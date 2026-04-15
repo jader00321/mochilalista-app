@@ -1,0 +1,9 @@
+# Variables de entorno generales
+.env
+
+# Configuraciones del editor
+.vscode/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db

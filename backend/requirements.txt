@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+psycopg2-binary
+sqlalchemy
+pydantic
+pydantic-settings
+python-jose[cryptography]
+passlib
+python-multipart
+email-validator
+pillow
+thefuzz
+google-genai
+google
+cloudinary

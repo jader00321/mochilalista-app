@@ -1,0 +1,11 @@
+# ==========================================
+# IGNORAR CACHÉ DE PYTHON (Aplica a todas las subcarpetas)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ==========================================
+# IGNORAR VARIABLES DE ENTORNO SECRETA
+# ==========================================
+.env
