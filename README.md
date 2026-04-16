@@ -37,13 +37,9 @@ Este proyecto representa una arquitectura de software robusta, enfocada en la es
 
 ## 📸 Demostración Visual (UX/UI)
 
-> **Nota para el evaluador:** La interfaz ha sido diseñada siguiendo principios de minimalismo y *Glassmorphism* para garantizar una navegación fluida, intuitiva y estéticamente atractiva.
-
 | Dashboard Principal | Escaneo Inteligente | Gestión de Inventario |
 | :---: | :---: | :---: |
 | <img src="URL_DE_TU_CAPTURA_1" width="250" alt="Dashboard"> | <img src="URL_DE_TU_CAPTURA_2" width="250" alt="Scanner IA"> | <img src="URL_DE_TU_CAPTURA_3" width="250" alt="Inventario"> |
-
-*(Para añadir GIFs de la app en uso, simplemente reemplaza la URL por el enlace al archivo .gif alojado en tu repositorio).*
 
 ---
 
@@ -92,31 +88,42 @@ Este proyecto está diseñado para ser fácilmente replicable. Utiliza Docker pa
 1. Clona este repositorio:
    ```bash
    git clone [https://github.com/TU_USUARIO/mochilalista-app.git](https://github.com/TU_USUARIO/mochilalista-app.git)
+   ```
 
 2. Navega al directorio del backend y configura el entorno:
     ```bash
     cd mochilalista-app/backend
-
+    ```
+    
 3. Configuración de Variables: Copia el archivo de ejemplo para crear tus variables locales:
     ```bash
     cp .env.example .env
-(Edita el archivo .env con las credenciales locales de prueba).
-
+    (Edita el archivo .env con las credenciales locales de prueba).
+    ```
+    
 4. Levanta los contenedores (FastAPI + PostgreSQL):
     ```bash
     docker-compose up -d --build
-
+    ```
+    
 Pasos para el Frontend
 
 1. En una nueva terminal, navega a la carpeta de la aplicación móvil:
     ```Bash
     cd mochilalista-app/app_movil
-
+    ```
+    
 2. Instala las dependencias de Dart:
     ```bash
     flutter pub get
-
+    ```
+    
 3. Ejecuta la aplicación en tu emulador o dispositivo físico:
     ```bash
     flutter run
+    ```
 </details>
+
+---
+
+Construido con dedicación para revolucionar la gestión de ventas y procesos comerciales.
