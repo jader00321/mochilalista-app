@@ -19,9 +19,10 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+    // 🔥 ACTUALIZADO: Versión exigida por las dependencias de cámara y core
     id("com.android.application") version "8.9.1" apply false
-    // 🔥 CORRECCIÓN: Actualizamos a la versión exacta que exige la librería base
-    id("org.jetbrains.kotlin.android") version "2.3.10" apply false
+    // 🔥 ACTUALIZADO: Versión estable más reciente para evitar el Warning
+    id("org.jetbrains.kotlin.android") version "2.1.0" apply false
 }
 
 include(":app")

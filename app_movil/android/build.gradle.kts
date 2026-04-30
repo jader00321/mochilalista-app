@@ -16,7 +16,6 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 
-// 🔥 EL PARCHE DEL NAMESPACE DEBE IR AQUÍ (ANTES DE EVALUAR)
 subprojects {
     afterEvaluate {
         val androidExt = extensions.findByName("android")
@@ -28,13 +27,12 @@ subprojects {
                     androidExt.javaClass.getMethod("setNamespace", String::class.java).invoke(androidExt, groupName)
                 }
             } catch (e: Exception) {
-                // Se ignora silenciosamente si el plugin no lo requiere
+                // Silencioso
             }
         }
     }
 }
 
-// 💥 ESTE ES EL GATILLO EVALUADOR (DEBE IR AL FINAL)
 subprojects {
     project.evaluationDependsOn(":app")
 }
