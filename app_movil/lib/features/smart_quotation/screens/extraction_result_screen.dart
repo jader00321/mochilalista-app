@@ -1,10 +1,11 @@
 import 'dart:io';
-import 'package:app_movil/features/smart_quotation/screens/matching_screen.dart';
-import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart'; 
-import 'package:app_movil/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:multi_split_view/multi_split_view.dart';
+
+import 'package:app_movil/features/smart_quotation/screens/matching_screen.dart';
+import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart'; 
+import 'package:app_movil/providers/auth_provider.dart';
 import '../providers/smart_quotation_provider.dart';
 import '../models/extracted_list_model.dart';
 import '../../../widgets/universal_image.dart';
@@ -117,7 +118,6 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 🔥 Título dinámico
                 Text(isClient ? "Revisa tu Lista Escolar" : "Validar Datos Extraídos", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                 Text("${provider.items.length} productos identificados", style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[200] : Colors.blue[100], fontWeight: FontWeight.w500)),
               ],
@@ -132,7 +132,6 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
                   onPressed: () {
                     final smartProvider = Provider.of<SmartQuotationProvider>(context, listen: false);
                     final matchingProvider = Provider.of<MatchingProvider>(context, listen: false); 
-                    final auth = Provider.of<AuthProvider>(context, listen: false);
                     
                     final updatedMetadata = ExtractedMetadata(
                       institutionName: _schoolCtrl.text,
@@ -151,13 +150,12 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
                         builder: (_) => MatchingScreen(
                           metadata: updatedMetadata, 
                           extractedItems: smartProvider.items,
-                          token: auth.token ?? "",
+                          // 🔥 CORRECCIÓN: Eliminamos la línea "token: auth.token ?? "","
                         ),
                       ),
                     );
                   },
                   icon: const Icon(Icons.check_circle_outline, size: 20),
-                  // 🔥 Botón dinámico
                   label: Text(isClient ? "BUSCAR PRODUCTOS" : "COTIZAR", style: const TextStyle(fontWeight: FontWeight.bold)),
                   style: FilledButton.styleFrom(backgroundColor: isDark ? Colors.blue[600] : Colors.blue[700], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                 ),

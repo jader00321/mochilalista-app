@@ -1,11 +1,12 @@
+import 'dart:convert'; // Necesario para jsonDecode y jsonEncode
+
 class InvoiceModel {
   final int id;
   final int negocioId;
   final String imagenUrl;
-  final String estado; // 'procesando', 'revision', 'completado'
+  final String estado;
   final DateTime fechaCarga;
   
-  // Datos de Auditoría
   final int? proveedorId;
   final double? montoTotalFactura;
   final DateTime? fechaEmision;
@@ -26,6 +27,16 @@ class InvoiceModel {
   });
 
   factory InvoiceModel.fromJson(Map<String, dynamic> json) {
+    // Si viene de SQLite como String, lo convertimos de vuelta a Map
+    Map<String, dynamic>? parsedJson;
+    if (json['datos_crudos_ia_json'] != null) {
+      if (json['datos_crudos_ia_json'] is String) {
+        parsedJson = jsonDecode(json['datos_crudos_ia_json']);
+      } else {
+        parsedJson = json['datos_crudos_ia_json'];
+      }
+    }
+
     return InvoiceModel(
       id: json['id'],
       negocioId: json['negocio_id'],
@@ -36,7 +47,23 @@ class InvoiceModel {
       montoTotalFactura: (json['monto_total_factura'] as num?)?.toDouble(),
       fechaEmision: json['fecha_emision'] != null ? DateTime.parse(json['fecha_emision']) : null,
       cantidadItemsExtraidos: json['cantidad_items_extraidos'],
-      datosCrudosIaJson: json['datos_crudos_ia_json'],
+      datosCrudosIaJson: parsedJson,
     );
+  }
+
+  Map<String, dynamic> toSqlite() {
+    return {
+      'id': id == 0 ? null : id,
+      'negocio_id': negocioId,
+      'imagen_url': imagenUrl,
+      'estado': estado,
+      'fecha_carga': fechaCarga.toIso8601String(),
+      'proveedor_id': proveedorId,
+      'monto_total_factura': montoTotalFactura,
+      'fecha_emision': fechaEmision?.toIso8601String(),
+      'cantidad_items_extraidos': cantidadItemsExtraidos,
+      // SQLite guarda los JSON como Strings
+      'datos_crudos_ia_json': datosCrudosIaJson != null ? jsonEncode(datosCrudosIaJson) : null,
+    };
   }
 }

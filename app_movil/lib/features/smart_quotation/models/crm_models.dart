@@ -1,4 +1,6 @@
-// Función global de seguridad para parsear JSON numéricos desde Python
+import 'dart:convert';
+
+// Función global de seguridad para parsear JSON numéricos desde Python/SQLite
 double _parseDouble(dynamic value) {
   if (value == null) return 0.0;
   if (value is num) return value.toDouble();
@@ -26,6 +28,7 @@ class ClientModel {
   final String nivelConfianza; 
   final List<String> etiquetas;
 
+  // Estas listas se llenarán dinámicamente mediante consultas JOIN en el servicio
   final List<SaleSummary> lastSales; 
   final List<PaymentModel> lastPayments;
 
@@ -51,6 +54,16 @@ class ClientModel {
   });
 
   factory ClientModel.fromJson(Map<String, dynamic> json) {
+    // Manejo de etiquetas que vienen como String (JSON) desde SQLite
+    List<String> parsedEtiquetas = [];
+    if (json['etiquetas'] != null) {
+      if (json['etiquetas'] is String) {
+        parsedEtiquetas = List<String>.from(jsonDecode(json['etiquetas']));
+      } else {
+        parsedEtiquetas = (json['etiquetas'] as List).map((e) => e.toString()).toList();
+      }
+    }
+
     return ClientModel(
       id: json['id'] ?? 0,
       negocioId: json['negocio_id'] ?? 0,
@@ -62,19 +75,36 @@ class ClientModel {
       address: json['direccion'],
       email: json['correo'],
       notes: json['notas'],
-      
-      // 🔥 PARSEO SEGURO
       totalDebt: _parseDouble(json['deuda_total']),
       saldoAFavor: _parseDouble(json['saldo_a_favor']), 
       pendingDeliveryCount: json['entregas_pendientes'] ?? json['entregas_pendientes_count'] ?? 0, 
-      
       registeredDate: json['fecha_registro'] ?? "",
       nivelConfianza: json['nivel_confianza'] ?? "bueno",
-      etiquetas: (json['etiquetas'] as List?)?.map((e) => e.toString()).toList() ?? [],
-
+      etiquetas: parsedEtiquetas,
       lastSales: (json['ultimas_ventas'] as List?)?.map((e) => SaleSummary.fromJson(e)).toList() ?? [],
       lastPayments: (json['ultimos_pagos'] as List?)?.map((e) => PaymentModel.fromJson(e)).toList() ?? [],
     );
+  }
+
+  Map<String, dynamic> toSqlite() {
+    return {
+      'id': id == 0 ? null : id,
+      'negocio_id': negocioId,
+      'creado_por_usuario_id': creadoPorUsuarioId,
+      'usuario_vinculado_id': usuarioVinculadoId,
+      'nombre_completo': fullName,
+      'telefono': phone,
+      'dni_ruc': docNumber,
+      'direccion': address,
+      'correo': email,
+      'notas': notes,
+      'nivel_confianza': nivelConfianza,
+      'etiquetas': jsonEncode(etiquetas), // Se guarda como String
+      'deuda_total': totalDebt,
+      'saldo_a_favor': saldoAFavor,
+      'entregas_pendientes': pendingDeliveryCount,
+      'fecha_registro': registeredDate.isEmpty ? DateTime.now().toIso8601String() : registeredDate,
+    };
   }
 }
 
@@ -107,6 +137,21 @@ class PaymentModel {
       note: json['nota'],
       date: json['fecha_pago'] ?? "",
     );
+  }
+
+  Map<String, dynamic> toSqlite(int? clienteId, int? ventaId, int? cuotaId) {
+    return {
+      'id': id == 0 ? null : id,
+      'negocio_id': negocioId,
+      'creado_por_usuario_id': creadoPorUsuarioId,
+      'cliente_id': clienteId,
+      'venta_id': ventaId,
+      'cuota_id': cuotaId,
+      'monto': amount,
+      'metodo_pago': method,
+      'nota': note,
+      'fecha_pago': date.isEmpty ? DateTime.now().toIso8601String() : date,
+    };
   }
 }
 
@@ -160,6 +205,18 @@ class InstallmentModel {
       dueDate: json['fecha_vencimiento'] ?? "",
       status: json['estado'] ?? "pendiente",
     );
+  }
+
+  Map<String, dynamic> toSqlite(int ventaId) {
+    return {
+      'id': id == 0 ? null : id,
+      'venta_id': ventaId,
+      'numero_cuota': installmentNumber,
+      'monto': amount,
+      'monto_pagado': montoPagado,
+      'fecha_vencimiento': dueDate,
+      'estado': status,
+    };
   }
 
   Map<String, dynamic> toJson() {
@@ -216,7 +273,7 @@ class SaleModel {
       quotationId: json['cotizacion_id'],
       clientId: json['cliente_id'],
       origenVenta: json['origen_venta'] ?? "smart_quotation",
-      isArchived: json['is_archived'] ?? false,
+      isArchived: json['is_archived'] == 1 || json['is_archived'] == true,
       paymentMethod: json['metodo_pago'] ?? "",
       paymentStatus: json['estado_pago'] ?? "",
       deliveryStatus: json['estado_entrega'] ?? "",
@@ -227,6 +284,26 @@ class SaleModel {
       saleDate: json['fecha_venta'] ?? "",
       installments: (json['cuotas'] as List?)?.map((e) => InstallmentModel.fromJson(e)).toList() ?? [],
     );
+  }
+
+  Map<String, dynamic> toSqlite() {
+    return {
+      'id': id == 0 ? null : id,
+      'negocio_id': negocioId,
+      'creado_por_usuario_id': creadoPorUsuarioId,
+      'cotizacion_id': quotationId,
+      'cliente_id': clientId,
+      'origen_venta': origenVenta,
+      'is_archived': isArchived ? 1 : 0,
+      'metodo_pago': paymentMethod,
+      'estado_pago': paymentStatus,
+      'estado_entrega': deliveryStatus,
+      'fecha_entrega': deliveryDate,
+      'monto_total': totalAmount,
+      'monto_pagado': paidAmount,
+      'descuento_aplicado': discount,
+      'fecha_venta': saleDate.isEmpty ? DateTime.now().toIso8601String() : saleDate,
+    };
   }
 }
 
@@ -265,8 +342,8 @@ class ValidationResult {
 
   factory ValidationResult.fromJson(Map<String, dynamic> json) {
     return ValidationResult(
-      hasIssues: json['has_issues'] ?? false,
-      canSell: json['can_sell'] ?? true,
+      hasIssues: json['has_issues'] == 1 || json['has_issues'] == true,
+      canSell: json['can_sell'] == 1 || json['can_sell'] == true || json['can_sell'] == null,
       stockWarnings: (json['stock_warnings'] as List?)?.map((e) => StockWarning.fromJson(e)).toList() ?? [],
       priceChanges: (json['price_changes'] as List?)?.map((e) => PriceChange.fromJson(e)).toList() ?? [],
     );

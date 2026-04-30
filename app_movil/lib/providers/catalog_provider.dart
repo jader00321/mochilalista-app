@@ -1,20 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import '../config/api_constants.dart';
+import '../database/local_db.dart';
 import '../models/inventory_wrapper.dart';
 import '../models/category_model.dart';
 import '../models/brand_model.dart';
-import '../models/product_model.dart'; 
+import '../services/master_data_service.dart';
+import '../services/product_service.dart';
 
 String normalizeText(String input) {
   return input.toLowerCase()
-      .replaceAll('á', 'a')
-      .replaceAll('é', 'e')
-      .replaceAll('í', 'i')
-      .replaceAll('ó', 'o')
-      .replaceAll('ú', 'u')
-      .replaceAll('ü', 'u');
+      .replaceAll('á', 'a').replaceAll('é', 'e').replaceAll('í', 'i')
+      .replaceAll('ó', 'o').replaceAll('ú', 'u').replaceAll('ü', 'u');
 }
 
 class CartItem {
@@ -31,11 +26,17 @@ class CartItem {
 }
 
 class CatalogProvider with ChangeNotifier {
-  String? _authToken;
+  // 🔥 CORRECCIÓN: Usamos IDs locales en lugar de un Token Web
+  int? _negocioId;
+  int? _userId;
   
+  // Servicios Locales
+  final MasterDataService _masterDataService = MasterDataService();
+  final ProductService _productService = ProductService();
+  final dbHelper = LocalDatabase.instance;
+
   List<Category> _categories = [];
   List<Brand> _brands = []; 
-
   final List<InventoryWrapper> _displayItems = []; 
 
   bool _isLoading = false;
@@ -66,9 +67,7 @@ class CatalogProvider with ChangeNotifier {
   Map<String, dynamic> get advancedFilters => _advancedFilters;
 
   bool get hasActiveFilters {
-    return _searchQuery.isNotEmpty || 
-           _selectedCategoryId != null || 
-           _advancedFilters.isNotEmpty;
+    return _searchQuery.isNotEmpty || _selectedCategoryId != null || _advancedFilters.isNotEmpty;
   }
 
   int get cartCount => _shoppingCart.length;
@@ -79,14 +78,16 @@ class CatalogProvider with ChangeNotifier {
   double get utilityTotal => _utilityList.fold(0, (sum, i) => sum + i.subtotal);
   List<CartItem> get utilityList => _utilityList;
 
-  // 🔥 SOLUCIÓN AL FALSO CACHÉ: 
-  // Interceptamos el cambio de token. Cuando el usuario cambia de negocio, el token JWT se actualiza.
-  // Al detectar eso, limpiamos inmediatamente toda la memoria del Catálogo.
-  void updateToken(String? token) {
-    if (_authToken != token) {
-      _authToken = token;
+  // 🔥 CORRECCIÓN: Renombrado a updateContext e inyección de IDs
+  void updateContext(int? negocioId, int? userId) {
+    if (_negocioId != negocioId || _userId != userId) {
+      _negocioId = negocioId;
+      _userId = userId;
       
-      // Limpieza profunda de la memoria RAM
+      // Sincronizamos los servicios con el negocio actual
+      _masterDataService.updateContext(negocioId);
+      _productService.updateContext(negocioId);
+
       _categories.clear();
       _brands.clear();
       _displayItems.clear();
@@ -97,58 +98,55 @@ class CatalogProvider with ChangeNotifier {
       _advancedFilters.clear();
       _selectedCategoryId = null;
       _searchQuery = '';
-      
-      // No hacemos notifyListeners() aquí para evitar reconstrucciones innecesarias 
-      // mientras la app navega de vuelta al Home.
     }
   }
 
-  Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer $_authToken',
-  };
-
   Future<bool> submitCommunityQuote({String? notes}) async {
-    if (_authToken == null || _shoppingCart.isEmpty) return false;
+    if (_shoppingCart.isEmpty || _negocioId == null || _userId == null) return false;
     _isLoading = true;
     notifyListeners();
 
     try {
-      final List<Map<String, dynamic>> itemsData = _shoppingCart.map((cartItem) {
-        final pres = cartItem.item.presentation;
-        final prod = cartItem.item.product;
-        return {
-          "product_id": prod.id,
-          "presentation_id": pres.id,
-          "quantity": cartItem.quantity,
-          "unit_price_applied": cartItem.price,
-          "original_unit_price": pres.precioVentaFinal,
-          "product_name": prod.nombre,
-          "specific_name": pres.nombreEspecifico,
-          "sales_unit": pres.unidadVenta,
-          "product_name_snapshot": cartItem.item.displayNameDetail,
-          "is_manual_price": false
-        };
-      }).toList();
-
-      final body = json.encode({
-        "notas": notes,
-        "total_amount": cartTotal,
-        "items": itemsData
+      final db = await dbHelper.database;
+      
+      // 1. Insertamos la cotización principal localmente usando los IDs correctos
+      int quoteId = await db.insert('smart_quotations', {
+        'negocio_id': _negocioId, // 🔥 Corrección
+        'creado_por_usuario_id': _userId, // 🔥 Corrección
+        'notas': notes,
+        'total_amount': cartTotal,
+        'total_savings': 0.0,
+        'status': 'PENDING',
+        'type': 'client_web', 
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
       });
 
-      final url = Uri.parse('${ApiConstants.baseUrl}/community-quotes/create');
-      final response = await http.post(url, headers: _headers, body: body);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        clearCart();
-        return true;
-      } else {
-        _errorMessage = "Error al enviar tu lista. Intenta nuevamente.";
-        return false;
+      // 2. Insertamos los items del carrito
+      for (var cartItem in _shoppingCart) {
+        final pres = cartItem.item.presentation;
+        final prod = cartItem.item.product;
+        
+        await db.insert('smart_quotation_items', {
+          'quotation_id': quoteId,
+          'product_id': prod.id,
+          'presentation_id': pres.id,
+          'quantity': cartItem.quantity,
+          'unit_price_applied': cartItem.price,
+          'original_unit_price': pres.precioVentaFinal,
+          'product_name': prod.nombre,
+          'specific_name': pres.nombreEspecifico,
+          'sales_unit': pres.unidadVenta,
+          'original_text': cartItem.item.displayNameDetail,
+          'is_manual_price': 0, 
+          'is_available': 1 
+        });
       }
+
+      clearCart();
+      return true;
     } catch (e) {
-      _errorMessage = "Error de conexión.";
+      _errorMessage = "Error guardando lista: $e";
       return false;
     } finally {
       _isLoading = false;
@@ -168,19 +166,13 @@ class CatalogProvider with ChangeNotifier {
   Future<void> _fetchMasters() async {
     if (_categories.isNotEmpty && _brands.isNotEmpty) return; 
     try {
-      final resCat = await http.get(Uri.parse('${ApiConstants.baseUrl}/categories/?solo_activos=true'), headers: _headers);
-      final resBrand = await http.get(Uri.parse('${ApiConstants.baseUrl}/brands/?solo_activos=true'), headers: _headers);
-      
-      if (resCat.statusCode == 200) {
-        _categories = (json.decode(resCat.body) as List).map((e) => Category.fromJson(e)).toList();
+      final masters = await _masterDataService.fetchAllMasterData(false);
+      if (masters != null) {
+        _categories = List<Category>.from(masters['categories']);
+        _brands = List<Brand>.from(masters['brands']);
+        notifyListeners();
       }
-      if (resBrand.statusCode == 200) {
-        _brands = (json.decode(resBrand.body) as List).map((e) => Brand.fromJson(e)).toList();
-      }
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Error cargando maestros en catálogo: $e");
-    }
+    } catch (e) { debugPrint("Error cargando maestros: $e"); }
   }
 
   Future<void> loadMoreItems() async {
@@ -206,28 +198,18 @@ class CatalogProvider with ChangeNotifier {
         if (value is! List) params[key] = value.toString();
       });
 
-      params['sort_by'] = 'nombre'; 
-      params['order'] = _isSortAscending ? 'asc' : 'desc';
-
-      final uriBuilder = Uri.parse('${ApiConstants.baseUrl}/products/');
-      Map<String, dynamic> finalQueryParameters = Map.from(params);
-
       if (_advancedFilters.containsKey('category_ids')) {
         final list = _advancedFilters['category_ids'] as List;
-        if (list.isNotEmpty) finalQueryParameters['category_ids'] = list.map((e) => e.toString()).toList();
+        if (list.isNotEmpty) params['category_ids'] = list.map((e) => e.toString()).join(',');
       }
       if (_advancedFilters.containsKey('brand_ids')) {
         final list = _advancedFilters['brand_ids'] as List;
-        if (list.isNotEmpty) finalQueryParameters['brand_ids'] = list.map((e) => e.toString()).toList();
+        if (list.isNotEmpty) params['brand_ids'] = list.map((e) => e.toString()).join(',');
       }
 
-      final uri = uriBuilder.replace(queryParameters: finalQueryParameters);
-      final response = await http.get(uri, headers: _headers);
+      final List<InventoryWrapper>? newItems = await _productService.fetchInventory(params);
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        final List<InventoryWrapper> newItems = data.map((item) => InventoryWrapper.fromJson(item)).toList();
-
+      if (newItems != null) {
         if (newItems.length < _limit) _hasMoreData = false;
         
         _displayItems.addAll(newItems);
@@ -239,11 +221,9 @@ class CatalogProvider with ChangeNotifier {
              return _isSortAscending ? cmp : -cmp;
            });
         }
-      } else {
-        _errorMessage = "Error servidor: ${response.statusCode}";
       }
     } catch (e) {
-      _errorMessage = "Error de conexión: $e";
+      _errorMessage = "Error cargando catálogo: $e";
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -333,7 +313,6 @@ class CatalogProvider with ChangeNotifier {
         }
       }
     }
-    
     notifyListeners();
   }
 
@@ -342,13 +321,11 @@ class CatalogProvider with ChangeNotifier {
       removeFromCart(item);
       return;
     }
-    
     if (newQuantity > item.item.presentation.stockActual) {
       _errorMessage = "Solo hay ${item.item.presentation.stockActual} unidades disponibles.";
       notifyListeners();
       return;
     }
-    
     item.quantity = newQuantity;
     notifyListeners();
   }
@@ -420,8 +397,11 @@ class CatalogProvider with ChangeNotifier {
     } catch (_) { return ""; }
   }
 
+  // 100% Offline Search
   Future<List<InventoryWrapper>> searchProducts(String query) async {
     if (query.isEmpty) return [];
+    
+    // 1. Buscamos primero en la lista cargada en RAM
     final localResults = _displayItems.where((item) {
       final name = normalizeText(item.product.nombre);
       final q = normalizeText(query);
@@ -430,46 +410,12 @@ class CatalogProvider with ChangeNotifier {
 
     if (localResults.isNotEmpty) return localResults;
 
+    // 2. Si no hay en RAM, buscamos en la base de datos (Fallback offline)
     try {
-      final url = Uri.parse('${ApiConstants.baseUrl}/smart-inventory-matcher/match-batch');
-      final body = json.encode({"items": [{"id": 1, "full_name": query, "quantity": 1}]});
-      final response = await http.post(url, headers: _headers, body: body);
-      
-      if (response.statusCode == 200) {
-        final decoded = json.decode(utf8.decode(response.bodyBytes));
-        final List<dynamic> results = decoded['results']; 
-        List<InventoryWrapper> smartResults = [];
-
-        for (var res in results) {
-          final suggested = res['suggested_product'];
-          if (suggested != null) {
-            final product = Product(
-              id: suggested['product_id'],
-              nombre: suggested['full_name'], 
-              stockTotalCalculado: suggested['stock'], 
-              categoriaId: 0, 
-              imagenUrl: suggested['image_url'],
-              marcaId: null, 
-            );
-
-            final presentation = ProductPresentation(
-              id: suggested['presentation_id'],
-              umpCompra: suggested['unit'] ?? 'Unidad',
-              precioVentaFinal: (suggested['price'] as num).toDouble(),
-              stockActual: suggested['stock'],
-              unidadesPorLote: suggested['conversion_factor'] ?? 1,
-              precioOferta: suggested['offer_price'] != null ? (suggested['offer_price'] as num).toDouble() : null,
-              proveedorId: null,
-              esDefault: true
-            );
-
-            smartResults.add(InventoryWrapper(product: product, presentation: presentation));
-          }
-        }
-        return smartResults;
-      }
+      final List<InventoryWrapper>? dbResults = await _productService.fetchInventory({'q': query, 'limit': '10'});
+      return dbResults ?? [];
     } catch (e) {
-      debugPrint("Error searching products (Smart Match): $e");
+      debugPrint("Error searching products offline: $e");
     }
     return [];
   }

@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';        
 import 'package:url_launcher/url_launcher.dart';
 import '../../../models/user_model.dart';
+import '../../../../utils/hardware_validator.dart'; // 🔥 IMPORT DE SEGURIDAD
 
 class BusinessInfoCard extends StatelessWidget {
   final BusinessModel? business;
@@ -11,7 +12,11 @@ class BusinessInfoCard extends StatelessWidget {
 
   const BusinessInfoCard({super.key, this.business, this.isCommunityClient = false});
 
-  Future<void> _openGoogleMaps(double lat, double lng) async {
+  Future<void> _openGoogleMaps(BuildContext context, double lat, double lng) async {
+    // 🔥 VALIDACIÓN DE INTERNET ANTES DE SALIR A MAPS
+    bool hasInternet = await HardwareValidator.checkInternet(context);
+    if (!hasInternet) return;
+
     final Uri url = Uri.parse("https://www.google.com/maps/search/?api=1&query=$lat,$lng");
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       debugPrint("No se pudo abrir el mapa");
@@ -50,7 +55,6 @@ class BusinessInfoCard extends StatelessWidget {
       );
     }
 
-    // 🔥 DECODIFICAR PREFERENCIAS DE PRIVACIDAD
     bool showAddress = true;
     bool showRuc = true;
     if (business!.printerConfig != null && business!.printerConfig!.isNotEmpty) {
@@ -61,7 +65,6 @@ class BusinessInfoCard extends StatelessWidget {
       } catch (_) {}
     }
 
-    // Si es el dueño, él SIEMPRE ve todo. Solo ocultamos si es Cliente.
     final bool canSeeAddress = !isCommunityClient || showAddress;
     final bool canSeeRuc = !isCommunityClient || showRuc;
     final hasMap = canSeeAddress && business!.latitud != null && business!.longitud != null;
@@ -138,7 +141,8 @@ class BusinessInfoCard extends StatelessWidget {
                 if (hasMap) ...[
                   const SizedBox(height: 14),
                   InkWell(
-                    onTap: () => _openGoogleMaps(business!.latitud!, business!.longitud!),
+                    // 🔥 SE PASA EL CONTEXTO PARA VALIDAR INTERNET
+                    onTap: () => _openGoogleMaps(context, business!.latitud!, business!.longitud!),
                     child: Row(
                       children: [
                         Icon(Icons.map, size: 20, color: Colors.blue[400]), 

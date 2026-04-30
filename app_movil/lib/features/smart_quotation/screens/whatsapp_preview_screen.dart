@@ -1,4 +1,4 @@
-import 'dart:convert'; // 🔥 Importado para poder leer las preferencias JSON
+import 'dart:convert'; 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -79,7 +79,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
     try {
       if (widget.saleId != null) {
         final saleProv = Provider.of<SaleProvider>(context, listen: false);
-        _saleData = await saleProv.getSaleDetail(widget.saleId!);
+        _saleData = await saleProv.getSaleDetailSilently(widget.saleId!); // Usamos un método silencioso para no cargar la UI
         if (_saleData != null && _saleData!['cotizacion'] != null) {
           _quotation = SmartQuotationModel.fromJson(_saleData!['cotizacion']);
         }
@@ -95,7 +95,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
         final int? targetClientId = _saleData?['cliente_id'] ?? _quotation!.clientId;
         
         if (targetClientId != null) {
-          final clientData = await clientService.getClientById(targetClientId, authProv.token!);
+          final clientData = await clientService.getClientById(targetClientId);
           if (clientData != null) {
             _originalClient = clientData;
             _clientNameCtrl.text = clientData.fullName;
@@ -174,7 +174,6 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       final lineTotal = item.quantity * item.unitPriceApplied;
       final hasDiscount = (item.originalUnitPrice - item.unitPriceApplied) > 0.01;
 
-      // 🔥 LEGADO ELIMINADO: Reemplazado productNameSnapshot por displayName
       String line = "▪ ${item.displayName} (x${item.quantity})";
       
       if (_config.showSubtotals) {
@@ -446,7 +445,10 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                               onChanged: (val) {
                                 if (val.isNotEmpty) { 
                                   setModalState(() {
-                                    searchFuture = clientService.searchClients(val, authProv.token!);
+                                    // 🔥 CORRECCIÓN 1: Enviar activeBusinessId
+                                    if (authProv.activeBusinessId != null) {
+                                      searchFuture = clientService.searchClients(val, authProv.activeBusinessId!);
+                                    }
                                   });
                                 }
                               },
@@ -632,9 +634,14 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
     final clientService = ClientService();
     bool savingError = false;
 
+    // VALIDACIÓN PREVIA DE SEGURIDAD
+    if (authProv.activeBusinessId == null || authProv.activeUserId == null) {
+      CustomSnackBar.show(context, message: "Error crítico: Sesión no válida.", isError: true);
+      return;
+    }
+
     if (_config.updateBusinessData) {
       try {
-        // 🔥 CORRECCIÓN: Leemos las preferencias actuales para no sobreescribirlas
         bool showAddress = true;
         bool showRuc = true;
         
@@ -647,7 +654,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
            } catch (_) {}
         }
         
-        // 🔥 Pasamos TODOS los parámetros (Añadido showAddress y showRuc)
+        // 🔥 CORRECCIÓN 2: Argumentos correctos y en orden. Se inyecta el activeBusinessId internamente en updateBusinessProfile.
         await authProv.updateBusinessProfile(authProv.businessName, _bizRucCtrl.text, _bizAddressCtrl.text, _bizPaymentCtrl.text, _bizLat, _bizLng, showAddress, showRuc);
       } catch (e) { savingError = true; }
     }
@@ -656,11 +663,13 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       try {
         final clientData = {'nombre_completo': _clientNameCtrl.text, 'telefono': _clientPhoneCtrl.text.replaceAll(" ", "")};
         if (_isUsingSelectedClient && _selectedClient != null) {
-          await clientService.updateClient(_selectedClient!.id, clientData, authProv.token!);
+          // 🔥 CORRECCIÓN 3: Solo enviamos el ID del cliente y la data. Ya no el token.
+          await clientService.updateClient(_selectedClient!.id, clientData);
         } else if (_originalClient != null && !_isUsingSelectedClient) {
-          await clientService.updateClient(_originalClient!.id, clientData, authProv.token!);
+          await clientService.updateClient(_originalClient!.id, clientData);
         } else {
-          await clientService.createClient(clientData, authProv.token!);
+          // 🔥 CORRECCIÓN 4: Inyectamos activeBusinessId y activeUserId 
+          await clientService.createClient(clientData, authProv.activeBusinessId!, authProv.activeUserId!);
         }
       } catch (e) { savingError = true; }
     }

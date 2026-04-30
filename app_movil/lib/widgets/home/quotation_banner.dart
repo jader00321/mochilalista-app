@@ -30,16 +30,15 @@ class QuotationBanner extends StatelessWidget {
     final isClient = authProv.isCommunityClient;
 
     return Material(
-      elevation: isDark ? 0 : 8,
-      shadowColor: isDark ? Colors.transparent : Colors.blue.withOpacity(0.2),
+      elevation: isDark ? 0 : 12,
+      shadowColor: isDark ? Colors.transparent : Colors.blue.withOpacity(0.15),
       color: cardColor,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
         side: isDark ? BorderSide(color: Colors.white.withOpacity(0.1), width: 1.5) : BorderSide.none,
       ),
       child: InkWell(
         onTap: () {
-          // 🔥 LÓGICA DE REANUDAR PARA CLIENTES VIP AL TOCAR EL BANNER
           if (isClient) {
             if (quotationScanner.items.isNotEmpty) {
               _showResumeDialog(
@@ -52,10 +51,10 @@ class QuotationBanner extends StatelessWidget {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.quotation))); 
                 },
                 onResume: () {
+                  // 🔥 CORRECCIÓN: Se eliminó el parámetro token
                   Navigator.push(context, MaterialPageRoute(builder: (_) => MatchingScreen(
                     extractedItems: quotationScanner.items,
                     metadata: quotationScanner.metadata,
-                    token: authProv.token ?? "", 
                   )));
                 }
               );
@@ -63,20 +62,25 @@ class QuotationBanner extends StatelessWidget {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.quotation)));
             }
           } else {
-            // Si es dueño, el banner lo lleva a la Mesa de Trabajo general
             onGoToWorkbench();
           }
         },
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: isDark 
+              ? LinearGradient(colors: [Colors.white.withOpacity(0.05), Colors.transparent], begin: Alignment.topLeft, end: Alignment.bottomRight)
+              : null,
+          ),
           padding: const EdgeInsets.all(24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], borderRadius: BorderRadius.circular(6)),
-                child: Text(isClient ? "INTELIGENCIA ARTIFICIAL" : "MESA DE TRABAJO", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1)),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], borderRadius: BorderRadius.circular(8)),
+                child: Text(isClient ? "INTELIGENCIA ARTIFICIAL" : "MESA DE TRABAJO", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
               ),
               const SizedBox(height: 16),
               Row(
@@ -86,7 +90,7 @@ class QuotationBanner extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87, height: 1.2)),
+                        Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: isDark ? Colors.white : Colors.black87, height: 1.2, letterSpacing: -0.5)),
                         const SizedBox(height: 8),
                         Text(subtitle, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14, height: 1.4)),
                       ],
@@ -94,18 +98,22 @@ class QuotationBanner extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   Container(
-                    width: 80, height: 80,
-                    decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue[50], shape: BoxShape.circle),
-                    child: Icon(isClient ? Icons.document_scanner : Icons.checklist_rtl, size: 40, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                    width: 75, height: 75,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue[50], 
+                      shape: BoxShape.circle,
+                      boxShadow: [if(!isDark) BoxShadow(color: Colors.blue.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))]
+                    ),
+                    child: Icon(isClient ? Icons.document_scanner_rounded : Icons.checklist_rtl_rounded, size: 36, color: isDark ? Colors.blue[300] : Colors.blue[700]),
                   )
                 ],
               ),
               const SizedBox(height: 20),
               Row(
                 children: [
-                  Text(buttonText, style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text(buttonText, style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.w800, fontSize: 15)),
                   const SizedBox(width: 8),
-                  Icon(Icons.arrow_forward, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 18),
+                  Icon(Icons.arrow_forward_rounded, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 20),
                 ],
               )
             ],
@@ -120,16 +128,21 @@ class QuotationBanner extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        title: Text(title, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-        content: Text(msg, style: TextStyle(color: isDark ? Colors.grey[300] : Colors.black87, fontSize: 16)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(title, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w900, fontSize: 20)),
+        content: Text(msg, style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 15, height: 1.4)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         actions: [
           TextButton(
             onPressed: () { Navigator.pop(ctx); onNew(); },
-            child: const Text("Tomar Nueva", style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
+            child: const Text("Iniciar Nueva", style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blue[600] : Colors.blue[800], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? Colors.blue[600] : Colors.blue[800], 
+              foregroundColor: Colors.white, 
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0
+            ),
             onPressed: () { Navigator.pop(ctx); onResume(); },
             child: const Text("Retomar Pedido", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           )

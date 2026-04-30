@@ -4,7 +4,8 @@ import 'package:latlong2/latlong.dart';
 import '../../../../providers/auth_provider.dart';
 import '../../../../widgets/custom_snackbar.dart';
 import '../screens/map_picker_screen.dart'; 
-import '../../../../screens/home_screen.dart'; // 🔥 Importamos el Home para reiniciar la app
+import '../../../../screens/home_screen.dart'; 
+import '../../../../utils/hardware_validator.dart'; // 🔥 IMPORT DEL VALIDADOR PREMIUM
 
 class CreateBusinessModal extends StatefulWidget {
   final bool isMandatory; 
@@ -18,7 +19,6 @@ class CreateBusinessModal extends StatefulWidget {
 class _CreateBusinessModalState extends State<CreateBusinessModal> {
   final _formKey = GlobalKey<FormState>();
   
-  // 🔥 Los controladores inician COMPLETAMENTE VACÍOS.
   final _nameCtrl = TextEditingController();
   final _rucCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
@@ -40,10 +40,15 @@ class _CreateBusinessModalState extends State<CreateBusinessModal> {
   }
 
   void _openMap() async {
+    // 🔥 PASO 1: Validar GPS con el nuevo Modal Premium
+    bool isGpsReady = await HardwareValidator.checkGPS(context);
+    if (!isGpsReady) return; // Si no hay GPS, se detiene aquí (el modal ya se mostró)
+
+    // PASO 2: Si todo está bien, abre el mapa
     final LatLng? result = await Navigator.push(context, MaterialPageRoute(builder: (_) => MapPickerScreen(initialLat: _lat, initialLng: _lng)));
     if (result != null) {
       setState(() { _lat = result.latitude; _lng = result.longitude; });
-      CustomSnackBar.show(context, message: "📍 Ubicación fijada", isError: false);
+      if (mounted) CustomSnackBar.show(context, message: "📍 Ubicación fijada", isError: false);
     }
   }
 
@@ -151,7 +156,6 @@ class _CreateBusinessModalState extends State<CreateBusinessModal> {
                   onPressed: auth.isLoading ? null : () async {
                     if (!_formKey.currentState!.validate()) return;
                     
-                    // Llama a createBusinessProfile
                     bool success = await auth.createBusinessProfile(
                       _nameCtrl.text.trim(), 
                       _rucCtrl.text.trim(), 
@@ -170,7 +174,7 @@ class _CreateBusinessModalState extends State<CreateBusinessModal> {
                               MaterialPageRoute(builder: (_) => const HomeScreen()), 
                               (route) => false
                             );
-                            CustomSnackBar.show(context, message: "Negocio creado y conectado con éxito", isError: false);
+                            CustomSnackBar.show(context, message: "Negocio creado con éxito", isError: false);
                         } else {
                             CustomSnackBar.show(context, message: auth.errorMessage, isError: true);
                         }

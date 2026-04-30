@@ -79,8 +79,6 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
   final _gradeCtrl = TextEditingController();
   
   bool _isGeneratingName = false;
-  
-  // 🔥 Nuevo Flag: Nos dice si esta cotización le pertenece a un Cliente VIP (B2C)
   bool _isAppOrder = false;
 
   @override
@@ -227,12 +225,12 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
         _schoolCtrl.text = data.institutionName ?? "";
         _gradeCtrl.text = data.gradeLevel ?? "";
         
-        // 🔥 Detectamos si es un Pedido App
         _isAppOrder = (data.clientName ?? "").contains("- Pedido");
         
         if (data.clientId != null && !authProv.isCommunityClient) {
           try {
-            final client = await clientService.getClientById(data.clientId!, authProv.token!);
+            // 🔥 CORRECCIÓN 1: Se quitó authProv.token!
+            final client = await clientService.getClientById(data.clientId!);
             if (client != null) {
               _selectedClient = client;
               _clientNameCtrl.text = client.fullName;
@@ -484,9 +482,11 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       };
       try {
         if (_selectedClient != null) {
-          await clientService.updateClient(_selectedClient!.id, clientData, authProv.token!);
+          // 🔥 CORRECCIÓN 2: Se quitó authProv.token!
+          await clientService.updateClient(_selectedClient!.id, clientData);
         } else {
-          final newClient = await clientService.createClient(clientData, authProv.token!);
+          // 🔥 CORRECCIÓN 3: Se quitó authProv.token! y se inyectaron los IDs activos
+          final newClient = await clientService.createClient(clientData, authProv.activeBusinessId!, authProv.activeUserId!);
           finalClientId = newClient.id;
         }
       } catch (e) { debugPrint("Error saving client: $e"); }
@@ -528,9 +528,6 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
         }
     }
 
-    // 🔥 LÓGICA DE CLONACIÓN B2C
-    // Si forceClone es true, le decimos al sistema que ignore el _currentQuotationId (enviando null)
-    // para que el backend lo cree como una NUEVA cotización en lugar de sobrescribir la original de la App.
     int? targetQuotationId = forceClone ? null : _currentQuotationId;
 
     final newId = await wbProv.saveManualQuotation(
@@ -564,7 +561,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
           CustomSnackBar.show(context, message: forceClone ? "Pedido clonado exitosamente" : "Guardado exitosamente", isError: false);
         }
       } else {
-        CustomSnackBar.show(context, message: "Error al guardar en el servidor", isError: true);
+        CustomSnackBar.show(context, message: "Error al guardar localmente", isError: true);
       }
     }
   }
@@ -587,7 +584,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       context: context, backgroundColor: Colors.transparent, isScrollControlled: true,
       builder: (ctx) => ManualQuoteSaveModal(
         isEditing: _currentQuotationId != null,
-        isAppOrder: _isAppOrder, // 🔥 Pasamos el flag al modal
+        isAppOrder: _isAppOrder,
         onSave: (status, type, {bool forceClone = false}) {
           String finalStatus = status == 'MAINTAIN_CURRENT' ? (widget.quotationSnapshot?.status ?? 'DRAFT') : status;
           _executeSave(status: finalStatus, type: type, navigateToDetail: true, forceClone: forceClone);
@@ -730,7 +727,6 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                                 clientAddressCtrl: _clientAddressCtrl, clientEmailCtrl: _clientEmailCtrl, clientNotesCtrl: _clientNotesCtrl,
                                 isNewClientMode: _updateClientData, onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; _hasUnsavedChanges = true; }); },
                                 
-                                // 🔥 BLOQUEAMOS EL BOTÓN BUSCAR SI ES PEDIDO APP (Para no sobreescribir)
                                 onSearchClientTap: (isGuest || _isAppOrder) ? () {
                                    if (_isAppOrder) {
                                       CustomSnackBar.show(context, message: "Este pedido pertenece a un cliente de la App. Clónalo si deseas asignarlo a otra persona.", isError: true);
@@ -761,7 +757,6 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                           clientAddressCtrl: _clientAddressCtrl, clientEmailCtrl: _clientEmailCtrl, clientNotesCtrl: _clientNotesCtrl,
                           isNewClientMode: _updateClientData, onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; _hasUnsavedChanges = true; }); },
                           
-                          // 🔥 BLOQUEAMOS EL BOTÓN BUSCAR SI ES PEDIDO APP
                           onSearchClientTap: (isGuest || _isAppOrder) ? () {
                              if (_isAppOrder) {
                                 CustomSnackBar.show(context, message: "Este pedido pertenece a un cliente de la App. Clónalo si deseas asignarlo a otra persona.", isError: true);

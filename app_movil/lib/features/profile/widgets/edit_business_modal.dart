@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../../providers/auth_provider.dart';
 import '../../../../widgets/custom_snackbar.dart';
 import '../screens/map_picker_screen.dart'; 
+import '../../../../utils/hardware_validator.dart'; // 🔥 IMPORT DEL VALIDADOR PREMIUM
 
 class EditBusinessModal extends StatefulWidget {
   final bool isMandatory; 
@@ -25,7 +26,6 @@ class _EditBusinessModalState extends State<EditBusinessModal> {
   double? _lat;
   double? _lng;
 
-  // 🔥 NUEVOS CONTROLES DE PRIVACIDAD
   bool _showAddress = true;
   bool _showRuc = true;
 
@@ -41,7 +41,6 @@ class _EditBusinessModalState extends State<EditBusinessModal> {
     _lat = business?.latitud;
     _lng = business?.longitud;
 
-    // 🔥 Extraemos las preferencias de privacidad guardadas en el JSON
     if (business?.printerConfig != null && business!.printerConfig!.isNotEmpty) {
       try {
         final Map<String, dynamic> prefs = json.decode(business.printerConfig!);
@@ -55,10 +54,15 @@ class _EditBusinessModalState extends State<EditBusinessModal> {
   }
 
   void _openMap() async {
+    // 🔥 PASO 1: Validar GPS con el nuevo Modal Premium
+    bool isGpsReady = await HardwareValidator.checkGPS(context);
+    if (!isGpsReady) return; // Si no hay GPS, se detiene aquí
+
+    // PASO 2: Si todo está bien, abre el mapa
     final LatLng? result = await Navigator.push(context, MaterialPageRoute(builder: (_) => MapPickerScreen(initialLat: _lat, initialLng: _lng)));
     if (result != null) {
       setState(() { _lat = result.latitude; _lng = result.longitude; });
-      CustomSnackBar.show(context, message: "📍 Ubicación fijada", isError: false);
+      if (mounted) CustomSnackBar.show(context, message: "📍 Ubicación fijada", isError: false);
     }
   }
 
@@ -166,7 +170,6 @@ class _EditBusinessModalState extends State<EditBusinessModal> {
                   onPressed: auth.isLoading ? null : () async {
                     if (!_formKey.currentState!.validate()) return;
                     
-                    // 🔥 Enviamos los nuevos datos de privacidad al auth provider
                     bool success = await auth.updateBusinessProfile(
                       _nameCtrl.text, _rucCtrl.text, _addressCtrl.text, _paymentCtrl.text, 
                       _lat, _lng, _showAddress, _showRuc
@@ -175,7 +178,8 @@ class _EditBusinessModalState extends State<EditBusinessModal> {
                     if (mounted) {
                         if(success) {
                             if (widget.isMandatory) {
-                                await auth.checkAuthStatus();
+                                // 🔥 CORRECCIÓN: Llamamos al método correcto del AuthProvider
+                                await auth.checkInitialState();
                             }
                             Navigator.pop(context);
                             CustomSnackBar.show(context, message: "Negocio configurado con éxito", isError: false);

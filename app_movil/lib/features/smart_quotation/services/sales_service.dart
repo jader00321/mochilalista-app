@@ -1,162 +1,162 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../../config/api_constants.dart';
 import '../models/crm_models.dart';
+import '../../../database/local_db.dart';
 
 class SalesService {
+  final dbHelper = LocalDatabase.instance;
   
-  // 🔥 Helper para atrapar la expulsión
-  void _checkAuthorization(http.Response response) {
-    if (response.statusCode == 401 || response.statusCode == 403) {
-      throw Exception("AUTH_REVOKED");
-    }
-  }
-  
-  Future<SaleModel> createSale(Map<String, dynamic> saleData, String token) async {
-    final url = Uri.parse('${ApiConstants.baseUrl}/sales/create');
+  // 🔥 Recibe explícitamente negocioId y usuarioId
+  Future<SaleModel> createSale(Map<String, dynamic> saleData, int negocioId, int usuarioId) async {
     try {
-      final response = await http.post(
-        url, 
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'}, 
-        body: json.encode(saleData)
-      ).timeout(const Duration(seconds: 20), onTimeout: () => throw Exception("Tiempo de espera agotado. Revisa tu conexión."));
+      final db = await dbHelper.database;
+      int saleId = 0;
 
-      _checkAuthorization(response); // 🔥 Verificación Anti-Despido
+      await db.transaction((txn) async {
+        saleId = await txn.insert('ventas', {
+          'negocio_id': negocioId,
+          'creado_por_usuario_id': usuarioId,
+          'cotizacion_id': saleData['cotizacion_id'],
+          'cliente_id': saleData['cliente_id'],
+          'origen_venta': saleData['origen_venta'] ?? 'directa',
+          'metodo_pago': saleData['metodo_pago'],
+          'estado_pago': saleData['estado_pago'],
+          'estado_entrega': saleData['estado_entrega'],
+          'monto_total': saleData['monto_total'],
+          'monto_pagado': saleData['monto_pagado'],
+          'descuento_aplicado': saleData['descuento_aplicado'] ?? 0.0,
+          'fecha_venta': DateTime.now().toIso8601String(),
+          'is_archived': 0
+        });
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return SaleModel.fromJson(json.decode(utf8.decode(response.bodyBytes)));
-      } else {
-        String errorMsg = "Error del servidor (${response.statusCode})";
-        try {
-          final error = json.decode(utf8.decode(response.bodyBytes));
-          errorMsg = error['detail'] ?? "Error desconocido al procesar venta";
-        } catch (_) {
-          errorMsg = "La base de datos rechazó la operación.";
+        List<dynamic> items = saleData['items'] ?? [];
+        for (var item in items) {
+          int presId = item['presentation_id'];
+          int quantity = item['quantity'];
+          await txn.rawUpdate(
+            'UPDATE presentaciones_producto SET stock_actual = stock_actual - ? WHERE id = ?',
+            [quantity, presId]
+          );
         }
-        throw Exception(errorMsg);
-      }
-    } catch (e) {
-      throw Exception("$e");
-    }
+
+        if (saleData['monto_pagado'] > 0) {
+          await txn.insert('pagos', {
+            'negocio_id': negocioId,
+            'creado_por_usuario_id': usuarioId,
+            'cliente_id': saleData['cliente_id'],
+            'venta_id': saleId,
+            'monto': saleData['monto_pagado'],
+            'metodo_pago': saleData['metodo_pago'] != 'credito' ? saleData['metodo_pago'] : 'efectivo',
+            'fecha_pago': DateTime.now().toIso8601String()
+          });
+        }
+
+        List<dynamic> cuotas = saleData['cuotas'] ?? [];
+        for (var c in cuotas) {
+          await txn.insert('cuotas', {
+            'venta_id': saleId, 'numero_cuota': c['numero_cuota'], 'monto': c['monto'],
+            'monto_pagado': c['monto_pagado'] ?? 0.0, 'fecha_vencimiento': c['fecha_vencimiento'],
+            'estado': c['estado'] ?? 'pendiente'
+          });
+        }
+
+        if (saleData['cotizacion_id'] != null) {
+          await txn.update('smart_quotations', {'status': 'SOLD'}, where: 'id = ?', whereArgs: [saleData['cotizacion_id']]);
+        }
+      });
+
+      final saleDataRow = await getSaleDetail(saleId);
+      return SaleModel.fromJson(saleDataRow);
+    } catch (e) { throw Exception("Error local al procesar la venta: $e"); }
   }
 
+  // 🔥 Recibe negocioId
   Future<List<SaleModel>> getHistory(
-    String token, {
-    int skip = 0, 
-    int limit = 50,
-    String? startDate,
-    String? endDate,
-    String? searchQuery,
-    bool isArchived = false,
-    String? origenVenta,
-    String sortBy = "fecha_venta",
-    String order = "desc"
+    int negocioId, {
+    int skip = 0, int limit = 50, String? startDate, String? endDate,
+    String? searchQuery, bool isArchived = false, String? origenVenta,
+    String sortBy = "fecha_venta", String order = "desc"
   }) async {
-    final Map<String, String> queryParams = {
-      'skip': skip.toString(),
-      'limit': limit.toString(),
-      'is_archived': isArchived.toString(),
-      'sort_by': sortBy,
-      'order': order,
-    };
-
-    if (startDate != null) queryParams['start_date'] = startDate;
-    if (endDate != null) queryParams['end_date'] = endDate;
-    if (searchQuery != null && searchQuery.isNotEmpty) queryParams['search_query'] = searchQuery;
-    if (origenVenta != null && origenVenta != "todas") queryParams['origen_venta'] = origenVenta;
-
-    final uri = Uri.parse('${ApiConstants.baseUrl}/sales/history').replace(queryParameters: queryParams);
-    
     try {
-      final response = await http.get(uri, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 15));
-      _checkAuthorization(response); // 🔥 Verificación Anti-Despido
+      final db = await dbHelper.database;
+      String query = '''
+        SELECT v.*, c.nombre_completo AS cliente_nombre, c.telefono AS cliente_telefono 
+        FROM ventas v
+        LEFT JOIN clientes c ON v.cliente_id = c.id
+        WHERE v.negocio_id = ? AND v.is_archived = ?
+      ''';
+      List<dynamic> args = [negocioId, isArchived ? 1 : 0];
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
-        return data.map((e) => SaleModel.fromJson(e)).toList();
-      } else {
-        throw Exception("Error al obtener el historial");
-      }
-    } catch (e) {
-      throw Exception("Error de conexión: $e");
-    }
+      if (startDate != null) { query += " AND v.fecha_venta >= ?"; args.add(startDate); }
+      if (endDate != null) { query += " AND v.fecha_venta <= ?"; args.add(endDate); }
+      if (origenVenta != null && origenVenta != "todas") { query += " AND v.origen_venta = ?"; args.add(origenVenta); }
+      if (searchQuery != null && searchQuery.isNotEmpty) { query += " AND c.nombre_completo LIKE ?"; args.add('%$searchQuery%'); }
+
+      query += " ORDER BY v.$sortBy ${order.toUpperCase()} LIMIT ? OFFSET ?";
+      args.add(limit); args.add(skip);
+
+      final List<Map<String, dynamic>> rows = await db.rawQuery(query, args);
+      return rows.map((e) => SaleModel.fromJson(e)).toList();
+    } catch (e) { throw Exception("Error al cargar historial local: $e"); }
   }
 
-  Future<SalesStatsModel> getStats(String token, {String? startDate, String? endDate, bool isArchived = false, String? origenVenta}) async {
-    final Map<String, String> queryParams = {
-      'is_archived': isArchived.toString()
-    };
-    if (startDate != null) queryParams['start_date'] = startDate;
-    if (endDate != null) queryParams['end_date'] = endDate;
-    if (origenVenta != null && origenVenta != "todas") queryParams['origen_venta'] = origenVenta;
-
-    final uri = Uri.parse('${ApiConstants.baseUrl}/sales/stats').replace(queryParameters: queryParams);
-
+  // 🔥 Recibe negocioId
+  Future<SalesStatsModel> getStats(int negocioId, {String? startDate, String? endDate, bool isArchived = false, String? origenVenta}) async {
     try {
-      final response = await http.get(uri, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 10));
-      _checkAuthorization(response); // 🔥 Verificación Anti-Despido
+      final db = await dbHelper.database;
+      String query = '''
+        SELECT SUM(monto_pagado) AS total_ingresos, SUM(monto_total - monto_pagado) AS total_deuda, COUNT(id) AS cantidad_ventas
+        FROM ventas 
+        WHERE negocio_id = ? AND is_archived = ?
+      ''';
+      List<dynamic> args = [negocioId, isArchived ? 1 : 0];
 
-      if (response.statusCode == 200) {
-        return SalesStatsModel.fromJson(json.decode(utf8.decode(response.bodyBytes)));
-      } else {
-        throw Exception("Error al obtener estadísticas");
-      }
-    } catch (e) {
-      throw Exception("Error de conexión: $e");
-    }
+      if (startDate != null) { query += " AND fecha_venta >= ?"; args.add(startDate); }
+      if (endDate != null) { query += " AND fecha_venta <= ?"; args.add(endDate); }
+      if (origenVenta != null && origenVenta != "todas") { query += " AND origen_venta = ?"; args.add(origenVenta); }
+
+      final List<Map<String, dynamic>> rows = await db.rawQuery(query, args);
+      if (rows.isNotEmpty) return SalesStatsModel.fromJson(rows.first);
+      return SalesStatsModel(totalIngresos: 0.0, totalDeuda: 0.0, cantidadVentas: 0);
+    } catch (e) { throw Exception("Error cargando estadísticas locales: $e"); }
   }
 
-  Future<bool> toggleArchive(String token, int saleId) async {
-    final url = Uri.parse('${ApiConstants.baseUrl}/sales/$saleId/archive');
+  Future<bool> toggleArchive(int saleId) async {
     try {
-      final response = await http.patch(url, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 10));
-      _checkAuthorization(response); // 🔥 Verificación Anti-Despido
+      final db = await dbHelper.database;
+      final sale = await db.query('ventas', columns: ['is_archived'], where: 'id = ?', whereArgs: [saleId]);
+      if (sale.isEmpty) throw Exception("Venta no encontrada.");
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['is_archived'];
-      } else {
-        throw Exception("Error al archivar la venta");
-      }
-    } catch (e) {
-      throw Exception("Error de conexión: $e");
-    }
+      int newVal = (sale.first['is_archived'] as int) == 1 ? 0 : 1;
+      await db.update('ventas', {'is_archived': newVal}, where: 'id = ?', whereArgs: [saleId]);
+      return newVal == 1;
+    } catch (e) { throw Exception("Error local al archivar: $e"); }
   }
 
-  Future<Map<String, dynamic>> getSaleDetail(String token, int saleId) async {
-    final url = Uri.parse('${ApiConstants.baseUrl}/sales/$saleId/detail');
+  Future<String> updateDeliveryStatus(int saleId, String newStatus) async {
     try {
-      final response = await http.get(url, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 15));
-      _checkAuthorization(response); // 🔥 Verificación Anti-Despido
-
-      if (response.statusCode == 200) {
-        return json.decode(utf8.decode(response.bodyBytes));
-      } else {
-        throw Exception("Error al cargar detalle de venta");
-      }
-    } catch (e) {
-      throw Exception("Error de conexión: $e");
-    }
+      final db = await dbHelper.database;
+      await db.update('ventas', {'estado_entrega': newStatus}, where: 'id = ?', whereArgs: [saleId]);
+      return newStatus;
+    } catch (e) { throw Exception("Error actualizando logística: $e"); }
   }
 
-  Future<String> updateDeliveryStatus(String token, int saleId, String newStatus) async {
-    final url = Uri.parse('${ApiConstants.baseUrl}/sales/$saleId/delivery');
+  Future<Map<String, dynamic>> getSaleDetail(int saleId) async {
     try {
-      final response = await http.patch(
-        url, 
-        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
-        body: json.encode({"estado_entrega": newStatus})
-      ).timeout(const Duration(seconds: 10));
-      
-      _checkAuthorization(response); // 🔥 Verificación Anti-Despido
+      final db = await dbHelper.database;
+      final vRows = await db.query('ventas', where: 'id = ?', whereArgs: [saleId], limit: 1);
+      if (vRows.isEmpty) throw Exception("Venta no encontrada");
+      Map<String, dynamic> saleMap = Map<String, dynamic>.from(vRows.first);
 
-      if (response.statusCode == 200) {
-        return json.decode(response.body)['estado_entrega'];
-      } else {
-        throw Exception("Error al actualizar estado logístico");
+      if (saleMap['cliente_id'] != null) {
+        final cRows = await db.query('clientes', where: 'id = ?', whereArgs: [saleMap['cliente_id']], limit: 1);
+        if (cRows.isNotEmpty) saleMap['cliente'] = cRows.first;
       }
-    } catch (e) {
-      throw Exception("Error de conexión: $e");
-    }
+      saleMap['cuotas'] = await db.query('cuotas', where: 'venta_id = ?', whereArgs: [saleId]);
+      saleMap['pagos'] = await db.query('pagos', where: 'venta_id = ?', whereArgs: [saleId]);
+
+      if (saleMap['cotizacion_id'] != null) {
+        saleMap['items'] = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [saleMap['cotizacion_id']]);
+      }
+      return saleMap;
+    } catch (e) { throw Exception("Error al obtener detalle de venta local: $e"); }
   }
 }

@@ -90,13 +90,14 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() => _currentIndex = index);
           if (index == 0 && auth.hasActiveContext) {
              Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
-             auth.checkAuthStatus();
+             // 🔥 CORRECCIÓN 1: Se llama a checkInitialState en lugar de checkAuthStatus
+             auth.checkInitialState();
           }
         },
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white, 
-        elevation: 8,
-        shadowColor: Colors.black45,
-        indicatorColor: isDark ? Colors.blue.withOpacity(0.2) : theme.colorScheme.primary.withOpacity(0.15),
+        elevation: 15,
+        shadowColor: Colors.black,
+        indicatorColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.15),
         destinations: destinations,
       ),
     );
@@ -115,12 +116,12 @@ class _HomeDashboardView extends StatelessWidget {
     final auth = Provider.of<AuthProvider>(context);
     final isGuest = !auth.hasActiveContext;
 
-    // 🔥 SOLUCIÓN: PULL TO REFRESH
     return RefreshIndicator(
       color: Colors.blue[800],
       onRefresh: () async {
         final authProv = Provider.of<AuthProvider>(context, listen: false);
-        await authProv.checkAuthStatus();
+        // 🔥 CORRECCIÓN 2: checkInitialState
+        await authProv.checkInitialState();
         if (authProv.hasActiveContext) {
           Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
           await Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
@@ -130,13 +131,12 @@ class _HomeDashboardView extends StatelessWidget {
         }
       },
       child: SingleChildScrollView(
-        // 🔥 IMPORTANTE: AlwaysScrollableScrollPhysics permite arrastrar hacia abajo aunque la pantalla no sea tan larga
         physics: const AlwaysScrollableScrollPhysics(), 
         child: Column(
           children: [
             const DashboardHeader(),
             Transform.translate(
-              offset: const Offset(0, -35),
+              offset: const Offset(0, -30),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: Column(
@@ -161,8 +161,8 @@ class _HomeDashboardView extends StatelessWidget {
                       isGuest ? "Explora nuestras herramientas" : (auth.isCommunityClient ? "Servicios de la Tienda" : "Gestión Operativa"), 
                       style: TextStyle(
                         fontSize: 18, 
-                        fontWeight: FontWeight.bold, 
-                        letterSpacing: 0.5,
+                        fontWeight: FontWeight.w900, 
+                        letterSpacing: -0.5,
                         color: isDark ? Colors.white : Colors.black87 
                       )
                     ),
@@ -182,16 +182,16 @@ class _HomeDashboardView extends StatelessWidget {
   Widget _buildGuestBanner(BuildContext context, bool isDark) {
     final cardColor = isDark ? const Color(0xFF23232F) : Colors.white;
     return Material(
-      elevation: isDark ? 0 : 8, 
-      shadowColor: isDark ? Colors.transparent : Colors.orange.withOpacity(0.2),
+      elevation: isDark ? 0 : 10, 
+      shadowColor: isDark ? Colors.transparent : Colors.orange.withOpacity(0.3),
       color: cardColor,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: isDark ? BorderSide(color: Colors.orange.withOpacity(0.3), width: 1.5) : BorderSide(color: Colors.orange.withOpacity(0.5), width: 1.5),
+        borderRadius: BorderRadius.circular(28),
+        side: isDark ? BorderSide(color: Colors.orange.withOpacity(0.3), width: 1.5) : BorderSide.none,
       ),
       child: InkWell(
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.quotation))),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Row(
@@ -202,13 +202,13 @@ class _HomeDashboardView extends StatelessWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange[50], borderRadius: BorderRadius.circular(8)),
+                      decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange[50], borderRadius: BorderRadius.circular(10)),
                       child: Text("MODO EXPLORACIÓN", style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange[800], fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
                     ),
                     const SizedBox(height: 12),
-                    Text("Conoce la Inteligencia Artificial", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: isDark ? Colors.white : Colors.black87, height: 1.2)),
+                    Text("Conoce la IA", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: isDark ? Colors.white : Colors.black87, height: 1.2, letterSpacing: -0.5)),
                     const SizedBox(height: 8),
-                    Text("Ingresa aquí para ver cómo funciona el escáner de listas escolares. Para pedir a tu tienda debes tener tu cuenta conectada.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13, height: 1.4)),
+                    Text("Ingresa aquí para ver cómo funciona el escáner de listas escolares. Regístrate para usarlo en tu negocio.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13, height: 1.4)),
                   ],
                 ),
               ),

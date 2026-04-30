@@ -9,10 +9,13 @@ import '../services/matching_service.dart';
 import '../services/client_service.dart';
 
 class MatchingProvider with ChangeNotifier {
+  int? _negocioId;
+  int? _usuarioId;
+  // ignore: unused_field
+  String? _aiToken;
+
   final MatchingService _service = MatchingService();
   final ClientService _clientService = ClientService();
-
-  Function()? onAuthRevoked;
 
   bool _isLoading = false;
   bool _isSaving = false;
@@ -37,8 +40,6 @@ class MatchingProvider with ChangeNotifier {
   ClientModel? get selectedClient => _selectedClient;
   bool get hasModifications => _hasModifications;
 
-  String? _authToken;
-
   double get totalNetAmount {
     final total = _pairs.fold(0.0, (sum, pair) => sum + pair.subtotal);
     return double.parse(total.toStringAsFixed(2));
@@ -59,33 +60,23 @@ class MatchingProvider with ChangeNotifier {
   }
 
   void _handleException(dynamic e) {
-    if (e.toString().contains("AUTH_REVOKED")) {
-      _errorMessage = "Tu acceso a este negocio ha sido revocado.";
-      if (onAuthRevoked != null) onAuthRevoked!();
-    } else {
-      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
-    }
+    _errorMessage = e.toString().replaceAll("Exception:", "").trim();
   }
 
-  void updateToken(String? token) {
-    if (_authToken != token) {
-      _authToken = token;
+  // 🔥 Multi-Perfil Context
+  void updateContext(int? negocioId, int? usuarioId, String? aiToken) {
+    if (_negocioId != negocioId) {
+      _negocioId = negocioId;
+      _usuarioId = usuarioId;
+      _aiToken = aiToken;
       clearState();
     }
   }
 
   void clearState() {
-    _pairs.clear();
-    _originalPairs.clear();
-    _metadata = null;
-    _originalMetadata = null;
-    _selectedClient = null;
-    _localImageFile = null;
-    _fullExtractedText = null;
-    _isLoading = false;
-    _isSaving = false;
-    _hasModifications = false;
-    _errorMessage = '';
+    _pairs.clear(); _originalPairs.clear(); _metadata = null; _originalMetadata = null;
+    _selectedClient = null; _localImageFile = null; _fullExtractedText = null;
+    _isLoading = false; _isSaving = false; _hasModifications = false; _errorMessage = '';
     notifyListeners();
   }
 
@@ -102,23 +93,20 @@ class MatchingProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> initializeAndMatch(List<ExtractedItem> sourceItems, ExtractedMetadata? meta, String token, {bool isClientRole = false}) async {
-    if (_pairs.isNotEmpty) return;
+  Future<void> initializeAndMatch(List<ExtractedItem> sourceItems, ExtractedMetadata? meta, {bool isClientRole = false}) async {
+    if (_pairs.isNotEmpty || _negocioId == null) return;
     _isLoading = true;
     _errorMessage = '';
-    _authToken = token;
 
     _metadata = ExtractedMetadata(
-      institutionName: meta?.institutionName ?? "",
-      studentName: meta?.studentName ?? "",
-      gradeLevel: meta?.gradeLevel ?? "",
+      institutionName: meta?.institutionName ?? "", studentName: meta?.studentName ?? "", gradeLevel: meta?.gradeLevel ?? "",
     );
 
     _pairs = sourceItems.map((item) => MatchPair(sourceItem: item)).toList();
     notifyListeners();
 
     try {
-      final results = await _service.runBatchMatching(sourceItems, token, isClientRole); 
+      final results = await _service.runBatchMatching(sourceItems, _negocioId!, isClientRole); 
 
       for (var result in results) {
         final index = _pairs.indexWhere((p) => p.sourceItem.id == result.itemId);
@@ -127,10 +115,7 @@ class MatchingProvider with ChangeNotifier {
           
           if (result.suggestedProduct != null) {
             pair.selectedProduct = result.suggestedProduct;
-            
-            if (result.suggestedQuantity != null) {
-                pair.selectedQuantity = result.suggestedQuantity!;
-            }
+            if (result.suggestedQuantity != null) pair.selectedQuantity = result.suggestedQuantity!;
 
             if (isClientRole) {
                 if (pair.selectedProduct!.stock <= 0) {
@@ -142,13 +127,9 @@ class MatchingProvider with ChangeNotifier {
                 }
             }
 
-            if (result.matchTypeString == 'AUTO') {
-              pair.status = MatchStatus.auto;
-            } else if (result.matchTypeString == 'SUGGESTION') {
-              pair.status = MatchStatus.suggestion;
-            } else {
-              pair.status = MatchStatus.none;
-            }
+            if (result.matchTypeString == 'AUTO') { pair.status = MatchStatus.auto; } 
+            else if (result.matchTypeString == 'SUGGESTION') { pair.status = MatchStatus.suggestion; } 
+            else { pair.status = MatchStatus.none; }
           }
         }
       }
@@ -230,9 +211,7 @@ class MatchingProvider with ChangeNotifier {
 
   void addManualRow() {
     int maxId = 0;
-    if (_pairs.isNotEmpty) {
-      maxId = _pairs.map((p) => p.sourceItem.id).reduce((curr, next) => curr > next ? curr : next);
-    }
+    if (_pairs.isNotEmpty) maxId = _pairs.map((p) => p.sourceItem.id).reduce((curr, next) => curr > next ? curr : next);
     final newItem = ExtractedItem(id: maxId + 1, originalText: "Agregado Manual", fullName: "Nuevo Ítem", quantity: 1, unit: "und");
     _pairs.add(MatchPair(sourceItem: newItem, status: MatchStatus.none));
     _hasModifications = true;
@@ -240,22 +219,13 @@ class MatchingProvider with ChangeNotifier {
   }
 
   Future<int?> saveQuotation(
-    String status, 
-    String token,
-    {
-      String? manualClientName,
-      String? manualClientPhone,
-      String? manualClientDni,
-      String? manualClientAddress,
-      String? manualClientEmail,
-      String? manualClientNotes,
-      bool updateClientData = true,
-      String? institutionName, 
-      String? gradeLevel,   
-      String? type, 
-      bool isClientRole = false, 
+    String status, {
+      String? manualClientName, String? manualClientPhone, String? manualClientDni, String? manualClientAddress, String? manualClientEmail, String? manualClientNotes,
+      bool updateClientData = true, String? institutionName, String? gradeLevel, String? type, bool isClientRole = false, 
     }
   ) async {
+    if (_negocioId == null || _usuarioId == null) return null;
+    
     _isSaving = true;
     notifyListeners();
 
@@ -271,8 +241,10 @@ class MatchingProvider with ChangeNotifier {
     if (gradeLevel != null && gradeLevel.isNotEmpty) _metadata!.gradeLevel = gradeLevel;
 
     String? uploadedImageUrl;
+    // 🔥 CORRECCIÓN: Como estamos guardando la imagen de forma local, 
+    // ya no necesitamos el _aiToken aquí, solo el archivo.
     if (_localImageFile != null) {
-        uploadedImageUrl = await _service.uploadImageToBackend(_localImageFile!, token);
+        uploadedImageUrl = await _service.uploadImageToBackend(_localImageFile!);
     }
 
     final Map<int, Map<String, dynamic>> groupedItems = {};
@@ -309,26 +281,21 @@ class MatchingProvider with ChangeNotifier {
       return null;
     }
 
-    // 🔥 PREVENCIÓN DE DUPLICADOS: Si el ID es 0 (Cliente Simulado del Frontend), lo mandamos como null para que el backend asigne el real.
     int? finalClientId = (_selectedClient?.id == 0) ? null : _selectedClient?.id;
     String rawClientName = _selectedClient?.fullName ?? manualClientName?.trim() ?? "";
 
-    // 🔥 BLOQUEO DE CREACIÓN DE CLIENTES SI ES ROL CLIENTE (Evita los nulls y clonaciones)
     if (!isClientRole && updateClientData && rawClientName.isNotEmpty) {
       final clientData = {
-        'nombre_completo': rawClientName,
-        'telefono': manualClientPhone?.replaceAll(" ", "") ?? "",
-        'dni_ruc': manualClientDni?.trim(),
-        'direccion': manualClientAddress?.trim(),
-        'correo': manualClientEmail?.trim(),
-        'notas': manualClientNotes?.trim()
+        'nombre_completo': rawClientName, 'telefono': manualClientPhone?.replaceAll(" ", "") ?? "",
+        'dni_ruc': manualClientDni?.trim(), 'direccion': manualClientAddress?.trim(),
+        'correo': manualClientEmail?.trim(), 'notas': manualClientNotes?.trim()
       };
       
       try {
         if (_selectedClient != null && _selectedClient!.id != 0) {
-          await _clientService.updateClient(_selectedClient!.id, clientData, token);
+          await _clientService.updateClient(_selectedClient!.id, clientData);
         } else {
-          final newClient = await _clientService.createClient(clientData, token);
+          final newClient = await _clientService.createClient(clientData, _negocioId!, _usuarioId!);
           finalClientId = newClient.id; 
         }
       } catch (e) {
@@ -340,7 +307,6 @@ class MatchingProvider with ChangeNotifier {
     String finalQuoteName = "";
     String typeLabel = type == "ai_scan" ? "IA" : "Manual";
 
-    // 🔥 NOMENCLATURA CORRECTA Y ROBUSTA
     if (isClientRole) {
         final String name = (manualClientName != null && manualClientName.isNotEmpty) ? manualClientName : "Cliente";
         finalQuoteName = "$name - Pedido $typeLabel #$timeStr"; 
@@ -350,7 +316,7 @@ class MatchingProvider with ChangeNotifier {
         } else {
             if (finalClientId != null) {
                try {
-                  final list = await _clientService.getPendingQuotations(finalClientId, token);
+                  final list = await _clientService.getPendingQuotations(finalClientId);
                   int count = list.length + 1;
                   finalQuoteName = "$rawClientName #$timeStr ($count) - $typeLabel";
                } catch(e) {
@@ -378,14 +344,14 @@ class MatchingProvider with ChangeNotifier {
       "total_amount": double.parse(finalAmount.toStringAsFixed(2)),
       "total_savings": double.parse(finalSavings.toStringAsFixed(2)),
       "status": status, 
-      "type": type ?? "ai_scan", // Mantiene ai_scan o manual original
+      "type": type ?? "ai_scan",
       "source_image_url": uploadedImageUrl, 
       "items": validItems,
       "original_text_dump": _fullExtractedText 
     };
 
     try {
-      final newId = await _service.saveQuotation(quotationPayload, token);
+      final newId = await _service.saveQuotation(quotationPayload, _negocioId!, _usuarioId!);
       _isSaving = false;
       return newId;
     } catch (e) {

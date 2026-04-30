@@ -1,33 +1,27 @@
 enum PdfTheme {
-  classic, // B/N Estricto
-  modern,  // Azul corporativo
-  minimal  // Limpio
+  classic, 
+  modern,  
+  minimal  
 }
 
 class PdfConfig {
-  // Datos Financieros Globales
   bool showTotalGlobal;
   bool showTotalSavings; 
 
-  // Datos Financieros (Columnas por Producto)
-  bool showProductUnit;       // Mostrar columna "Unid."
-  bool showProductUnitPrice;  // Mostrar precio S/ Unitario
-  bool showProductSubtotal;   // Mostrar precio S/ Total por línea
-  bool showProductSavings;    // Mostrar precio original tachado (si hay descuento)
+  bool showProductUnit;      
+  bool showProductUnitPrice; 
+  bool showProductSubtotal;  
+  bool showProductSavings;   
 
-  // Datos de Transacción
   bool showTransactionDetails; 
   String? documentTitle;       
 
-  // Datos Visuales
   bool showImages;
   PdfTheme theme;
 
-  // Datos de Cliente 
-  bool showClientName;      
-  bool showInstitutionInfo; // Sirve para Colegio/Grado (Proformas) o Notas (Caja Rápida)
+  bool showClientName;       
+  bool showInstitutionInfo; 
   
-  // Privacidad del Negocio
   bool showBusinessInfo; 
   bool includeOwnerPhone;
   bool includeShopAddress;
@@ -38,7 +32,6 @@ class PdfConfig {
     this.showTotalGlobal = true,
     this.showTotalSavings = true, 
     
-    // Opciones de Producto por defecto
     this.showProductUnit = true,
     this.showProductUnitPrice = true,
     this.showProductSubtotal = true,
@@ -56,4 +49,52 @@ class PdfConfig {
     this.includeShopRuc = true,
     this.includeLogo = true,
   });
+
+  // Agregado para guardarlo en la Base de Datos o SharedPreferences localmente
+  factory PdfConfig.fromJson(Map<String, dynamic> json) {
+    return PdfConfig(
+      showTotalGlobal: json['showTotalGlobal'] ?? true,
+      showTotalSavings: json['showTotalSavings'] ?? true,
+      showProductUnit: json['showProductUnit'] ?? true,
+      showProductUnitPrice: json['showProductUnitPrice'] ?? true,
+      showProductSubtotal: json['showProductSubtotal'] ?? true,
+      showProductSavings: json['showProductSavings'] ?? true,
+      showTransactionDetails: json['showTransactionDetails'] ?? true,
+      documentTitle: json['documentTitle'],
+      showImages: json['showImages'] ?? false,
+      theme: PdfTheme.values.firstWhere(
+        (e) => e.name == json['theme'], 
+        orElse: () => PdfTheme.modern
+      ),
+      showClientName: json['showClientName'] ?? true,
+      showInstitutionInfo: json['showInstitutionInfo'] ?? true,
+      showBusinessInfo: json['showBusinessInfo'] ?? true,
+      includeOwnerPhone: json['includeOwnerPhone'] ?? true,
+      includeShopAddress: json['includeShopAddress'] ?? true,
+      includeShopRuc: json['includeShopRuc'] ?? true,
+      includeLogo: json['includeLogo'] ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'showTotalGlobal': showTotalGlobal,
+      'showTotalSavings': showTotalSavings,
+      'showProductUnit': showProductUnit,
+      'showProductUnitPrice': showProductUnitPrice,
+      'showProductSubtotal': showProductSubtotal,
+      'showProductSavings': showProductSavings,
+      'showTransactionDetails': showTransactionDetails,
+      'documentTitle': documentTitle,
+      'showImages': showImages,
+      'theme': theme.name,
+      'showClientName': showClientName,
+      'showInstitutionInfo': showInstitutionInfo,
+      'showBusinessInfo': showBusinessInfo,
+      'includeOwnerPhone': includeOwnerPhone,
+      'includeShopAddress': includeShopAddress,
+      'includeShopRuc': includeShopRuc,
+      'includeLogo': includeLogo,
+    };
+  }
 }

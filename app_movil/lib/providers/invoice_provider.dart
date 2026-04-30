@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import '../config/api_constants.dart';
+import '../database/local_db.dart';
 import '../models/invoice_model.dart';
 
 class InvoiceProvider with ChangeNotifier {
-  String? _authToken;
+  int? _negocioId;
   bool _isLoading = false;
   String _errorMessage = "";
   
+  final dbHelper = LocalDatabase.instance;
+
   List<InvoiceModel> _invoices = [];
   bool _hasMoreData = true;
   int _currentSkip = 0;
@@ -19,17 +19,13 @@ class InvoiceProvider with ChangeNotifier {
   List<InvoiceModel> get invoices => _invoices;
   bool get hasMoreData => _hasMoreData;
 
-  void updateToken(String? token) {
-    _authToken = token;
+  // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
+  void updateContext(int? negocioId) {
+    _negocioId = negocioId;
   }
 
-  Map<String, String> get _headers => {
-    'Authorization': 'Bearer $_authToken',
-    'Content-Type': 'application/json',
-  };
-
   Future<void> fetchInvoices({bool reset = false}) async {
-    if (_authToken == null) return;
+    if (_negocioId == null) return;
 
     if (reset) {
       _isLoading = true;
@@ -45,31 +41,32 @@ class InvoiceProvider with ChangeNotifier {
     }
 
     try {
-      final url = Uri.parse('${ApiConstants.baseUrl}/invoices/?skip=$_currentSkip&limit=$_limit');
-      final response = await http.get(url, headers: _headers);
+      final db = await dbHelper.database;
+      // Consultamos la tabla facturas_carga usando el _negocioId dinámico
+      final List<Map<String, dynamic>> rows = await db.query(
+        'facturas_carga',
+        where: 'negocio_id = ?',
+        whereArgs: [_negocioId],
+        limit: _limit,
+        offset: _currentSkip,
+        orderBy: 'fecha_carga DESC'
+      );
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
-        final List<InvoiceModel> newInvoices = data.map((json) => InvoiceModel.fromJson(json)).toList();
+      final List<InvoiceModel> newInvoices = rows.map((json) => InvoiceModel.fromJson(json)).toList();
 
-        if (newInvoices.length < _limit) {
-          _hasMoreData = false;
-        }
-
-        if (reset) {
-          _invoices = newInvoices;
-        } else {
-          _invoices.addAll(newInvoices);
-        }
-        
-        _currentSkip += newInvoices.length;
-      } else if (response.statusCode == 403) {
-         _errorMessage = "Requiere seleccionar un negocio primero.";
-      } else {
-        _errorMessage = "Error al cargar facturas: ${response.statusCode}";
+      if (newInvoices.length < _limit) {
+        _hasMoreData = false;
       }
+
+      if (reset) {
+        _invoices = newInvoices;
+      } else {
+        _invoices.addAll(newInvoices);
+      }
+      
+      _currentSkip += newInvoices.length;
     } catch (e) {
-      _errorMessage = "Error de conexión: $e";
+      _errorMessage = "Error cargando facturas: $e";
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -77,15 +74,17 @@ class InvoiceProvider with ChangeNotifier {
   }
 
   Future<InvoiceModel?> getInvoiceDetail(int invoiceId) async {
-    if (_authToken == null) return null;
-
     try {
-      final url = Uri.parse('${ApiConstants.baseUrl}/invoices/$invoiceId');
-      final response = await http.get(url, headers: _headers);
+      final db = await dbHelper.database;
+      final List<Map<String, dynamic>> rows = await db.query(
+        'facturas_carga',
+        where: 'id = ?',
+        whereArgs: [invoiceId],
+        limit: 1
+      );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(utf8.decode(response.bodyBytes));
-        return InvoiceModel.fromJson(data);
+      if (rows.isNotEmpty) {
+        return InvoiceModel.fromJson(rows.first);
       }
     } catch (e) {
       debugPrint("Error obteniendo detalle de factura: $e");
@@ -94,33 +93,32 @@ class InvoiceProvider with ChangeNotifier {
   }
 
   Future<bool> updateInvoice(int invoiceId, {String? estado, int? proveedorId, String? imagenUrl}) async {
-    if (_authToken == null) return false;
-
     try {
-      final url = Uri.parse('${ApiConstants.baseUrl}/invoices/$invoiceId');
+      final db = await dbHelper.database;
       final Map<String, dynamic> body = {};
       
       if (estado != null) body['estado'] = estado;
       if (proveedorId != null) body['proveedor_id'] = proveedorId;
       if (imagenUrl != null) body['imagen_url'] = imagenUrl;
 
-      final response = await http.patch(
-        url, 
-        headers: _headers, 
-        body: json.encode(body)
+      int rowsUpdated = await db.update(
+        'facturas_carga',
+        body,
+        where: 'id = ?',
+        whereArgs: [invoiceId]
       );
 
-      if (response.statusCode == 200) {
+      if (rowsUpdated > 0) {
         final index = _invoices.indexWhere((inv) => inv.id == invoiceId);
         if (index != -1) {
-          final updatedData = json.decode(utf8.decode(response.bodyBytes));
-          _invoices[index] = InvoiceModel.fromJson(updatedData);
+          final updatedRow = await db.query('facturas_carga', where: 'id = ?', whereArgs: [invoiceId]);
+          _invoices[index] = InvoiceModel.fromJson(updatedRow.first);
           notifyListeners();
         }
         return true;
       }
     } catch (e) {
-      debugPrint("Error actualizando factura: $e");
+      debugPrint("Error actualizando factura localmente: $e");
     }
     return false;
   }

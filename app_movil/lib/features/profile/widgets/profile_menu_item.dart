@@ -20,7 +20,6 @@ class ProfileMenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 Colores dinámicos y legibles
     final textColor = isDestructive ? Colors.red : (isDark ? Colors.white : Colors.black87);
     final iconColor = isDestructive ? Colors.red : (isDark ? Colors.blue[300] : Colors.blue[700]);
     final iconBgColor = isDestructive 

@@ -19,14 +19,12 @@ class AIItemExtracted {
   String? marcaDetectada;
   String? codigo;
 
-  // --- MATEMÁTICA DE COMPRA ---
   String umpCompra; 
   int unidadesPorLote;
   double cantidadUmpComprada;
   double precioUmpProveedor;
   double totalPagoLote;
 
-  // --- INTENCIÓN DE VENTA ---
   String unidadVenta;
 
   AIItemExtracted({
@@ -80,7 +78,7 @@ class AIItemExtracted {
 }
 
 class AIInvoiceResponse {
-  int? invoiceId; // 🔥 NUEVO: Atrapa el ID de la factura creada en BD
+  int? invoiceId; 
   String proveedorDetectado;
   String? rucDetectado;
   String? fechaDetectada;
@@ -98,7 +96,7 @@ class AIInvoiceResponse {
 
   factory AIInvoiceResponse.fromJson(Map<String, dynamic> json) {
     return AIInvoiceResponse(
-      invoiceId: json['invoice_id'], // 🔥 Mapeado
+      invoiceId: json['invoice_id'], 
       proveedorDetectado: json['proveedor_detectado'] ?? 'Desconocido',
       rucDetectado: json['ruc_detectado'],     
       fechaDetectada: json['fecha_detectada'], 
@@ -108,7 +106,7 @@ class AIInvoiceResponse {
   }
 
   Map<String, dynamic> toJson() => {
-    'invoice_id': invoiceId, // 🔥 Viajará en el JSON
+    'invoice_id': invoiceId, 
     'proveedor_detectado': proveedorDetectado,
     'ruc_detectado': rucDetectado,
     'fecha_detectada': fechaDetectada,
@@ -195,14 +193,12 @@ class StagingVariant {
   String nombreEspecifico;
   String? codigoBarra;
   
-  // --- DATOS DE COMPRA ---
   String umpCompra;
   double cantidadUmpComprada;
   double precioUmpProveedor;
   double totalPagoLote;
   int unidadesPorLote;
 
-  // --- DATOS DE VENTA ---
   String unidadVenta;
   int unidadesPorVenta;
   double costoUnitarioSugerido;
@@ -219,19 +215,16 @@ class StagingVariant {
   StagingVariant({
     String? uuidTemporal,
     required this.nombreEspecifico,
-    
     required this.umpCompra,
     required this.cantidadUmpComprada,
     required this.precioUmpProveedor,
     required this.totalPagoLote,
     required this.unidadesPorLote,
-    
     required this.unidadVenta,
     required this.unidadesPorVenta,
     required this.costoUnitarioSugerido,
     required this.factorGananciaVentaSugerido,
     required this.precioVentaSugerido,
-    
     required this.matchPresentacion,
     this.codigoBarra,
     this.isConfirmed = true,
@@ -241,24 +234,20 @@ class StagingVariant {
     return StagingVariant(
       uuidTemporal: json['uuid_temporal'] ?? generateFrontendUuid(),
       nombreEspecifico: json['nombre_especifico'] ?? '',
-      
-      // Compras
       umpCompra: json['ump_compra'] ?? 'UND',
       cantidadUmpComprada: (json['cantidad_ump_comprada'] ?? 0).toDouble(),
       precioUmpProveedor: (json['precio_ump_proveedor'] ?? 0).toDouble(),
       totalPagoLote: (json['total_pago_lote'] ?? 0).toDouble(),
       unidadesPorLote: json['unidades_por_lote'] ?? 1,
-      
-      // Ventas
       unidadVenta: json['unidad_venta'] ?? 'Unidad',
       unidadesPorVenta: json['unidades_por_venta'] ?? 1,
       costoUnitarioSugerido: (json['costo_unitario_sugerido'] ?? 0).toDouble(),
       factorGananciaVentaSugerido: (json['factor_ganancia_venta_sugerido'] ?? 1.35).toDouble(),
       precioVentaSugerido: (json['precio_venta_sugerido'] ?? 0).toDouble(),
-      
       codigoBarra: json['codigo_barras'],
       matchPresentacion: MatchResult.fromJson(json['match_presentacion']),
-      isConfirmed: json['confirmado'] ?? true
+      // Adaptado para SQLite booleans si es necesario
+      isConfirmed: json['confirmado'] == 1 || json['confirmado'] == true || json['confirmado'] == null
     );
   }
 }
@@ -301,7 +290,7 @@ class StagingProductGroup {
 }
 
 class StagingResponse {
-  int? invoiceId; // 🔥 NUEVO: Conserva el ID de la factura para mandarlo en el Batch
+  int? invoiceId; 
   MatchResult proveedorMatch;
   String proveedorTexto;
   String? rucProveedor;
@@ -321,7 +310,7 @@ class StagingResponse {
 
   factory StagingResponse.fromJson(Map<String, dynamic> json) {
     return StagingResponse(
-      invoiceId: json['invoice_id'], // 🔥 Mapeado
+      invoiceId: json['invoice_id'], 
       proveedorMatch: MatchResult.fromJson(json['proveedor_match']),
       proveedorTexto: json['proveedor_texto'],
       rucProveedor: json['ruc_detectado'],

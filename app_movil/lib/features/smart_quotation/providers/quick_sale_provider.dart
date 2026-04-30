@@ -5,6 +5,8 @@ import '../models/smart_quotation_model.dart';
 import '../../../../providers/inventory_provider.dart';
 
 class QuickSaleProvider with ChangeNotifier {
+  int? _negocioId;
+  int? _usuarioId;
   
   // --- ESTADO DEL CARRITO ---
   final List<MatchedProduct> _cart = [];
@@ -61,6 +63,12 @@ class QuickSaleProvider with ChangeNotifier {
     return _overridePrices[presentationId] ?? item.offerPrice ?? item.price;
   }
 
+  // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
+  void updateContext(int? negocioId, int? usuarioId) {
+    _negocioId = negocioId;
+    _usuarioId = usuarioId;
+  }
+
   // --- FUNCIONES DE CARRITO Y CLIENTE ---
   void setClientInfo({int? id, String? name, String? phone, String? clientNote, String? saleNote, double? saldo}) {
     _clientId = id;
@@ -77,11 +85,9 @@ class QuickSaleProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // 🔥 Retorna un String si hay error, o null si fue exitoso
   String? addToCart(InventoryWrapper itemWrapper) {
     final presId = itemWrapper.presentation.id!;
 
-    // Bloqueo de Stock amigable
     if (itemWrapper.isOutOfStock) {
       return "El producto '${itemWrapper.displayNameDetail}' se encuentra agotado.";
     }
@@ -108,10 +114,9 @@ class QuickSaleProvider with ChangeNotifier {
     _cart.add(matched);
     _quantities[presId] = 1;
     notifyListeners();
-    return null; // Sin errores
+    return null; 
   }
 
-  // 🔥 Retorna un String si hay error, o null si fue exitoso
   String? updateItemFromModal(MatchedProduct product, int newQty, double? newOverridePrice) {
     final index = _cart.indexWhere((p) => p.presentationId == product.presentationId);
     if (index != -1) {
@@ -131,7 +136,6 @@ class QuickSaleProvider with ChangeNotifier {
     return null;
   }
 
-  // 🔥 Retorna un String si hay error, o null si fue exitoso
   String? updateQuantity(int presentationId, int newQty, int maxStock) {
     if (newQty <= 0) {
       removeItem(presentationId);
@@ -196,8 +200,8 @@ class QuickSaleProvider with ChangeNotifier {
 
     return SmartQuotationModel(
       id: DateTime.now().millisecondsSinceEpoch % 100000, 
-      negocioId: 0, 
-      creadoPorUsuarioId: 0, 
+      negocioId: _negocioId ?? 0, 
+      creadoPorUsuarioId: _usuarioId ?? 0, 
       clientId: null,
       clientName: _clientName ?? "Cliente Rápido", 
       institutionName: "Venta al Paso", 

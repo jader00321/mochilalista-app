@@ -33,13 +33,12 @@ import '../../../screens/home_screen.dart';
 class MatchingScreen extends StatefulWidget {
   final List<ExtractedItem> extractedItems;
   final ExtractedMetadata? metadata;
-  final String token;
+  // 🔥 ELIMINADO: final String token; (Ya no se necesita en modo offline/multi-perfil)
 
   const MatchingScreen({
     super.key,
     required this.extractedItems,
     this.metadata,
-    required this.token,
   });
 
   @override
@@ -83,14 +82,13 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
        _clientEmailCtrl.text = auth.user?.email ?? "";
        
        // Simulamos un ClientModel propio para que la UI muestre "Cliente Vinculado"
-       // Al mandar ID = 0, el Provider sabrá que no debe buscarlo ni crearlo, dejando la inyección al Backend.
        final mySelf = ClientModel(
-          id: 0, 
-          negocioId: 0, creadoPorUsuarioId: 0,
-          usuarioVinculadoId: auth.user?.id,
-          fullName: auth.user?.fullName ?? "Mi Cuenta",
-          phone: auth.user?.phone ?? "",
-          registeredDate: DateTime.now().toIso8601String()
+         id: 0, 
+         negocioId: 0, creadoPorUsuarioId: 0,
+         usuarioVinculadoId: auth.user?.id,
+         fullName: auth.user?.fullName ?? "Mi Cuenta",
+         phone: auth.user?.phone ?? "",
+         registeredDate: DateTime.now().toIso8601String()
        );
        provider.setClient(mySelf);
     }
@@ -101,10 +99,10 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
       initGrade = provider.metadata?.gradeLevel ?? initGrade;
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        // 🔥 CORRECCIÓN 1: Se quitó widget.token
         provider.initializeAndMatch(
             widget.extractedItems, 
             widget.metadata, 
-            widget.token, 
             isClientRole: isClient
         );
       });
@@ -213,9 +211,12 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                               onChanged: (val) {
                                 if (val.isNotEmpty) {
                                   setModalState(() {
-                                    searchFuture = clientService.searchClients(val, authProv.token!).then(
-                                      (clients) => clients.where((c) => !c.fullName.startsWith("Caja Rápida -")).toList()
-                                    );
+                                    // 🔥 CORRECCIÓN 2: Se usa activeBusinessId en lugar de token!
+                                    if (authProv.activeBusinessId != null) {
+                                      searchFuture = clientService.searchClients(val, authProv.activeBusinessId!).then(
+                                        (clients) => clients.where((c) => !c.fullName.startsWith("Caja Rápida -")).toList()
+                                      );
+                                    }
                                   });
                                 }
                               },
@@ -348,9 +349,9 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
     if (confirm != true) return;
     if (_isFabOpen) _toggleFab();
 
+    // 🔥 CORRECCIÓN 3: Se quitó widget.token de esta función
     int? newId = await provider.saveQuotation(
       isClient ? 'PENDING_APPROVAL' : 'PENDING', 
-      widget.token,
       manualClientName: _clientNameCtrl.text,
       manualClientPhone: _clientPhoneCtrl.text,
       manualClientDni: _clientDniCtrl.text,
@@ -360,8 +361,8 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
       updateClientData: _updateClientData, 
       institutionName: _schoolCtrl.text, 
       gradeLevel: _gradeCtrl.text, 
-      type: 'ai_scan', // 🔥 SIEMPRE SERÁ 'ai_scan' DESDE ESTA PANTALLA
-      isClientRole: isClient // 🔥 Informamos al provider que es un cliente
+      type: 'ai_scan', 
+      isClientRole: isClient 
     );
 
     if (newId != null && mounted) {
@@ -697,7 +698,6 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                   isDark: isDark,
                   isGuest: isGuest, 
                   onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; }); _updateHeader(); },
-                  // 🔥 BLOQUEO DE BÚSQUEDA PARA EL CLIENTE
                   onSearchClientTap: isClient ? () {
                     CustomSnackBar.show(context, message: "Tu cuenta ya está vinculada automáticamente.", isError: false);
                   } : () => _showClientSearch(isDark),

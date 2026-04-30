@@ -1,4 +1,3 @@
-// app/models/inventory_wrapper.dart
 import 'product_model.dart';
 
 class InventoryWrapper {
@@ -44,10 +43,8 @@ class InventoryWrapper {
     return "Margen No Definido";
   }
 
-  // 🔥 CONTROL DE STOCK VISUAL: Ahora funcionará sin errores
   bool get isOutOfStock => presentation.stockActual <= 0;
   
-  // Se considera stock bajo si es menor o igual a la alerta (por defecto 5)
   bool get isLowStock => presentation.stockActual > 0 && 
                          presentation.stockActual <= (presentation.stockAlerta ?? 5);
 }

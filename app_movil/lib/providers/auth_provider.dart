@@ -2,60 +2,55 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../models/user_model.dart';
 
-enum AuthStatus { checking, authenticated, notAuthenticated }
+enum AuthStatus { checking, authenticated, profileSelection }
 
 class AuthProvider with ChangeNotifier {
-  final _storage = const FlutterSecureStorage();
+  final _secureStorage = const FlutterSecureStorage();
   final AuthService _authService = AuthService();
 
   AuthStatus _status = AuthStatus.checking;
-  UserModel? _user;
-  String? _token;
-  String _errorMessage = '';
-  bool _isLoading = false;
-
-  int? _activeBusinessId;
-  String? _activeRole;
-  Map<String, dynamic> _permissions = {};
+  List<UserModel> _localProfiles = [];
+  UserModel? _activeUser;
   
-  BusinessModel? _currentBusiness; 
+  bool _isLoading = false;
+  String _errorMessage = '';
 
   AuthStatus get status => _status;
-  UserModel? get user => _user;
-  String? get token => _token;
-  bool get isAuthenticated => _status == AuthStatus.authenticated;
+  List<UserModel> get localProfiles => _localProfiles;
+  UserModel? get user => _activeUser;
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
-  
-  String get userName => _user?.fullName ?? "Usuario Invitado"; 
-  String get userEmail => _user?.email ?? "";
-  String get userRole => _activeRole?.toUpperCase() ?? "INVITADO";
-  
-  bool get ownsBusiness => _user?.business != null; 
-  
-  String get businessName => _currentBusiness?.commercialName ?? "Sin Negocio";
-  BusinessModel? get currentBusiness => _currentBusiness; 
 
-  bool get hasActiveContext => _activeBusinessId != null;
-  int? get activeBusinessId => _activeBusinessId;
-  String get activeRole => _activeRole ?? "limbo";
+  BusinessModel? get currentBusiness => _activeUser?.business;
+  int? get activeBusinessId => _activeUser?.business?.id;
+  int? get activeUserId => _activeUser?.id;
 
-  bool get isOwner => _activeRole == 'dueno';
-  bool get isCommunityClient => _activeRole == 'cliente_comunidad';
-  bool get isWorker => _activeRole == 'trabajador';
+  String get userName => _activeUser?.fullName ?? "Usuario";
+  String get businessName => _activeUser?.business?.commercialName ?? "Mi Negocio";
 
-  bool get canViewCosts => isOwner || (_permissions['can_view_costs'] == true);
-  bool get canEditInventory => isOwner || (_permissions['can_edit_inventory'] == true);
-  bool get canApplyDiscounts => isOwner || (_permissions['can_apply_discounts'] == true);
-  bool get canGiveCredit => isOwner || (_permissions['can_give_credit'] == true);
-  bool get canManageClients => isOwner || (_permissions['can_manage_clients'] == true);
-  bool get canVoidSales => isOwner || (_permissions['can_void_sales'] == true);
+  bool get isAuthenticated => _status == AuthStatus.authenticated && _activeUser != null;
+  bool get hasActiveContext => activeBusinessId != null;
+
+  // Permisos absolutos por ser offline
+  bool get isOwner => true;
+  bool get isCommunityClient => false;
+  bool get isWorker => false;
+
+  bool get canViewCosts => true;
+  bool get canEditInventory => true;
+  bool get canApplyDiscounts => true;
+  bool get canGiveCredit => true;
+  bool get canManageClients => true;
+  bool get canVoidSales => true;
+
+  String? get token => null;
 
   AuthProvider() {
-    checkAuthStatus();
+    checkInitialState();
   }
 
   void clearError() {
@@ -65,164 +60,119 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  void _decodeTokenAndSetContext(String jwtToken) {
+  Future<void> checkInitialState() async {
+    _status = AuthStatus.checking;
+    notifyListeners();
+
     try {
-      final parts = jwtToken.split('.');
-      if (parts.length != 3) return;
-
-      final payload = parts[1];
-      final String normalized = base64Url.normalize(payload);
-      final String decoded = utf8.decode(base64Url.decode(normalized));
-      final Map<String, dynamic> payloadMap = json.decode(decoded);
-
-      _activeBusinessId = payloadMap['negocio_id'];
-      _activeRole = payloadMap['rol_en_negocio'];
-      _permissions = payloadMap['permisos'] ?? {};
-    } catch (e) {
-      debugPrint("Error decodificando JWT: $e");
-      _activeBusinessId = null;
-      _activeRole = null;
-      _permissions = {};
-    }
-  }
-
-  Future<void> _fetchCurrentBusiness() async {
-    if (_token != null && _activeBusinessId != null) {
-       _currentBusiness = await _authService.getCurrentBusiness(_token!);
-       notifyListeners();
-    }
-  }
-
-  Future<void> _autoSwitchToFirstWorkspace() async {
-    if (_token == null) return;
-    try {
-      final workspaces = await _authService.getWorkspaces(_token!);
-      if (workspaces.isNotEmpty) {
-        final defaultNegocioId = workspaces.first['negocio_id'];
-        final contextToken = await _authService.switchContext(_token!, defaultNegocioId);
+      _localProfiles = await _authService.getLocalProfiles();
+      
+      if (_localProfiles.isEmpty) {
+        _status = AuthStatus.profileSelection;
+      } else {
+        final prefs = await SharedPreferences.getInstance();
+        final lastUserId = prefs.getInt('last_active_user_id');
         
-        if (contextToken != null) {
-          await setContextToken(contextToken);
+        if (lastUserId != null) {
+          try {
+            _activeUser = await _authService.getUserProfile(lastUserId);
+            _status = AuthStatus.authenticated;
+          } catch (_) {
+            // Si el perfil ya no existe en la BD, lo mandamos a selección
+            await prefs.remove('last_active_user_id');
+            _status = AuthStatus.profileSelection;
+          }
+        } else {
+          _status = AuthStatus.profileSelection;
         }
       }
     } catch (e) {
-      debugPrint("Fallo al intentar el auto-switch: $e");
+      _errorMessage = "No se pudieron cargar los perfiles de tu dispositivo.";
+      _status = AuthStatus.profileSelection;
+    } finally {
+      notifyListeners();
     }
   }
 
-  Future<void> checkAuthStatus() async {
-    _status = AuthStatus.checking;
-    try {
-      final storedToken = await _storage.read(key: 'jwt_token');
-      
-      if (storedToken == null) {
-        await _logoutLocal(); 
-        return;
-      }
-      
-      final userProfile = await _authService.getUserProfile(storedToken);
-      _token = storedToken;
-      _user = userProfile;
-      _decodeTokenAndSetContext(storedToken); 
-      
-      if (_activeBusinessId == null) {
-         await _autoSwitchToFirstWorkspace();
-      } else {
-         // 🔥 CRÍTICO: Refrescar token contextual silenciosamente en el Auto-Login
-         try {
-           final freshContextToken = await _authService.switchContext(storedToken, _activeBusinessId!);
-           if (freshContextToken != null) {
-             await setContextToken(freshContextToken); // Esto actualiza permisos y negocio
-           } else {
-             await _fetchCurrentBusiness(); // Respaldo si falla el switch
-           }
-         } catch (e) {
-           // Si el servidor rechaza el switch context (Ej: Trabajador Suspendido), 
-           // se fuerza el cierre de sesión local por seguridad.
-           debugPrint("Error al refrescar contexto: $e");
-           await _logoutLocal();
-           return;
-         }
-      }
-
-      _status = AuthStatus.authenticated;
-    } catch (e) { 
-      await _logoutLocal(); 
-    } finally { 
-      notifyListeners(); 
-    }
-  }
-
-  Future<bool> login(String email, String password) async {
+  Future<bool> createProfileAndLogin({
+    required String nombreDueno, required String telefono, required String nombreNegocio,
+    required String direccion, String? logoPath, required String moneda, String? pin
+  }) async {
     _setLoading(true);
-    _errorMessage = ''; 
     try {
-      final response = await _authService.login(email, password);
-      final newToken = response['access_token'];
-      await _storage.write(key: 'jwt_token', value: newToken);
-      
-      final userProfile = await _authService.getUserProfile(newToken);
-      _token = newToken;
-      _user = userProfile;
-      _decodeTokenAndSetContext(newToken); 
-      
-      if (_activeBusinessId == null) {
-         await _autoSwitchToFirstWorkspace();
-      } else {
-         await _fetchCurrentBusiness(); 
+      final newUser = await _authService.registerLocalProfile(
+        nombreDueno: nombreDueno, telefono: telefono, nombreNegocio: nombreNegocio, 
+        direccion: direccion, logoPath: logoPath, moneda: moneda
+      );
+
+      if (pin != null && pin.isNotEmpty) {
+        await _secureStorage.write(key: 'pin_${newUser.id}', value: pin);
       }
 
-      _status = AuthStatus.authenticated;
-      _setLoading(false);
+      await loginWithProfile(newUser.id);
       return true;
     } catch (e) {
       _errorMessage = e.toString().replaceAll("Exception:", "").trim();
-      _status = AuthStatus.notAuthenticated;
       _setLoading(false);
       return false;
     }
   }
 
-  Future<void> setContextToken(String newContextToken) async {
-    await _storage.write(key: 'jwt_token', value: newContextToken);
-    _token = newContextToken;
-    _decodeTokenAndSetContext(newContextToken);
-    await _fetchCurrentBusiness(); 
+  Future<void> loginWithProfile(int userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('last_active_user_id', userId);
+    
+    _activeUser = await _authService.getUserProfile(userId);
+    _status = AuthStatus.authenticated;
+    
+    _localProfiles = await _authService.getLocalProfiles(); 
     notifyListeners();
   }
 
-  Future<void> clearContext() async {
-    _activeBusinessId = null;
-    _activeRole = null;
-    _currentBusiness = null;
-    _permissions = {};
-    notifyListeners();
+  Future<bool> profileHasPin(int userId) async {
+    final pin = await _secureStorage.read(key: 'pin_$userId');
+    return pin != null && pin.isNotEmpty;
+  }
+
+  Future<bool> verifyPin(int userId, String enteredPin) async {
+    final correctPin = await _secureStorage.read(key: 'pin_$userId');
+    return correctPin == enteredPin;
   }
 
   Future<void> logout() async {
-    await _logoutLocal();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('last_active_user_id');
+    _activeUser = null;
+    _status = AuthStatus.profileSelection;
     notifyListeners();
   }
 
-  Future<void> _logoutLocal() async {
-    await _storage.delete(key: 'jwt_token');
-    _token = null;
-    _user = null;
-    _currentBusiness = null;
-    _activeBusinessId = null;
-    _activeRole = null;
-    _permissions = {};
-    _status = AuthStatus.notAuthenticated;
-  }
-
-  Future<bool> register(String nombre, String email, String password, String negocio, String telefono) async {
+  // 🔥 NUEVA FUNCIÓN DE CONTINGENCIA: Borrado seguro
+  Future<bool> deleteProfileAndData(int userId, String inputPin) async {
     _setLoading(true);
-    _errorMessage = ''; 
     try {
-      await _authService.register(nombre, email, password, negocio, telefono);
-      bool loggedIn = await login(email, password);
+      // 1. Verificamos el PIN de seguridad si es que tiene uno
+      bool hasPin = await profileHasPin(userId);
+      if (hasPin) {
+        bool isCorrect = await verifyPin(userId, inputPin);
+        if (!isCorrect) throw Exception("El PIN ingresado es incorrecto.");
+      }
+
+      // 2. Procedemos al borrado de base de datos
+      bool deleted = await _authService.deleteLocalProfile(userId);
+      if (deleted) {
+        // 3. Limpiamos la memoria segura
+        await _secureStorage.delete(key: 'pin_$userId');
+        
+        // 4. Si es el usuario activo, lo deslogueamos
+        if (_activeUser?.id == userId) {
+          await logout();
+        }
+        await checkInitialState(); // Recarga la lista de perfiles
+      }
+      
       _setLoading(false);
-      return loggedIn;
+      return deleted;
     } catch (e) {
       _errorMessage = e.toString().replaceAll("Exception:", "").trim();
       _setLoading(false);
@@ -230,26 +180,31 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  // --- MÉTODOS DE ACTUALIZACIÓN ---
+  
   Future<bool> updateUserProfile(String nombre, String telefono) async {
-    if (_token == null) return false;
+    if (_activeUser == null) return false;
     _setLoading(true);
     try {
-      final updatedUser = await _authService.updateProfile(_token!, nombre, telefono);
-      _user = updatedUser; 
+      final updatedUser = await _authService.updateProfile(_activeUser!.id, nombre, telefono);
+      _activeUser = updatedUser; 
       _setLoading(false);
       return true;
     } catch (e) {
-      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
+      _errorMessage = "No se pudieron actualizar tus datos personales.";
       _setLoading(false);
       return false;
     }
   }
 
-  Future<bool> changePassword(String currentPassword, String newPassword) async {
-    if (_token == null) return false;
+  Future<bool> changePassword(String currentPin, String newPin) async {
+    if (_activeUser == null) return false;
     _setLoading(true);
     try {
-      await _authService.changePassword(_token!, currentPassword, newPassword);
+      bool isCorrect = await verifyPin(_activeUser!.id, currentPin);
+      if (!isCorrect) throw Exception("El PIN actual es incorrecto.");
+      
+      await _secureStorage.write(key: 'pin_${_activeUser!.id}', value: newPin);
       _setLoading(false);
       return true;
     } catch (e) {
@@ -260,88 +215,59 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<bool> createBusinessProfile(String name, String ruc, String address, String paymentInfo, double? lat, double? lng, bool showAddress, bool showRuc) async {
-    if (_token == null) return false;
+    if (_activeUser == null) return false;
     _setLoading(true);
     try {
       String encodedConfig = json.encode({"show_address": showAddress, "show_ruc": showRuc});
-      
-      final newBusiness = await _authService.createBusiness(_token!, name, ruc, address, paymentInfo, lat, lng, encodedConfig);
-      
-      final newToken = await _authService.switchContext(_token!, newBusiness.id);
-      if (newToken != null) {
-         await setContextToken(newToken);
-      }
-      
+      await _authService.createBusiness(_activeUser!.id, name, ruc, address, paymentInfo, lat, lng, encodedConfig);
+      await loginWithProfile(_activeUser!.id); 
       _setLoading(false);
       return true;
     } catch (e) {
-      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
+      _errorMessage = "Ocurrió un error al crear la información del negocio.";
       _setLoading(false);
       return false;
     }
   }
 
   Future<bool> updateBusinessProfile(String name, String ruc, String address, String paymentInfo, double? lat, double? lng, bool showAddress, bool showRuc, {bool clearLogo = false}) async {
-    if (_token == null) return false;
+    if (_activeUser == null || activeBusinessId == null) return false;
     _setLoading(true);
     try {
       String encodedConfig = json.encode({"show_address": showAddress, "show_ruc": showRuc});
-      final updatedBusiness = await _authService.updateBusiness(_token!, name, ruc, address, paymentInfo, lat, lng, encodedConfig, clearLogo: clearLogo);
+      final updatedBusiness = await _authService.updateBusiness(activeBusinessId!, name, ruc, address, paymentInfo, lat, lng, encodedConfig, clearLogo: clearLogo);
       
-      if (_activeBusinessId != updatedBusiness.id) {
-          final newToken = await _authService.switchContext(_token!, updatedBusiness.id);
-          if (newToken != null) {
-             await setContextToken(newToken);
-          }
-      } else {
-          _currentBusiness = updatedBusiness; 
-          notifyListeners();
-      }
-
-      if (_user != null) {
-         _user = UserModel(
-           id: _user!.id,
-           codigoUnicoUsuario: _user!.codigoUnicoUsuario,
-           email: _user!.email,
-           fullName: _user!.fullName,
-           phone: _user!.phone,
-           isActive: _user!.isActive,
-           business: updatedBusiness 
+      if (_activeUser != null) {
+         _activeUser = UserModel(
+           id: _activeUser!.id, codigoUnicoUsuario: _activeUser!.codigoUnicoUsuario, email: _activeUser!.email,
+           fullName: _activeUser!.fullName, phone: _activeUser!.phone, isActive: _activeUser!.isActive, business: updatedBusiness 
          );
       }
-
+      notifyListeners();
       _setLoading(false);
       return true;
     } catch (e) {
-      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
+      _errorMessage = "No pudimos actualizar los datos del negocio.";
       _setLoading(false);
       return false;
     }
   }
 
   Future<bool> uploadBusinessLogo(File imageFile) async {
-    if (_token == null) return false;
+    if (_activeUser == null || activeBusinessId == null) return false;
     _setLoading(true);
     try {
-      final updatedBusiness = await _authService.uploadLogo(_token!, imageFile);
-      if (_currentBusiness != null) {
-        final bypassUrl = "${updatedBusiness.logoUrl}?t=${DateTime.now().millisecondsSinceEpoch}";
-        _currentBusiness = BusinessModel(
-            id: updatedBusiness.id, 
-            commercialName: updatedBusiness.commercialName, 
-            ruc: updatedBusiness.ruc, 
-            address: updatedBusiness.address, 
-            printerConfig: updatedBusiness.printerConfig, 
-            paymentInfo: updatedBusiness.paymentInfo, 
-            latitud: updatedBusiness.latitud, 
-            longitud: updatedBusiness.longitud,
-            logoUrl: bypassUrl, 
-          );
+      final updatedBusiness = await _authService.uploadLogo(activeBusinessId!, imageFile);
+      if (_activeUser != null) {
+         _activeUser = UserModel(
+           id: _activeUser!.id, codigoUnicoUsuario: _activeUser!.codigoUnicoUsuario, email: _activeUser!.email,
+           fullName: _activeUser!.fullName, phone: _activeUser!.phone, isActive: _activeUser!.isActive, business: updatedBusiness 
+         );
       }
       _setLoading(false);
       return true;
     } catch (e) {
-      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
+      _errorMessage = "La imagen es muy pesada o el formato no es compatible.";
       _setLoading(false);
       return false;
     }

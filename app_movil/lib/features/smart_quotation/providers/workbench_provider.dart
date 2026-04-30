@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; 
-import 'dart:convert';
 import 'package:intl/intl.dart'; 
-import '../../../config/api_constants.dart';
 import '../models/smart_quotation_model.dart';
 import '../models/crm_models.dart';
 import '../services/quotation_service.dart';
+import '../../../database/local_db.dart';
 
 enum WorkbenchSort { time, alpha }
 
 class WorkbenchProvider with ChangeNotifier {
-  String? _authToken;
+  int? _negocioId;
+  int? _usuarioId;
+  
   bool _isLoading = false;
   String _errorMessage = "";
   
-  // 🔥 FASE 3: Callback para notificar a la UI si el usuario es expulsado
   Function()? onAuthRevoked;
 
   final QuotationService _quotationService = QuotationService();
+  final dbHelper = LocalDatabase.instance;
   
   List<SmartQuotationModel> _allQuotations = [];
   
@@ -50,18 +50,14 @@ class WorkbenchProvider with ChangeNotifier {
     return count;
   }
 
-  void updateToken(String? token) {
-    _authToken = token;
+  // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
+  void updateContext(int? negocioId, int? usuarioId) {
+    _negocioId = negocioId;
+    _usuarioId = usuarioId;
   }
 
-  // 🔥 Helper para manejar la expulsión en el catch
   void _handleException(dynamic e) {
-    if (e.toString().contains("AUTH_REVOKED")) {
-      _errorMessage = "Tu acceso a este negocio ha sido revocado.";
-      if (onAuthRevoked != null) onAuthRevoked!();
-    } else {
-      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
-    }
+    _errorMessage = e.toString().replaceAll("Exception:", "").trim();
   }
 
   void setSort(WorkbenchSort type) {
@@ -75,25 +71,32 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   Future<void> loadDashboard() async {
-    if (_authToken == null) return;
+    if (_negocioId == null) return;
     _isLoading = true;
     notifyListeners();
     
     try {
-      final url = Uri.parse('${ApiConstants.baseUrl}/smart-quotations/');
-      final response = await http.get(url, headers: {
-        'Authorization': 'Bearer $_authToken',
-        'Content-Type': 'application/json',
-      });
+      final db = await dbHelper.database;
+      
+      // 🔥 FILTRA SOLO POR EL NEGOCIO ACTUAL
+      final quotesRows = await db.query('smart_quotations', where: 'negocio_id = ?', whereArgs: [_negocioId]);
+      final itemsRows = await db.query('smart_quotation_items');
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
-        _allQuotations = data.map((e) => SmartQuotationModel.fromJson(e)).toList();
-        _organizeLists();
-        _evaluateHealthAndAutoDowngrade();
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        throw Exception("AUTH_REVOKED");
+      Map<int, List<Map<String, dynamic>>> itemsMap = {};
+      for (var item in itemsRows) {
+          int qId = item['quotation_id'] as int;
+          itemsMap.putIfAbsent(qId, () => []).add(item);
       }
+
+      _allQuotations = quotesRows.map((q) {
+          var map = Map<String, dynamic>.from(q);
+          map['items'] = itemsMap[q['id']] ?? [];
+          return SmartQuotationModel.fromJson(map);
+      }).toList();
+
+      _organizeLists();
+      await _evaluateHealthAndAutoDowngrade();
+
     } catch (e) {
       _handleException(e);
     } finally {
@@ -126,21 +129,16 @@ class WorkbenchProvider with ChangeNotifier {
     if (tipo == 'pos_rapido' || tipo == 'quick_sale' || tipo == 'caja') {
       return false; 
     }
-    
     if (q.institutionName != null) {
       final inst = q.institutionName!.toLowerCase();
-      if (inst.contains('venta al paso pos') || inst.contains('venta al paso')) {
-        return false;
-      }
+      if (inst.contains('venta al paso pos') || inst.contains('venta al paso')) return false;
     }
-
     if (q.clientName != null) {
       final name = q.clientName!.toLowerCase();
       if (name.contains('caja') && name.contains('rápida')) return false;
       if (name.contains('caja rapida')) return false;
       if (name.startsWith('sin cliente')) return false; 
     }
-
     return true;
   }
 
@@ -166,14 +164,12 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   Future<void> checkTrafficLight(int quotationId) async {
-    if (_authToken == null) return;
     try {
-      final result = await _quotationService.validateIntegrity(quotationId, _authToken!);
+      final result = await _quotationService.validateIntegrity(quotationId);
       _trafficLights[quotationId] = result;
       notifyListeners(); 
     } catch (e) {
-      // No silenciamos el auth revoked
-      if (e.toString().contains("AUTH_REVOKED")) _handleException(e);
+      debugPrint("Error verificando integridad local: $e");
     }
   }
 
@@ -185,7 +181,7 @@ class WorkbenchProvider with ChangeNotifier {
     required List<Map<String, dynamic>> items, required double totalAmount,
     double totalSavings = 0.0, String status = "DRAFT", String type = "manual",
   }) async {
-    if (_authToken == null) return null;
+    if (_negocioId == null || _usuarioId == null) return null;
     _isLoading = true;
     notifyListeners();
     try {
@@ -199,18 +195,11 @@ class WorkbenchProvider with ChangeNotifier {
       }
 
       final newId = await _quotationService.saveManualQuotation(
-        token: _authToken!, 
-        id: id, 
-        clientId: clientId, 
-        clientName: clientName,  
-        institutionName: institution, 
-        gradeLevel: grade, 
-        notas: notas, 
-        totalAmount: totalAmount,
-        totalSavings: totalSavings, 
-        items: items, 
-        status: status, 
-        type: type,
+        negocioId: _negocioId!, 
+        usuarioId: _usuarioId!,
+        id: id, clientId: clientId, clientName: clientName, institutionName: institution, 
+        gradeLevel: grade, notas: notas, totalAmount: totalAmount,
+        totalSavings: totalSavings, items: items, status: status, type: type,
       );
       await loadDashboard(); 
       return newId;
@@ -224,9 +213,8 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   Future<bool> changeQuotationStatus(int id, String newStatus, {bool skipReload = false}) async {
-    if (_authToken == null) return false;
     try {
-      final success = await _quotationService.updateQuotationStatus(id, newStatus, _authToken!);
+      final success = await _quotationService.updateQuotationStatus(id, newStatus);
       if (success && !skipReload) await loadDashboard(); 
       return success;
     } catch (e) { 
@@ -236,11 +224,10 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   Future<bool> refreshQuotation(int id, {bool fixPrices = true, bool fixStock = false}) async {
-    if (_authToken == null) return false;
     _isLoading = true;
     notifyListeners();
     try {
-      final success = await _quotationService.refreshQuotation(id, _authToken!, fixPrices: fixPrices, fixStock: fixStock);
+      final success = await _quotationService.refreshQuotation(id, fixPrices: fixPrices, fixStock: fixStock);
       if (success) {
         await checkTrafficLight(id); 
         await loadDashboard(); 
@@ -256,20 +243,13 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   Future<int?> cloneQuotation(int id) async {
-    if (_authToken == null) return null;
+    if (_usuarioId == null) return null;
     _isLoading = true;
     notifyListeners();
     try {
-      final url = Uri.parse('${ApiConstants.baseUrl}/smart-quotations/$id/clone');
-      final response = await http.post(url, headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'});
-      if (response.statusCode == 200) {
-        final data = json.decode(utf8.decode(response.bodyBytes));
-        await loadDashboard();
-        return data['id']; 
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        throw Exception("AUTH_REVOKED");
-      }
-      return null;
+      final clone = await _quotationService.cloneQuotation(id, _usuarioId!);
+      await loadDashboard();
+      return clone.id; 
     } catch (e) { 
       _handleException(e);
       return null; 
@@ -279,20 +259,13 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   Future<int?> convertToPack(int id) async {
-    if (_authToken == null) return null;
     _isLoading = true;
     notifyListeners();
     try {
-      final url = Uri.parse('${ApiConstants.baseUrl}/smart-quotations/$id/to-pack');
-      final response = await http.post(url, headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'});
-      if (response.statusCode == 200) {
-        final data = json.decode(utf8.decode(response.bodyBytes));
-        await loadDashboard();
-        return data['id']; 
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        throw Exception("AUTH_REVOKED");
-      }
-      return null;
+      final db = await dbHelper.database;
+      await db.update('smart_quotations', {'type': 'pack', 'is_template': 1}, where: 'id = ?', whereArgs: [id]);
+      await loadDashboard();
+      return id; 
     } catch (e) { 
       _handleException(e);
       return null; 
@@ -302,54 +275,36 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   Future<bool> deleteQuotation(int id) async {
-    if (_authToken == null) return false;
     _isLoading = true;
     notifyListeners();
     try {
-      try {
-         await _quotationService.updateQuotationStatus(id, 'DRAFT', _authToken!);
-      } catch (_) {}
+      final db = await dbHelper.database;
+      await db.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
+      await db.delete('smart_quotations', where: 'id = ?', whereArgs: [id]);
       
-      final url = Uri.parse('${ApiConstants.baseUrl}/smart-quotations/$id');
-      final response = await http.delete(url, headers: {'Authorization': 'Bearer $_authToken'});
-      
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        await loadDashboard(); 
-        return true;
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        throw Exception("AUTH_REVOKED");
-      }
-      throw Exception("Error deleting");
+      await loadDashboard(); 
+      return true;
     } catch (e) {
       _handleException(e);
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
   }
 
   Future<bool> renameQuotation(int id, String newName, {int? clientId}) async {
-    if (_authToken == null) return false;
     try {
-      final url = Uri.parse('${ApiConstants.baseUrl}/smart-quotations/$id');
-      
-      final Map<String, dynamic> bodyData = {"client_name": newName};
+      final db = await dbHelper.database;
+      Map<String, dynamic> updateData = {"client_name": newName};
       if (clientId != null) {
-        bodyData["client_id"] = clientId;
+        updateData["client_id"] = clientId;
       }
 
-      final response = await http.patch(
-        url,
-        headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'},
-        body: json.encode(bodyData), 
-      );
-      if (response.statusCode == 200) {
-        await loadDashboard(); 
-        return true;
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        throw Exception("AUTH_REVOKED");
-      }
-      return false;
+      await db.update('smart_quotations', updateData, where: 'id = ?', whereArgs: [id]);
+      
+      await loadDashboard(); 
+      return true;
     } catch (e) {
       _handleException(e);
       return false;

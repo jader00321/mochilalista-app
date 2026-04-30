@@ -67,8 +67,6 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
   Widget build(BuildContext context) {
     final String path = widget.controller.text;
     final bool hasImage = path.isNotEmpty && path != 'null';
-    
-    final bool isLocalPending = hasImage && !path.startsWith('http');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,25 +95,7 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
                     children: [
                       UniversalImage(path: path),
                       
-                      if (isLocalPending)
-                        Positioned(
-                          bottom: 0, left: 0, right: 0,
-                          child: Container(
-                            color: Colors.black.withOpacity(0.7),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.cloud_upload, color: Colors.white, size: 16),
-                                SizedBox(width: 8),
-                                Text(
-                                  "Se subirá al guardar", 
-                                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                      // ❌ Eliminado el cartel de "Se subirá al guardar"
 
                       Positioned(
                         top: 10, right: 10,

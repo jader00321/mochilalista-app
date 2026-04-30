@@ -57,9 +57,12 @@ class _ClientSearchModalState extends State<ClientSearchModal> {
                       onChanged: (val) {
                         if (val.isNotEmpty) {
                           setState(() {
-                            _searchFuture = _clientService.searchClients(val, authProv.token!).then(
-                              (clients) => clients.where((c) => !c.fullName.startsWith("Caja Rápida -")).toList()
-                            );
+                            // 🔥 CORRECCIÓN 2: Enviamos activeBusinessId! en lugar del token.
+                            if (authProv.activeBusinessId != null) {
+                              _searchFuture = _clientService.searchClients(val, authProv.activeBusinessId!).then(
+                                (clients) => clients.where((c) => !c.fullName.startsWith("Caja Rápida -")).toList()
+                              );
+                            }
                           });
                         } else {
                           setState(() { _searchFuture = null; });

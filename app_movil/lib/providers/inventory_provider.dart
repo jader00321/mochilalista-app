@@ -12,7 +12,7 @@ import '../services/image_service.dart';
 enum SortType { id, alpha }
 
 class InventoryProvider with ChangeNotifier {
-  String? _authToken;
+  int? _negocioId;
   
   // --- SERVICIOS ---
   final MasterDataService _masterDataService = MasterDataService();
@@ -149,14 +149,13 @@ class InventoryProvider with ChangeNotifier {
   String get errorMessage => _errorMessage;
   String? get lastActionError => _lastActionError;
 
-  // 🔥 SOLUCIÓN AL FALSO CACHÉ DEL INVENTARIO
-  void updateToken(String? token) {
-    if (_authToken != token) {
-      _authToken = token;
-      _masterDataService.updateToken(token);
-      _productService.updateToken(token);
+  // 🔥 CORRECCIÓN: Renombrado de updateToken a updateContext
+  void updateContext(int? negocioId) {
+    if (_negocioId != negocioId) {
+      _negocioId = negocioId;
+      _masterDataService.updateContext(negocioId);
+      _productService.updateContext(negocioId);
       
-      // Limpieza profunda al cambiar de cuenta o negocio
       _inventoryItems.clear();
       _categories.clear();
       _brands.clear();
@@ -190,10 +189,6 @@ class InventoryProvider with ChangeNotifier {
   }
   
   Future<Product?> fetchProductById(int productId) async => await _productService.fetchProductById(productId);
-
-  // ==========================================================
-  // DELEGACIÓN A SERVICIOS (HTTP LÓGICA)
-  // ==========================================================
 
   Future<void> loadMasterData({bool showAll = true}) async {
     final result = await _masterDataService.fetchAllMasterData(showAll);
@@ -261,7 +256,7 @@ class InventoryProvider with ChangeNotifier {
     bool reset = false, String? searchQuery, List<int>? categoryIds, List<int>? brandIds, List<int>? providerIds,
     String? filterState, double? minPrice, double? maxPrice, int? minStock, int? maxStock, bool? hasOffer, bool? onlyDefaults,
   }) async {
-    if (_authToken == null) return;
+    if (_negocioId == null) return;
 
     if (reset) {
       _isLoading = true; _currentSkip = 0; _inventoryItems = []; _hasMoreData = true;
@@ -374,7 +369,12 @@ class InventoryProvider with ChangeNotifier {
     if (oferta != null) { body['precio_oferta'] = oferta; if (oferta > 0) { body['tipo_descuento'] = tipoDesc; body['valor_descuento'] = valorDesc; } }
     if (stock != null) body['stock_actual'] = stock;
     if (estado != null) body['estado'] = estado;
-    if (imagenUrl != null) body['imagen_url'] = await ImageService.processAndUploadImage(imagenUrl, _authToken!);
+    
+    if (imagenUrl != null) {
+      final oldIndex = _inventoryItems.indexWhere((wrapper) => wrapper.presentation.id == presentationId);
+      String? oldPath = oldIndex != -1 ? _inventoryItems[oldIndex].presentation.imagenUrl : null;
+      body['imagen_url'] = await ImageService.processAndSaveImage(imagenUrl, oldImagePath: oldPath);
+    }
 
     bool ok = await _productService.updatePresentation(presentationId, body);
     if (ok) {
@@ -397,7 +397,7 @@ class InventoryProvider with ChangeNotifier {
           precioVentaFinal: precioVentaFinal ?? oldPres.precioVentaFinal,
           
           stockActual: stock ?? oldPres.stockActual, precioOferta: oferta ?? oldPres.precioOferta, tipoDescuento: tipoDesc ?? oldPres.tipoDescuento, 
-          valorDescuento: valorDesc ?? oldPres.valorDescuento, estado: estado ?? oldPres.estado,
+          valorDescuento: valorDesc ?? oldPres.valorDescuento, estado: estado ?? oldPres.estado, activo: oldPres.activo
         );
 
         _inventoryItems[index] = InventoryWrapper(product: _inventoryItems[index].product, presentation: updatedPres);

@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart'; 
 
 class UniversalImage extends StatelessWidget {
   final String? path;
@@ -24,28 +23,32 @@ class UniversalImage extends StatelessWidget {
       return _buildPlaceholder(context, isDark);
     }
 
+    // Salvavidas para datos antiguos (legacy URLs)
     if (path!.startsWith('http')) {
-      return CachedNetworkImage(
-        imageUrl: path!,
+      return Image.network(
+        path!,
         height: height,
         width: width,
         fit: fit,
-        placeholder: (context, url) => Container(
-          height: height,
-          width: width,
-          color: isDark ? Colors.white10 : Colors.grey[100],
-          child: const Center(
-            child: SizedBox(
-              height: 24, 
-              width: 24, 
-              child: CircularProgressIndicator(strokeWidth: 3, color: Colors.grey)
-            )
-          ),
-        ),
-        errorWidget: (context, url, error) => _buildError(context, isDark),
+        errorBuilder: (context, error, stackTrace) => _buildError(context, isDark),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: height,
+            width: width,
+            color: isDark ? Colors.white10 : Colors.grey[100],
+            child: const Center(
+              child: SizedBox(
+                height: 24, width: 24, 
+                child: CircularProgressIndicator(strokeWidth: 3, color: Colors.grey)
+              )
+            ),
+          );
+        },
       );
     }
 
+    // Lógica Offline Principal: Leer desde el celular
     final file = File(path!);
     if (file.existsSync()) {
       return Image.file(
@@ -53,7 +56,7 @@ class UniversalImage extends StatelessWidget {
         height: height,
         width: width,
         fit: fit,
-        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(context, isDark),
+        errorBuilder: (context, error, stackTrace) => _buildError(context, isDark),
       );
     }
 

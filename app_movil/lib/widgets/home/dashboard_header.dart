@@ -1,3 +1,4 @@
+import 'dart:io'; // 🔥 IMPORTANTE: Necesario para leer archivos locales de SQLite
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -11,7 +12,7 @@ import '../../features/smart_quotation/providers/sale_provider.dart';
 // Screens
 import '../../features/profile/screens/profile_screen.dart'; 
 import '../../features/profile/screens/notifications_screen.dart'; 
-import '../../screens/login_screen.dart'; 
+import '../../screens/onboarding/profile_selection_screen.dart'; // 🔥 Ajustado para usar la selección de perfiles
 
 class DashboardHeader extends StatefulWidget {
   const DashboardHeader({super.key});
@@ -30,11 +31,11 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     });
   }
 
-  // 🔥 Añadimos un parámetro para forzar la recarga desde el botón manual
   Future<void> _loadData({bool forceRefresh = false}) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     if (forceRefresh) {
-      await auth.checkAuthStatus();
+      // 🔥 CORRECCIÓN: checkInitialState
+      await auth.checkInitialState();
     }
     
     if (auth.isAuthenticated && auth.hasActiveContext) {
@@ -61,42 +62,39 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     final pendingQuotes = (auth.isAuthenticated && !isGuest) ? workbench.inProcessList.length : 0;
     final userName = auth.userName.split(' ')[0]; 
     
-    String displayRole = "MODO INVITADO";
-    if (!isGuest) {
-       displayRole = auth.activeRole.toUpperCase();
-       if (displayRole == 'DUENO') displayRole = 'DUEÑO';
-       if (displayRole == 'CLIENTE_COMUNIDAD') displayRole = 'CLIENTE VIP';
-    }
+    // 🔥 CORRECCIÓN: Como es offline, si no es invitado, siempre es el dueño
+    final String displayRole = isGuest ? "MODO INVITADO" : "DUEÑO DE NEGOCIO";
 
     final todaySales = (auth.isAuthenticated && !isGuest) ? salesProv.todaySalesTotal : 0.0;
 
-    final String? rawLogoUrl = auth.user?.business?.logoUrl;
-    final bool hasValidLogo = rawLogoUrl != null && (rawLogoUrl.startsWith('http://') || rawLogoUrl.startsWith('https://'));
+    // 🔥 LOGO OFFLINE: Leemos la ruta local guardada en SQLite
+    final String? rawLogoUrl = auth.currentBusiness?.logoUrl;
+    final bool hasValidLogo = rawLogoUrl != null && rawLogoUrl.trim().isNotEmpty && rawLogoUrl != 'null';
                               
     final int unreadCount = isGuest ? 0 : notifProv.unreadCount; 
 
     return Container(
       width: double.infinity,
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 16,
-        bottom: 60, 
+        top: MediaQuery.of(context).padding.top + 20,
+        bottom: 65, // Más espacio abajo para que el banner superpuesto respire
         left: 24,
         right: 24
       ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark 
-            ? [const Color(0xFF0D47A1), const Color(0xFF001229)] 
-            : [const Color(0xFF1565C0), const Color(0xFF0D47A1)], 
+            ? [const Color(0xFF0A2E5C), const Color(0xFF001229)] // Azul más elegante en dark mode
+            : [const Color(0xFF1976D2), const Color(0xFF0D47A1)], // Azul Material 3
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(40),
-          bottomRight: Radius.circular(40),
+          bottomLeft: Radius.circular(50),
+          bottomRight: Radius.circular(50),
         ),
         boxShadow: [
-          if (!isDark) BoxShadow(color: Colors.blue.withOpacity(0.25), blurRadius: 20, offset: const Offset(0, 8))
+          if (!isDark) BoxShadow(color: Colors.blue.shade900.withOpacity(0.3), blurRadius: 25, offset: const Offset(0, 10))
         ]
       ),
       child: Column(
@@ -111,9 +109,9 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                   children: [
                     Text(
                       _getGreeting(),
-                      style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14, fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -121,17 +119,17 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                         Flexible(
                           child: Text(
                             userName,
-                            style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: isGuest ? Colors.orange.withOpacity(0.8) : Colors.white.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: Colors.white.withOpacity(0.2))
                           ),
                           child: Text(
@@ -144,15 +142,15 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                     
                     if (!isGuest)
                       Padding(
-                        padding: const EdgeInsets.only(top: 6.0),
+                        padding: const EdgeInsets.only(top: 8.0),
                         child: Row(
                           children: [
-                            Icon(Icons.storefront_rounded, color: Colors.blue[200], size: 16),
+                            Icon(Icons.storefront_rounded, color: Colors.blue[200], size: 18),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 auth.businessName,
-                                style: TextStyle(color: Colors.blue[100], fontSize: 14, fontWeight: FontWeight.w500),
+                                style: TextStyle(color: Colors.blue[100], fontSize: 15, fontWeight: FontWeight.w600),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -169,10 +167,9 @@ class _DashboardHeaderState extends State<DashboardHeader> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 🔥 BOTÓN MANUAL DE ACTUALIZAR AÑADIDO AQUÍ
                   IconButton(
                     onPressed: () => _loadData(forceRefresh: true),
-                    icon: const Icon(Icons.refresh, color: Colors.white, size: 26),
+                    icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 26),
                     tooltip: "Actualizar datos",
                   ),
                   
@@ -186,7 +183,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       label: Text("$unreadCount", style: const TextStyle(fontWeight: FontWeight.bold)),
                       backgroundColor: Colors.orangeAccent,
                       offset: const Offset(4, -4),
-                      child: Icon(Icons.notifications_outlined, color: Colors.white.withOpacity(isGuest ? 0.3 : 0.9), size: 28),
+                      child: Icon(Icons.notifications_outlined, color: Colors.white.withOpacity(isGuest ? 0.3 : 1.0), size: 28),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -196,37 +193,27 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       if (auth.isAuthenticated) {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()))
                           .then((_) {
-                            if (mounted) {
-                              _loadData(forceRefresh: true);
-                            }
+                            if (mounted) _loadData(forceRefresh: true);
                           });
                       } else {
-                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()));
                       }
                     },
-                    // 🔥 SOLUCIÓN DEL LOGO EN LA CABECERA:
-                    // Usamos Image.network con un errorBuilder en lugar de backgroundImage.
                     child: Container(
-                      width: 46, height: 46,
+                      width: 50, height: 50,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white, // Fondo blanco de seguridad
-                        border: Border.all(color: isDark ? Colors.white24 : Colors.white54, width: 2.0), 
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 3))]
+                        color: Colors.white, 
+                        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2.0), 
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))]
                       ),
                       child: ClipOval(
+                        // 🔥 CARGA DE FOTOS OFFLINE O RED
                         child: hasValidLogo
-                            ? Image.network(
-                                rawLogoUrl,
-                                fit: BoxFit.cover,
-                                // Si la imagen falla al cargar de la web, mostramos el ícono de la tiendita
-                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.store, color: Color(0xFF1565C0), size: 24),
-                                loadingBuilder: (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return const Center(child: SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2)));
-                                },
-                              )
-                            : Icon(auth.isAuthenticated ? Icons.person : Icons.login_rounded, color: const Color(0xFF1565C0), size: 26),
+                            ? (rawLogoUrl.startsWith('http') 
+                                ? Image.network(rawLogoUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.store, color: Colors.blue))
+                                : Image.file(File(rawLogoUrl), fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.store, color: Colors.blue)))
+                            : Icon(auth.isAuthenticated ? Icons.person : Icons.login_rounded, color: const Color(0xFF1565C0), size: 28),
                       ),
                     ),
                   ),
@@ -236,22 +223,22 @@ class _DashboardHeaderState extends State<DashboardHeader> {
           ),
 
           if (!isGuest && !auth.isCommunityClient) ...[
-            const SizedBox(height: 28), 
+            const SizedBox(height: 30), 
             Row(
               children: [
                 Expanded(
                   child: _buildKpiCard(
-                    icon: Icons.assignment_late_outlined,
+                    icon: Icons.assignment_late_rounded,
                     label: "Por Revisar",
                     value: "$pendingQuotes",
                     color: Colors.orangeAccent,
                     isDark: isDark
                   ),
                 ),
-                const SizedBox(width: 14), 
+                const SizedBox(width: 16), 
                 Expanded(
                   child: _buildKpiCard(
-                    icon: Icons.trending_up,
+                    icon: Icons.trending_up_rounded,
                     label: "Ventas Hoy",
                     value: currency.format(todaySales), 
                     color: Colors.greenAccent,
@@ -268,31 +255,31 @@ class _DashboardHeaderState extends State<DashboardHeader> {
 
   Widget _buildKpiCard({required IconData icon, required String label, required String value, required Color color, required bool isDark}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 22),
+            child: Icon(icon, color: color, size: 24),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   value, 
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
                   overflow: TextOverflow.ellipsis, 
                 ),
                 const SizedBox(height: 2),
-                Text(label, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w600)),
+                Text(label, style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w600)),
               ],
             ),
           )

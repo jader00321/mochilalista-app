@@ -13,6 +13,9 @@ import '../providers/auth_provider.dart';
 import '../features/smart_quotation/screens/extraction_result_screen.dart'; 
 import '../screens/scanner/invoice_review_screen.dart'; 
 
+// 🔥 IMPORT DE SEGURIDAD Y HARDWARE
+import '../utils/hardware_validator.dart';
+
 enum ScanMode { quotation, invoice }
 
 class ScanScreen extends StatefulWidget {
@@ -27,7 +30,6 @@ class ScanScreen extends StatefulWidget {
 class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateMixin {
   final ImagePicker _picker = ImagePicker();
 
-  // 🔥 NUEVO: Función para explicar a los invitados qué hace la pantalla
   void _showExplorationModal(BuildContext context, bool isQuotation, bool isDark) {
     showDialog(
       context: context,
@@ -61,11 +63,20 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // 🔥 BLOQUEO DE INVITADO
-    if (!auth.hasActiveContext) {
+    if (auth.activeBusinessId == null) {
       _showExplorationModal(context, widget.mode == ScanMode.quotation, isDark);
       return;
     }
+
+    // 🔥 VALIDACIÓN DE INTERNET: Solo avanzamos si es estable.
+    bool isInternetStable = await HardwareValidator.checkInternet(
+      context, 
+      onNavigateToManual: () {
+        Navigator.pushReplacementNamed(context, '/manual_quotation');
+      }
+    );
+
+    if (!isInternetStable) return;
 
     try {
       final XFile? photo = await _picker.pickImage(
@@ -90,13 +101,14 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
         bool success = false;
         String errorMsg = "";
 
+        // 🔥 CORRECCIÓN AQUÍ: Eliminamos el token de los parámetros, el Provider ya lo tiene internamente
         if (widget.mode == ScanMode.quotation) {
           final smartProvider = Provider.of<SmartQuotationProvider>(context, listen: false);
-          success = await smartProvider.analyzeImage(context, imageFile, auth.token ?? "");
+          success = await smartProvider.analyzeImage(context, imageFile); 
           errorMsg = smartProvider.errorMessage;
         } else {
           final scannerProvider = Provider.of<ScannerProvider>(context, listen: false);
-          success = await scannerProvider.uploadAndAnalyzeImage(imageFile);
+          success = await scannerProvider.uploadAndAnalyzeImage(imageFile); 
           errorMsg = scannerProvider.statusMessage;
         }
         
@@ -136,30 +148,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bool isQuotation = widget.mode == ScanMode.quotation;
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final isGuest = !auth.hasActiveContext;
-
-    if (!isQuotation && auth.isCommunityClient) {
-       return Scaffold(
-          backgroundColor: isDark ? const Color(0xFF14141C) : Colors.white,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            foregroundColor: isDark ? Colors.white : Colors.black87,
-          ),
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.block, size: 80, color: Colors.red.withOpacity(0.8)),
-                const SizedBox(height: 20),
-                Text("Acceso Denegado", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                const SizedBox(height: 10),
-                Text("Esta función es exclusiva del personal autorizado.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 16)),
-              ],
-            )
-          )
-       );
-    }
+    final isGuest = auth.activeBusinessId == null;
 
     final String title = isQuotation ? "Escanear Lista" : "Escanear Factura";
     final String subtitle = isQuotation 
@@ -220,7 +209,6 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                 ),
               ),
 
-              // 🔥 BANNER DE EXPLORACIÓN
               if (isGuest)
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
@@ -306,9 +294,6 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
   }
 }
 
-// =========================================================================
-// WIDGET ANIMADO PARA EL DIÁLOGO DE CARGA 
-// =========================================================================
 class _ScanningDialog extends StatefulWidget {
   final ScanMode mode;
   const _ScanningDialog({required this.mode});

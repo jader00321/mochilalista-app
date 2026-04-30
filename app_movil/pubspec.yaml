@@ -39,6 +39,30 @@ dependencies:
   latlong2: ^0.9.0
   image: ^4.2.0
 
+  # ==========================================
+  # 🔥 NUEVAS DEPENDENCIAS (VERSIÓN OFFLINE)
+  # ==========================================
+  # 1. Base de datos local
+  sqflite: ^2.3.0
+  path: ^1.8.3
+
+  # 2. Seguridad Dual (PIN + Huella)
+  local_auth: ^2.1.8
+  # flutter_secure_storage ya lo tenías, excelente.
+
+  # 3. Validaciones de Hardware (Internet)
+  # geolocator ya lo tenías, excelente.
+  connectivity_plus: ^5.0.2
+
+  flutter_local_notifications: ^17.0.1
+  # 4. Tareas en segundo plano (Backups automáticos)
+  workmanager: ^0.5.2
+
+  file_picker: ^6.1.1
+  google_sign_in: ^6.1.6
+  googleapis: ^11.4.0
+  googleapis_auth: ^1.4.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

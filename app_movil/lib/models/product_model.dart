@@ -1,5 +1,3 @@
-// app/models/product_model.dart
-
 class ProductPresentation {
   final int? id;
   final String? nombreEspecifico;
@@ -23,12 +21,13 @@ class ProductPresentation {
   final double precioVentaFinal;
   
   final int stockActual;
-  final int? stockAlerta; // 🔥 AGREGADO: Campo faltante que causaba el error
+  final int? stockAlerta; 
   final bool esDefault;
   final double? precioOferta;
   final String? tipoDescuento;    
   final double? valorDescuento;   
   final String estado; 
+  final bool activo; // Añadido para hacer match con DB
 
   ProductPresentation({
     this.id,
@@ -49,12 +48,13 @@ class ProductPresentation {
     this.factorGananciaVenta,
     required this.precioVentaFinal,
     required this.stockActual,
-    this.stockAlerta = 5, // 🔥 AGREGADO: Valor por defecto
+    this.stockAlerta = 5, 
     this.esDefault = false,
     this.precioOferta,
     this.tipoDescuento,
     this.valorDescuento,
     this.estado = 'publico', 
+    this.activo = true,
   });
 
   factory ProductPresentation.fromJson(Map<String, dynamic> json) {
@@ -81,8 +81,9 @@ class ProductPresentation {
       precioVentaFinal: (json['precio_venta_final'] as num?)?.toDouble() ?? 0.0,
       
       stockActual: json['stock_actual'] ?? 0,
-      stockAlerta: json['stock_alerta'], // 🔥 AGREGADO: Mapeo del JSON
-      esDefault: json['es_default'] ?? false,
+      stockAlerta: json['stock_alerta'], 
+      esDefault: json['es_default'] == 1 || json['es_default'] == true,
+      activo: json['activo'] == 1 || json['activo'] == true || json['activo'] == null,
       precioOferta: json['precio_oferta'] != null ? (json['precio_oferta'] as num).toDouble() : null,
       tipoDescuento: json['tipo_descuento'],
       valorDescuento: json['valor_descuento'] != null ? (json['valor_descuento'] as num).toDouble() : null,
@@ -90,8 +91,10 @@ class ProductPresentation {
     );
   }
 
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toSqlite(int productoId) {
     return {
+      'id': id == 0 ? null : id,
+      'producto_id': productoId,
       'nombre_especifico': nombreEspecifico,
       'codigo_barras': codigoBarras,
       'descripcion': descripcion,
@@ -109,9 +112,13 @@ class ProductPresentation {
       'factor_ganancia_venta': factorGananciaVenta,
       'precio_venta_final': precioVentaFinal,
       'stock_actual': stockActual,
-      'stock_alerta': stockAlerta, // 🔥 AGREGADO: Envío al Backend
-      'es_default': esDefault,
+      'stock_alerta': stockAlerta, 
+      'es_default': esDefault ? 1 : 0,
       'estado': estado, 
+      'activo': activo ? 1 : 0,
+      'precio_oferta': precioOferta,
+      'tipo_descuento': tipoDescuento,
+      'valor_descuento': valorDescuento,
     };
   }
 }
@@ -126,7 +133,6 @@ class Product {
   final String? codigoBarras;
   final String estado;     
   final List<ProductPresentation> presentaciones;
-  
   final int stockTotalCalculado;
 
   Product({
@@ -143,6 +149,7 @@ class Product {
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
+    // Al venir de SQLite, la lista de presentaciones se la inyectaremos después desde el servicio
     var list = json['presentaciones'] as List? ?? [];
     List<ProductPresentation> presentationList = list.map((i) => ProductPresentation.fromJson(i)).toList();
 
@@ -158,5 +165,20 @@ class Product {
       presentaciones: presentationList,
       stockTotalCalculado: json['stock_total_calculado'] ?? 0,
     );
+  }
+
+  Map<String, dynamic> toSqlite(int negocioId) {
+    return {
+      'id': id == 0 ? null : id,
+      'negocio_id': negocioId,
+      'categoria_id': categoriaId == 0 ? null : categoriaId,
+      'marca_id': marcaId,
+      'codigo_barras': codigoBarras,
+      'nombre': nombre,
+      'descripcion': descripcion,
+      'imagen_url': imagenUrl,
+      'estado': estado,
+      'fecha_actualizacion': DateTime.now().toIso8601String(),
+    };
   }
 }

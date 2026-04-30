@@ -1,4 +1,6 @@
-// 1. MODELO PARA VER A LOS MIEMBROS DEL EQUIPO (Derivado de NegocioUsuario)
+import 'dart:convert';
+
+// 1. MODELO PARA VER A LOS MIEMBROS DEL EQUIPO
 class TeamMemberModel {
   final int usuarioId;
   final String nombre;
@@ -15,22 +17,27 @@ class TeamMemberModel {
   });
 
   factory TeamMemberModel.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic> parsePermisos(dynamic data) {
+      if (data == null) return {};
+      if (data is String) return jsonDecode(data);
+      return data;
+    }
+
     return TeamMemberModel(
       usuarioId: json['usuario_id'] ?? 0,
       nombre: json['nombre'] ?? 'Usuario Desconocido',
       rol: json['rol'] ?? 'trabajador',
       estado: json['estado'] ?? 'activo',
-      permisos: json['permisos'] ?? {},
+      permisos: parsePermisos(json['permisos']),
     );
   }
 
-  // Helper para saber rápidamente qué permisos tiene
   bool can(String permissionKey) {
     return permisos[permissionKey] == true;
   }
 }
 
-// 2. MODELO PARA LOS CÓDIGOS DE INVITACIÓN (Derivado de CodigosAccesoNegocio)
+// 2. MODELO PARA LOS CÓDIGOS DE INVITACIÓN
 class AccessCodeModel {
   final int id;
   final String codigo;
@@ -62,6 +69,20 @@ class AccessCodeModel {
           ? DateTime.parse(json['fecha_expiracion']) 
           : null,
     );
+  }
+
+  Map<String, dynamic> toSqlite(int negocioId, int creadorId) {
+    return {
+      'id': id == 0 ? null : id,
+      'codigo': codigo,
+      'negocio_id': negocioId,
+      'creado_por_usuario_id': creadorId,
+      'rol_a_otorgar': rolAOtorgar,
+      'usos_maximos': usosMaximos,
+      'usos_actuales': usosActuales,
+      'fecha_creacion': fechaCreacion.toIso8601String(),
+      'fecha_expiracion': fechaExpiracion?.toIso8601String(),
+    };
   }
 
   bool get isExpired {

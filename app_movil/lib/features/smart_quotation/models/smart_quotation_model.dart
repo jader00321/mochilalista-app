@@ -1,7 +1,7 @@
 class SmartQuotationModel {
   final int id;
-  final int negocioId; // 🔥 FASE 3
-  final int creadoPorUsuarioId; // 🔥 FASE 3: Reemplaza a userId
+  final int negocioId; 
+  final int creadoPorUsuarioId; 
   final int? clientId;
   final String? clientName; 
   final String? institutionName;
@@ -51,7 +51,7 @@ class SmartQuotationModel {
     return SmartQuotationModel(
       id: json['id'],
       negocioId: json['negocio_id'] ?? 0,
-      creadoPorUsuarioId: json['creado_por_usuario_id'] ?? json['user_id'] ?? 0, // Fallback por si acaso
+      creadoPorUsuarioId: json['creado_por_usuario_id'] ?? json['user_id'] ?? 0, 
       clientId: json['client_id'],
       clientName: json['client_name'],
       institutionName: json['institution_name'],
@@ -61,13 +61,34 @@ class SmartQuotationModel {
       totalSavings: (json['total_savings'] ?? 0.0).toDouble(),
       status: json['status'] ?? 'DRAFT',
       type: json['type'] ?? 'manual',
-      isTemplate: json['is_template'] ?? false,
+      isTemplate: json['is_template'] == 1 || json['is_template'] == true, // SQLite Soporte
       sourceImageUrl: json['source_image_url'], 
       originalTextDump: json['original_text_dump'],
       createdAt: json['created_at'] ?? "",
       itemCount: json['items'] != null ? itemsList.length : (json['item_count'] ?? 0),
       items: itemsList,
     );
+  }
+
+  Map<String, dynamic> toSqlite() {
+    return {
+      'id': id == 0 ? null : id,
+      'negocio_id': negocioId,
+      'creado_por_usuario_id': creadoPorUsuarioId,
+      'client_id': clientId,
+      'client_name': clientName,
+      'institution_name': institutionName,
+      'grade_level': gradeLevel,
+      'notas': notas,
+      'total_amount': totalAmount,
+      'total_savings': totalSavings,
+      'status': status,
+      'type': type,
+      'is_template': isTemplate ? 1 : 0,
+      'source_image_url': sourceImageUrl,
+      'original_text_dump': originalTextDump,
+      'created_at': createdAt.isEmpty ? DateTime.now().toIso8601String() : createdAt,
+    };
   }
 
   SmartQuotationModel copyWith({
@@ -164,13 +185,32 @@ class QuotationItem {
       quantity: json['quantity'] ?? 1,
       unitPriceApplied: (json['unit_price_applied'] ?? 0.0).toDouble(),
       originalUnitPrice: (json['original_unit_price'] ?? 0.0).toDouble(),
-      isAvailable: json['is_available'] ?? true, 
+      isAvailable: json['is_available'] == 1 || json['is_available'] == true || json['is_available'] == null, 
       originalText: json['original_text'],
       imageUrl: json['image_url'], 
     );
   }
 
-  // 🔥 NUEVO: Getter inteligente para reemplazar el snapshot en la UI
+  Map<String, dynamic> toSqlite(int quotationId) {
+    return {
+      'id': id == 0 ? null : id,
+      'quotation_id': quotationId,
+      'product_id': productId,
+      'presentation_id': presentationId,
+      'quantity': quantity,
+      'unit_price_applied': unitPriceApplied,
+      'original_unit_price': originalUnitPrice,
+      'product_name': productName,
+      'brand_name': brandName,
+      'specific_name': specificName,
+      'sales_unit': salesUnit,
+      'original_text': originalText,
+      // Evaluamos si el precio aplicado es distinto al original para determinar is_manual_price
+      'is_manual_price': unitPriceApplied != originalUnitPrice ? 1 : 0, 
+      'is_available': isAvailable ? 1 : 0,
+    };
+  }
+
   String get displayName {
     final buffer = StringBuffer();
     if (productName != null && productName!.isNotEmpty) {

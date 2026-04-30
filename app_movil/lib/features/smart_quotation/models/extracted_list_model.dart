@@ -12,6 +12,13 @@ class SchoolListAnalysisResponse {
               .toList() ?? [],
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'metadata': metadata.toJson(),
+      'items': items.map((i) => i.toJson()).toList(),
+    };
+  }
 }
 
 class ExtractedMetadata {
@@ -29,7 +36,14 @@ class ExtractedMetadata {
     );
   }
 
-  // MÉTODO PARA RESPALDO
+  Map<String, dynamic> toJson() {
+    return {
+      'institution_name': institutionName,
+      'student_name': studentName,
+      'grade_level': gradeLevel,
+    };
+  }
+
   ExtractedMetadata clone() {
     return ExtractedMetadata(
       institutionName: institutionName,
@@ -82,7 +96,6 @@ class ExtractedItem {
     };
   }
 
-  // MÉTODO PARA RESPALDO PROFUNDO
   ExtractedItem clone() {
     return ExtractedItem(
       id: id,

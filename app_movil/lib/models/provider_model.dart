@@ -8,7 +8,7 @@ class ProviderModel {
   final String? ruc;
   final DateTime? fechaCreacion;
   final bool activo;
-  final int productsCount; // Nuevo
+  final int productsCount;
 
   ProviderModel({
     required this.id,
@@ -35,8 +35,22 @@ class ProviderModel {
       fechaCreacion: json['fecha_creacion'] != null 
           ? DateTime.tryParse(json['fecha_creacion'].toString()) 
           : null,
-      activo: json['activo'] ?? true,
+      activo: json['activo'] == 1 || json['activo'] == true,
       productsCount: json['products_count'] ?? 0,
     );
+  }
+
+  Map<String, dynamic> toSqlite(int negocioId) {
+    return {
+      'id': id == 0 ? null : id,
+      'negocio_id': negocioId,
+      'nombre_empresa': nombreEmpresa,
+      'contacto_nombre': contactoNombre,
+      'telefono': telefono,
+      'email': correo,
+      'ruc': ruc,
+      'fecha_creacion': (fechaCreacion ?? DateTime.now()).toIso8601String(),
+      'activo': activo ? 1 : 0,
+    };
   }
 }

@@ -1,4 +1,4 @@
-import 'dart:async'; 
+/*import 'dart:async'; 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -32,19 +32,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   void initState() {
     super.initState();
     
-    // 🔥 Animación de Entrada "Splash to Login"
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
     
     _fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animController, curve: const Interval(0.4, 1.0, curve: Curves.easeOut))
     );
 
-    // El logo empieza más abajo y sube a su posición final
     _slideLogoAnim = Tween<double>(begin: 1.2, end: 0.0).animate(
       CurvedAnimation(parent: _animController, curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic))
     );
 
-    // El formulario entra desde abajo hacia arriba
     _slideFormAnim = Tween<double>(begin: 60.0, end: 0.0).animate(
       CurvedAnimation(parent: _animController, curve: const Interval(0.4, 1.0, curve: Curves.easeOutCubic))
     );
@@ -97,21 +94,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             offset: Offset(0, yOffset),
             child: Column(
               children: [
-                // 🔥 SOLUCIÓN DEL LOGO: Contenedor con fondo blanco sólido para proteger el PNG transparente
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white, 
                     shape: BoxShape.circle,
                     boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 5))]
                   ),
-                  child: Image.asset(
-                    'assets/logo.png', 
-                    width: 65, 
-                    height: 65, 
-                    fit: BoxFit.contain,
-                    // Plan de respaldo por si el asset no se encuentra en cache instantáneamente
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.storefront, size: 65, color: Color(0xFF1565C0)),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/logo.png', 
+                      width: 55, 
+                      height: 55, 
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.storefront_rounded, size: 55, color: Color(0xFF1565C0)),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -119,9 +116,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   opacity: _fadeAnim.value,
                   child: Column(
                     children: [
-                      const Text("MochilaLista", style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                      const Text("MochilaLista", style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                       const SizedBox(height: 4),
-                      Text("Gestiona y compra útiles escolares", style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500)),
+                      Text("Gestiona y compra útiles escolares", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 15, fontWeight: FontWeight.w500)),
                     ],
                   ),
                 )
@@ -145,11 +142,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           physics: const BouncingScrollPhysics(),
           child: Column(
             children: [
-              // Ajuste de márgenes para que no se superponga con la cabecera en celulares pequeños
               Padding(
                 padding: const EdgeInsets.only(top: 15),
                 child: Container(
-                  padding: const EdgeInsets.all(32),
+                  padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
                     color: surfaceColor,
                     borderRadius: BorderRadius.circular(32),
@@ -158,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   ),
                   child: Column(
                     children: [
-                      Text("Iniciar Sesión", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: textColor)),
+                      Text("Iniciar Sesión", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: textColor, letterSpacing: -0.5)),
                       const SizedBox(height: 30),
                       
                       CustomTextField(label: "Correo Electrónico", icon: Icons.email_outlined, controller: _emailCtrl, keyboardType: TextInputType.emailAddress, maxLines: 1),
@@ -172,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           ? Container(
                               margin: const EdgeInsets.only(top: 20),
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.red.shade800 : Colors.red.shade200)),
+                              decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.red.shade800 : Colors.red.shade200)),
                               child: Row(
                                 children: [
                                   Icon(Icons.error_outline, color: isDark ? Colors.red[300] : Colors.red.shade700, size: 24),
@@ -224,12 +220,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text("¿No tienes cuenta? ", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[800], fontSize: 14, fontWeight: FontWeight.w500)),
+                    Text("¿No tienes cuenta? ", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[800], fontSize: 14, fontWeight: FontWeight.w600)),
                     TextButton(
                       onPressed: () {
                         auth.clearError();
                         _clearErrorOnType();
-                        // Transición fluida al registro
                         Navigator.push(context, PageRouteBuilder(
                           pageBuilder: (context, animation, secondaryAnimation) => const RegisterScreen(),
                           transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -238,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ));
                       },
                       style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                      child: Text("Regístrate aquí", style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.green[400] : Colors.green[700], fontSize: 15)),
+                      child: Text("Regístrate aquí", style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.blue[400] : Colors.blue[700], fontSize: 15)),
                     )
                   ],
                 ),
@@ -247,7 +242,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               const SizedBox(height: 10),
               TextButton(
                 onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen())),
-                child: Text("Continuar como invitado", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 14, decoration: TextDecoration.underline)),
+                child: Text("Continuar como invitado", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 14, decoration: TextDecoration.underline, fontWeight: FontWeight.w600)),
               ),
               const SizedBox(height: 20),
             ],
@@ -256,4 +251,4 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       ),
     );
   }
-}
+}*/

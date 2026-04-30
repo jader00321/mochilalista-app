@@ -16,10 +16,6 @@ class MapPickerScreen extends StatefulWidget {
 class _MapPickerScreenState extends State<MapPickerScreen> {
   final MapController _mapController = MapController();
   bool _isLoadingLoc = false;
-  
-  // 🔥 OPTIMIZACIÓN: Se eliminaron _centerPosition y _currentZoom del estado.
-  // El controlador del mapa maneja su propio estado interno en C++ de forma nativa,
-  // consultar el estado del controlador es 100x más rápido que usar setState.
 
   @override
   void initState() {
@@ -66,7 +62,6 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       body: Stack(
         alignment: Alignment.center,
         children: [
-          // 1. MAPA OPENSTREETMAP
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -74,7 +69,6 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                   ? LatLng(widget.initialLat!, widget.initialLng!) 
                   : const LatLng(-12.046374, -77.042793),
               initialZoom: 16.0,
-              // 🔥 ELIMINADO: onPositionChanged con setState. Esto detiene el colapso.
             ),
             children: [
               TileLayer(
@@ -84,13 +78,11 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
             ],
           ),
 
-          // 2. PIN ESTILO UBER (Fijo en el centro exacto de la pantalla)
           const Padding(
             padding: EdgeInsets.only(bottom: 40), 
             child: Icon(Icons.location_on, size: 55, color: Colors.redAccent),
           ),
 
-          // 3. BOTÓN ATRÁS (En SafeArea Superior)
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             left: 16,
@@ -103,7 +95,6 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
             ),
           ),
 
-          // 4. CONTROLES DE ZOOM Y GPS
           Positioned(
             bottom: 180, 
             right: 16,
@@ -135,7 +126,6 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
             ),
           ),
 
-          // 5. PANEL INFERIOR DE CONFIRMACIÓN
           Positioned(
             bottom: 0, left: 0, right: 0,
             child: Container(
@@ -154,7 +144,6 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
-                      // 🔥 Extraemos las coordenadas directamente de la cámara nativa en este milisegundo
                       onPressed: () => Navigator.pop(context, _mapController.camera.center),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue[800],

@@ -39,41 +39,37 @@ class SmartActionGrid extends StatelessWidget {
       mainAxisSpacing: 16,
       childAspectRatio: 1.05, 
       children: [
-        // 1. COTIZAR LISTA MANUAL / NUEVO PEDIDO
         _buildCard(
           context,
           title: isClient ? "Crear Pedido" : "Cotizar Manual",
           subtitle: isClient ? "Catálogo Virtual" : "Detallada",
-          icon: isClient ? Icons.add_shopping_cart : Icons.edit_note_rounded,
-          color: isDark ? Colors.blue[400]! : Colors.blue,
+          icon: isClient ? Icons.add_shopping_cart_rounded : Icons.edit_note_rounded,
+          color: isDark ? Colors.blue[400]! : Colors.blue[700]!,
           isDark: isDark,
           onTap: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualQuotationScreen()));
           },
         ),
 
-        // 🔥 OCULTAMOS ESTAS AL CLIENTE, PERO SE MUESTRAN AL DUEÑO/TRABAJADOR
         if (!isClient) ...[
-          // 2. VENTA RÁPIDA
           _buildCard(
             context,
             title: "Venta Rápida",
             subtitle: "Caja al paso",
             icon: Icons.flash_on_rounded, 
-            color: isDark ? Colors.pink[300]! : Colors.pinkAccent,
+            color: isDark ? Colors.pink[300]! : Colors.pink[600]!,
             isDark: isDark,
             onTap: () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const QuickSaleScreen()));
             },
           ),
 
-          // 3. CARGAR FACTURA
           _buildCard(
             context,
             title: "Cargar Factura",
             subtitle: "Reponer Stock",
             icon: Icons.receipt_long_rounded,
-            color: isDark ? Colors.teal[400]! : Colors.teal, 
+            color: isDark ? Colors.teal[400]! : Colors.teal[600]!, 
             isDark: isDark,
             onTap: () {
               if (inventoryScanner.aiRawData != null) {
@@ -100,13 +96,12 @@ class SmartActionGrid extends StatelessWidget {
             },
           ),
 
-          // 4. COTIZAR LISTA CON IA 
           _buildCard(
             context,
             title: "Cotizar Lista",
             subtitle: "Escaneo con IA",
             icon: Icons.document_scanner_rounded,
-            color: isDark ? Colors.orange[400]! : Colors.orange,
+            color: isDark ? Colors.orange[400]! : Colors.orange[700]!,
             isDark: isDark,
             onTap: () {
               if (quotationScanner.items.isNotEmpty) {
@@ -120,10 +115,10 @@ class SmartActionGrid extends StatelessWidget {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.quotation))); 
                   },
                   onResume: () {
+                    // 🔥 CORRECCIÓN: Se eliminó el parámetro token
                     Navigator.push(context, MaterialPageRoute(builder: (_) => MatchingScreen(
                       extractedItems: quotationScanner.items,
                       metadata: quotationScanner.metadata,
-                      token: authProv.token ?? "", 
                     )));
                   }
                 );
@@ -133,26 +128,24 @@ class SmartActionGrid extends StatelessWidget {
             },
           ),
 
-          // 5. CLIENTES CRM
           _buildCard(
             context,
             title: "Clientes",
             subtitle: "Deudas y Pagos",
             icon: Icons.people_alt_rounded,
-            color: isDark ? Colors.purple[300]! : Colors.purple,
+            color: isDark ? Colors.purple[300]! : Colors.purple[600]!,
             isDark: isDark,
             onTap: () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientTrackingScreen()));
             },
           ),
 
-          // 6. ACTIVIDAD
           _buildCard(
             context,
             title: "Actividad",
             subtitle: "Historial Ventas",
             icon: Icons.history_edu_rounded,
-            color: isDark ? Colors.indigo[300]! : Colors.indigo,
+            color: isDark ? Colors.indigo[300]! : Colors.indigo[600]!,
             isDark: isDark,
             onTap: () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesHistoryScreen()));
@@ -168,16 +161,21 @@ class SmartActionGrid extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        title: Text(title, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-        content: Text(msg, style: TextStyle(color: isDark ? Colors.grey[300] : Colors.black87, fontSize: 16)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(title, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w900, fontSize: 20)),
+        content: Text(msg, style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 15, height: 1.4)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         actions: [
           TextButton(
             onPressed: () { Navigator.pop(ctx); onNew(); },
             child: const Text("Iniciar Nueva", style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blue[600] : Colors.blue[800], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? Colors.blue[600] : Colors.blue[800], 
+              foregroundColor: Colors.white, 
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0
+            ),
             onPressed: () { Navigator.pop(ctx); onResume(); },
             child: const Text("Retomar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           )
@@ -189,15 +187,19 @@ class SmartActionGrid extends StatelessWidget {
   Widget _buildCard(BuildContext context, {required String title, required String subtitle, required IconData icon, required Color color, required bool isDark, required VoidCallback onTap}) {
     return Material(
       color: isDark ? const Color(0xFF23232F) : Colors.white,
-      elevation: isDark ? 0 : 4,
-      shadowColor: isDark ? Colors.transparent : color.withOpacity(0.2),
+      elevation: isDark ? 0 : 8,
+      shadowColor: isDark ? Colors.transparent : color.withOpacity(0.15),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: isDark ? BorderSide(color: Colors.white.withOpacity(0.1), width: 1.5) : BorderSide.none),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(24),
         splashColor: color.withOpacity(0.15),
         highlightColor: color.withOpacity(0.05),
-        child: Padding(
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: isDark ? LinearGradient(colors: [color.withOpacity(0.05), Colors.transparent], begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), 
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,20 +207,20 @@ class SmartActionGrid extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: isDark ? color.withOpacity(0.15) : color.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: isDark ? color.withOpacity(0.2) : color.withOpacity(0.1), shape: BoxShape.circle),
                 child: Icon(icon, color: color, size: 28),
               ),
               const SizedBox(height: 12), 
               Text(
                 title, 
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87, height: 1.1),
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: isDark ? Colors.white : Colors.black87, height: 1.1, letterSpacing: -0.5),
                 maxLines: 2, 
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
               Text(
                 subtitle, 
-                style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500),
+                style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w600),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               )

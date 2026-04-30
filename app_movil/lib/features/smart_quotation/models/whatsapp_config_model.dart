@@ -1,26 +1,20 @@
 class WhatsAppConfig {
-  // Datos Financieros
   bool showSubtotals; 
   bool showTotalGlobal; 
   
-  // Ahorros y Descuentos
   bool showSavingsSection; 
   bool showDiscountDetail; 
 
-  // --- NUEVO: Gestión Post-Venta ---
-  bool showDebtInfo;     // Mostrar saldo pendiente si existe
-  bool showDeliveryInfo; // Mostrar estado de entrega y fecha
+  bool showDebtInfo;     
+  bool showDeliveryInfo; 
   
-  // Datos del Negocio
   bool showBusinessInfo; 
   bool includeOwnerPhone;
   bool includeShopAddress;
   bool includeShopRuc;
   
-  // Información de Pago
   bool showPaymentInfo; 
 
-  // Estado de Edición
   bool updateClientData; 
   bool updateBusinessData; 
 
@@ -29,8 +23,8 @@ class WhatsAppConfig {
     this.showTotalGlobal = true,
     this.showSavingsSection = true,
     this.showDiscountDetail = false, 
-    this.showDebtInfo = true,     // Por defecto activo si hay deuda
-    this.showDeliveryInfo = true, // Por defecto activo si hay envíos
+    this.showDebtInfo = true,    
+    this.showDeliveryInfo = true, 
     this.showBusinessInfo = true,
     this.includeOwnerPhone = true,
     this.includeShopAddress = true,
@@ -39,4 +33,41 @@ class WhatsAppConfig {
     this.updateClientData = false,
     this.updateBusinessData = false,
   });
+
+  // Agregado para guardarlo offline
+  factory WhatsAppConfig.fromJson(Map<String, dynamic> json) {
+    return WhatsAppConfig(
+      showSubtotals: json['showSubtotals'] ?? true,
+      showTotalGlobal: json['showTotalGlobal'] ?? true,
+      showSavingsSection: json['showSavingsSection'] ?? true,
+      showDiscountDetail: json['showDiscountDetail'] ?? false,
+      showDebtInfo: json['showDebtInfo'] ?? true,
+      showDeliveryInfo: json['showDeliveryInfo'] ?? true,
+      showBusinessInfo: json['showBusinessInfo'] ?? true,
+      includeOwnerPhone: json['includeOwnerPhone'] ?? true,
+      includeShopAddress: json['includeShopAddress'] ?? true,
+      includeShopRuc: json['includeShopRuc'] ?? true,
+      showPaymentInfo: json['showPaymentInfo'] ?? true,
+      updateClientData: json['updateClientData'] ?? false,
+      updateBusinessData: json['updateBusinessData'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'showSubtotals': showSubtotals,
+      'showTotalGlobal': showTotalGlobal,
+      'showSavingsSection': showSavingsSection,
+      'showDiscountDetail': showDiscountDetail,
+      'showDebtInfo': showDebtInfo,
+      'showDeliveryInfo': showDeliveryInfo,
+      'showBusinessInfo': showBusinessInfo,
+      'includeOwnerPhone': includeOwnerPhone,
+      'includeShopAddress': includeShopAddress,
+      'includeShopRuc': includeShopRuc,
+      'showPaymentInfo': showPaymentInfo,
+      'updateClientData': updateClientData,
+      'updateBusinessData': updateBusinessData,
+    };
+  }
 }

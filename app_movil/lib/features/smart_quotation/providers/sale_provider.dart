@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; 
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../../config/api_constants.dart';
 import '../services/sales_service.dart';
 import '../services/quotation_service.dart';
 import '../services/client_service.dart';
@@ -10,7 +7,8 @@ import '../models/smart_quotation_model.dart';
 import '../models/crm_models.dart';
 
 class SaleProvider with ChangeNotifier {
-  String? _authToken;
+  int? _negocioId;
+  int? _usuarioId;
   
   Function()? onAuthRevoked;
 
@@ -64,23 +62,20 @@ class SaleProvider with ChangeNotifier {
     return sum;
   }
 
-  void updateToken(String? token) {
-    _authToken = token;
+  // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
+  void updateContext(int? negocioId, int? usuarioId) {
+    _negocioId = negocioId;
+    _usuarioId = usuarioId;
   }
 
   void _handleException(dynamic e) {
-    if (e.toString().contains("AUTH_REVOKED")) {
-      _errorMessage = "Tu acceso a este negocio ha sido revocado.";
-      if (onAuthRevoked != null) onAuthRevoked!();
-    } else {
-      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
-    }
+    _errorMessage = e.toString().replaceAll("Exception:", "").trim();
   }
 
   Future<bool> updateFullClient(int clientId, Map<String, dynamic> clientData) async {
-    if (_authToken == null) return false;
+    if (_negocioId == null) return false;
     try {
-      await _clientService.updateClient(clientId, clientData, _authToken!);
+      await _clientService.updateClient(clientId, clientData);
       return true;
     } catch (e) {
       _handleException(e);
@@ -89,9 +84,9 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<bool> updateClientNote(int clientId, String newNote) async {
-    if (_authToken == null) return false;
+    if (_negocioId == null) return false;
     try {
-      await _clientService.updateClient(clientId, {'notas': newNote}, _authToken!);
+      await _clientService.updateClient(clientId, {'notas': newNote});
       return true;
     } catch (e) {
       _handleException(e);
@@ -100,16 +95,13 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<bool> updateQuotationNote(int quotationId, String newNote) async {
-    if (_authToken == null) return false;
+    if (_negocioId == null || _usuarioId == null) return false;
     try {
-      final url = Uri.parse('${ApiConstants.baseUrl}/smart-quotations/$quotationId');
-      final response = await http.patch(
-        url,
-        headers: {'Authorization': 'Bearer $_authToken', 'Content-Type': 'application/json'},
-        body: json.encode({"notas": newNote}),
+      await _quotationService.saveManualQuotation(
+        negocioId: _negocioId!, usuarioId: _usuarioId!,
+        id: quotationId, totalAmount: 0, totalSavings: 0, items: [], notas: newNote
       );
-      if (response.statusCode == 401 || response.statusCode == 403) throw Exception("AUTH_REVOKED");
-      return response.statusCode == 200;
+      return true;
     } catch (e) {
       _handleException(e);
       return false;
@@ -117,14 +109,14 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<SmartQuotationModel?> prepareForSale(SmartQuotationModel current, int? newClientId) async {
-    if (_authToken == null) return null;
+    if (_negocioId == null || _usuarioId == null) return null;
     _isLoading = true;
     notifyListeners();
 
     try {
       bool mustClone = current.isTemplate || (current.clientId != null && current.clientId != newClientId); 
       if (mustClone) {
-        return await _quotationService.cloneQuotation(current.id, _authToken!, targetClientId: newClientId);
+        return await _quotationService.cloneQuotation(current.id, _usuarioId!, targetClientId: newClientId);
       } else {
         return current;
       }
@@ -137,7 +129,6 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
-  // 🔥 MODIFICADO: Retorna un String? (null = Éxito, String = Mensaje de Error Exacto)
   Future<String?> processCheckout({
     required int quotationId,
     required int? clientId, 
@@ -154,7 +145,7 @@ class SaleProvider with ChangeNotifier {
     String origenVenta = "smart_quotation",
     List<Map<String, dynamic>>? detalleVenta,
   }) async {
-    if (_authToken == null) return "Error: Sesión no válida.";
+    if (_negocioId == null || _usuarioId == null) return "Error: Sesión no válida.";
     _isLoading = true;
     notifyListeners();
 
@@ -172,16 +163,16 @@ class SaleProvider with ChangeNotifier {
       "monto_pagado": paid,
       "descuento_aplicado": discount,
       "cuotas": installments?.map((e) => e.toJson()).toList() ?? [],
-      "detalle_venta": detalleVenta ?? []
+      "items": detalleVenta ?? []
     };
 
     try {
-      await _salesService.createSale(saleData, _authToken!);
+      await _salesService.createSale(saleData, _negocioId!, _usuarioId!);
       await loadFilteredHistory(reset: true); 
-      return null; // Null significa SIN ERRORES (Éxito)
+      return null; 
     } catch (e) {
       _handleException(e);
-      return _errorMessage; // Devolvemos el error extraído para la UI
+      return _errorMessage; 
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -189,9 +180,9 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<ClientModel?> getClientById(int id) async {
-    if (_authToken == null) return null;
+    if (_negocioId == null) return null;
     try {
-        return await _clientService.getClientById(id, _authToken!);
+        return await _clientService.getClientById(id);
     } catch (e) {
         _handleException(e);
         return null;
@@ -199,9 +190,9 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<List<ClientModel>> searchClients(String query) async {
-    if (_authToken == null || query.isEmpty) return [];
+    if (_negocioId == null || query.isEmpty) return [];
     try {
-        return await _clientService.searchClients(query, _authToken!);
+        return await _clientService.searchClients(query, _negocioId!);
     } catch (e) {
         _handleException(e);
         return [];
@@ -209,9 +200,9 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<ClientModel?> registerClient(Map<String, dynamic> data) async {
-    if (_authToken == null) return null;
+    if (_negocioId == null || _usuarioId == null) return null;
     try {
-      return await _clientService.createClient(data, _authToken!);
+      return await _clientService.createClient(data, _negocioId!, _usuarioId!);
     } catch (e) {
       _handleException(e);
       return null;
@@ -219,20 +210,18 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> getSaleDetail(int saleId) async {
-    if (_authToken == null) return null;
+    if (_negocioId == null) return null;
     _isLoading = true;
     notifyListeners();
 
     try {
-      final detail = await _salesService.getSaleDetail(_authToken!, saleId);
-      
+      final detail = await _salesService.getSaleDetail(saleId);
       if (detail['cliente_id'] != null) {
         final clientData = await getClientById(detail['cliente_id']);
         if (clientData != null && clientData.notes != null) {
            detail['cliente_notas'] = clientData.notes;
         }
       }
-      
       return detail;
     } catch (e) {
       _handleException(e);
@@ -248,7 +237,7 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<void> loadFilteredHistory({bool reset = false}) async {
-    if (_authToken == null) return;
+    if (_negocioId == null) return;
     
     if (reset) {
       _isLoading = true;
@@ -268,7 +257,7 @@ class SaleProvider with ChangeNotifier {
       String? origen = (_currentTab == "todas" || _currentTab == "archivadas") ? null : _currentTab;
 
       final newSales = await _salesService.getHistory(
-        _authToken!,
+        _negocioId!,
         skip: _currentSkip,
         limit: _limit,
         startDate: _currentStartDate,
@@ -300,13 +289,13 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<void> _loadDynamicStats() async {
-    if (_authToken == null) return;
+    if (_negocioId == null) return;
     try {
       bool isArchivedTab = _currentTab == "archivadas";
       String? origen = (_currentTab == "todas" || _currentTab == "archivadas") ? null : _currentTab;
 
       _currentStats = await _salesService.getStats(
-        _authToken!,
+        _negocioId!,
         startDate: _currentStartDate,
         endDate: _currentEndDate,
         isArchived: isArchivedTab,
@@ -319,12 +308,12 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<bool> updateDeliveryStatus(int saleId, String newStatus) async {
-    if (_authToken == null) return false;
+    if (_negocioId == null) return false;
     _isLoading = true;
     notifyListeners();
 
     try {
-      await _salesService.updateDeliveryStatus(_authToken!, saleId, newStatus);
+      await _salesService.updateDeliveryStatus(saleId, newStatus);
       return true; 
     } catch (e) {
       _handleException(e);
@@ -392,9 +381,9 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<void> toggleArchiveSale(int saleId) async {
-    if (_authToken == null) return;
+    if (_negocioId == null) return;
     try {
-      await _salesService.toggleArchive(_authToken!, saleId);
+      await _salesService.toggleArchive(saleId);
       _salesHistory.removeWhere((element) => element.id == saleId);
       notifyListeners();
       _loadDynamicStats();
@@ -415,9 +404,9 @@ class SaleProvider with ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> getSaleDetailSilently(int saleId) async {
-    if (_authToken == null) return null;
+    if (_negocioId == null) return null;
     try {
-      final detail = await _salesService.getSaleDetail(_authToken!, saleId);
+      final detail = await _salesService.getSaleDetail(saleId);
       if (detail['cliente_id'] != null) {
         final clientData = await getClientById(detail['cliente_id']);
         if (clientData != null && clientData.notes != null) {

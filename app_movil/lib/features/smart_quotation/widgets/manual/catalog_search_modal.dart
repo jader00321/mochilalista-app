@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 // Providers
 import '../../providers/manual_quote_provider.dart'; 
-import '../../../../providers/auth_provider.dart'; 
 
 // Modelos y Widgets
 import '../../../../../models/inventory_wrapper.dart';
@@ -35,10 +34,9 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProv = Provider.of<AuthProvider>(context, listen: false);
+      // 🔥 CORRECCIÓN 1: El ProxyProvider ya inyectó el contexto, 
+      // solo iniciamos la carga de productos de frente.
       final quoteProv = Provider.of<ManualQuoteProvider>(context, listen: false);
-      
-      quoteProv.updateToken(authProv.token);
       quoteProv.init();
     });
 
@@ -73,9 +71,7 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
     final prod = wrapper.product;
     final pres = wrapper.presentation;
 
-    // 🔥 Bloqueo de producto sin stock.
-    // El producto se ve en la lista (para que el cliente sepa que la tienda lo maneja),
-    // pero si lo toca, le avisa que no hay stock y no le deja abrir el modal de compra.
+    // Bloqueo de producto sin stock.
     if (pres.stockActual <= 0) {
       CustomSnackBar.show(
         context, 
@@ -121,7 +117,7 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
         initialQty: 1,
         initialCustomName: fullNameBuilder,
         categoryName: categoryName,
-        isNewAddition: true, // 🔥 Indicamos al modal que es un producto NUEVO en la cotización
+        isNewAddition: true, 
         onConfirm: (finalProd, qty, price, name) {
           widget.onAddProduct(finalProd, qty, price, name);
         },
@@ -263,7 +259,6 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                     final brandName = provider.getBrandName(prod.marcaId);
                     final catName = provider.getCategoryName(prod.categoriaId); 
                     
-                    // 🔥 LÓGICA DE STOCK Y COLORES
                     Color stockColor = isDark ? Colors.green[400]! : Colors.green;
                     String stockText = "${pres.stockActual} disp.";
                     bool isOutOfStock = false;
@@ -291,7 +286,7 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                         onTap: () => _openDetail(wrapper, brandName, catName),
                         borderRadius: BorderRadius.circular(16),
                         child: Opacity(
-                          opacity: isOutOfStock ? 0.5 : 1.0, // 🔥 EFECTO OPACO PARA PRODUCTOS AGOTADOS
+                          opacity: isOutOfStock ? 0.5 : 1.0, 
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Row(

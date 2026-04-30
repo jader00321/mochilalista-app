@@ -56,11 +56,11 @@ class MatchedProduct {
       imageUrl: json['image_url'],
       unit: json['unit'] ?? "Unidad",
       conversionFactor: json['conversion_factor'] ?? 1,
-      isAvailable: json['is_available'] ?? true,
+      // Soporte SQLite booleans
+      isAvailable: json['is_available'] == 1 || json['is_available'] == true || json['is_available'] == null,
     );
   }
 
-  // 🔥 Nombre limpio sin la unidad repetida
   String get displayNameClean {
     final buffer = StringBuffer();
     buffer.write(productName);
@@ -87,14 +87,14 @@ class BackendMatchResult {
   final String matchTypeString; 
   final int score;
   final MatchedProduct? suggestedProduct;
-  final int? suggestedQuantity; // 🔥 SOLUCIÓN AL ERROR DE COMPILACIÓN (Añadido para recibir desde Python)
+  final int? suggestedQuantity; 
 
   BackendMatchResult({
     required this.itemId, 
     required this.matchTypeString, 
     required this.score, 
     this.suggestedProduct,
-    this.suggestedQuantity // 🔥 Agregado al constructor
+    this.suggestedQuantity 
   });
 
   factory BackendMatchResult.fromJson(Map<String, dynamic> json) {
@@ -103,7 +103,7 @@ class BackendMatchResult {
       matchTypeString: json['match_type'], 
       score: json['score'] ?? 0,
       suggestedProduct: json['suggested_product'] != null ? MatchedProduct.fromJson(json['suggested_product']) : null,
-      suggestedQuantity: json['suggested_quantity'], // 🔥 Parseado desde el JSON del backend
+      suggestedQuantity: json['suggested_quantity'], 
     );
   }
 }
@@ -168,15 +168,14 @@ class MatchPair {
       "unit_price_applied": effectiveUnitPrice, 
       "original_unit_price": originalUnitPrice, 
       
-      // 🔥 ENVÍO ESTRUCTURADO AL BACKEND
       "product_name": selectedProduct!.productName,
       "brand_name": selectedProduct!.brand,
       "specific_name": selectedProduct!.specificName,
       "sales_unit": selectedProduct!.unit,
       
       "original_text": sourceItem.originalText,
-      "is_manual_price": overridePrice != null,
-      "is_available": selectedProduct!.isAvailable
+      "is_manual_price": overridePrice != null ? 1 : 0, // SQLite Format
+      "is_available": selectedProduct!.isAvailable ? 1 : 0 // SQLite Format
     };
   }
 }

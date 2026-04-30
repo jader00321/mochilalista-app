@@ -34,16 +34,30 @@ class BusinessModel {
       longitud: json['longitud'] != null ? double.parse(json['longitud'].toString()) : null,
     );
   }
+
+  Map<String, dynamic> toSqlite(int idDueno) {
+    return {
+      'id': id == 0 ? null : id,
+      'nombre_comercial': commercialName,
+      'ruc': ruc,
+      'direccion': address,
+      'logo_url': logoUrl,
+      'configuracion_impresora': printerConfig,
+      'informacion_pago': paymentInfo,
+      'latitud': latitud,
+      'longitud': longitud,
+      'id_dueno': idDueno,
+      'fecha_creacion': DateTime.now().toIso8601String(),
+    };
+  }
 }
 
 class UserModel {
   final int id;
-  final String? codigoUnicoUsuario; // 🔥 FASE 3: Añadido para el Radar
+  final String? codigoUnicoUsuario; 
   final String email;
   final String fullName;
   final String? phone;
-  // 🔥 FASE 3: 'role' eliminado como propiedad global. 
-  // Ahora el rol se obtiene del WorkspaceModel o del JWT decodificado en AuthProvider.
   final bool isActive;
   final BusinessModel? business; 
 
@@ -60,15 +74,27 @@ class UserModel {
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'],
-      codigoUnicoUsuario: json['codigo_unico_usuario'], // 🔥 Mapeado
+      codigoUnicoUsuario: json['codigo_unico_usuario'], 
       email: json['email'],
       fullName: json['nombre_completo'] ?? "Usuario",
       phone: json['telefono'],
-      isActive: json['activo'] ?? true,
+      isActive: json['activo'] == 1 || json['activo'] == true, // Soporte SQLite
       business: json['negocio_data'] != null 
           ? BusinessModel.fromJson(json['negocio_data']) 
           : null,
     );
+  }
+
+  Map<String, dynamic> toSqlite() {
+    return {
+      'id': id == 0 ? null : id,
+      'codigo_unico_usuario': codigoUnicoUsuario,
+      'nombre_completo': fullName,
+      'email': email,
+      'telefono': phone,
+      'activo': isActive ? 1 : 0, // Soporte SQLite
+      'fecha_creacion': DateTime.now().toIso8601String(),
+    };
   }
 
   Map<String, dynamic> toUpdateJson() {

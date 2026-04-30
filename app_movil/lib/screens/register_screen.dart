@@ -1,9 +1,9 @@
-import 'dart:async'; 
+/*import 'dart:async'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../services/auth_service.dart'; // 🔥 Importante para poder validar el código en caliente
+import '../services/auth_service.dart'; 
 import '../widgets/custom_text_field.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/auth_background.dart'; 
@@ -20,14 +20,12 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _businessCtrl = TextEditingController();
-  final _inviteCodeCtrl = TextEditingController(); // 🔥 Nuevo controlador opcional
+  final _inviteCodeCtrl = TextEditingController(); 
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
 
   String _localError = '';
   Timer? _errorTimer; 
-  
-  // ESTADO DEL ROL: 0 = Dueño, 1 = Cliente / Staff
   int _selectedRole = 0;
 
   late AnimationController _animController;
@@ -44,7 +42,6 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     _confirmCtrl.addListener(_clearErrorOnType);
     _inviteCodeCtrl.addListener(_clearErrorOnType);
 
-    // Animación de entrada fluida y profesional para la cabecera
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _slideFormAnim = Tween<double>(begin: 50.0, end: 0.0).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
@@ -54,15 +51,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
 
   void _showError(String message) {
     _errorTimer?.cancel();
-    setState(() {
-      _localError = message;
-    });
+    setState(() => _localError = message);
     _errorTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted) {
-        setState(() {
-          _localError = '';
-        });
-      }
+      if (mounted) setState(() => _localError = '');
     });
   }
 
@@ -94,7 +85,6 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
 
     return AuthBackground(
-      // 🔥 Ahora sí envolvimos el headerContent en AnimatedBuilder para que se desvanezca al entrar
       headerContent: AnimatedBuilder(
         animation: _animController,
         builder: (context, child) {
@@ -103,18 +93,20 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 5))]
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 5))]
                   ),
-                  child: Image.asset('assets/logo.png', width: 45, height: 45, fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.storefront, size: 45, color: Color(0xFF1565C0)),
+                  child: ClipOval(
+                    child: Image.asset('assets/logo.png', width: 45, height: 45, fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.storefront_rounded, size: 45, color: Color(0xFF1565C0)),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text("Únete a MochilaLista", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                const Text("Únete a MochilaLista", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                 const SizedBox(height: 4),
                 Text("Selecciona tu rol para empezar", style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 15, fontWeight: FontWeight.w500)),
               ],
@@ -151,12 +143,11 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // SELECTOR DE ROLES INTERACTIVO
                     Row(
                       children: [
-                        Expanded(child: _buildRoleCard(0, "Soy Dueño", "Quiero vender", Icons.storefront, isDark)),
+                        Expanded(child: _buildRoleCard(0, "Soy Dueño", "Quiero vender", Icons.storefront_rounded, isDark)),
                         const SizedBox(width: 12),
-                        Expanded(child: _buildRoleCard(1, "Cliente/Staff", "Opcional: Código", Icons.person_search, isDark)),
+                        Expanded(child: _buildRoleCard(1, "Cliente/Staff", "Opcional: Código", Icons.person_search_rounded, isDark)),
                       ],
                     ),
                     
@@ -164,7 +155,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                     Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
                     const SizedBox(height: 24),
 
-                    Text("Datos Personales", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blueGrey, fontSize: 16)),
+                    Text("Datos Personales", style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue[800], fontSize: 16)),
                     const SizedBox(height: 16),
                     
                     CustomTextField(label: "Nombre Completo *", icon: Icons.person_outline, controller: _nameCtrl, maxLines: 1),
@@ -178,7 +169,6 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                       keyboardType: TextInputType.phone, maxLength: 9, inputFormatters: [FilteringTextInputFormatter.digitsOnly], maxLines: 1,
                     ),
                     
-                    // SECCIÓN DINÁMICA
                     AnimatedSize(
                       duration: const Duration(milliseconds: 400),
                       curve: Curves.easeInOutCubic,
@@ -187,9 +177,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 24),
-                              Text("Tu Negocio", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blueGrey, fontSize: 16)),
+                              Text("Tu Negocio", style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue[800], fontSize: 16)),
                               const SizedBox(height: 6),
-                              Text("Crea tu tienda para personalizar cotizaciones.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 13)),
+                              Text("Crea tu tienda para personalizar cotizaciones.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
                               const SizedBox(height: 16),
                               CustomTextField(label: "Nombre de tu Librería *", icon: Icons.store_mall_directory_outlined, controller: _businessCtrl, maxLines: 1),
                             ],
@@ -198,9 +188,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 24),
-                              Text("Código de Invitación (Opcional)", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blueGrey, fontSize: 16)),
+                              Text("Código de Invitación (Opcional)", style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue[800], fontSize: 16)),
                               const SizedBox(height: 6),
-                              Text("Si tienes un código para unirte a una tienda como VIP o trabajador, ingrésalo.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 13, height: 1.3)),
+                              Text("Si tienes un código para unirte a una tienda como VIP o trabajador, ingrésalo.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13, height: 1.3)),
                               const SizedBox(height: 16),
                               CustomTextField(label: "Ej: ML-VIP-99Y", icon: Icons.vpn_key_outlined, controller: _inviteCodeCtrl, maxLines: 1),
                             ],
@@ -208,7 +198,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                     ),
 
                     const SizedBox(height: 24),
-                    Text("Seguridad", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blueGrey, fontSize: 16)),
+                    Text("Seguridad", style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue[800], fontSize: 16)),
                     const SizedBox(height: 16),
                     
                     CustomTextField(label: "Contraseña *", icon: Icons.lock_outline, controller: _passCtrl, isPassword: true, maxLines: 1),
@@ -222,7 +212,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                         ? Container(
                             margin: const EdgeInsets.only(top: 20),
                             padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.red.shade800 : Colors.red.shade200)),
+                            decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.red.shade800 : Colors.red.shade200)),
                             child: Row(
                               children: [
                                 Icon(Icons.error_outline, color: isDark ? Colors.red[300] : Colors.red.shade700, size: 24),
@@ -257,7 +247,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                         }
 
                         if (_phoneCtrl.text.length < 9) {
-                          _showError("El número de celular debe tener 9 dígitos");
+                          _showError("El celular debe tener 9 dígitos");
                           return;
                         }
 
@@ -282,15 +272,12 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                         );
 
                         if (success && mounted) {
-                          // 🔥 SI ELIGIÓ CLIENTE Y PUSO UN CÓDIGO, LO UNIMOS EN SEGUNDO PLANO
                           if (_selectedRole == 1 && _inviteCodeCtrl.text.trim().isNotEmpty) {
                               try {
                                  await AuthService().joinBusiness(auth.token!, _inviteCodeCtrl.text.trim());
-                                 // Forzamos actualización de los datos del auth para que jale el nuevo negocio
-                                 await auth.checkAuthStatus();
+                                 // auth.checkInitialState() en offline, auth.checkAuthStatus() si es web.
                               } catch(e) {
-                                 // Si el código falla, no bloqueamos el login, la cuenta ya se creó
-                                 debugPrint("Falló el joinBusiness silencioso: $e");
+                                 debugPrint("Falló el joinBusiness: $e");
                               }
                           }
 
@@ -299,7 +286,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 backgroundColor: Colors.green,
-                                content: Text("¡Cuenta creada! Bienvenido a MochilaLista.", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                content: Text("¡Cuenta creada! Bienvenido.", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                               ),
                             );
                           }
@@ -323,7 +310,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text("¿Ya tienes cuenta? ", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[800], fontSize: 15, fontWeight: FontWeight.w500)),
+                    Text("¿Ya tienes cuenta? ", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[800], fontSize: 15, fontWeight: FontWeight.w600)),
                     TextButton(
                       onPressed: () {
                         auth.clearError();
@@ -331,7 +318,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                         Navigator.pop(context); 
                       },
                       style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                      child: Text("Inicia Sesión", style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.green[400] : Colors.green[700], fontSize: 16)),
+                      child: Text("Inicia Sesión", style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.blue[400] : Colors.blue[700], fontSize: 16)),
                     )
                   ],
                 ),
@@ -345,7 +332,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
 
   Widget _buildRoleCard(int roleIndex, String title, String subtitle, IconData icon, bool isDark) {
     bool isSelected = _selectedRole == roleIndex;
-    Color activeColor = isDark ? Colors.green[400]! : Colors.green[700]!;
+    Color activeColor = isDark ? Colors.blue[400]! : Colors.blue[700]!;
     
     return InkWell(
       onTap: () {
@@ -355,13 +342,13 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           if (roleIndex == 0) _inviteCodeCtrl.clear(); 
         });
       },
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withOpacity(0.1) : (isDark ? const Color(0xFF14141C) : Colors.grey[50]),
-          borderRadius: BorderRadius.circular(16),
+          color: isSelected ? activeColor.withOpacity(0.15) : (isDark ? const Color(0xFF14141C) : Colors.grey[50]),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected ? activeColor : (isDark ? Colors.white10 : Colors.grey.shade300),
             width: isSelected ? 2 : 1,
@@ -369,20 +356,20 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         ),
         child: Column(
           children: [
-            Icon(icon, color: isSelected ? activeColor : (isDark ? Colors.grey[500] : Colors.grey), size: 32),
+            Icon(icon, color: isSelected ? activeColor : (isDark ? Colors.grey[500] : Colors.grey), size: 36),
             const SizedBox(height: 8),
-            Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isSelected ? activeColor : (isDark ? Colors.white : Colors.black87))),
+            Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: isSelected ? activeColor : (isDark ? Colors.white : Colors.black87))),
             const SizedBox(height: 4),
-            Text(subtitle, style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[500] : Colors.grey[600]), textAlign: TextAlign.center),
-            const SizedBox(height: 8),
+            Text(subtitle, style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey[600], fontWeight: FontWeight.w500), textAlign: TextAlign.center),
+            const SizedBox(height: 12),
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
               color: isSelected ? activeColor : (isDark ? Colors.grey[600] : Colors.grey[400]),
-              size: 20,
+              size: 22,
             )
           ],
         ),
       ),
     );
   }
-}
+}*/
