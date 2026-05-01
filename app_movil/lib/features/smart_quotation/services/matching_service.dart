@@ -17,6 +17,9 @@ class MatchingService {
 
     for (var item in items) {
       String searchName = item.fullName.trim();
+      
+      // Construimos una query para encontrar la mejor coincidencia.
+      // Puedes implementar TheFuzz de Flutter aquí si lo deseas en el futuro.
       String query = '''
         SELECT p.*, pr.id AS pres_id, pr.nombre_especifico, pr.unidad_venta, 
                pr.precio_venta_final, pr.precio_oferta, pr.stock_actual, pr.activo AS pres_activo
@@ -24,9 +27,13 @@ class MatchingService {
         INNER JOIN productos p ON pr.producto_id = p.id
         WHERE p.negocio_id = ? AND pr.activo = 1
         AND (p.nombre LIKE ? OR pr.nombre_especifico LIKE ?)
-        LIMIT 1
       ''';
       
+      if (isClientRole) {
+        query += " AND pr.stock_actual > 0";
+      }
+      query += " LIMIT 1";
+
       final rows = await db.rawQuery(query, [negocioId, '%$searchName%', '%$searchName%']);
       
       if (rows.isNotEmpty) {
@@ -35,7 +42,7 @@ class MatchingService {
         MatchedProduct matchedProduct = MatchedProduct(
           productId: row['id'] as int,
           presentationId: row['pres_id'] as int,
-          fullName: "${row['nombre']} ${row['nombre_especifico'] ?? ''}",
+          fullName: "${row['nombre']} ${row['nombre_especifico'] ?? ''}".trim(),
           productName: row['nombre'] as String,
           specificName: row['nombre_especifico'] as String?,
           price: (row['precio_venta_final'] as num).toDouble(),
@@ -51,7 +58,7 @@ class MatchingService {
           matchTypeString: 'AUTO',
           score: 85, 
           suggestedProduct: matchedProduct,
-          suggestedQuantity: item.quantity
+          suggestedQuantity: isClientRole && item.quantity > matchedProduct.stock ? matchedProduct.stock : item.quantity
         ));
       } else {
         results.add(BackendMatchResult(
@@ -103,8 +110,8 @@ class MatchingService {
             'specific_name': item['specific_name'],
             'sales_unit': item['sales_unit'],
             'original_text': item['original_text'],
-            'is_manual_price': item['is_manual_price'] == true ? 1 : 0,
-            'is_available': item['is_available'] == true ? 1 : 0,
+            'is_manual_price': item['is_manual_price'] == true || item['is_manual_price'] == 1 ? 1 : 0,
+            'is_available': item['is_available'] == true || item['is_available'] == 1 ? 1 : 0,
           });
         }
       });

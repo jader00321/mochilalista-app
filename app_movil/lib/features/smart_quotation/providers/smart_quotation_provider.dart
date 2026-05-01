@@ -13,14 +13,12 @@ import '../services/client_service.dart';
 import '../../../database/local_db.dart';
 
 class SmartQuotationProvider with ChangeNotifier {
-  String? _aiToken; // Token para peticiones IA
+  String? _aiToken; // Usado referencialmente
 
   final AIExtractionService _service = AIExtractionService();
   final ClientService _clientService = ClientService(); 
   final dbHelper = LocalDatabase.instance;
   
-  // 🔥 SE ELIMINÓ onAuthRevoked YA QUE ESTAMOS OFFLINE Y NUNCA EXPIRARÁ LOCALMENTE
-
   bool _isLoading = false;
   String _errorMessage = '';
 
@@ -50,10 +48,6 @@ class SmartQuotationProvider with ChangeNotifier {
   int? draftQuotationId; 
 
   bool get hasManualDraft => draftManualItems != null && draftManualItems!.isNotEmpty;
-
-  void _handleException(dynamic e) {
-    _errorMessage = e.toString().replaceAll("Exception:", "").trim();
-  }
 
   void saveManualDraft({
     required List<MatchedProduct> items, required Map<int, int> quantities, required Map<int, double> prices,
@@ -93,7 +87,6 @@ class SmartQuotationProvider with ChangeNotifier {
       return _items.map((i) => i.originalText).join("\n");
   }
 
-  // 🔥 Multi-Perfil Context
   void updateContext(int? negocioId, int? usuarioId, String? aiToken) {
     _aiToken = aiToken;
   }
@@ -104,12 +97,6 @@ class SmartQuotationProvider with ChangeNotifier {
   }
 
   Future<bool> analyzeImage(BuildContext context, File image) async {
-    if (_aiToken == null) {
-      _errorMessage = "Requiere token para servicio IA.";
-      notifyListeners();
-      return false;
-    }
-
     Provider.of<MatchingProvider>(context, listen: false).clearState();
     _isLoading = true;
     _errorMessage = '';
@@ -117,17 +104,16 @@ class SmartQuotationProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _service.analyzeImage(image, _aiToken!);
+      final response = await _service.analyzeImage(image, _aiToken ?? "");
       _metadata = response.metadata;
       _items = response.items;
-      _isLoading = false;
-      notifyListeners();
       return true;
     } catch (e) {
-      _handleException(e);
+      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
   }
 
@@ -175,7 +161,7 @@ class SmartQuotationProvider with ChangeNotifier {
       qMap['items'] = iRows;
       return SmartQuotationModel.fromJson(qMap);
     } catch (e) {
-      _handleException(e);
+      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
       return null;
     }
   }

@@ -53,7 +53,6 @@ class AuthService {
     int userId = 0;
 
     try {
-      // Usamos una transacción para asegurar que si falla el negocio, tampoco se cree el usuario.
       await db.transaction((txn) async {
         userId = await txn.insert('usuarios', {
           'nombre_completo': nombreDueno,
@@ -82,7 +81,7 @@ class AuthService {
       return await getUserProfile(userId);
     } catch (e) {
       debugPrint("Error registrando perfil: $e");
-      throw Exception("Ocurrió un error al crear tu negocio. Verifica el almacenamiento de tu celular.");
+      throw Exception("Ocurrió un error al crear tu negocio. Verifica los datos o el almacenamiento.");
     }
   }
 
@@ -135,11 +134,10 @@ class AuthService {
     return BusinessModel.fromJson(biz.first);
   }
 
-  // 🔥 NUEVA FUNCIÓN DE SEGURIDAD: Elimina un perfil y, por CASCADA, todo su negocio y datos
   Future<bool> deleteLocalProfile(int userId) async {
     try {
       final db = await dbHelper.database;
-      // Gracias a PRAGMA foreign_keys = ON, esto borrará negocios, productos y ventas de este usuario.
+      // PRAGMA foreign_keys = ON borrará negocios, productos y ventas en cascada.
       int count = await db.delete('usuarios', where: 'id = ?', whereArgs: [userId]);
       return count > 0;
     } catch (e) {

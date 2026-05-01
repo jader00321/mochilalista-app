@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../providers/sale_provider.dart';
-import '../../../providers/auth_provider.dart'; // 🔥 FASE 4
+import '../../../providers/auth_provider.dart'; 
 import '../widgets/history/history_dashboard_cards.dart';
 import '../widgets/history/history_filter_bar.dart';
 import '../widgets/history/sales_list_builder.dart';
@@ -45,7 +45,6 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     super.dispose();
   }
 
-  // 🔥 NUEVO: Explicación de Exploración
   void _showExplorationModal(BuildContext context, bool isDark) {
     showDialog(
       context: context,
@@ -77,7 +76,6 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // 🔥 BLOQUEO DE INVITADOS PARA EXPORTAR
     if (!auth.hasActiveContext) {
       _showExplorationModal(context, isDark);
       return;
@@ -142,7 +140,6 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
       ),
       body: Column(
         children: [
-          // 🔥 AVISO DE EXPLORACIÓN PERMANENTE PARA INVITADOS
           if (isGuest)
             Container(
               width: double.infinity,

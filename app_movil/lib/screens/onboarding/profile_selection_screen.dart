@@ -4,7 +4,9 @@ import '../../../providers/auth_provider.dart';
 import '../../../widgets/universal_image.dart';
 import '../../../widgets/primary_button.dart';
 import '../../../widgets/auth_background.dart';
-import 'onboarding_screen.dart'; // Ajusta la ruta si es necesario
+import 'onboarding_screen.dart'; 
+import '../home_screen.dart';
+import 'lock_screen.dart'; // Asegúrate de importar el LockScreen
 
 class ProfileSelectionScreen extends StatefulWidget {
   const ProfileSelectionScreen({super.key});
@@ -31,6 +33,36 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> with Si
   void dispose() {
     _animController.dispose();
     super.dispose();
+  }
+
+  // 🔥 NUEVA LÓGICA DE NAVEGACIÓN DE SEGURIDAD
+  Future<void> _handleProfileSelection(int userId, AuthProvider auth) async {
+    // 1. Verificamos si este usuario configuró un PIN en su almacenamiento seguro local
+    bool hasPin = await auth.profileHasPin(userId);
+
+    if (!mounted) return;
+
+    if (hasPin) {
+      // Si tiene seguridad, lo mandamos al LockScreen para que ponga la huella o el PIN
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => LockScreen(userId: userId),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    } else {
+      // Si no tiene seguridad, lo logueamos directamente e iniciamos la app
+      await auth.loginWithProfile(userId);
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
+    }
   }
 
   @override
@@ -123,7 +155,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> with Si
                         ),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(20),
-                          onTap: () => auth.loginWithProfile(p.id),
+                          onTap: () => _handleProfileSelection(p.id, auth), // Llama a la lógica de seguridad
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Row(

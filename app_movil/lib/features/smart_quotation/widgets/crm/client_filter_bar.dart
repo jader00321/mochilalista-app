@@ -36,7 +36,6 @@ class ClientFilterBar extends StatelessWidget {
             onSelected: (_) => provider.toggleDeliveryFilter(),
           ),
           const SizedBox(width: 10),
-          // 🔥 FASE 4: NUEVO FILTRO
           _buildFilterChip(
             label: "Clientes App",
             icon: Icons.phone_android,

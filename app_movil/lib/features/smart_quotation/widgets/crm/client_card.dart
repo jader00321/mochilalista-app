@@ -23,7 +23,7 @@ class ClientCard extends StatelessWidget {
       msg += " Te escribimos para recordarte que tienes un saldo pendiente de ${currency.format(client.totalDebt)}.";
     }
 
-    final url = Uri.parse("https://wa.me/51${client.phone}?text=${Uri.encodeComponent(msg)}");
+    final url = Uri.parse("https://wa.me/51${client.phone.replaceAll(' ', '')}?text=${Uri.encodeComponent(msg)}");
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     } else {
@@ -33,7 +33,7 @@ class ClientCard extends StatelessWidget {
 
   Future<void> _launchCall(BuildContext context) async {
     if (client.phone.isEmpty || client.phone == "000000000") return;
-    final url = Uri.parse("tel:${client.phone}");
+    final url = Uri.parse("tel:${client.phone.replaceAll(' ', '')}");
     if (await canLaunchUrl(url)) await launchUrl(url);
   }
 
@@ -70,16 +70,15 @@ class ClientCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final confidenceColor = _getConfidenceColor(isDark);
     
-    final cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
+    final cardColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     
-    // 🔥 FASE 4: LOGICA DE INSIGNIAS
     final bool isAppClient = client.usuarioVinculadoId != null;
 
     return Card(
       elevation: isDark ? 0 : 2,
       margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
-      color: isDark ? const Color(0xFF23232F) : cardColor,
+      color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(color: confidenceColor.withOpacity(0.4), width: 1.5)
@@ -87,7 +86,10 @@ class ClientCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => ClientDetailScreen(client: client))).then((_) => onRefresh());
+          Navigator.push(
+            context, 
+            MaterialPageRoute(builder: (_) => ClientDetailScreen(client: client))
+          ).then((_) => onRefresh());
         },
         child: Column(
           children: [
@@ -100,11 +102,21 @@ class ClientCard extends StatelessWidget {
                       CircleAvatar(
                         radius: 30,
                         backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
-                        child: Text(client.fullName.isNotEmpty ? client.fullName[0].toUpperCase() : "?", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 26, color: isDark ? Colors.white70 : Colors.black54)),
+                        child: Text(
+                          client.fullName.isNotEmpty ? client.fullName[0].toUpperCase() : "?", 
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 26, color: isDark ? Colors.white70 : Colors.black54)
+                        ),
                       ),
                       Positioned(
                         bottom: 0, right: 0,
-                        child: Container(width: 18, height: 18, decoration: BoxDecoration(color: confidenceColor, shape: BoxShape.circle, border: Border.all(color: isDark ? const Color(0xFF23232F) : cardColor, width: 2.5))),
+                        child: Container(
+                          width: 18, height: 18, 
+                          decoration: BoxDecoration(
+                            color: confidenceColor, 
+                            shape: BoxShape.circle, 
+                            border: Border.all(color: cardColor, width: 2.5)
+                          )
+                        ),
                       )
                     ],
                   ),
@@ -117,14 +129,22 @@ class ClientCard extends StatelessWidget {
                         Row(
                           children: [
                             Expanded(
-                              child: Text(client.fullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              child: Text(
+                                client.fullName, 
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor), 
+                                maxLines: 1, 
+                                overflow: TextOverflow.ellipsis
+                              ),
                             ),
-                            // 🔥 FASE 4: BADGE DE APP
                             if (isAppClient)
                               Container(
                                 margin: const EdgeInsets.only(left: 8),
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(color: Colors.teal.withOpacity(0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.teal.withOpacity(0.5))),
+                                decoration: BoxDecoration(
+                                  color: Colors.teal.withOpacity(0.15), 
+                                  borderRadius: BorderRadius.circular(6), 
+                                  border: Border.all(color: Colors.teal.withOpacity(0.5))
+                                ),
                                 child: const Row(
                                   children: [
                                     Icon(Icons.phone_android, size: 12, color: Colors.teal),
@@ -158,7 +178,7 @@ class ClientCard extends StatelessWidget {
                     ),
                   ),
 
-                  if (client.totalDebt > 0)
+                  if (client.totalDebt > 0.01)
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -174,11 +194,14 @@ class ClientCard extends StatelessWidget {
             Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
 
             Container(
-              decoration: BoxDecoration(color: isDark ? Colors.black12 : Colors.grey[50], borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20))),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.black12 : Colors.grey[50], 
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20))
+              ),
               child: IntrinsicHeight(
                 child: Row(
                   children: [
-                    if (client.totalDebt > 0) ...[
+                    if (client.totalDebt > 0.01) ...[
                       Expanded(child: _QuickActionButton(icon: Icons.payments, label: "Cobrar", color: isDark ? Colors.green[400]! : Colors.green[700]!, onTap: () => _openPaymentModal(context))),
                       VerticalDivider(width: 1, color: isDark ? Colors.white10 : Colors.grey[300]),
                     ],

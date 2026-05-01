@@ -2,23 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-// Providers
 import '../providers/sale_provider.dart';
 import '../providers/quick_sale_provider.dart';
 import '../../../../providers/inventory_provider.dart';
 import '../../smart_quotation/providers/workbench_provider.dart';
 
-// Widgets & Utilidades
 import '../../../widgets/universal_image.dart';
 import '../../../widgets/full_screen_image_viewer.dart';
 
-// Widgets Modulares de Detalle
 import '../widgets/history/detail_widgets/detail_header_card.dart';
 import '../widgets/history/detail_widgets/detail_client_card.dart';
 import '../widgets/history/detail_widgets/detail_notes_card.dart';
 import '../widgets/history/detail_widgets/detail_status_card.dart';
 
-// Pantallas destino
 import 'quick_sale_screen.dart';
 import 'pdf_preview_screen.dart';   
 import 'whatsapp_preview_screen.dart'; 
@@ -110,15 +106,15 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: dialogBgColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(_saleData!['is_archived'] ? "¿Restaurar Venta?" : "¿Anular Venta?", style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-        content: Text(_saleData!['is_archived'] 
+        title: Text(_saleData!['is_archived'] == 1 ? "¿Restaurar Venta?" : "¿Anular Venta?", style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+        content: Text(_saleData!['is_archived'] == 1
             ? "Esta venta volverá a aparecer en el historial principal y sumará a tus ingresos." 
             : "Esta venta se marcará como anulada y restará de tus ingresos diarios. ¿Continuar?",
             style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey, fontSize: 16))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _saleData!['is_archived'] ? Colors.green : Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            style: ElevatedButton.styleFrom(backgroundColor: _saleData!['is_archived'] == 1 ? Colors.green : Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             onPressed: () async {
               Navigator.pop(ctx);
               setState(() => _isProcessingAction = true);
@@ -131,11 +127,11 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
               }
               
               if (mounted) {
-                _showSnack(_saleData!['is_archived'] ? "Venta restaurada exitosamente." : "Venta anulada.");
+                _showSnack(_saleData!['is_archived'] == 1 ? "Venta restaurada exitosamente." : "Venta anulada.");
                 Navigator.pop(context); 
               }
             },
-            child: Text(_saleData!['is_archived'] ? "Restaurar" : "Anular", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            child: Text(_saleData!['is_archived'] == 1 ? "Restaurar" : "Anular", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
           )
         ],
       )
@@ -145,8 +141,8 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
   void _handleSellAgainQuickSale(bool isDark) {
     final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
-    final cotizacion = _saleData!['cotizacion'] ?? {};
-    final items = cotizacion['items'] as List<dynamic>? ?? [];
+    
+    final items = _saleData!['items'] as List<dynamic>? ?? [];
 
     if (items.isEmpty) {
       _showSnack("No hay productos vigentes para vender.", isError: true);
@@ -448,9 +444,9 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     if (_isLoading) return Scaffold(backgroundColor: bgColor, body: const Center(child: CircularProgressIndicator()));
     if (_saleData == null) return Scaffold(backgroundColor: bgColor, appBar: AppBar(title: const Text("Detalle")), body: const Center(child: Text("Error al cargar datos.")));
 
-    final cotizacion = _saleData!['cotizacion'] ?? {};
-    final items = cotizacion['items'] as List<dynamic>? ?? [];
-    final origenVenta = _saleData!['origen_venta'] ?? cotizacion['type'];
+    // Extraemos de la consulta optimizada SQLite
+    final items = _saleData!['items'] as List<dynamic>? ?? [];
+    final origenVenta = _saleData!['origen_venta'];
     final styles = _getOrigenStyles(origenVenta, isDark);
     
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
@@ -461,12 +457,13 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     final int cotizacionId = _saleData!['cotizacion_id'] ?? 0;
     final int? clientId = _saleData!['cliente_id'];
 
-    final String institution = cotizacion['institution_name'] ?? "";
-    final String grade = cotizacion['grade_level'] ?? "";
-    final String imageUrl = cotizacion['source_image_url'] ?? "";
+    // Para evitar nulos si la venta original no fue una cotizacion
+    final String institution = "";
+    final String grade = "";
+    final String imageUrl = "";
 
     final String clientNote = _saleData!['cliente_notas'] ?? ""; 
-    final String saleNote = cotizacion['notas'] ?? ""; 
+    final String saleNote = ""; 
 
     final double totalAmount = (_saleData!['monto_total'] ?? 0).toDouble();
     final double paidAmount = (_saleData!['monto_pagado'] ?? 0).toDouble();
@@ -498,9 +495,9 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                   PopupMenuItem(
                     value: 'archive', 
                     child: Row(children: [
-                      Icon(_saleData!['is_archived'] ? Icons.unarchive : Icons.auto_delete, color: _saleData!['is_archived'] ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.red[400] : Colors.red), size: 24), 
+                      Icon(_saleData!['is_archived'] == 1 ? Icons.unarchive : Icons.auto_delete, color: _saleData!['is_archived'] == 1 ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.red[400] : Colors.red), size: 24), 
                       const SizedBox(width: 12), 
-                      Text(_saleData!['is_archived'] ? "Restaurar Venta" : "Anular Venta", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))
+                      Text(_saleData!['is_archived'] == 1 ? "Restaurar Venta" : "Anular Venta", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))
                     ])
                   )
                 ],
@@ -565,7 +562,6 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                     ),
                   ),
 
-                // 🔥 6. LISTA DE PRODUCTOS ESTRUCTURADA
                 Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -584,7 +580,6 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                           final String imgUrl = item['image_url'] ?? "";
                           final bool hadDiscount = originalPrice > unitPrice + 0.01;
 
-                          // Identificamos si es un item nuevo estructurado o legado
                           bool isStructured = item['product_name'] != null && item['product_name'].toString().isNotEmpty;
 
                           return Container(

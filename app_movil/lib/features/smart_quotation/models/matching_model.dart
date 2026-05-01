@@ -56,7 +56,6 @@ class MatchedProduct {
       imageUrl: json['image_url'],
       unit: json['unit'] ?? "Unidad",
       conversionFactor: json['conversion_factor'] ?? 1,
-      // Soporte SQLite booleans
       isAvailable: json['is_available'] == 1 || json['is_available'] == true || json['is_available'] == null,
     );
   }
@@ -174,8 +173,8 @@ class MatchPair {
       "sales_unit": selectedProduct!.unit,
       
       "original_text": sourceItem.originalText,
-      "is_manual_price": overridePrice != null ? 1 : 0, // SQLite Format
-      "is_available": selectedProduct!.isAvailable ? 1 : 0 // SQLite Format
+      "is_manual_price": overridePrice != null ? 1 : 0, // SQLite
+      "is_available": selectedProduct!.isAvailable ? 1 : 0 // SQLite
     };
   }
 }

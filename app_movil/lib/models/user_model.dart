@@ -30,8 +30,8 @@ class BusinessModel {
       logoUrl: json['logo_url'],
       printerConfig: json['configuracion_impresora'], 
       paymentInfo: json['informacion_pago'], 
-      latitud: json['latitud'] != null ? double.parse(json['latitud'].toString()) : null,
-      longitud: json['longitud'] != null ? double.parse(json['longitud'].toString()) : null,
+      latitud: json['latitud'] != null ? double.tryParse(json['latitud'].toString()) : null,
+      longitud: json['longitud'] != null ? double.tryParse(json['longitud'].toString()) : null,
     );
   }
 
@@ -78,7 +78,7 @@ class UserModel {
       email: json['email'],
       fullName: json['nombre_completo'] ?? "Usuario",
       phone: json['telefono'],
-      isActive: json['activo'] == 1 || json['activo'] == true, // Soporte SQLite
+      isActive: json['activo'] == 1 || json['activo'] == true, 
       business: json['negocio_data'] != null 
           ? BusinessModel.fromJson(json['negocio_data']) 
           : null,
@@ -92,7 +92,7 @@ class UserModel {
       'nombre_completo': fullName,
       'email': email,
       'telefono': phone,
-      'activo': isActive ? 1 : 0, // Soporte SQLite
+      'activo': isActive ? 1 : 0, 
       'fecha_creacion': DateTime.now().toIso8601String(),
     };
   }

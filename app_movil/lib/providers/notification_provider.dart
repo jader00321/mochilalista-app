@@ -13,7 +13,6 @@ class NotificationProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
 
-  // 🔥 CORRECCIÓN: Renombrado de updateToken a updateContext
   void updateContext(int? negocioId) {
     if (_negocioId != negocioId) {
       _negocioId = negocioId;
@@ -47,15 +46,19 @@ class NotificationProvider with ChangeNotifier {
   Future<void> markAsRead(int id) async {
     final index = _notifications.indexWhere((n) => n.id == id);
     if (index != -1 && !_notifications[index].isRead) {
+      // Actualización Optimista (UI primero)
       _notifications[index].isRead = true;
       notifyListeners();
       
       try {
         final db = await dbHelper.database;
-        await db.update('notificaciones', {'leida': 1}, where: 'id = ?', whereArgs: [id]);
+        int rows = await db.update('notificaciones', {'leida': 1}, where: 'id = ?', whereArgs: [id]);
+        if (rows == 0) throw Exception("No se afectaron filas");
       } catch (e) {
+        // Reversión si SQLite falla
         _notifications[index].isRead = false; 
         notifyListeners();
+        debugPrint("Error marcando como leída: $e");
       }
     }
   }
@@ -63,6 +66,7 @@ class NotificationProvider with ChangeNotifier {
   Future<void> markAllAsRead() async {
     if (_negocioId == null) return;
 
+    // Actualización Optimista
     for (var n in _notifications) {
       n.isRead = true;
     }
@@ -70,24 +74,29 @@ class NotificationProvider with ChangeNotifier {
 
     try {
       final db = await dbHelper.database;
-      await db.update('notificaciones', {'leida': 1}, where: 'negocio_id = ?', whereArgs: [_negocioId]);
+      await db.update('notificaciones', {'leida': 1}, where: 'negocio_id = ? AND leida = 0', whereArgs: [_negocioId]);
     } catch (e) {
-      fetchNotifications(); 
+      debugPrint("Error marcando todas como leídas: $e");
+      fetchNotifications(); // Refrescar desde BD si hay error
     }
   }
 
   Future<void> deleteNotification(int id) async {
     final index = _notifications.indexWhere((n) => n.id == id);
     if (index != -1) {
+      // Actualización Optimista
       final removed = _notifications.removeAt(index);
       notifyListeners();
 
       try {
         final db = await dbHelper.database;
-        await db.delete('notificaciones', where: 'id = ?', whereArgs: [id]);
+        int rows = await db.delete('notificaciones', where: 'id = ?', whereArgs: [id]);
+        if (rows == 0) throw Exception("No se borró la notificación");
       } catch (e) {
+        // Reversión si SQLite falla
         _notifications.insert(index, removed); 
         notifyListeners();
+        debugPrint("Error borrando notificación: $e");
       }
     }
   }

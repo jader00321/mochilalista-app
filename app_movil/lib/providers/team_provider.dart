@@ -9,7 +9,7 @@ class TeamProvider with ChangeNotifier {
   String _errorMessage = "";
 
   List<TeamMemberModel> _teamMembers = [];
-  List<AccessCodeModel> _accessCodes = []; 
+  final List<AccessCodeModel> _accessCodes = []; 
 
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
@@ -31,7 +31,7 @@ class TeamProvider with ChangeNotifier {
 
     try {
       final db = await dbHelper.database;
-      // Buscar el dueño de este negocio específico
+      // Buscar el dueño de este negocio específico en SQLite
       final negocioRows = await db.query('negocios', where: 'id = ?', whereArgs: [_negocioId], limit: 1);
       
       if (negocioRows.isNotEmpty) {
@@ -45,13 +45,13 @@ class TeamProvider with ChangeNotifier {
               nombre: users.first['nombre_completo'] as String? ?? 'Dueño',
               rol: 'dueno',
               estado: 'activo',
-              permisos: {}, 
+              permisos: {"is_owner": true}, 
             )
           ];
         }
       }
     } catch (e) {
-      _errorMessage = "Error cargando usuario local.";
+      _errorMessage = "Error cargando equipo local.";
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -59,7 +59,7 @@ class TeamProvider with ChangeNotifier {
   }
 
   Future<void> fetchAccessCodes(int businessId) async {
-    _accessCodes = []; 
+    // Modo offline: No hay invitaciones
     notifyListeners();
   }
 
@@ -72,13 +72,13 @@ class TeamProvider with ChangeNotifier {
   Future<bool> deleteAccessCode(int businessId, int codeId) async => false;
 
   Future<bool> updateMemberPermissions(int businessId, int userId, Map<String, dynamic> newPermissions, String newStatus, String newRole) async {
-    _errorMessage = "No puedes cambiar tus propios permisos de dueño.";
+    _errorMessage = "No puedes cambiar los permisos del Dueño Principal.";
     notifyListeners();
     return false;
   }
 
   Future<bool> addUserDirectly(int businessId, String userCode, String role) async {
-    _errorMessage = "La versión offline es exclusiva para uso en este dispositivo.";
+    _errorMessage = "La versión offline es exclusiva para un usuario local.";
     notifyListeners();
     return false;
   }

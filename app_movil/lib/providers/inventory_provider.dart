@@ -14,11 +14,9 @@ enum SortType { id, alpha }
 class InventoryProvider with ChangeNotifier {
   int? _negocioId;
   
-  // --- SERVICIOS ---
   final MasterDataService _masterDataService = MasterDataService();
   final ProductService _productService = ProductService();
 
-  // --- ESTADOS ---
   List<InventoryWrapper> _inventoryItems = []; 
   List<Category> _categories = [];
   List<Brand> _brands = [];        
@@ -88,7 +86,6 @@ class InventoryProvider with ChangeNotifier {
   SortType get provSort => _provSort; 
   bool get provAsc => _provAsc;
 
-  // --- GETTERS ORDENADOS ---
   List<InventoryWrapper> get items {
     final list = List<InventoryWrapper>.from(_inventoryItems);
     list.sort((a, b) {
@@ -149,7 +146,6 @@ class InventoryProvider with ChangeNotifier {
   String get errorMessage => _errorMessage;
   String? get lastActionError => _lastActionError;
 
-  // 🔥 CORRECCIÓN: Renombrado de updateToken a updateContext
   void updateContext(int? negocioId) {
     if (_negocioId != negocioId) {
       _negocioId = negocioId;
@@ -191,12 +187,16 @@ class InventoryProvider with ChangeNotifier {
   Future<Product?> fetchProductById(int productId) async => await _productService.fetchProductById(productId);
 
   Future<void> loadMasterData({bool showAll = true}) async {
-    final result = await _masterDataService.fetchAllMasterData(showAll);
-    if (result != null) {
-      _categories = List<Category>.from(result['categories']);
-      _brands = List<Brand>.from(result['brands']);
-      _providers = List<ProviderModel>.from(result['providers']);
-      notifyListeners();
+    try {
+      final result = await _masterDataService.fetchAllMasterData(showAll);
+      if (result != null) {
+        _categories = List<Category>.from(result['categories']);
+        _brands = List<Brand>.from(result['brands']);
+        _providers = List<ProviderModel>.from(result['providers']);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint("Error loading master data: $e");
     }
   }
 
@@ -252,6 +252,7 @@ class InventoryProvider with ChangeNotifier {
     return false;
   }
 
+  // 🔥 SOLUCIÓN A LA CARGA INFINITA
   Future<void> loadInventory({
     bool reset = false, String? searchQuery, List<int>? categoryIds, List<int>? brandIds, List<int>? providerIds,
     String? filterState, double? minPrice, double? maxPrice, int? minStock, int? maxStock, bool? hasOffer, bool? onlyDefaults,
@@ -271,49 +272,58 @@ class InventoryProvider with ChangeNotifier {
 
     if (_brands.isEmpty) await loadMasterData();
 
-    Map<String, String> queryParams = {
-      'skip': _currentSkip.toString(), 
-      'limit': _limit.toString()
-    };
-    
-    void addIfNotNull(String key, dynamic value) { if (value != null) queryParams[key] = value.toString(); }
-    
-    addIfNotNull('q', _lastQuery); addIfNotNull('estado', _lastEstado);
-    addIfNotNull('min_price', _lastMinPrice); addIfNotNull('max_price', _lastMaxPrice);
-    addIfNotNull('min_stock', _lastMinStock); addIfNotNull('max_stock', _lastMaxStock);
-    if (_lastHasOffer) queryParams['has_offer'] = 'true';
-    if (_lastOnlyDefaults) queryParams['only_defaults'] = 'true';
-    
-    if (_lastCategoryIds != null && _lastCategoryIds!.isNotEmpty) queryParams['category_ids'] = _lastCategoryIds!.join(",");
-    if (_lastBrandIds != null && _lastBrandIds!.isNotEmpty) queryParams['brand_ids'] = _lastBrandIds!.join(",");
-    if (_lastProviderIds != null && _lastProviderIds!.isNotEmpty) queryParams['provider_ids'] = _lastProviderIds!.join(",");
+    try {
+      Map<String, String> queryParams = {
+        'skip': _currentSkip.toString(), 
+        'limit': _limit.toString()
+      };
+      
+      void addIfNotNull(String key, dynamic value) { if (value != null) queryParams[key] = value.toString(); }
+      
+      addIfNotNull('q', _lastQuery); addIfNotNull('estado', _lastEstado);
+      addIfNotNull('min_price', _lastMinPrice); addIfNotNull('max_price', _lastMaxPrice);
+      addIfNotNull('min_stock', _lastMinStock); addIfNotNull('max_stock', _lastMaxStock);
+      if (_lastHasOffer) queryParams['has_offer'] = 'true';
+      if (_lastOnlyDefaults) queryParams['only_defaults'] = 'true';
+      
+      if (_lastCategoryIds != null && _lastCategoryIds!.isNotEmpty) queryParams['category_ids'] = _lastCategoryIds!.join(",");
+      if (_lastBrandIds != null && _lastBrandIds!.isNotEmpty) queryParams['brand_ids'] = _lastBrandIds!.join(",");
+      if (_lastProviderIds != null && _lastProviderIds!.isNotEmpty) queryParams['provider_ids'] = _lastProviderIds!.join(",");
 
-    final newItems = await _productService.fetchInventory(queryParams);
-    
-    if (newItems != null) {
-      if (newItems.length < _limit) _hasMoreData = false;
-      if (reset) {
-        _inventoryItems = newItems;
+      final newItems = await _productService.fetchInventory(queryParams);
+      
+      if (newItems != null) {
+        if (newItems.length < _limit) _hasMoreData = false;
+        if (reset) {
+          _inventoryItems = newItems;
+        } else {
+          _inventoryItems.addAll(newItems);
+        }
+        _currentSkip += newItems.length;
       } else {
-        _inventoryItems.addAll(newItems);
+        _errorMessage = "Error de conexión con el inventario";
       }
-      _currentSkip += newItems.length;
-    } else {
-      _errorMessage = "Error de conexión con el inventario";
+    } catch (e) {
+      _errorMessage = "Error inesperado al cargar inventario: $e";
+    } finally {
+      // 🔥 ESTO ASEGURA QUE LA CARGA INFINITA NO OCURRA NUNCA MÁS
+      _isLoading = false; 
+      _isLoadingMore = false;
+      notifyListeners();
     }
-    
-    _isLoading = false; _isLoadingMore = false;
-    notifyListeners();
   }
 
   Future<void> loadMore() async => await loadInventory(reset: false);
 
   Future<bool> deleteProduct(int id) async {
     _isLoading = true; notifyListeners();
-    bool ok = await _productService.deleteProduct(id);
-    if (ok) { _inventoryItems.removeWhere((w) => w.product.id == id); }
-    _isLoading = false; notifyListeners();
-    return ok;
+    try {
+      bool ok = await _productService.deleteProduct(id);
+      if (ok) { _inventoryItems.removeWhere((w) => w.product.id == id); }
+      return ok;
+    } finally {
+      _isLoading = false; notifyListeners();
+    }
   }
 
   Future<bool> createFullProduct({
@@ -321,13 +331,16 @@ class InventoryProvider with ChangeNotifier {
     String? descripcion, String? imagenUrl, String? codigoBarras, required List<ProductPresentation> presentaciones
   }) async {
     _isLoading = true; notifyListeners();
-    bool ok = await _productService.createFullProduct(
-      nombre: nombre, marcaId: marcaId, categoriaId: categoriaId, proveedorId: proveedorId, estado: estado, 
-      descripcion: descripcion, imagenUrl: imagenUrl, codigoBarras: codigoBarras, presentaciones: presentaciones
-    );
-    if (ok) await loadInventory(reset: true);
-    _isLoading = false; notifyListeners();
-    return ok;
+    try {
+      bool ok = await _productService.createFullProduct(
+        nombre: nombre, marcaId: marcaId, categoriaId: categoriaId, proveedorId: proveedorId, estado: estado, 
+        descripcion: descripcion, imagenUrl: imagenUrl, codigoBarras: codigoBarras, presentaciones: presentaciones
+      );
+      if (ok) await loadInventory(reset: true);
+      return ok;
+    } finally {
+      _isLoading = false; notifyListeners();
+    }
   }
 
   Future<bool> editFullProduct({
@@ -336,14 +349,17 @@ class InventoryProvider with ChangeNotifier {
     required List<ProductPresentation> presentaciones, required List<int> idsToDelete
   }) async {
     _isLoading = true; notifyListeners();
-    bool ok = await _productService.editFullProduct(
-      productId: productId, nombre: nombre, marcaId: marcaId, categoriaId: categoriaId, proveedorId: proveedorId, 
-      estado: estado, descripcion: descripcion, imagenUrl: imagenUrl, codigoBarras: codigoBarras, 
-      presentaciones: presentaciones, idsToDelete: idsToDelete
-    );
-    if (ok) await loadInventory(reset: true);
-    _isLoading = false; notifyListeners();
-    return ok;
+    try {
+      bool ok = await _productService.editFullProduct(
+        productId: productId, nombre: nombre, marcaId: marcaId, categoriaId: categoriaId, proveedorId: proveedorId, 
+        estado: estado, descripcion: descripcion, imagenUrl: imagenUrl, codigoBarras: codigoBarras, 
+        presentaciones: presentaciones, idsToDelete: idsToDelete
+      );
+      if (ok) await loadInventory(reset: true);
+      return ok;
+    } finally {
+      _isLoading = false; notifyListeners();
+    }
   }
 
   Future<bool> updatePresentation(int presentationId, {

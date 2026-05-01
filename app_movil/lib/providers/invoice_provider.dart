@@ -19,7 +19,6 @@ class InvoiceProvider with ChangeNotifier {
   List<InvoiceModel> get invoices => _invoices;
   bool get hasMoreData => _hasMoreData;
 
-  // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
   void updateContext(int? negocioId) {
     _negocioId = negocioId;
   }
@@ -42,7 +41,6 @@ class InvoiceProvider with ChangeNotifier {
 
     try {
       final db = await dbHelper.database;
-      // Consultamos la tabla facturas_carga usando el _negocioId dinámico
       final List<Map<String, dynamic>> rows = await db.query(
         'facturas_carga',
         where: 'negocio_id = ?',

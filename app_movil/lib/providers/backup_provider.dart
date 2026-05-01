@@ -29,26 +29,20 @@ class BackupProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ==========================================
-  // CONFIGURACIÓN DE BACKUPS AUTOMÁTICOS
-  // ==========================================
-
   void _reconfigureWorkmanager() {
-    final String taskName = "monthlyBackupTask"; // Debe coincidir con main.dart
+    final String taskName = "monthlyBackupTask"; 
     
-    // Primero cancelamos cualquier tarea programada previamente
     Workmanager().cancelByUniqueName("backup_periodico_app");
 
     if (_isAutoBackupEnabled) {
-      // Reprogramamos con la nueva frecuencia
       Workmanager().registerPeriodicTask(
-        "backup_periodico_app", // ID único de la tarea
+        "backup_periodico_app",
         taskName,
         frequency: Duration(days: _autoBackupIntervalDays),
-        initialDelay: const Duration(minutes: 15), // Espera 15 min antes del primer intento
+        initialDelay: const Duration(minutes: 15), 
         constraints: Constraints(
-          networkType: NetworkType.connected, // Asegura internet para Drive
-          requiresBatteryNotLow: true, // No agota la batería del usuario
+          networkType: NetworkType.connected, 
+          requiresBatteryNotLow: true, 
         ),
       );
     }
@@ -77,20 +71,16 @@ class BackupProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ==========================================
-  // EJECUCIÓN DE BACKUPS MANUALES
-  // ==========================================
-
   Future<bool> backupToWhatsApp() async {
     _setLoading(true);
     try {
       bool success = await BackupManager.exportToWhatsApp();
-      _setLoading(false);
       return success;
     } catch (e) {
       _errorMessage = e.toString();
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
@@ -98,12 +88,12 @@ class BackupProvider with ChangeNotifier {
     _setLoading(true);
     try {
       bool success = await BackupManager.exportToDownloads();
-      _setLoading(false);
       return success;
     } catch (e) {
       _errorMessage = e.toString();
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
@@ -111,29 +101,25 @@ class BackupProvider with ChangeNotifier {
     _setLoading(true);
     try {
       bool success = await BackupManager.exportToGoogleDrive();
-      _setLoading(false);
       return success;
     } catch (e) {
       _errorMessage = e.toString();
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
-
-  // ==========================================
-  // RESTAURACIÓN
-  // ==========================================
 
   Future<bool> restoreDatabase() async {
     _setLoading(true);
     try {
       bool success = await BackupManager.restoreBackup();
-      _setLoading(false);
       return success;
     } catch (e) {
       _errorMessage = e.toString();
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 

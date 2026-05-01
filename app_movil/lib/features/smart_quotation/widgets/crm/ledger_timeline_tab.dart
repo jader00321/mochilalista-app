@@ -91,7 +91,6 @@ class LedgerTimelineTab extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // CORRECCIÓN DEL OVERFLOW: Usar Wrap o Expanded correctamente
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -118,7 +117,6 @@ class LedgerTimelineTab extends StatelessWidget {
                         Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
                         const SizedBox(height: 12),
                         
-                        // CORRECCIÓN DEL OVERFLOW INFERIOR
                         Wrap(
                           alignment: WrapAlignment.spaceBetween,
                           crossAxisAlignment: WrapCrossAlignment.center,

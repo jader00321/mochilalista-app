@@ -9,8 +9,6 @@ import '../models/crm_models.dart';
 class SaleProvider with ChangeNotifier {
   int? _negocioId;
   int? _usuarioId;
-  
-  Function()? onAuthRevoked;
 
   final SalesService _salesService = SalesService();
   final QuotationService _quotationService = QuotationService();
@@ -62,7 +60,6 @@ class SaleProvider with ChangeNotifier {
     return sum;
   }
 
-  // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
   void updateContext(int? negocioId, int? usuarioId) {
     _negocioId = negocioId;
     _usuarioId = usuarioId;
@@ -146,27 +143,28 @@ class SaleProvider with ChangeNotifier {
     List<Map<String, dynamic>>? detalleVenta,
   }) async {
     if (_negocioId == null || _usuarioId == null) return "Error: Sesión no válida.";
+    
     _isLoading = true;
     notifyListeners();
 
-    final saleData = {
-      "cotizacion_id": origenVenta == "pos_rapido" ? null : quotationId, 
-      "cliente_id": clientId,
-      "client_name_override": clientName, 
-      "notas": saleNote, 
-      "origen_venta": origenVenta,
-      "metodo_pago": paymentMethod,
-      "estado_pago": paymentStatus,
-      "estado_entrega": deliveryStatus,
-      "fecha_entrega": deliveryDate, 
-      "monto_total": total,
-      "monto_pagado": paid,
-      "descuento_aplicado": discount,
-      "cuotas": installments?.map((e) => e.toJson()).toList() ?? [],
-      "items": detalleVenta ?? []
-    };
-
     try {
+      final saleData = {
+        "cotizacion_id": origenVenta == "pos_rapido" ? null : quotationId, 
+        "cliente_id": clientId,
+        "client_name_override": clientName, 
+        "notas": saleNote, 
+        "origen_venta": origenVenta,
+        "metodo_pago": paymentMethod,
+        "estado_pago": paymentStatus,
+        "estado_entrega": deliveryStatus,
+        "fecha_entrega": deliveryDate, 
+        "monto_total": total,
+        "monto_pagado": paid,
+        "descuento_aplicado": discount,
+        "cuotas": installments?.map((e) => e.toJson()).toList() ?? [],
+        "items": detalleVenta ?? []
+      };
+
       await _salesService.createSale(saleData, _negocioId!, _usuarioId!);
       await loadFilteredHistory(reset: true); 
       return null; 
@@ -174,6 +172,7 @@ class SaleProvider with ChangeNotifier {
       _handleException(e);
       return _errorMessage; 
     } finally {
+      // 🔥 Aseguramos que la UI deje de cargar incluso si falla SQLite
       _isLoading = false;
       notifyListeners();
     }

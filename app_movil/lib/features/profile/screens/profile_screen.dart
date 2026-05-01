@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_view/photo_view.dart';
@@ -14,7 +13,7 @@ import '../widgets/business_info_card.dart';
 import '../widgets/profile_menu_item.dart';
 import '../widgets/edit_profile_modal.dart';
 import '../widgets/edit_business_modal.dart';
-import '../widgets/change_pin_modal.dart'; // Si lo renombraste a pin
+import '../widgets/change_pin_modal.dart'; 
 import '../../../../widgets/custom_snackbar.dart';
 import '../../../../screens/onboarding/profile_selection_screen.dart'; 
 import 'printer_config_screen.dart';
@@ -52,7 +51,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Future<void> _refreshProfile() async {
-    // 🔥 USANDO checkInitialState en lugar del antiguo checkAuthStatus
     await Provider.of<AuthProvider>(context, listen: false).checkInitialState();
     if (mounted) CustomSnackBar.show(context, message: "Datos actualizados", isError: false);
   }

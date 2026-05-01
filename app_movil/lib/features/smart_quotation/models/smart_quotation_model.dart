@@ -61,7 +61,7 @@ class SmartQuotationModel {
       totalSavings: (json['total_savings'] ?? 0.0).toDouble(),
       status: json['status'] ?? 'DRAFT',
       type: json['type'] ?? 'manual',
-      isTemplate: json['is_template'] == 1 || json['is_template'] == true, // SQLite Soporte
+      isTemplate: json['is_template'] == 1 || json['is_template'] == true, // Soporte SQLite
       sourceImageUrl: json['source_image_url'], 
       originalTextDump: json['original_text_dump'],
       createdAt: json['created_at'] ?? "",
@@ -205,7 +205,6 @@ class QuotationItem {
       'specific_name': specificName,
       'sales_unit': salesUnit,
       'original_text': originalText,
-      // Evaluamos si el precio aplicado es distinto al original para determinar is_manual_price
       'is_manual_price': unitPriceApplied != originalUnitPrice ? 1 : 0, 
       'is_available': isAvailable ? 1 : 0,
     };

@@ -21,15 +21,16 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadData();
-    });
+    _loadData();
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+    
     final provider = Provider.of<SaleProvider>(context, listen: false);
     final data = await provider.getSaleDetail(widget.saleId);
+    
     if (mounted) {
       setState(() {
         _saleData = data;
@@ -82,7 +83,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
               final success = await provider.updateDeliveryStatus(widget.saleId, selectedStatus);
               
               if (success) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Logística actualizada", style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.green));
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Logística actualizada"), backgroundColor: Colors.green));
                 await _loadData(); 
               } else {
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(provider.errorMessage), backgroundColor: Colors.red));
@@ -126,7 +127,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
-    final cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
+    final cardColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
     if (_isLoading && _saleData == null) {
@@ -138,22 +139,22 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
     }
 
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-    final double total = double.parse(_saleData!['monto_total'].toString());
-    final double pagado = double.parse(_saleData!['monto_pagado'].toString());
+    
+    // 🔥 Parseo double seguro desde SQLite
+    final double total = (num.tryParse(_saleData!['monto_total'].toString()) ?? 0.0).toDouble();
+    final double pagado = (num.tryParse(_saleData!['monto_pagado'].toString()) ?? 0.0).toDouble();
     
     double saldo = total - pagado;
     if (saldo <= 0.02) saldo = 0.0;
 
     final List<dynamic> cuotas = _saleData!['cuotas'] ?? [];
-    final cotizacion = _saleData!['cotizacion'] ?? {};
-    final items = cotizacion['items'] as List<dynamic>? ?? [];
+    final items = _saleData!['items'] as List<dynamic>? ?? [];
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text("Detalle de Venta #${widget.saleId}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: textColor)),
+        title: Text("Detalle de Venta #${widget.saleId}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         backgroundColor: Colors.transparent,
-        iconTheme: IconThemeData(color: textColor),
         elevation: 0,
       ),
       body: RefreshIndicator(
@@ -229,8 +230,8 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                   itemCount: cuotas.length,
                   itemBuilder: (ctx, i) {
                     final c = cuotas[i];
-                    final double cMonto = double.parse(c['monto'].toString());
-                    final double cPagado = double.parse((c['monto_pagado'] ?? 0.0).toString());
+                    final double cMonto = (num.tryParse(c['monto'].toString()) ?? 0.0).toDouble();
+                    final double cPagado = (num.tryParse((c['monto_pagado'] ?? 0.0).toString()) ?? 0.0).toDouble();
                     
                     double cSaldo = cMonto - cPagado;
                     bool isPaid = c['estado'] == 'pagado';
@@ -309,6 +310,9 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                 itemCount: items.length,
                 itemBuilder: (ctx, i) {
                   final item = items[i];
+                  double unitP = (num.tryParse(item['unit_price_applied'].toString()) ?? 0.0).toDouble();
+                  int quantity = int.tryParse(item['quantity'].toString()) ?? 1;
+
                   return Card(
                     elevation: 0,
                     color: cardColor,
@@ -317,9 +321,9 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       leading: Icon(Icons.check_box, color: isDark ? Colors.green[400] : Colors.green),
-                      title: Text(item['product_name_snapshot'] ?? "Producto", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
-                      subtitle: Text("Cantidad: ${item['quantity']}", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])),
-                      trailing: Text(currency.format(item['unit_price_applied'] * item['quantity']), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
+                      title: Text(item['product_name'] ?? "Producto", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
+                      subtitle: Text("Cantidad: $quantity", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                      trailing: Text(currency.format(unitP * quantity), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
                     ),
                   );
                 }

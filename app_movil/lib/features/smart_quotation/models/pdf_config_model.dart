@@ -50,7 +50,6 @@ class PdfConfig {
     this.includeLogo = true,
   });
 
-  // Agregado para guardarlo en la Base de Datos o SharedPreferences localmente
   factory PdfConfig.fromJson(Map<String, dynamic> json) {
     return PdfConfig(
       showTotalGlobal: json['showTotalGlobal'] ?? true,

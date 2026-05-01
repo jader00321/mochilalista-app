@@ -8,12 +8,10 @@ class QuickSaleProvider with ChangeNotifier {
   int? _negocioId;
   int? _usuarioId;
   
-  // --- ESTADO DEL CARRITO ---
   final List<MatchedProduct> _cart = [];
   final Map<int, int> _quantities = {}; 
   final Map<int, double> _overridePrices = {}; 
 
-  // --- DATOS DEL CLIENTE Y VENTA ---
   int? _clientId; 
   String? _clientName;
   String? _clientPhone;
@@ -31,7 +29,6 @@ class QuickSaleProvider with ChangeNotifier {
 
   bool get isEmpty => _cart.isEmpty && _clientId == null && (_clientName == null || _clientName!.isEmpty) && (_saleNote == null || _saleNote!.isEmpty);
 
-  // --- CÁLCULOS MATEMÁTICOS ---
   double get totalOriginalPrice {
     double total = 0;
     for (var item in _cart) {
@@ -63,13 +60,11 @@ class QuickSaleProvider with ChangeNotifier {
     return _overridePrices[presentationId] ?? item.offerPrice ?? item.price;
   }
 
-  // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
   void updateContext(int? negocioId, int? usuarioId) {
     _negocioId = negocioId;
     _usuarioId = usuarioId;
   }
 
-  // --- FUNCIONES DE CARRITO Y CLIENTE ---
   void setClientInfo({int? id, String? name, String? phone, String? clientNote, String? saleNote, double? saldo}) {
     _clientId = id;
     _clientName = name;

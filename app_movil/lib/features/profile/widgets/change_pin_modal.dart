@@ -22,6 +22,29 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
   bool _obscureConfirm = true;
   
   String _localError = '';
+  
+  // Variables para la lógica inteligente
+  bool _isLoadingStatus = true;
+  bool _hasPinActive = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCurrentSecurityStatus();
+  }
+
+  Future<void> _checkCurrentSecurityStatus() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.user != null) {
+      bool hasPin = await auth.profileHasPin(auth.user!.id);
+      if (mounted) {
+        setState(() {
+          _hasPinActive = hasPin;
+          _isLoadingStatus = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +53,10 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     
     final textStyle = TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, letterSpacing: 5);
+
+    if (_isLoadingStatus) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     return Container(
       padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
@@ -43,23 +70,29 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Cambiar PIN de Seguridad", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+            Text(_hasPinActive ? "Seguridad de Cuenta" : "Crear PIN de Seguridad", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
             const SizedBox(height: 10),
-            Text("Ingresa tu PIN actual y el nuevo de 4 dígitos.", style: TextStyle(color: Colors.grey[500])),
+            Text(
+              _hasPinActive ? "Actualiza o desactiva tu PIN actual de 4 dígitos." : "Crea un PIN de 4 dígitos para proteger tu negocio.", 
+              style: TextStyle(color: Colors.grey[500])
+            ),
             const SizedBox(height: 25),
             
-            TextFormField(
-              controller: _currentCtrl,
-              obscureText: _obscureCurrent,
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: textStyle,
-              decoration: _deco("PIN Actual", Icons.lock_outline, _obscureCurrent, () => setState(() => _obscureCurrent = !_obscureCurrent), isDark),
-              validator: (v) => v!.isEmpty ? "Requerido" : null,
-              onChanged: (_) { if (_localError.isNotEmpty) setState(() => _localError = ''); },
-            ),
-            const SizedBox(height: 16),
+            // Solo mostramos el PIN Actual si el usuario YA tiene seguridad activada
+            if (_hasPinActive) ...[
+              TextFormField(
+                controller: _currentCtrl,
+                obscureText: _obscureCurrent,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                style: textStyle,
+                decoration: _deco("PIN Actual", Icons.lock_outline, _obscureCurrent, () => setState(() => _obscureCurrent = !_obscureCurrent), isDark),
+                validator: (v) => v!.isEmpty ? "Requerido" : null,
+                onChanged: (_) { if (_localError.isNotEmpty) setState(() => _localError = ''); },
+              ),
+              const SizedBox(height: 16),
+            ],
             
             TextFormField(
               controller: _newCtrl,
@@ -107,42 +140,84 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
             ],
 
             const SizedBox(height: 25),
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                onPressed: auth.isLoading ? null : () async {
-                  if (!_formKey.currentState!.validate()) return;
-                  
-                  setState(() => _localError = ''); 
-                  final user = auth.user;
-                  if (user == null) return;
+            Row(
+              children: [
+                // Botón secundario para DESACTIVAR seguridad (solo visible si tiene PIN)
+                if (_hasPinActive) ...[
+                  Expanded(
+                    child: SizedBox(
+                      height: 55,
+                      child: TextButton(
+                        onPressed: auth.isLoading ? null : () async {
+                          if (_currentCtrl.text.isEmpty) {
+                            setState(() => _localError = "Ingresa tu PIN actual para desactivar la seguridad.");
+                            return;
+                          }
+                          setState(() => _localError = ''); 
+                          bool isValid = await auth.verifyPin(auth.user!.id, _currentCtrl.text);
+                          if (!isValid) {
+                            setState(() => _localError = "El PIN actual es incorrecto.");
+                            return;
+                          }
+                          // Si es válido, enviamos un PIN vacío o desencadenamos la eliminación
+                          final success = await auth.changePassword(_currentCtrl.text, "");
+                          if (mounted && success) {
+                            Navigator.pop(context);
+                            CustomSnackBar.show(context, message: "Seguridad desactivada. Acceso directo habilitado.", isError: false);
+                          }
+                        },
+                        style: TextButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.red.shade200)),
+                          foregroundColor: Colors.red
+                        ),
+                        child: const Text("Desactivar PIN", style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
 
-                  // Verificamos si el PIN actual ingresado es correcto
-                  bool isValid = await auth.verifyPin(user.id, _currentCtrl.text);
-                  
-                  if (!isValid) {
-                    setState(() => _localError = "El PIN actual es incorrecto.");
-                    return;
-                  }
+                // Botón principal de Actualizar / Crear
+                Expanded(
+                  flex: 2,
+                  child: SizedBox(
+                    height: 55,
+                    child: ElevatedButton(
+                      onPressed: auth.isLoading ? null : () async {
+                        if (!_formKey.currentState!.validate()) return;
+                        
+                        setState(() => _localError = ''); 
+                        final user = auth.user;
+                        if (user == null) return;
 
-                  // Si es correcto, actualizamos la contraseña simulada y guardamos el PIN
-                  final success = await auth.changePassword(_currentCtrl.text, _newCtrl.text); // Usa offline password override
-                  
-                  if (mounted) {
-                    if (success) {
-                      Navigator.pop(context); 
-                      CustomSnackBar.show(context, message: "PIN de seguridad actualizado", isError: false);
-                    } else {
-                      setState(() => _localError = auth.errorMessage);
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                child: auth.isLoading 
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("ACTUALIZAR PIN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
-              ),
+                        if (_hasPinActive) {
+                          bool isValid = await auth.verifyPin(user.id, _currentCtrl.text);
+                          if (!isValid) {
+                            setState(() => _localError = "El PIN actual es incorrecto.");
+                            return;
+                          }
+                          final success = await auth.changePassword(_currentCtrl.text, _newCtrl.text);
+                          if (mounted && success) {
+                            Navigator.pop(context); 
+                            CustomSnackBar.show(context, message: "PIN de seguridad actualizado", isError: false);
+                          }
+                        } else {
+                          // Lógica para Crear PIN por primera vez
+                          final success = await auth.changePassword("", _newCtrl.text); // Asumimos string vacío como "sin pin"
+                          if (mounted && success) {
+                            Navigator.pop(context); 
+                            CustomSnackBar.show(context, message: "Seguridad activada correctamente.", isError: false);
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                      child: auth.isLoading 
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(_hasPinActive ? "ACTUALIZAR" : "CREAR PIN", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
+                    ),
+                  ),
+                ),
+              ],
             )
           ],
         ),

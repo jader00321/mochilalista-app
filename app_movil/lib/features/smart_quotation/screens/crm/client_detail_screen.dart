@@ -57,6 +57,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
   Future<void> _refreshData() async {
     final prov = Provider.of<TrackingProvider>(context, listen: false);
     
+    // Obtenemos los datos actualizados de SQLite y actualizamos la UI local
     final freshClient = await prov.getClientById(_currentClient.id);
     
     await prov.loadClientLedger(_currentClient.id);
@@ -76,7 +77,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
       backgroundColor: Colors.transparent,
       builder: (ctx) => PaymentEntryModal(client: _currentClient),
     ).then((_) {
-      _refreshData();
+      _refreshData(); // Actualiza el estado de cuenta y la deuda
     });
   }
 
@@ -364,7 +365,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
       itemCount: sales.length,
       itemBuilder: (ctx, i) {
         final sale = sales[i];
-        final date = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(sale.date));
+        final date = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.tryParse(sale.date) ?? DateTime.now());
         
         bool isQuick = sale.origenVenta == 'pos_rapido';
         String title = isQuick ? "Caja Rápida (Al Contado)" : "Lista Cotizada";
@@ -504,7 +505,6 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // 🔥 CORRECCIÓN DEL OVERFLOW INFERIOR: Usamos Column y FittedBox para el precio
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -531,9 +531,6 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
   }
 }
 
-// ---------------------------------------------------------------------------------
-// DELEGATE PARA MANTENER LAS PESTAÑAS PEGADAS CUANDO EL HEADER SE OCULTA
-// ---------------------------------------------------------------------------------
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar _tabBar;
   final Color backgroundColor;

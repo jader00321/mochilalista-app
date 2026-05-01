@@ -7,15 +7,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:device_info_plus/device_info_plus.dart';
 
-import '../database/local_db.dart'; // 🔥 Importamos para cerrar la conexión
+import '../database/local_db.dart'; 
 import 'google_auth_client.dart';
 
 class BackupManager {
-  // 🔥 El nombre DEBE ser exactamente igual al que declaraste en local_db.dart
   static const String _dbName = 'mochilalista.db'; 
 
-  /// Obtiene la ruta física exacta del archivo SQLite en el celular
   static Future<File> _getDatabaseFile() async {
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, _dbName);
@@ -26,7 +25,6 @@ class BackupManager {
   // EXPORTACIÓN MANUAL Y AUTOMÁTICA
   // ==========================================
 
-  /// A. Exportar a WhatsApp / Correo / Bluetooth
   static Future<bool> exportToWhatsApp() async {
     try {
       final dbFile = await _getDatabaseFile();
@@ -43,17 +41,23 @@ class BackupManager {
     }
   }
 
-  /// B. Guardar en la carpeta "Descargas" del celular
+  // 🔥 SOLUCIÓN A PERMISOS EN ANDROID 13+
   static Future<bool> exportToDownloads() async {
     try {
       final dbFile = await _getDatabaseFile();
       if (!await dbFile.exists()) throw Exception("La base de datos no existe.");
 
       if (Platform.isAndroid) {
-        var status = await Permission.storage.status;
-        if (!status.isGranted) {
-          status = await Permission.storage.request();
-          if (!status.isGranted) throw Exception("Permiso de almacenamiento denegado.");
+        final plugin = DeviceInfoPlugin();
+        final androidInfo = await plugin.androidInfo;
+        
+        // En Android 13+ (API 33+) no se pide Permission.storage para descargas
+        if (androidInfo.version.sdkInt < 33) {
+          var status = await Permission.storage.status;
+          if (!status.isGranted) {
+            status = await Permission.storage.request();
+            if (!status.isGranted) throw Exception("Permiso de almacenamiento denegado. Ve a Configuración y dáselo a la app.");
+          }
         }
       }
 
@@ -73,7 +77,6 @@ class BackupManager {
     }
   }
 
-  /// C. Exportar a Google Drive (Nube Segura)
   static Future<bool> exportToGoogleDrive() async {
     try {
       final dbFile = await _getDatabaseFile();
@@ -114,13 +117,11 @@ class BackupManager {
   // ==========================================
   static Future<bool> restoreBackup() async {
     try {
-      // 1. Abrimos el explorador
       FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.any);
 
       if (result != null && result.files.single.path != null) {
         String filePath = result.files.single.path!;
         
-        // Verificación estricta de seguridad
         if (!filePath.endsWith('.db')) {
            throw Exception("El archivo seleccionado no es válido. Asegúrate de elegir un archivo terminado en .db");
         }
@@ -128,15 +129,13 @@ class BackupManager {
         File backupFile = File(filePath);
         final currentDbFile = await _getDatabaseFile();
         
-        // 🔥 CRÍTICO: Cerramos la conexión activa de SQLite para liberar el archivo original
+        // 🔥 CRÍTICO: Cerramos la conexión activa
         await LocalDatabase.instance.closeConnection();
         
-        // Reemplazamos el archivo físico
         await backupFile.copy(currentDbFile.path);
-        
         return true; 
       }
-      return false; // El usuario canceló la selección
+      return false; 
     } catch (e) {
       debugPrint("Error restaurando backup: $e");
       throw Exception(e.toString().replaceAll("Exception:", "").trim());

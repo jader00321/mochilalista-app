@@ -1,14 +1,9 @@
-// ignore_for_file: non_constant_identifier_names
 import 'dart:math';
 
 String generateFrontendUuid() {
   final random = Random();
   return "${DateTime.now().microsecondsSinceEpoch}_${random.nextInt(1000000)}";
 }
-
-// ==============================================================================
-// 1. MODELOS DE RESPUESTA IA (RAW)
-// ==============================================================================
 
 class AIItemExtracted {
   String uuidTemporal; 
@@ -114,10 +109,6 @@ class AIInvoiceResponse {
     'items': items.map((x) => x.toJson()).toList(),
   };
 }
-
-// ==============================================================================
-// 2. MODELOS DE STAGING (PADRE -> HIJOS)
-// ==============================================================================
 
 class MatchData {
   int id;
@@ -246,7 +237,6 @@ class StagingVariant {
       precioVentaSugerido: (json['precio_venta_sugerido'] ?? 0).toDouble(),
       codigoBarra: json['codigo_barras'],
       matchPresentacion: MatchResult.fromJson(json['match_presentacion']),
-      // Adaptado para SQLite booleans si es necesario
       isConfirmed: json['confirmado'] == 1 || json['confirmado'] == true || json['confirmado'] == null
     );
   }

@@ -1,4 +1,5 @@
 import '../models/crm_models.dart';
+import '../models/smart_quotation_model.dart';
 import '../../../database/local_db.dart';
 
 class ClientService {
@@ -18,21 +19,19 @@ class ClientService {
     } catch (e) { return null; }
   }
   
-  // 🔥 Recibe negocioId
   Future<List<ClientModel>> searchClients(String query, int negocioId) async {
     try {
       final db = await dbHelper.database;
       final rows = await db.query(
         'clientes', 
-        where: 'negocio_id = ? AND (nombre_completo LIKE ? OR dni_ruc LIKE ?)', 
-        whereArgs: [negocioId, '%$query%', '%$query%'],
+        where: 'negocio_id = ? AND (nombre_completo LIKE ? OR dni_ruc LIKE ? OR telefono LIKE ?)', 
+        whereArgs: [negocioId, '%$query%', '%$query%', '%$query%'],
         limit: 20
       );
       return rows.map((e) => ClientModel.fromJson(e)).toList();
     } catch (e) { return []; }
   }
 
-  // 🔥 Recibe negocioId y usuarioId
   Future<ClientModel> createClient(Map<String, dynamic> clientData, int negocioId, int usuarioId) async {
     try {
       final db = await dbHelper.database;
@@ -61,7 +60,6 @@ class ClientService {
     } catch (e) { throw Exception("Error actualizando cliente localmente: $e"); }
   }
   
-  // 🔥 Recibe negocioId
   Future<List<ClientModel>> getTrackingClients(int negocioId, {bool debtorsOnly = false}) async {
     try {
       final db = await dbHelper.database;
@@ -80,8 +78,12 @@ class ClientService {
       final payments = await db.query('pagos', where: 'cliente_id = ?', whereArgs: [clientId]);
 
       List<Map<String, dynamic>> combined = [];
-      for (var s in sales) combined.add({'id_ref': s['id'], 'tipo': 'cargo', 'fecha': s['fecha_venta'], 'monto': s['monto_total'], 'detalle': 'Venta #${s['id']}'});
-      for (var p in payments) combined.add({'id_ref': p['id'], 'tipo': 'abono', 'fecha': p['fecha_pago'], 'monto': p['monto'], 'detalle': 'Pago en ${p['metodo_pago']}'});
+      for (var s in sales) {
+        combined.add({'id_ref': s['id'], 'tipo': 'cargo', 'fecha': s['fecha_venta'], 'monto': s['monto_total'], 'detalle': 'Venta #${s['id']}'});
+      }
+      for (var p in payments) {
+        combined.add({'id_ref': p['id'], 'tipo': 'abono', 'fecha': p['fecha_pago'], 'monto': p['monto'], 'detalle': 'Pago en ${p['metodo_pago']}'});
+      }
 
       combined.sort((a, b) => DateTime.parse(a['fecha']).compareTo(DateTime.parse(b['fecha'])));
 
@@ -98,10 +100,11 @@ class ClientService {
     } catch (e) { return []; }
   }
 
-  Future<List<dynamic>> getPendingQuotations(int clientId) async {
+  Future<List<SmartQuotationModel>> getPendingQuotations(int clientId) async {
     try {
       final db = await dbHelper.database;
-      return await db.query('smart_quotations', where: 'client_id = ? AND status != ? AND status != ?', whereArgs: [clientId, 'SOLD', 'ARCHIVED'], orderBy: 'created_at DESC');
+      final rows = await db.query('smart_quotations', where: 'client_id = ? AND status != ? AND status != ?', whereArgs: [clientId, 'SOLD', 'ARCHIVED'], orderBy: 'created_at DESC');
+      return rows.map((e) => SmartQuotationModel.fromJson(e)).toList();
     } catch (e) { return []; }
   }
 
@@ -113,11 +116,11 @@ class ClientService {
     } catch (e) { return []; }
   }
 
-  // 🔥 Recibe negocioId y usuarioId
   Future<bool> registerPayment(int clientId, double amount, String method, int negocioId, int usuarioId, {int? ventaId, int? cuotaId, bool guardarVuelto = false}) async {
     try {
       final db = await dbHelper.database;
 
+      // 🔥 Transacción Segura de Pagos (Evita desajustes financieros)
       await db.transaction((txn) async {
         await txn.insert('pagos', {
           'negocio_id': negocioId, 'creado_por_usuario_id': usuarioId, 'cliente_id': clientId,
@@ -147,6 +150,11 @@ class ClientService {
         if (clientRows.isNotEmpty) {
            double nuevaDeuda = (clientRows.first['deuda_total'] as num).toDouble() - amount;
            await txn.update('clientes', {'deuda_total': nuevaDeuda < 0 ? 0.0 : nuevaDeuda}, where: 'id = ?', whereArgs: [clientId]);
+           
+           if (guardarVuelto && nuevaDeuda < 0) {
+             double saldoExistente = (clientRows.first['saldo_a_favor'] as num).toDouble();
+             await txn.update('clientes', {'saldo_a_favor': saldoExistente + (nuevaDeuda * -1)}, where: 'id = ?', whereArgs: [clientId]);
+           }
         }
       });
       return true;

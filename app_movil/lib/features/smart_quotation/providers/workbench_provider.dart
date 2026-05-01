@@ -14,8 +14,6 @@ class WorkbenchProvider with ChangeNotifier {
   bool _isLoading = false;
   String _errorMessage = "";
   
-  Function()? onAuthRevoked;
-
   final QuotationService _quotationService = QuotationService();
   final dbHelper = LocalDatabase.instance;
   
@@ -50,7 +48,6 @@ class WorkbenchProvider with ChangeNotifier {
     return count;
   }
 
-  // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
   void updateContext(int? negocioId, int? usuarioId) {
     _negocioId = negocioId;
     _usuarioId = usuarioId;
@@ -78,7 +75,6 @@ class WorkbenchProvider with ChangeNotifier {
     try {
       final db = await dbHelper.database;
       
-      // 🔥 FILTRA SOLO POR EL NEGOCIO ACTUAL
       final quotesRows = await db.query('smart_quotations', where: 'negocio_id = ?', whereArgs: [_negocioId]);
       final itemsRows = await db.query('smart_quotation_items');
 
@@ -254,7 +250,8 @@ class WorkbenchProvider with ChangeNotifier {
       _handleException(e);
       return null; 
     } finally { 
-      _isLoading = false; notifyListeners(); 
+      _isLoading = false; 
+      notifyListeners(); 
     }
   }
 
@@ -270,7 +267,8 @@ class WorkbenchProvider with ChangeNotifier {
       _handleException(e);
       return null; 
     } finally { 
-      _isLoading = false; notifyListeners(); 
+      _isLoading = false; 
+      notifyListeners(); 
     }
   }
 

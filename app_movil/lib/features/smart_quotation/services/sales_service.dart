@@ -4,7 +4,6 @@ import '../../../database/local_db.dart';
 class SalesService {
   final dbHelper = LocalDatabase.instance;
   
-  // 🔥 Recibe explícitamente negocioId y usuarioId
   Future<SaleModel> createSale(Map<String, dynamic> saleData, int negocioId, int usuarioId) async {
     try {
       final db = await dbHelper.database;
@@ -68,7 +67,6 @@ class SalesService {
     } catch (e) { throw Exception("Error local al procesar la venta: $e"); }
   }
 
-  // 🔥 Recibe negocioId
   Future<List<SaleModel>> getHistory(
     int negocioId, {
     int skip = 0, int limit = 50, String? startDate, String? endDate,
@@ -77,6 +75,7 @@ class SalesService {
   }) async {
     try {
       final db = await dbHelper.database;
+      // 🔥 INNER JOIN: Traemos los datos del cliente para que la UI no falle
       String query = '''
         SELECT v.*, c.nombre_completo AS cliente_nombre, c.telefono AS cliente_telefono 
         FROM ventas v
@@ -94,11 +93,19 @@ class SalesService {
       args.add(limit); args.add(skip);
 
       final List<Map<String, dynamic>> rows = await db.rawQuery(query, args);
-      return rows.map((e) => SaleModel.fromJson(e)).toList();
+      
+      // Mapeo adaptado
+      return rows.map((e) {
+        var map = Map<String, dynamic>.from(e);
+        // Empaquetamos los datos del cliente en un sub-mapa si existe
+        if (map['cliente_nombre'] != null) {
+           map['cliente_info'] = {'nombre_completo': map['cliente_nombre'], 'telefono': map['cliente_telefono']};
+        }
+        return SaleModel.fromJson(map);
+      }).toList();
     } catch (e) { throw Exception("Error al cargar historial local: $e"); }
   }
 
-  // 🔥 Recibe negocioId
   Future<SalesStatsModel> getStats(int negocioId, {String? startDate, String? endDate, bool isArchived = false, String? origenVenta}) async {
     try {
       final db = await dbHelper.database;
@@ -148,7 +155,7 @@ class SalesService {
 
       if (saleMap['cliente_id'] != null) {
         final cRows = await db.query('clientes', where: 'id = ?', whereArgs: [saleMap['cliente_id']], limit: 1);
-        if (cRows.isNotEmpty) saleMap['cliente'] = cRows.first;
+        if (cRows.isNotEmpty) saleMap['cliente_info'] = cRows.first; // 🔥 Cambio de clave para compatibilidad JSON
       }
       saleMap['cuotas'] = await db.query('cuotas', where: 'venta_id = ?', whereArgs: [saleId]);
       saleMap['pagos'] = await db.query('pagos', where: 'venta_id = ?', whereArgs: [saleId]);

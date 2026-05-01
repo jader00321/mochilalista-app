@@ -17,10 +17,10 @@ class QuotationService {
       Map<String, dynamic> cloneData = Map.from(qRows.first);
       cloneData.remove('id'); 
       cloneData['status'] = 'DRAFT';
-      cloneData['client_name'] = cloneData['client_name'] + " (Copia)";
+      cloneData['client_name'] = cloneData['client_name'].toString() + " (Copia)";
       cloneData['is_template'] = 0;
       cloneData['clone_source_id'] = quotationId;
-      cloneData['creado_por_usuario_id'] = usuarioId; // El clon le pertenece al usuario actual
+      cloneData['creado_por_usuario_id'] = usuarioId; 
       cloneData['created_at'] = DateTime.now().toIso8601String();
       cloneData['updated_at'] = DateTime.now().toIso8601String();
       if (targetClientId != null) cloneData['client_id'] = targetClientId;
@@ -70,8 +70,9 @@ class QuotationService {
             
         int currentStock = pres['stock_actual'] as int;
         
-        // Validar Precios
-        if (item['is_manual_price'] == 0 && (item['unit_price_applied'] as num).toDouble() != currentPrice) {
+        // Validación de precios (Cuidado con los booleanos de SQLite que vienen como int)
+        bool isManual = item['is_manual_price'] == 1 || item['is_manual_price'] == true;
+        if (!isManual && (item['unit_price_applied'] as num).toDouble() != currentPrice) {
           hasIssues = true;
           prices.add(PriceChange(
             itemId: item['id'] as int,
@@ -81,7 +82,7 @@ class QuotationService {
           ));
         }
 
-        // Validar Stock
+        // Validación de stock
         if (currentStock < (item['quantity'] as int)) {
           hasIssues = true;
           canSell = false;
@@ -96,7 +97,7 @@ class QuotationService {
 
       return ValidationResult(hasIssues: hasIssues, canSell: canSell, stockWarnings: warnings, priceChanges: prices);
     } catch (e) {
-      throw Exception("Error local al validar: $e");
+      throw Exception("Error local al validar integridad: $e");
     }
   }
 
@@ -137,7 +138,7 @@ class QuotationService {
             'product_name': item['product_name'],
             'specific_name': item['specific_name'],
             'sales_unit': item['sales_unit'],
-            'is_manual_price': item['is_manual_price'] == true ? 1 : 0,
+            'is_manual_price': item['is_manual_price'] == true || item['is_manual_price'] == 1 ? 1 : 0,
             'is_available': 1
           });
         }

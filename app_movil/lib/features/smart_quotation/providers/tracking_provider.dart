@@ -9,8 +9,6 @@ class TrackingProvider with ChangeNotifier {
   
   final ClientService _service = ClientService();
 
-  Function()? onAuthRevoked;
-
   // --- ESTADO GENERAL ---
   List<ClientModel> _allClients = [];
   bool _isLoading = false;
@@ -80,6 +78,7 @@ class TrackingProvider with ChangeNotifier {
     } catch (e) {
       _handleException(e);
     } finally {
+      // 🔥 Aseguramos apagar el loader siempre
       _isLoading = false;
       notifyListeners();
     }
@@ -198,7 +197,8 @@ class TrackingProvider with ChangeNotifier {
     } catch (e) {
        _handleException(e);
     } finally { 
-      _isLoadingLedger = false; notifyListeners(); 
+      _isLoadingLedger = false; 
+      notifyListeners(); 
     }
   }
 
@@ -211,7 +211,8 @@ class TrackingProvider with ChangeNotifier {
     } catch (e) {
        _handleException(e);
     } finally { 
-      _isLoadingDebts = false; notifyListeners(); 
+      _isLoadingDebts = false; 
+      notifyListeners(); 
     }
   }
 
@@ -220,12 +221,12 @@ class TrackingProvider with ChangeNotifier {
     _isLoadingQuotations = true;
     notifyListeners();
     try {
-      final rawList = await _service.getPendingQuotations(clientId);
-      _currentClientQuotations = rawList.map((e) => SmartQuotationModel.fromJson(e)).toList();
+      _currentClientQuotations = await _service.getPendingQuotations(clientId);
     } catch (e) {
        _handleException(e);
     } finally { 
-      _isLoadingQuotations = false; notifyListeners(); 
+      _isLoadingQuotations = false; 
+      notifyListeners(); 
     }
   }
 

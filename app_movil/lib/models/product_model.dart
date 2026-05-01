@@ -27,7 +27,7 @@ class ProductPresentation {
   final String? tipoDescuento;    
   final double? valorDescuento;   
   final String estado; 
-  final bool activo; // Añadido para hacer match con DB
+  final bool activo; 
 
   ProductPresentation({
     this.id,
@@ -149,7 +149,6 @@ class Product {
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
-    // Al venir de SQLite, la lista de presentaciones se la inyectaremos después desde el servicio
     var list = json['presentaciones'] as List? ?? [];
     List<ProductPresentation> presentationList = list.map((i) => ProductPresentation.fromJson(i)).toList();
 

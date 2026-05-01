@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-// Función global de seguridad para parsear JSON numéricos desde Python/SQLite
+// Función global de seguridad para parsear JSON numéricos desde SQLite
 double _parseDouble(dynamic value) {
   if (value == null) return 0.0;
   if (value is num) return value.toDouble();
@@ -28,7 +28,6 @@ class ClientModel {
   final String nivelConfianza; 
   final List<String> etiquetas;
 
-  // Estas listas se llenarán dinámicamente mediante consultas JOIN en el servicio
   final List<SaleSummary> lastSales; 
   final List<PaymentModel> lastPayments;
 
@@ -54,12 +53,14 @@ class ClientModel {
   });
 
   factory ClientModel.fromJson(Map<String, dynamic> json) {
-    // Manejo de etiquetas que vienen como String (JSON) desde SQLite
+    // Manejo seguro de etiquetas (SQLite guarda listas como String)
     List<String> parsedEtiquetas = [];
     if (json['etiquetas'] != null) {
       if (json['etiquetas'] is String) {
-        parsedEtiquetas = List<String>.from(jsonDecode(json['etiquetas']));
-      } else {
+        try {
+          parsedEtiquetas = List<String>.from(jsonDecode(json['etiquetas']));
+        } catch (_) {}
+      } else if (json['etiquetas'] is List) {
         parsedEtiquetas = (json['etiquetas'] as List).map((e) => e.toString()).toList();
       }
     }
@@ -99,7 +100,7 @@ class ClientModel {
       'correo': email,
       'notas': notes,
       'nivel_confianza': nivelConfianza,
-      'etiquetas': jsonEncode(etiquetas), // Se guarda como String
+      'etiquetas': jsonEncode(etiquetas), // IMPORTANTE: Se guarda como JSON String
       'deuda_total': totalDebt,
       'saldo_a_favor': saldoAFavor,
       'entregas_pendientes': pendingDeliveryCount,

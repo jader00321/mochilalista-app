@@ -34,7 +34,6 @@ class WhatsAppConfig {
     this.updateBusinessData = false,
   });
 
-  // Agregado para guardarlo offline
   factory WhatsAppConfig.fromJson(Map<String, dynamic> json) {
     return WhatsAppConfig(
       showSubtotals: json['showSubtotals'] ?? true,

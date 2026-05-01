@@ -5,7 +5,6 @@ import '../../models/crm_models.dart';
 import '../../providers/tracking_provider.dart';
 import '../../../../widgets/custom_snackbar.dart';
 
-// 🔥 FORMATEADOR DE TELÉFONO (Ej: 999 888 777)
 class _PhoneNumberFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
@@ -55,7 +54,6 @@ class _ClientProfileEditorState extends State<ClientProfileEditor> {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.client.fullName);
     
-    // Formatear el teléfono si ya existe al cargar
     String formattedPhone = widget.client.phone;
     if (formattedPhone.length == 9 && !formattedPhone.contains(' ')) {
        formattedPhone = "${formattedPhone.substring(0,3)} ${formattedPhone.substring(3,6)} ${formattedPhone.substring(6,9)}";
@@ -98,34 +96,37 @@ class _ClientProfileEditorState extends State<ClientProfileEditor> {
 
     setState(() => _isLoading = true);
 
-    final data = {
-      "nombre_completo": _nameCtrl.text.trim(),
-      "telefono": _phoneCtrl.text.replaceAll(' ', '').trim().isEmpty ? "000000000" : _phoneCtrl.text.replaceAll(' ', '').trim(),
-      "dni_ruc": _dniCtrl.text.trim(),
-      "direccion": _addressCtrl.text.trim(),
-      "correo": _emailCtrl.text.trim(),
-      "notas": _notesCtrl.text.trim(),
-      "etiquetas": _currentTags,
-      "nivel_confianza": _currentConfidence,
-    };
+    try {
+      final data = {
+        "nombre_completo": _nameCtrl.text.trim(),
+        "telefono": _phoneCtrl.text.replaceAll(' ', '').trim().isEmpty ? "000000000" : _phoneCtrl.text.replaceAll(' ', '').trim(),
+        "dni_ruc": _dniCtrl.text.trim(),
+        "direccion": _addressCtrl.text.trim(),
+        "correo": _emailCtrl.text.trim(),
+        "notas": _notesCtrl.text.trim(),
+        "etiquetas": _currentTags,
+        "nivel_confianza": _currentConfidence,
+      };
 
-    final provider = Provider.of<TrackingProvider>(context, listen: false);
-    
-    ClientModel? updatedClient;
-    if (widget.isNew) {
-      updatedClient = await provider.createClient(data); 
-    } else {
-      updatedClient = await provider.updateClientProfile(widget.client.id, data);
-    }
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      if (updatedClient != null) {
-        CustomSnackBar.show(context, message: widget.isNew ? "Cliente registrado exitosamente" : "Perfil actualizado exitosamente", isError: false);
-        Navigator.pop(context, updatedClient);
+      final provider = Provider.of<TrackingProvider>(context, listen: false);
+      
+      ClientModel? updatedClient;
+      if (widget.isNew) {
+        updatedClient = await provider.createClient(data); 
       } else {
-        CustomSnackBar.show(context, message: "Error al guardar el cliente", isError: true);
+        updatedClient = await provider.updateClientProfile(widget.client.id, data);
       }
+
+      if (mounted) {
+        if (updatedClient != null) {
+          CustomSnackBar.show(context, message: widget.isNew ? "Cliente registrado exitosamente" : "Perfil actualizado exitosamente", isError: false);
+          Navigator.pop(context, updatedClient);
+        } else {
+          CustomSnackBar.show(context, message: "Error al guardar el cliente", isError: true);
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

@@ -18,16 +18,14 @@ class Brand {
       id: json['id'] ?? 0,
       nombre: json['nombre'] ?? '',
       urlImagen: json['imagen_url'] ?? json['urlImagen'],
-      // SQLite devuelve 1 o 0 para booleanos
       activo: json['activo'] == 1 || json['activo'] == true,
       productsCount: json['products_count'] ?? 0,
     );
   }
 
-  // Método especial para insertar en SQLite
   Map<String, dynamic> toSqlite(int negocioId) {
     return {
-      'id': id == 0 ? null : id, // Autoincrement si es 0/null
+      'id': id == 0 ? null : id, 
       'negocio_id': negocioId,
       'nombre': nombre,
       'imagen_url': urlImagen,

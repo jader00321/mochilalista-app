@@ -26,11 +26,9 @@ class CartItem {
 }
 
 class CatalogProvider with ChangeNotifier {
-  // 🔥 CORRECCIÓN: Usamos IDs locales en lugar de un Token Web
   int? _negocioId;
   int? _userId;
   
-  // Servicios Locales
   final MasterDataService _masterDataService = MasterDataService();
   final ProductService _productService = ProductService();
   final dbHelper = LocalDatabase.instance;
@@ -78,13 +76,11 @@ class CatalogProvider with ChangeNotifier {
   double get utilityTotal => _utilityList.fold(0, (sum, i) => sum + i.subtotal);
   List<CartItem> get utilityList => _utilityList;
 
-  // 🔥 CORRECCIÓN: Renombrado a updateContext e inyección de IDs
   void updateContext(int? negocioId, int? userId) {
     if (_negocioId != negocioId || _userId != userId) {
       _negocioId = negocioId;
       _userId = userId;
       
-      // Sincronizamos los servicios con el negocio actual
       _masterDataService.updateContext(negocioId);
       _productService.updateContext(negocioId);
 
@@ -109,10 +105,9 @@ class CatalogProvider with ChangeNotifier {
     try {
       final db = await dbHelper.database;
       
-      // 1. Insertamos la cotización principal localmente usando los IDs correctos
       int quoteId = await db.insert('smart_quotations', {
-        'negocio_id': _negocioId, // 🔥 Corrección
-        'creado_por_usuario_id': _userId, // 🔥 Corrección
+        'negocio_id': _negocioId,
+        'creado_por_usuario_id': _userId,
         'notas': notes,
         'total_amount': cartTotal,
         'total_savings': 0.0,
@@ -122,7 +117,6 @@ class CatalogProvider with ChangeNotifier {
         'updated_at': DateTime.now().toIso8601String(),
       });
 
-      // 2. Insertamos los items del carrito
       for (var cartItem in _shoppingCart) {
         final pres = cartItem.item.presentation;
         final prod = cartItem.item.product;
@@ -138,6 +132,7 @@ class CatalogProvider with ChangeNotifier {
           'specific_name': pres.nombreEspecifico,
           'sales_unit': pres.unidadVenta,
           'original_text': cartItem.item.displayNameDetail,
+          // 🔥 SQLite exige enteros para representar booleanos
           'is_manual_price': 0, 
           'is_available': 1 
         });
@@ -397,11 +392,9 @@ class CatalogProvider with ChangeNotifier {
     } catch (_) { return ""; }
   }
 
-  // 100% Offline Search
   Future<List<InventoryWrapper>> searchProducts(String query) async {
     if (query.isEmpty) return [];
     
-    // 1. Buscamos primero en la lista cargada en RAM
     final localResults = _displayItems.where((item) {
       final name = normalizeText(item.product.nombre);
       final q = normalizeText(query);
@@ -410,7 +403,6 @@ class CatalogProvider with ChangeNotifier {
 
     if (localResults.isNotEmpty) return localResults;
 
-    // 2. Si no hay en RAM, buscamos en la base de datos (Fallback offline)
     try {
       final List<InventoryWrapper>? dbResults = await _productService.fetchInventory({'q': query, 'limit': '10'});
       return dbResults ?? [];

@@ -6,7 +6,6 @@ import 'image_service.dart';
 class ProductService {
   int? _negocioId;
   
-  // 🔥 Reemplaza a updateToken
   void updateContext(int? negocioId) => _negocioId = negocioId;
   
   final dbHelper = LocalDatabase.instance;
@@ -31,8 +30,8 @@ class ProductService {
       List<dynamic> args = [_negocioId];
 
       if (queryParams['q'] != null && queryParams['q'].toString().isNotEmpty) {
-        query += " AND (p.nombre LIKE ? OR pr.codigo_barras LIKE ?)";
-        args.addAll(['%${queryParams['q']}%', '%${queryParams['q']}%']);
+        query += " AND (p.nombre LIKE ? OR pr.codigo_barras LIKE ? OR p.codigo_barras LIKE ?)";
+        args.addAll(['%${queryParams['q']}%', '%${queryParams['q']}%', '%${queryParams['q']}%']);
       }
       if (queryParams['estado'] != null) {
         query += " AND pr.estado = ?";
@@ -119,22 +118,28 @@ class ProductService {
       final db = await dbHelper.database;
       String? finalParentUrl = await ImageService.processAndSaveImage(imagenUrl);
 
-      int pId = await db.insert('productos', {
-        'negocio_id': _negocioId, 'nombre': nombre, 'marca_id': marcaId, 'categoria_id': categoriaId,
-        'descripcion': descripcion, 'imagen_url': finalParentUrl, 'codigo_barras': codigoBarras,
-        'estado': estado, 'fecha_actualizacion': DateTime.now().toIso8601String()
-      });
+      // 🔥 REPLICACIÓN EXACTA: Uso de Transaction para integridad de datos (Evita datos corruptos)
+      await db.transaction((txn) async {
+        int pId = await txn.insert('productos', {
+          'negocio_id': _negocioId, 'nombre': nombre, 'marca_id': marcaId, 'categoria_id': categoriaId,
+          'descripcion': descripcion, 'imagen_url': finalParentUrl, 'codigo_barras': codigoBarras,
+          'estado': estado, 'fecha_actualizacion': DateTime.now().toIso8601String()
+        });
 
-      for (var pres in presentaciones) {
-        String? finalPresUrl = await ImageService.processAndSaveImage(pres.imagenUrl);
-        Map<String, dynamic> sqliteMap = pres.toSqlite(pId);
-        sqliteMap['imagen_url'] = finalPresUrl;
-        sqliteMap.remove('id');
-        if (sqliteMap['proveedor_id'] == null) sqliteMap['proveedor_id'] = proveedorId;
-        await db.insert('presentaciones_producto', sqliteMap);
-      }
+        for (var pres in presentaciones) {
+          String? finalPresUrl = await ImageService.processAndSaveImage(pres.imagenUrl);
+          Map<String, dynamic> sqliteMap = pres.toSqlite(pId);
+          sqliteMap['imagen_url'] = finalPresUrl;
+          sqliteMap.remove('id');
+          if (sqliteMap['proveedor_id'] == null) sqliteMap['proveedor_id'] = proveedorId;
+          await txn.insert('presentaciones_producto', sqliteMap);
+        }
+      });
       return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+      print("Error createFullProduct: $e");
+      return false; 
+    }
   }
 
   Future<bool> editFullProduct({
@@ -148,40 +153,46 @@ class ProductService {
       final oldProd = await db.query('productos', columns: ['imagen_url'], where: 'id = ?', whereArgs: [productId]);
       String? finalParentUrl = await ImageService.processAndSaveImage(imagenUrl, oldImagePath: oldProd.first['imagen_url'] as String?);
 
-      await db.update('productos', {
-        'nombre': nombre, 'marca_id': marcaId, 'categoria_id': categoriaId, 'descripcion': descripcion, 
-        'imagen_url': finalParentUrl, 'codigo_barras': codigoBarras, 'estado': estado, 
-        'fecha_actualizacion': DateTime.now().toIso8601String()
-      }, where: 'id = ?', whereArgs: [productId]);
-      
-      for (int id in idsToDelete) {
-         final oldP = await db.query('presentaciones_producto', columns: ['imagen_url'], where: 'id = ?', whereArgs: [id]);
-         if (oldP.isNotEmpty && oldP.first['imagen_url'] != null) await ImageService.deleteLocalImage(oldP.first['imagen_url'] as String);
-         await db.delete('presentaciones_producto', where: 'id = ?', whereArgs: [id]);
-      }
-      
-      for (var pres in presentaciones) {
-        if (pres.id != null) {
-          final oldP = await db.query('presentaciones_producto', columns: ['imagen_url'], where: 'id = ?', whereArgs: [pres.id]);
-          String? finalPresUrl = await ImageService.processAndSaveImage(pres.imagenUrl, oldImagePath: oldP.isNotEmpty ? oldP.first['imagen_url'] as String? : null);
-          
-          Map<String, dynamic> updateMap = pres.toSqlite(productId);
-          updateMap['imagen_url'] = finalPresUrl;
-          if (updateMap['proveedor_id'] == null) updateMap['proveedor_id'] = proveedorId;
-
-          await db.update('presentaciones_producto', updateMap, where: 'id = ?', whereArgs: [pres.id]);
-        } else {
-          String? finalPresUrl = await ImageService.processAndSaveImage(pres.imagenUrl);
-          Map<String, dynamic> insertMap = pres.toSqlite(productId);
-          insertMap['imagen_url'] = finalPresUrl;
-          insertMap.remove('id');
-          if (insertMap['proveedor_id'] == null) insertMap['proveedor_id'] = proveedorId;
-
-          await db.insert('presentaciones_producto', insertMap);
+      // 🔥 REPLICACIÓN EXACTA: Transacción para borrar, actualizar e insertar variantes sin riesgo
+      await db.transaction((txn) async {
+        await txn.update('productos', {
+          'nombre': nombre, 'marca_id': marcaId, 'categoria_id': categoriaId, 'descripcion': descripcion, 
+          'imagen_url': finalParentUrl, 'codigo_barras': codigoBarras, 'estado': estado, 
+          'fecha_actualizacion': DateTime.now().toIso8601String()
+        }, where: 'id = ?', whereArgs: [productId]);
+        
+        for (int id in idsToDelete) {
+           final oldP = await txn.query('presentaciones_producto', columns: ['imagen_url'], where: 'id = ?', whereArgs: [id]);
+           if (oldP.isNotEmpty && oldP.first['imagen_url'] != null) await ImageService.deleteLocalImage(oldP.first['imagen_url'] as String);
+           await txn.delete('presentaciones_producto', where: 'id = ?', whereArgs: [id]);
         }
-      }
+        
+        for (var pres in presentaciones) {
+          if (pres.id != null) {
+            final oldP = await txn.query('presentaciones_producto', columns: ['imagen_url'], where: 'id = ?', whereArgs: [pres.id]);
+            String? finalPresUrl = await ImageService.processAndSaveImage(pres.imagenUrl, oldImagePath: oldP.isNotEmpty ? oldP.first['imagen_url'] as String? : null);
+            
+            Map<String, dynamic> updateMap = pres.toSqlite(productId);
+            updateMap['imagen_url'] = finalPresUrl;
+            if (updateMap['proveedor_id'] == null) updateMap['proveedor_id'] = proveedorId;
+
+            await txn.update('presentaciones_producto', updateMap, where: 'id = ?', whereArgs: [pres.id]);
+          } else {
+            String? finalPresUrl = await ImageService.processAndSaveImage(pres.imagenUrl);
+            Map<String, dynamic> insertMap = pres.toSqlite(productId);
+            insertMap['imagen_url'] = finalPresUrl;
+            insertMap.remove('id');
+            if (insertMap['proveedor_id'] == null) insertMap['proveedor_id'] = proveedorId;
+
+            await txn.insert('presentaciones_producto', insertMap);
+          }
+        }
+      });
       return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+      print("Error editFullProduct: $e");
+      return false; 
+    }
   }
 
   Future<bool> updatePresentation(int presentationId, Map<String, dynamic> body) async {

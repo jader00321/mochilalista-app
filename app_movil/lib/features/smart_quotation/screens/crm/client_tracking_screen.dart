@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 
 import '../../providers/tracking_provider.dart';
-import '../../../../providers/auth_provider.dart'; // 🔥 FASE 4
+import '../../../../providers/auth_provider.dart'; 
 import '../../models/crm_models.dart';
 import '../../widgets/crm/client_filter_bar.dart';
 import '../../widgets/crm/client_card.dart';
@@ -18,7 +18,6 @@ class ClientTrackingScreen extends StatefulWidget {
 
 class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
-  
   final ScrollController _scrollController = ScrollController();
   bool _showScrollToTop = false;
 
@@ -26,7 +25,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<TrackingProvider>(context, listen: false).loadClients();
+      _onRefresh();
     });
 
     _scrollController.addListener(() {
@@ -45,6 +44,10 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
     super.dispose();
   }
 
+  Future<void> _onRefresh() async {
+    await Provider.of<TrackingProvider>(context, listen: false).loadClients();
+  }
+
   void _scrollToTop() {
     _scrollController.animateTo(
       0, 
@@ -53,24 +56,23 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
     );
   }
 
-  // 🔥 NUEVO: Explicación de Exploración
   void _showExplorationModal(BuildContext context, bool isDark) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
+        title: const Row(
           children: [
-            Icon(Icons.explore, color: Colors.orange[400]),
-            const SizedBox(width: 10),
-            const Text("Modo Exploración", style: TextStyle(fontWeight: FontWeight.bold)),
+            Icon(Icons.explore, color: Colors.orange),
+            SizedBox(width: 10),
+            Text("Modo Exploración", style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        content: Text(
+        content: const Text(
           "Para crear clientes o enviar mensajes de cobro masivos, necesitas registrar tu propio negocio.\n\n"
           "Dirígete a tu Perfil cuando estés listo para empezar a gestionar tus clientes reales.",
-          style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16, height: 1.4),
+          style: TextStyle(fontSize: 16, height: 1.4),
         ),
         actions: [
           TextButton(
@@ -93,8 +95,8 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
 
     final emptyClient = ClientModel(
       id: 0,
-      negocioId: 0,
-      creadoPorUsuarioId: 0,
+      negocioId: auth.activeBusinessId ?? 0,
+      creadoPorUsuarioId: auth.activeUserId ?? 0,
       fullName: "",
       phone: "",
       registeredDate: DateTime.now().toIso8601String(),
@@ -108,7 +110,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
     );
 
     if (updatedClient != null && mounted) {
-      Provider.of<TrackingProvider>(context, listen: false).loadClients();
+      _onRefresh();
     }
   }
 
@@ -157,7 +159,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text("Abre WhatsApp uno por uno para enviar el mensaje de forma segura. (${sentClientIds.length}/${debtors.length} enviados)", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 16)),
+                  Text("Abre WhatsApp para enviar el mensaje de forma segura. (${sentClientIds.length}/${debtors.length} enviados)", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 16)),
                   const SizedBox(height: 20),
                   
                   Expanded(
@@ -182,8 +184,8 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                             ? null 
                             : ElevatedButton.icon(
                                 onPressed: isSent ? null : () async {
-                                  String msg = "Hola ${client.fullName}, te saludamos de la librería. Te escribimos para recordarte que tienes un saldo pendiente. Agradecemos tu pronta cancelación.";
-                                  final url = Uri.parse("https://wa.me/51${client.phone}?text=${Uri.encodeComponent(msg)}");
+                                  String msg = "Hola ${client.fullName}, te saludamos de la librería. Te recordamos que tienes un saldo pendiente. Agradecemos tu pronta cancelación.";
+                                  final url = Uri.parse("https://wa.me/51${client.phone.replaceAll(' ', '')}?text=${Uri.encodeComponent(msg)}");
                                   
                                   if (await canLaunchUrl(url)) {
                                     await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -195,8 +197,6 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: isSent ? (isDark ? Colors.grey[800] : Colors.grey[300]) : const Color(0xFF25D366),
                                   foregroundColor: isSent ? (isDark ? Colors.grey[500] : Colors.grey[700]) : Colors.white,
-                                  elevation: isSent ? 0 : 2,
-                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))
                                 ),
                               ),
@@ -217,7 +217,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
   Widget build(BuildContext context) {
     final provider = Provider.of<TrackingProvider>(context);
     final clients = provider.filteredClients;
-    final debtorsList = clients.where((c) => c.totalDebt > 0).toList();
+    final debtorsList = clients.where((c) => c.totalDebt > 0.01).toList();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
@@ -270,20 +270,19 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
       
       body: Column(
         children: [
-          // 🔥 AVISO DE EXPLORACIÓN PERMANENTE PARA INVITADOS
           if (!Provider.of<AuthProvider>(context).hasActiveContext)
              Container(
                width: double.infinity,
                color: Colors.orange.withOpacity(0.15),
                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-               child: Row(
+               child: const Row(
                  children: [
-                   Icon(Icons.info_outline, color: Colors.orange[700]),
-                   const SizedBox(width: 12),
+                   Icon(Icons.info_outline, color: Colors.orange),
+                   SizedBox(width: 12),
                    Expanded(
                      child: Text(
                        "Modo Exploración. Para agregar clientes a tu Directorio, debes registrar tu negocio.",
-                       style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
+                       style: TextStyle(fontSize: 13),
                      )
                    )
                  ]
@@ -302,7 +301,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "${clients.length} clientes encontrados", 
+                  "${clients.length} clientes", 
                   style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 15)
                 ),
                 PopupMenuButton<String>(
@@ -316,9 +315,9 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                   ),
                   onSelected: (val) => provider.setSort(val),
                   itemBuilder: (ctx) => [
-                    PopupMenuItem(value: 'name_asc', child: Text("Alfabético (A-Z)", style: TextStyle(color: textColor, fontSize: 16, fontWeight: provider.currentSort == 'name_asc' ? FontWeight.bold : FontWeight.normal))),
-                    PopupMenuItem(value: 'newest', child: Text("Más recientes", style: TextStyle(color: textColor, fontSize: 16, fontWeight: provider.currentSort == 'newest' ? FontWeight.bold : FontWeight.normal))),
-                    PopupMenuItem(value: 'oldest', child: Text("Más antiguos", style: TextStyle(color: textColor, fontSize: 16, fontWeight: provider.currentSort == 'oldest' ? FontWeight.bold : FontWeight.normal))),
+                    const PopupMenuItem(value: 'name_asc', child: Text("Alfabético (A-Z)")),
+                    const PopupMenuItem(value: 'newest', child: Text("Más recientes")),
+                    const PopupMenuItem(value: 'oldest', child: Text("Más antiguos")),
                   ],
                 )
               ],
@@ -326,31 +325,37 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
           ),
 
           Expanded(
-            child: provider.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : clients.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center, 
+            child: RefreshIndicator(
+              onRefresh: _onRefresh, // 🔥 ARRASTRAR PARA ACTUALIZAR AÑADIDO
+              color: Colors.blue[800],
+              child: provider.isLoading && clients.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : clients.isEmpty
+                  ? ListView( // Necesita ser un scrollable para que Pull-to-refresh funcione
                       children: [
-                        Icon(Icons.people_outline, size: 90, color: isDark ? Colors.white10 : Colors.grey[300]), 
-                        const SizedBox(height: 20), 
-                        Text("No se encontraron clientes", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 18, fontWeight: FontWeight.bold))
-                      ]
+                        SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                        Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center, 
+                            children: [
+                              Icon(Icons.people_outline, size: 90, color: isDark ? Colors.white10 : Colors.grey[300]), 
+                              const SizedBox(height: 20), 
+                              Text("No se encontraron clientes", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 18, fontWeight: FontWeight.bold))
+                            ]
+                          )
+                        ),
+                      ],
                     )
-                  )
-                : RefreshIndicator(
-                    onRefresh: () => provider.loadClients(),
-                    child: ListView.builder(
+                  : ListView.builder(
                       controller: _scrollController,
-                      padding: EdgeInsets.only(top: 16, bottom: provider.filterHasDebt ? 120 : 100),
+                      padding: const EdgeInsets.only(top: 16, bottom: 120),
                       itemCount: clients.length,
                       itemBuilder: (ctx, i) => ClientCard(
                         client: clients[i], 
-                        onRefresh: () => provider.loadClients()
+                        onRefresh: _onRefresh
                       ),
                     ),
-                  ),
+            ),
           ),
         ],
       ),
@@ -378,9 +383,8 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("${debtorsList.length} deudores filtrados", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)),
-                        const SizedBox(height: 4),
-                        Text("Envío individual seguro", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14)),
+                        Text("${debtorsList.length} deudores", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)),
+                        Text("Cobro masivo individual", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14)),
                       ],
                     ),
                   ),

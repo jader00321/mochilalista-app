@@ -78,7 +78,6 @@ class AuthProvider with ChangeNotifier {
             _activeUser = await _authService.getUserProfile(lastUserId);
             _status = AuthStatus.authenticated;
           } catch (_) {
-            // Si el perfil ya no existe en la BD, lo mandamos a selección
             await prefs.remove('last_active_user_id');
             _status = AuthStatus.profileSelection;
           }
@@ -87,13 +86,14 @@ class AuthProvider with ChangeNotifier {
         }
       }
     } catch (e) {
-      _errorMessage = "No se pudieron cargar los perfiles de tu dispositivo.";
+      _errorMessage = "No se pudieron cargar los perfiles.";
       _status = AuthStatus.profileSelection;
     } finally {
       notifyListeners();
     }
   }
 
+  // 🔥 SOLUCIÓN AL BUG DE NAVEGACIÓN Y CARGA INFINITA
   Future<bool> createProfileAndLogin({
     required String nombreDueno, required String telefono, required String nombreNegocio,
     required String direccion, String? logoPath, required String moneda, String? pin
@@ -113,8 +113,9 @@ class AuthProvider with ChangeNotifier {
       return true;
     } catch (e) {
       _errorMessage = e.toString().replaceAll("Exception:", "").trim();
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false); // Apaga siempre el loader para que la app no se congele
     }
   }
 
@@ -123,9 +124,9 @@ class AuthProvider with ChangeNotifier {
     await prefs.setInt('last_active_user_id', userId);
     
     _activeUser = await _authService.getUserProfile(userId);
-    _status = AuthStatus.authenticated;
-    
     _localProfiles = await _authService.getLocalProfiles(); 
+    
+    _status = AuthStatus.authenticated;
     notifyListeners();
   }
 
@@ -147,40 +148,32 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // 🔥 NUEVA FUNCIÓN DE CONTINGENCIA: Borrado seguro
   Future<bool> deleteProfileAndData(int userId, String inputPin) async {
     _setLoading(true);
     try {
-      // 1. Verificamos el PIN de seguridad si es que tiene uno
       bool hasPin = await profileHasPin(userId);
       if (hasPin) {
         bool isCorrect = await verifyPin(userId, inputPin);
         if (!isCorrect) throw Exception("El PIN ingresado es incorrecto.");
       }
 
-      // 2. Procedemos al borrado de base de datos
       bool deleted = await _authService.deleteLocalProfile(userId);
       if (deleted) {
-        // 3. Limpiamos la memoria segura
         await _secureStorage.delete(key: 'pin_$userId');
-        
-        // 4. Si es el usuario activo, lo deslogueamos
         if (_activeUser?.id == userId) {
           await logout();
+        } else {
+          await checkInitialState();
         }
-        await checkInitialState(); // Recarga la lista de perfiles
       }
-      
-      _setLoading(false);
       return deleted;
     } catch (e) {
       _errorMessage = e.toString().replaceAll("Exception:", "").trim();
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
-
-  // --- MÉTODOS DE ACTUALIZACIÓN ---
   
   Future<bool> updateUserProfile(String nombre, String telefono) async {
     if (_activeUser == null) return false;
@@ -188,12 +181,12 @@ class AuthProvider with ChangeNotifier {
     try {
       final updatedUser = await _authService.updateProfile(_activeUser!.id, nombre, telefono);
       _activeUser = updatedUser; 
-      _setLoading(false);
       return true;
     } catch (e) {
       _errorMessage = "No se pudieron actualizar tus datos personales.";
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
@@ -205,12 +198,12 @@ class AuthProvider with ChangeNotifier {
       if (!isCorrect) throw Exception("El PIN actual es incorrecto.");
       
       await _secureStorage.write(key: 'pin_${_activeUser!.id}', value: newPin);
-      _setLoading(false);
       return true;
     } catch (e) {
       _errorMessage = e.toString().replaceAll("Exception:", "").trim();
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
@@ -221,12 +214,12 @@ class AuthProvider with ChangeNotifier {
       String encodedConfig = json.encode({"show_address": showAddress, "show_ruc": showRuc});
       await _authService.createBusiness(_activeUser!.id, name, ruc, address, paymentInfo, lat, lng, encodedConfig);
       await loginWithProfile(_activeUser!.id); 
-      _setLoading(false);
       return true;
     } catch (e) {
       _errorMessage = "Ocurrió un error al crear la información del negocio.";
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
@@ -243,13 +236,13 @@ class AuthProvider with ChangeNotifier {
            fullName: _activeUser!.fullName, phone: _activeUser!.phone, isActive: _activeUser!.isActive, business: updatedBusiness 
          );
       }
-      notifyListeners();
-      _setLoading(false);
       return true;
     } catch (e) {
       _errorMessage = "No pudimos actualizar los datos del negocio.";
-      _setLoading(false);
       return false;
+    } finally {
+      notifyListeners();
+      _setLoading(false);
     }
   }
 
@@ -264,12 +257,12 @@ class AuthProvider with ChangeNotifier {
            fullName: _activeUser!.fullName, phone: _activeUser!.phone, isActive: _activeUser!.isActive, business: updatedBusiness 
          );
       }
-      _setLoading(false);
       return true;
     } catch (e) {
-      _errorMessage = "La imagen es muy pesada o el formato no es compatible.";
-      _setLoading(false);
+      _errorMessage = "La imagen es muy pesada o formato no compatible.";
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 

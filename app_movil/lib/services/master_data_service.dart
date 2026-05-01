@@ -7,7 +7,6 @@ import 'image_service.dart';
 class MasterDataService {
   int? _negocioId;
   
-  // 🔥 Reemplaza a updateToken
   void updateContext(int? negocioId) => _negocioId = negocioId;
   
   final dbHelper = LocalDatabase.instance;
@@ -20,9 +19,24 @@ class MasterDataService {
       String whereClause = showAll ? "negocio_id = ?" : "negocio_id = ? AND activo = 1";
       List<dynamic> args = [_negocioId];
       
-      final catsData = await db.query('categorias', where: whereClause, whereArgs: args);
-      final brandsData = await db.query('marcas', where: whereClause, whereArgs: args);
-      final provsData = await db.query('proveedores', where: whereClause, whereArgs: args);
+      // 🔥 REPLICACIÓN EXACTA DE PYTHON: Subconsultas para el conteo de productos
+      final catsData = await db.rawQuery('''
+        SELECT c.*, 
+        (SELECT COUNT(*) FROM productos p WHERE p.categoria_id = c.id AND p.negocio_id = c.negocio_id) as products_count
+        FROM categorias c WHERE $whereClause
+      ''', args);
+
+      final brandsData = await db.rawQuery('''
+        SELECT m.*, 
+        (SELECT COUNT(*) FROM productos p WHERE p.marca_id = m.id AND p.negocio_id = m.negocio_id) as products_count
+        FROM marcas m WHERE $whereClause
+      ''', args);
+
+      final provsData = await db.rawQuery('''
+        SELECT pv.*, 
+        (SELECT COUNT(*) FROM presentaciones_producto pp WHERE pp.proveedor_id = pv.id) as products_count
+        FROM proveedores pv WHERE $whereClause
+      ''', args);
 
       return {
         'categories': catsData.map((e) => Category.fromJson(e)).toList(),

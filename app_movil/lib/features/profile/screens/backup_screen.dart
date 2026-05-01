@@ -84,9 +84,6 @@ class BackupScreen extends StatelessWidget {
           ListView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             children: [
-              // ==========================================
-              // SECCIÓN 1: EXPORTACIÓN MANUAL
-              // ==========================================
               const Text("Exportación Manual", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.blue, letterSpacing: 0.5)),
               const SizedBox(height: 8),
               Text("Guarda una copia exacta de tu inventario y ventas en este preciso momento.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14)),
@@ -133,9 +130,6 @@ class BackupScreen extends StatelessWidget {
 
               const SizedBox(height: 40),
 
-              // ==========================================
-              // SECCIÓN 2: AUTOMATIZACIÓN (CON ANIMACIÓN)
-              // ==========================================
               const Text("Protección Automática", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.blue, letterSpacing: 0.5)),
               const SizedBox(height: 8),
               Text("La aplicación creará un respaldo por ti de forma silenciosa e invisible.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14)),
@@ -154,7 +148,6 @@ class BackupScreen extends StatelessWidget {
                       onChanged: (val) => backupProvider.toggleAutoBackup(val),
                     ),
                     
-                    // 🔥 ANIMACIÓN: Se despliega suavemente al encender el Switch
                     AnimatedSize(
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
@@ -224,9 +217,6 @@ class BackupScreen extends StatelessWidget {
 
               const SizedBox(height: 50),
 
-              // ==========================================
-              // SECCIÓN 3: RESTAURACIÓN
-              // ==========================================
               const Text("Restaurar Sistema", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.red, letterSpacing: 0.5)),
               const SizedBox(height: 8),
               Text("Usa esta opción solo si cambiaste de celular o si necesitas recuperar una versión anterior.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14)),
@@ -247,9 +237,6 @@ class BackupScreen extends StatelessWidget {
             ],
           ),
 
-          // ==========================================
-          // OVERLAY DE CARGA (Para procesos asíncronos)
-          // ==========================================
           if (backupProvider.isLoading)
             Container(
               color: Colors.black.withOpacity(0.6),

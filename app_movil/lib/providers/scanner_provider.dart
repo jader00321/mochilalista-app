@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import '../config/api_constants.dart';
 import '../models/scanner_models.dart';
 import '../database/local_db.dart';
@@ -9,7 +9,6 @@ import '../database/local_db.dart';
 class ScannerProvider with ChangeNotifier {
   int? _negocioId;
   int? _usuarioId;
-  String? _aiToken; // Token para la IA en la nube
   
   bool _isLoading = false;
   String _statusMessage = "";
@@ -69,11 +68,10 @@ class ScannerProvider with ChangeNotifier {
     return count;
   }
 
-  // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
   void updateContext(int? negocioId, int? usuarioId, String? aiToken) {
     _negocioId = negocioId;
     _usuarioId = usuarioId;
-    _aiToken = aiToken;
+    // Ya no usamos aiToken, usaremos ApiConstants.googleApiKey
   }
 
   void saveProgress() {
@@ -85,9 +83,6 @@ class ScannerProvider with ChangeNotifier {
 
   void notifyUIUpdate() => notifyListeners();
 
-  // ===========================================================================
-  // 🔥 NUEVO: FUNCIÓN PARA EL ESCÁNER DE CÓDIGOS DE BARRAS FÍSICO (OFFLINE)
-  // ===========================================================================
   Future<Map<String, dynamic>?> scanBarcode(String barcode) async {
     if (_negocioId == null || barcode.trim().isEmpty) return null;
 
@@ -96,8 +91,6 @@ class ScannerProvider with ChangeNotifier {
 
     try {
       final db = await dbHelper.database;
-
-      // Buscamos si el código de barras coincide con el de la presentación o el producto padre
       final rows = await db.rawQuery('''
         SELECT p.*, pr.id AS pres_id, pr.nombre_especifico, pr.descripcion AS pres_desc, pr.imagen_url AS pres_img,
         pr.codigo_barras AS pres_cb, pr.proveedor_id AS pres_prov, pr.ump_compra, pr.precio_ump_proveedor,
@@ -114,8 +107,6 @@ class ScannerProvider with ChangeNotifier {
 
       if (rows.isNotEmpty) {
         final row = rows.first;
-        
-        // Separamos los datos para el Product y la Presentation como lo espera la UI
         Map<String, dynamic> productMap = Map<String, dynamic>.from(row);
         Map<String, dynamic> presentationMap = {
           'id': row['pres_id'], 'nombre_especifico': row['nombre_especifico'], 'descripcion': row['pres_desc'],
@@ -130,25 +121,18 @@ class ScannerProvider with ChangeNotifier {
           'tipo_descuento': row['tipo_descuento'], 'valor_descuento': row['valor_descuento'],
           'estado': row['pres_estado'], 'activo': row['pres_activo'],
         };
-
-        return {
-          'found': true,
-          'product': productMap,
-          'presentation': presentationMap
-        };
+        return {'found': true, 'product': productMap, 'presentation': presentationMap};
       } else {
         return {'found': false};
       }
     } catch (e) {
-      _statusMessage = "Error buscando código localmente: $e";
+      _statusMessage = "Error buscando código: $e";
       return null;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
-  // ===========================================================================
-
 
   Future<List<Map<String, dynamic>>> searchProviders(String query) async {
     if (_negocioId == null) return [];
@@ -164,30 +148,91 @@ class ScannerProvider with ChangeNotifier {
     } catch (e) { return []; }
   }
 
-  // 🔥 LA IA SIGUE ONLINE: Usa el token para enviar la foto a tu servidor/API
+  // ===========================================================================
+  // 🔥 ANÁLISIS IA DIRECTO DESDE EL CELULAR (Sin Backend Python)
+  // ===========================================================================
   Future<bool> uploadAndAnalyzeImage(File imageFile) async {
     _isLoading = true;
-    _statusMessage = "Analizando imagen con IA...";
+    _statusMessage = "Analizando con Inteligencia Artificial...";
     _currentImage = imageFile;
     notifyListeners();
 
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('${ApiConstants.baseUrl}/scanner/ai/analyze_invoice'));
-      if (_aiToken != null) request.headers['Authorization'] = 'Bearer $_aiToken';
-      request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+      final apiKey = ApiConstants.googleApiKey;
+      if (apiKey.isEmpty) throw Exception("API Key de Google Gemini no configurada en el archivo .env");
 
-      var streamedRes = await request.send();
-      var res = await http.Response.fromStream(streamedRes);
+      final model = GenerativeModel(
+        model: ApiConstants.geminiModelFlash,
+        apiKey: apiKey,
+      );
 
-      if (res.statusCode == 200) {
-        final decoded = json.decode(utf8.decode(res.bodyBytes));
+      final imageBytes = await imageFile.readAsBytes();
+      final imagePart = DataPart('image/jpeg', imageBytes); // Gemini lo asimila como DataPart
+
+      // 🔥 ESTE ES TU PROMPT ORIGINAL DE PYTHON TRADUCIDO AL CELULAR
+      final prompt = TextPart('''
+        Actúa como un experto contable y analista de inventarios de papelería en Perú.
+        Tu misión es digitalizar esta factura física/electrónica con PRECISIÓN ABSOLUTA.
+        
+        COMPLEJIDAD DEL NEGOCIO Y FLEXIBILIDAD:
+        Los proveedores venden productos en Lotes (Millares, Cientos, Docenas, Cajas).
+        A menudo, el cliente compra FRACCIONES de ese lote (Ej: "0.25 MLL" significa 1/4 de millar).
+        Debes deducir la matemática de la factura incluso si faltan datos implícitos.
+
+        REGLAS ESTRICTAS DE EXTRACCIÓN DE ÍTEMS:
+        1. 'ump_compra': La unidad de empaque del proveedor. (Ej: "DOC", "MLL", "CTO", "UND", "PAQ", "CJA"). Si no se especifica, usa "UND".
+        2. 'unidades_por_lote': Deduce cuántas unidades individuales vienen en ese 'ump_compra'. (MLL=1000, CTO=100, DOC=12, GRZ=144, UND=1. Si dice 'Caja x 50', es 50).
+        3. 'cantidad_ump_comprada': El número exacto en la columna "Cantidad". (Ej: si dice 0.25 MLL, pon 0.25. Si dice 3 DOC, pon 3.0).
+        4. 'total_pago_lote': El importe TOTAL pagado por esa línea específica (Subtotal o Importe de Venta).
+        5. 'precio_ump_proveedor': El precio unitario del lote. Si no está claro en la foto, INFIÉRELO DIVIDIENDO: (total_pago_lote / cantidad_ump_comprada).
+
+        REGLAS DE DESCRIPCIÓN:
+        - 'producto_padre_estimado': El nombre general limpio (Ej: "Cuaderno Stanford", "Lápiz Chequeador").
+        - 'variante_detectada': Características específicas, colores, tamaños (Ej: "A4 Cuadriculado", "Color Rojo").
+        - 'marca_detectada': Solo si se menciona explícitamente (Faber Castell, Artesco, etc).
+
+        Extrae el monto total de toda la factura en 'monto_total_factura'.
+        Extrae los datos respetando estrictamente el esquema JSON solicitado:
+        {
+          "proveedor_detectado": "string",
+          "ruc_detectado": "string",
+          "fecha_detectada": "YYYY-MM-DD",
+          "monto_total_factura": float,
+          "items": [
+            {
+              "descripcion_detectada": "string",
+              "producto_padre_estimado": "string",
+              "variante_detectada": "string",
+              "marca_detectada": "string",
+              "codigo_detectado": "string",
+              "ump_compra": "string",
+              "unidades_por_lote": int,
+              "cantidad_ump_comprada": float,
+              "precio_ump_proveedor": float,
+              "total_pago_lote": float,
+              "unidad_venta": "string"
+            }
+          ]
+        }
+      ''');
+
+      final response = await model.generateContent([
+        Content.multi([prompt, imagePart])
+      ]);
+
+      if (response.text != null && response.text!.isNotEmpty) {
+        // Limpiamos la respuesta en caso de que Gemini añada markdown ```json
+        String cleanJson = response.text!.replaceAll('```json', '').replaceAll('```', '').trim();
+        final decoded = json.decode(cleanJson);
+        
         _aiRawData = AIInvoiceResponse.fromJson(decoded);
         return true;
       } else {
-        _statusMessage = "Error IA (${res.statusCode}): ${res.body}";
+        throw Exception("La IA no devolvió datos legibles.");
       }
     } catch (e) {
       _statusMessage = "Error de conexión con la IA: $e";
+      debugPrint(_statusMessage);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -470,6 +515,7 @@ class ScannerProvider with ChangeNotifier {
     try {
       final db = await dbHelper.database;
       
+      // 🔥 TRANSACCIÓN SEGURA AÑADIDA
       await db.transaction((txn) async {
         int? idProveedor = _stagingData!.proveedorMatch.datos?.id;
         if (!_stagingData!.proveedorMatch.estado.contains("MATCH")) {

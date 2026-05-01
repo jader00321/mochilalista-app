@@ -11,8 +11,6 @@ import '../services/client_service.dart';
 class MatchingProvider with ChangeNotifier {
   int? _negocioId;
   int? _usuarioId;
-  // ignore: unused_field
-  String? _aiToken;
 
   final MatchingService _service = MatchingService();
   final ClientService _clientService = ClientService();
@@ -63,12 +61,10 @@ class MatchingProvider with ChangeNotifier {
     _errorMessage = e.toString().replaceAll("Exception:", "").trim();
   }
 
-  // 🔥 Multi-Perfil Context
   void updateContext(int? negocioId, int? usuarioId, String? aiToken) {
     if (_negocioId != negocioId) {
       _negocioId = negocioId;
       _usuarioId = usuarioId;
-      _aiToken = aiToken;
       clearState();
     }
   }
@@ -229,136 +225,132 @@ class MatchingProvider with ChangeNotifier {
     _isSaving = true;
     notifyListeners();
 
-    if (_pairs.isEmpty) {
-      _errorMessage = "No se puede guardar una lista vacía";
-      _isSaving = false;
-      notifyListeners();
-      return null;
-    }
-
-    _metadata ??= ExtractedMetadata();
-    if (institutionName != null && institutionName.isNotEmpty) _metadata!.institutionName = institutionName;
-    if (gradeLevel != null && gradeLevel.isNotEmpty) _metadata!.gradeLevel = gradeLevel;
-
-    String? uploadedImageUrl;
-    // 🔥 CORRECCIÓN: Como estamos guardando la imagen de forma local, 
-    // ya no necesitamos el _aiToken aquí, solo el archivo.
-    if (_localImageFile != null) {
-        uploadedImageUrl = await _service.uploadImageToBackend(_localImageFile!);
-    }
-
-    final Map<int, Map<String, dynamic>> groupedItems = {};
-
-    for (var p in _pairs.where((p) => p.selectedProduct != null)) {
-      int pId = p.selectedProduct!.presentationId;
-      
-      if (groupedItems.containsKey(pId)) {
-        groupedItems[pId]!['quantity'] += p.selectedQuantity;
-        if (p.sourceItem.originalText.isNotEmpty) {
-          groupedItems[pId]!['original_text'] += " | ${p.sourceItem.originalText}";
-        }
-        
-        double currentPrice = groupedItems[pId]!['unit_price_applied'];
-        if (p.effectiveUnitPrice < currentPrice) {
-           groupedItems[pId]!['unit_price_applied'] = p.effectiveUnitPrice;
-           groupedItems[pId]!['is_manual_price'] = p.overridePrice != null;
-        }
-      } else {
-        var itemJson = p.toQuotationItemJson(); 
-        if (itemJson != null) {
-          itemJson['original_text'] = p.sourceItem.originalText;
-          groupedItems[pId] = itemJson;
-        }
-      }
-    }
-
-    final validItems = groupedItems.values.toList();
-
-    if (validItems.isEmpty) {
-      _errorMessage = "Selecciona al menos un producto para guardar.";
-      _isSaving = false;
-      notifyListeners();
-      return null;
-    }
-
-    int? finalClientId = (_selectedClient?.id == 0) ? null : _selectedClient?.id;
-    String rawClientName = _selectedClient?.fullName ?? manualClientName?.trim() ?? "";
-
-    if (!isClientRole && updateClientData && rawClientName.isNotEmpty) {
-      final clientData = {
-        'nombre_completo': rawClientName, 'telefono': manualClientPhone?.replaceAll(" ", "") ?? "",
-        'dni_ruc': manualClientDni?.trim(), 'direccion': manualClientAddress?.trim(),
-        'correo': manualClientEmail?.trim(), 'notas': manualClientNotes?.trim()
-      };
-      
-      try {
-        if (_selectedClient != null && _selectedClient!.id != 0) {
-          await _clientService.updateClient(_selectedClient!.id, clientData);
-        } else {
-          final newClient = await _clientService.createClient(clientData, _negocioId!, _usuarioId!);
-          finalClientId = newClient.id; 
-        }
-      } catch (e) {
-        debugPrint("Error guardando cliente CRM: $e");
-      }
-    }
-
-    final timeStr = DateFormat('dd-HHmm').format(DateTime.now()); 
-    String finalQuoteName = "";
-    String typeLabel = type == "ai_scan" ? "IA" : "Manual";
-
-    if (isClientRole) {
-        final String name = (manualClientName != null && manualClientName.isNotEmpty) ? manualClientName : "Cliente";
-        finalQuoteName = "$name - Pedido $typeLabel #$timeStr"; 
-    } else {
-        if (rawClientName.isEmpty) {
-            finalQuoteName = "Cotización $typeLabel #$timeStr";
-        } else {
-            if (finalClientId != null) {
-               try {
-                  final list = await _clientService.getPendingQuotations(finalClientId);
-                  int count = list.length + 1;
-                  finalQuoteName = "$rawClientName #$timeStr ($count) - $typeLabel";
-               } catch(e) {
-                  finalQuoteName = "$rawClientName #$timeStr - $typeLabel";
-               }
-            } else {
-               finalQuoteName = "$rawClientName #$timeStr - $typeLabel";
-            }
-        }
-    }
-
-    double finalAmount = 0.0;
-    double finalSavings = 0.0;
-    for(var item in validItems) {
-      finalAmount += (item['unit_price_applied'] * item['quantity']);
-      double originalTotal = item['original_unit_price'] * item['quantity'];
-      finalSavings += (originalTotal - (item['unit_price_applied'] * item['quantity']));
-    }
-
-    final quotationPayload = {
-      "client_id": finalClientId, 
-      "client_name": finalQuoteName, 
-      "institution_name": _metadata?.institutionName,
-      "grade_level": _metadata?.gradeLevel,
-      "total_amount": double.parse(finalAmount.toStringAsFixed(2)),
-      "total_savings": double.parse(finalSavings.toStringAsFixed(2)),
-      "status": status, 
-      "type": type ?? "ai_scan",
-      "source_image_url": uploadedImageUrl, 
-      "items": validItems,
-      "original_text_dump": _fullExtractedText 
-    };
-
     try {
+      if (_pairs.isEmpty) {
+        _errorMessage = "No se puede guardar una lista vacía";
+        return null;
+      }
+
+      _metadata ??= ExtractedMetadata();
+      if (institutionName != null && institutionName.isNotEmpty) _metadata!.institutionName = institutionName;
+      if (gradeLevel != null && gradeLevel.isNotEmpty) _metadata!.gradeLevel = gradeLevel;
+
+      String? uploadedImageUrl;
+      if (_localImageFile != null) {
+          uploadedImageUrl = await _service.uploadImageToBackend(_localImageFile!);
+      }
+
+      final Map<int, Map<String, dynamic>> groupedItems = {};
+
+      for (var p in _pairs.where((p) => p.selectedProduct != null)) {
+        int pId = p.selectedProduct!.presentationId;
+        
+        if (groupedItems.containsKey(pId)) {
+          groupedItems[pId]!['quantity'] += p.selectedQuantity;
+          if (p.sourceItem.originalText.isNotEmpty) {
+            groupedItems[pId]!['original_text'] += " | ${p.sourceItem.originalText}";
+          }
+          
+          double currentPrice = groupedItems[pId]!['unit_price_applied'];
+          if (p.effectiveUnitPrice < currentPrice) {
+             groupedItems[pId]!['unit_price_applied'] = p.effectiveUnitPrice;
+             // SQLite format: 1 (true), 0 (false)
+             groupedItems[pId]!['is_manual_price'] = p.overridePrice != null ? 1 : 0;
+          }
+        } else {
+          var itemJson = p.toQuotationItemJson(); 
+          if (itemJson != null) {
+            itemJson['original_text'] = p.sourceItem.originalText;
+            groupedItems[pId] = itemJson;
+          }
+        }
+      }
+
+      final validItems = groupedItems.values.toList();
+
+      if (validItems.isEmpty) {
+        _errorMessage = "Selecciona al menos un producto para guardar.";
+        return null;
+      }
+
+      int? finalClientId = (_selectedClient?.id == 0) ? null : _selectedClient?.id;
+      String rawClientName = _selectedClient?.fullName ?? manualClientName?.trim() ?? "";
+
+      if (!isClientRole && updateClientData && rawClientName.isNotEmpty) {
+        final clientData = {
+          'nombre_completo': rawClientName, 'telefono': manualClientPhone?.replaceAll(" ", "") ?? "",
+          'dni_ruc': manualClientDni?.trim(), 'direccion': manualClientAddress?.trim(),
+          'correo': manualClientEmail?.trim(), 'notas': manualClientNotes?.trim()
+        };
+        
+        try {
+          if (_selectedClient != null && _selectedClient!.id != 0) {
+            await _clientService.updateClient(_selectedClient!.id, clientData);
+          } else {
+            final newClient = await _clientService.createClient(clientData, _negocioId!, _usuarioId!);
+            finalClientId = newClient.id; 
+          }
+        } catch (e) {
+          debugPrint("Error guardando cliente CRM: $e");
+        }
+      }
+
+      final timeStr = DateFormat('dd-HHmm').format(DateTime.now()); 
+      String finalQuoteName = "";
+      String typeLabel = type == "ai_scan" ? "IA" : "Manual";
+
+      if (isClientRole) {
+          final String name = (manualClientName != null && manualClientName.isNotEmpty) ? manualClientName : "Cliente";
+          finalQuoteName = "$name - Pedido $typeLabel #$timeStr"; 
+      } else {
+          if (rawClientName.isEmpty) {
+              finalQuoteName = "Cotización $typeLabel #$timeStr";
+          } else {
+              if (finalClientId != null) {
+                 try {
+                    final list = await _clientService.getPendingQuotations(finalClientId);
+                    int count = list.length + 1;
+                    finalQuoteName = "$rawClientName #$timeStr ($count) - $typeLabel";
+                 } catch(e) {
+                    finalQuoteName = "$rawClientName #$timeStr - $typeLabel";
+                 }
+              } else {
+                 finalQuoteName = "$rawClientName #$timeStr - $typeLabel";
+              }
+          }
+      }
+
+      double finalAmount = 0.0;
+      double finalSavings = 0.0;
+      for(var item in validItems) {
+        finalAmount += (item['unit_price_applied'] * item['quantity']);
+        double originalTotal = item['original_unit_price'] * item['quantity'];
+        finalSavings += (originalTotal - (item['unit_price_applied'] * item['quantity']));
+      }
+
+      final quotationPayload = {
+        "client_id": finalClientId, 
+        "client_name": finalQuoteName, 
+        "institution_name": _metadata?.institutionName,
+        "grade_level": _metadata?.gradeLevel,
+        "total_amount": double.parse(finalAmount.toStringAsFixed(2)),
+        "total_savings": double.parse(finalSavings.toStringAsFixed(2)),
+        "status": status, 
+        "type": type ?? "ai_scan",
+        "source_image_url": uploadedImageUrl, 
+        "items": validItems,
+        "original_text_dump": _fullExtractedText 
+      };
+
       final newId = await _service.saveQuotation(quotationPayload, _negocioId!, _usuarioId!);
-      _isSaving = false;
       return newId;
+
     } catch (e) {
       _handleException(e);
+      return null;
+    } finally {
       _isSaving = false;
       notifyListeners();
-      return null;
     }
   }
 }

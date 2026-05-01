@@ -15,6 +15,7 @@ import '../../screens/scanner/invoice_review_screen.dart';
 import '../../screens/scanner/invoice_staging_screen.dart'; 
 import '../../features/smart_quotation/screens/quick_sale_screen.dart';
 import '../../features/smart_quotation/screens/sales_history_screen.dart';
+import '../../screens/db_inspector_screen.dart';
 
 class SmartActionGrid extends StatelessWidget {
   final Function(int)? onNavigateToTab;
@@ -151,6 +152,19 @@ class SmartActionGrid extends StatelessWidget {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesHistoryScreen()));
             },
           ),
+//
+          _buildCard(
+            context,
+            title: "DB Inspector",
+            subtitle: "Depuración BD",
+            icon: Icons.admin_panel_settings_rounded,
+            color: isDark ? Colors.grey[400]! : Colors.grey[700]!,
+            isDark: isDark,
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const DbInspectorScreen()));
+            },
+          ),
+          //
         ]
       ],
     );

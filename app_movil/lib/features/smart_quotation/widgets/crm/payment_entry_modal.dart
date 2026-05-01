@@ -492,30 +492,33 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
 
     setState(() => _isLoading = true);
     
-    final prov = Provider.of<TrackingProvider>(context, listen: false);
-    
-    int? ventaId = _selectedTargetType == 'venta' ? _selectedTargetId : null;
-    int? cuotaId = _selectedTargetType == 'cuota' ? _selectedTargetId : null;
+    try {
+      final prov = Provider.of<TrackingProvider>(context, listen: false);
+      
+      int? ventaId = _selectedTargetType == 'venta' ? _selectedTargetId : null;
+      int? cuotaId = _selectedTargetType == 'cuota' ? _selectedTargetId : null;
 
-    String backendMethod = _method.toLowerCase().replaceAll(' ', '_');
+      String backendMethod = _method.toLowerCase().replaceAll(' ', '_');
 
-    bool success = await prov.registerPayment(
-      widget.client.id, 
-      amount, 
-      backendMethod, 
-      ventaId: ventaId, 
-      cuotaId: cuotaId,
-      guardarVuelto: _keepAsCredit && !isPayingWithSaldo 
-    );
+      bool success = await prov.registerPayment(
+        widget.client.id, 
+        amount, 
+        backendMethod, 
+        ventaId: ventaId, 
+        cuotaId: cuotaId,
+        guardarVuelto: _keepAsCredit && !isPayingWithSaldo 
+      );
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      if (success) {
-        Navigator.pop(context);
-        CustomSnackBar.show(context, message: "¡Abono registrado exitosamente!", isError: false);
-      } else {
-        CustomSnackBar.show(context, message: "Error al registrar pago.", isError: true);
+      if (mounted) {
+        if (success) {
+          Navigator.pop(context);
+          CustomSnackBar.show(context, message: "¡Abono registrado exitosamente!", isError: false);
+        } else {
+          CustomSnackBar.show(context, message: "Error al registrar pago.", isError: true);
+        }
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 }

@@ -1,4 +1,4 @@
-import 'dart:convert'; // Necesario para jsonDecode y jsonEncode
+import 'dart:convert';
 
 class InvoiceModel {
   final int id;
@@ -27,7 +27,6 @@ class InvoiceModel {
   });
 
   factory InvoiceModel.fromJson(Map<String, dynamic> json) {
-    // Si viene de SQLite como String, lo convertimos de vuelta a Map
     Map<String, dynamic>? parsedJson;
     if (json['datos_crudos_ia_json'] != null) {
       if (json['datos_crudos_ia_json'] is String) {
@@ -62,7 +61,6 @@ class InvoiceModel {
       'monto_total_factura': montoTotalFactura,
       'fecha_emision': fechaEmision?.toIso8601String(),
       'cantidad_items_extraidos': cantidadItemsExtraidos,
-      // SQLite guarda los JSON como Strings
       'datos_crudos_ia_json': datosCrudosIaJson != null ? jsonEncode(datosCrudosIaJson) : null,
     };
   }
