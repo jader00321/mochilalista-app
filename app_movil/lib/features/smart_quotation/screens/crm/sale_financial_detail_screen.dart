@@ -243,10 +243,33 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                       displayEstado = 'PAGADO';
                     }
                     
-                    Color statusColor = isDark ? Colors.orange[300]! : Colors.orange;
+                    DateTime dueDate = DateTime.tryParse(c['fecha_vencimiento'] ?? "") ?? DateTime.now();
+                    DateTime today = DateTime.now();
+                    int daysDiff = dueDate.difference(DateTime(today.year, today.month, today.day)).inDays;
+
+                    Color statusColor = isDark ? Colors.grey[400]! : Colors.grey;
+                    IconData statusIcon = Icons.calendar_today;
+                    String statusText = displayEstado;
+
                     if (isPaid) {
                       statusColor = isDark ? Colors.green[400]! : Colors.green;
-                    } else if (cPagado > 0) statusColor = isDark ? Colors.blue[300]! : Colors.blue;
+                      statusIcon = Icons.check_circle;
+                    } else {
+                      if (daysDiff < 0) {
+                        statusColor = isDark ? Colors.red[400]! : Colors.red;
+                        statusIcon = Icons.warning_rounded;
+                        statusText = 'VENCIDA';
+                      } else if (daysDiff <= 3) {
+                        statusColor = isDark ? Colors.orange[400]! : Colors.orange;
+                        statusIcon = Icons.schedule;
+                        statusText = 'PRÓXIMA';
+                      } else if (cPagado > 0) {
+                        statusColor = isDark ? Colors.blue[300]! : Colors.blue;
+                        statusIcon = Icons.payments;
+                      } else {
+                        statusColor = isDark ? Colors.grey[400]! : Colors.grey[700]!;
+                      }
+                    }
 
                     return Card(
                       elevation: 0,
@@ -258,15 +281,18 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                         child: ExpansionTile(
                           iconColor: textColor,
                           collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey,
-                          leading: CircleAvatar(backgroundColor: statusColor.withOpacity(0.15), child: Icon(isPaid ? Icons.check : Icons.calendar_month, color: statusColor)),
+                          leading: CircleAvatar(backgroundColor: statusColor.withOpacity(0.15), child: Icon(statusIcon, color: statusColor)),
                           title: Text("Cuota ${c['numero_cuota']}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                          subtitle: Text("Vence: ${DateFormat('dd/MM/yyyy').format(DateTime.parse(c['fecha_vencimiento']))}", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                          subtitle: Text(
+                            daysDiff < 0 && !isPaid ? "Venció hace ${daysDiff.abs()} días" : "Vence: ${DateFormat('dd/MM/yyyy').format(dueDate)}", 
+                            style: TextStyle(fontSize: 13, color: daysDiff < 0 && !isPaid ? (isDark ? Colors.red[300] : Colors.red) : (isDark ? Colors.grey[400] : Colors.grey[700]), fontWeight: daysDiff < 0 && !isPaid ? FontWeight.bold : FontWeight.normal)
+                          ),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(currency.format(cMonto), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: textColor)),
-                              Text(displayEstado, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                              Text(statusText, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
                             ],
                           ),
                           children: [
@@ -286,6 +312,41 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                                       Text("Falta Pagar: ${currency.format(cSaldo)}", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.red[300] : Colors.red)),
                                     ],
                                   ),
+                                  if (!isPaid)
+                                    IconButton(
+                                      icon: Icon(Icons.edit_calendar, color: isDark ? Colors.blue[300] : Colors.blue),
+                                      tooltip: "Editar Fecha de Vencimiento",
+                                      onPressed: () async {
+                                        final newDate = await showDatePicker(
+                                          context: context,
+                                          initialDate: dueDate,
+                                          firstDate: DateTime.now().subtract(const Duration(days: 60)),
+                                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                                          builder: (context, child) {
+                                            return Theme(
+                                              data: isDark ? ThemeData.dark().copyWith(
+                                                colorScheme: ColorScheme.dark(primary: Colors.blue[300]!, onPrimary: Colors.black, surface: const Color(0xFF23232F), onSurface: Colors.white),
+                                              ) : ThemeData.light().copyWith(
+                                                colorScheme: ColorScheme.light(primary: Colors.blue[800]!, onPrimary: Colors.white, surface: Colors.white, onSurface: Colors.black),
+                                              ),
+                                              child: child!,
+                                            );
+                                          },
+                                        );
+                                        if (newDate != null && newDate.isAtSameMomentAs(dueDate) == false) {
+                                          setState(() => _isLoading = true);
+                                          final provider = Provider.of<SaleProvider>(context, listen: false);
+                                          final success = await provider.updateInstallmentDate(c['id'] as int, newDate.toIso8601String());
+                                          if (success) {
+                                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fecha actualizada exitosamente"), backgroundColor: Colors.green));
+                                            await _loadData();
+                                          } else {
+                                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al actualizar la fecha"), backgroundColor: Colors.red));
+                                            setState(() => _isLoading = false);
+                                          }
+                                        }
+                                      },
+                                    )
                                 ],
                               ),
                             )

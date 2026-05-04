@@ -82,7 +82,8 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     }
 
     final provider = Provider.of<SaleProvider>(context, listen: false);
-    final csvData = provider.generateCsvData();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final csvData = provider.generateCsvData(authProvider.currentCurrency);
     
     if (csvData.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No hay datos para exportar")));

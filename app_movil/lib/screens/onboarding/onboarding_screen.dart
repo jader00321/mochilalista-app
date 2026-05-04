@@ -21,6 +21,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   final _telefonoCtrl = TextEditingController();
   final _direccionCtrl = TextEditingController();
   final _logoCtrl = TextEditingController();
+  final _infoPagoCtrl = TextEditingController();
   final _pinCtrl = TextEditingController();
   
   String _monedaSeleccionada = 'S/ (Soles)';
@@ -47,6 +48,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     _telefonoCtrl.dispose();
     _direccionCtrl.dispose();
     _logoCtrl.dispose();
+    _infoPagoCtrl.dispose();
     _pinCtrl.dispose();
     super.dispose();
   }
@@ -70,6 +72,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       direccion: _direccionCtrl.text.trim(),
       logoPath: _logoCtrl.text,
       moneda: _monedaSeleccionada,
+      paymentInfo: _infoPagoCtrl.text.trim(),
       pin: _usarSeguridad ? _pinCtrl.text : null,
     );
 
@@ -190,6 +193,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                       onChanged: (val) => setState(() => _monedaSeleccionada = val!),
                       dropdownColor: isDark ? const Color(0xFF23232F) : Colors.white,
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  CustomTextField(
+                    label: 'Información de Pago (Yape, Plin, Cuenta, etc.)', 
+                    icon: Icons.account_balance_wallet_outlined, 
+                    controller: _infoPagoCtrl,
                   ),
                   const SizedBox(height: 20),
 

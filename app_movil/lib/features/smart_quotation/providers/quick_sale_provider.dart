@@ -61,8 +61,11 @@ class QuickSaleProvider with ChangeNotifier {
   }
 
   void updateContext(int? negocioId, int? usuarioId) {
-    _negocioId = negocioId;
-    _usuarioId = usuarioId;
+    if (_negocioId != negocioId || _usuarioId != usuarioId) {
+      _negocioId = negocioId;
+      _usuarioId = usuarioId;
+      clearCart();
+    }
   }
 
   void setClientInfo({int? id, String? name, String? phone, String? clientNote, String? saleNote, double? saldo}) {

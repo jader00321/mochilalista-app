@@ -71,9 +71,13 @@ class MasterDataService {
   Future<String?> deleteCategory(int id) async {
     final db = await dbHelper.database;
     try {
+      final pCountRows = await db.query('productos', columns: ['id'], where: 'categoria_id = ?', whereArgs: [id]);
+      if (pCountRows.isNotEmpty) {
+        return "No se puede eliminar porque hay ${pCountRows.length} productos usándola.";
+      }
       await db.delete('categorias', where: 'id = ?', whereArgs: [id]);
       return null;
-    } catch (e) { return "No se puede eliminar porque hay productos usándola."; }
+    } catch (e) { return "Error al eliminar la categoría."; }
   }
 
   Future<int?> createBrand(String nombre, String? urlImagen) async {
@@ -106,13 +110,17 @@ class MasterDataService {
   Future<String?> deleteBrand(int id) async {
     final db = await dbHelper.database;
     try {
+      final pCountRows = await db.query('productos', columns: ['id'], where: 'marca_id = ?', whereArgs: [id]);
+      if (pCountRows.isNotEmpty) {
+        return "No se puede eliminar porque hay ${pCountRows.length} productos usándola.";
+      }
       final oldData = await db.query('marcas', columns: ['imagen_url'], where: 'id = ?', whereArgs: [id]);
       await db.delete('marcas', where: 'id = ?', whereArgs: [id]);
       if (oldData.isNotEmpty && oldData.first['imagen_url'] != null) {
         await ImageService.deleteLocalImage(oldData.first['imagen_url'] as String);
       }
       return null;
-    } catch (e) { return "No se puede eliminar porque hay productos usándola."; }
+    } catch (e) { return "Error al eliminar la marca."; }
   }
 
   Future<int?> createProvider(String nombre, String? ruc, String? contacto, String? telefono, String? correo) async {
@@ -146,8 +154,12 @@ class MasterDataService {
   Future<String?> deleteProvider(int id) async {
     final db = await dbHelper.database;
     try {
+      final pCountRows = await db.query('presentaciones_producto', columns: ['id'], where: 'proveedor_id = ?', whereArgs: [id]);
+      if (pCountRows.isNotEmpty) {
+        return "No se puede eliminar porque hay ${pCountRows.length} presentaciones usando este proveedor.";
+      }
       await db.delete('proveedores', where: 'id = ?', whereArgs: [id]);
       return null;
-    } catch (e) { return "No se puede eliminar porque hay productos usando este proveedor."; }
+    } catch (e) { return "Error al eliminar el proveedor."; }
   }
 }

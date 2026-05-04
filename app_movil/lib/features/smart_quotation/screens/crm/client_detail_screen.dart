@@ -62,6 +62,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
     
     await prov.loadClientLedger(_currentClient.id);
     await prov.loadClientQuotations(_currentClient.id);
+    await prov.loadClientDebts(_currentClient.id);
 
     if (mounted && freshClient != null) {
       setState(() {
@@ -286,10 +287,77 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                 elevation: 0
               ),
             ),
-          )
+          ),
+          
+          _buildDelinquencyBanner(isDark),
         ],
       ),
     );
+  }
+
+  Widget _buildDelinquencyBanner(bool isDark) {
+    final provider = Provider.of<TrackingProvider>(context);
+    final debts = provider.currentClientDebts;
+    if (debts.isEmpty || provider.isLoadingDebts) return const SizedBox.shrink();
+
+    int overdueCount = 0;
+    int maxDaysOverdue = 0;
+    DateTime today = DateTime.now();
+    today = DateTime(today.year, today.month, today.day);
+
+    for (var sale in debts) {
+      for (var cuota in sale.installments) {
+        if (cuota.status != 'pagado') {
+          DateTime dueDate = DateTime.tryParse(cuota.dueDate) ?? DateTime.now();
+          dueDate = DateTime(dueDate.year, dueDate.month, dueDate.day);
+          if (dueDate.isBefore(today)) {
+            overdueCount++;
+            int days = today.difference(dueDate).inDays;
+            if (days > maxDaysOverdue) maxDaysOverdue = days;
+          }
+        }
+      }
+    }
+
+    if (overdueCount == 0 && _currentClient.totalDebt > 0) {
+      return Container(
+        margin: const EdgeInsets.only(top: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.greenAccent.withOpacity(0.3))),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.greenAccent),
+            const SizedBox(width: 12),
+            const Expanded(child: Text("Cliente al día. Sin cuotas vencidas.", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+          ],
+        ),
+      );
+    }
+
+    if (overdueCount > 0) {
+      return Container(
+        margin: const EdgeInsets.only(top: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent.withOpacity(0.3))),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 32),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("⚠️ $overdueCount cuota(s) vencida(s)", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  Text("Deuda más antigua: hace $maxDaysOverdue días", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return const SizedBox.shrink();
   }
 
   Widget _buildStatsCarousel(bool isDark) {

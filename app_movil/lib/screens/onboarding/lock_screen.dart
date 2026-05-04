@@ -191,9 +191,11 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
       TweenSequenceItem(tween: Tween(begin: 10.0, end: 0.0), weight: 1),
     ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut));
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      body: SafeArea(
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: bgColor,
+        body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnim,
           child: Column(
@@ -321,6 +323,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
               const SizedBox(height: 20),
             ],
           ),
+        ),
         ),
       ),
     );

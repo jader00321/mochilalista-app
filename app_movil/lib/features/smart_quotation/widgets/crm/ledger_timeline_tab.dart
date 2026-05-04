@@ -129,10 +129,23 @@ class LedgerTimelineTab extends StatelessWidget {
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(color: isDark ? Colors.blueGrey.withOpacity(0.2) : Colors.blueGrey[50], borderRadius: BorderRadius.circular(8)),
+                              decoration: BoxDecoration(
+                                color: item.saldoResultante < 0 
+                                    ? (isDark ? Colors.amber.withOpacity(0.2) : Colors.amber[50]) 
+                                    : (isDark ? Colors.blueGrey.withOpacity(0.2) : Colors.blueGrey[50]), 
+                                borderRadius: BorderRadius.circular(8)
+                              ),
                               child: Text(
-                                "Saldo Deuda: ${currency.format(item.saldoResultante)}",
-                                style: TextStyle(color: isDark ? Colors.blueGrey[200] : Colors.blueGrey[800], fontSize: 13, fontWeight: FontWeight.bold),
+                                item.saldoResultante < 0 
+                                    ? "Saldo a Favor: ${currency.format(item.saldoResultante.abs())}"
+                                    : "Saldo Deuda: ${currency.format(item.saldoResultante)}",
+                                style: TextStyle(
+                                  color: item.saldoResultante < 0 
+                                      ? (isDark ? Colors.amber[300] : Colors.amber[800]) 
+                                      : (isDark ? Colors.blueGrey[200] : Colors.blueGrey[800]), 
+                                  fontSize: 13, 
+                                  fontWeight: FontWeight.bold
+                                ),
                               ),
                             )
                           ],

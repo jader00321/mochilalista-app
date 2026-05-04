@@ -12,6 +12,7 @@ import '../features/smart_quotation/screens/crm/client_tracking_screen.dart';
 import '../features/smart_quotation/screens/workbench_screen.dart';
 import '../features/smart_quotation/screens/client_orders_screen.dart'; 
 import 'scan_screen.dart'; 
+import 'onboarding/lock_screen.dart';
 
 import '../widgets/home/dashboard_header.dart';
 import '../widgets/home/quotation_banner.dart';
@@ -24,8 +25,42 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
+  DateTime? _pausedTime;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _pausedTime = DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_pausedTime != null) {
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        final difference = DateTime.now().difference(_pausedTime!);
+        // Delay de gracia de 1 minuto
+        if (difference.inMinutes >= 1 && auth.hasPinCache && auth.user != null) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => LockScreen(userId: auth.user!.id)),
+            (route) => false,
+          );
+        }
+      }
+      _pausedTime = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,8 +125,8 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() => _currentIndex = index);
           if (index == 0 && auth.hasActiveContext) {
              Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
-             // 🔥 CORRECCIÓN 1: Se llama a checkInitialState en lugar de checkAuthStatus
-             auth.checkInitialState();
+             // 🔥 CORRECCIÓN 1: Se llama a refreshActiveUser para evitar parpadeo
+             auth.refreshActiveUser();
           }
         },
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white, 
@@ -120,8 +155,8 @@ class _HomeDashboardView extends StatelessWidget {
       color: Colors.blue[800],
       onRefresh: () async {
         final authProv = Provider.of<AuthProvider>(context, listen: false);
-        // 🔥 CORRECCIÓN 2: checkInitialState
-        await authProv.checkInitialState();
+        // 🔥 CORRECCIÓN 2: refreshActiveUser en lugar de checkInitialState completo
+        await authProv.refreshActiveUser();
         if (authProv.hasActiveContext) {
           Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
           await Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class BusinessModel {
   final int id;
   final String commercialName;
@@ -6,6 +8,8 @@ class BusinessModel {
   final String? logoUrl;
   final String? printerConfig; 
   final String? paymentInfo; 
+  final String moneda;
+  final String? metodoPago;
   final double? latitud;  
   final double? longitud; 
 
@@ -17,11 +21,30 @@ class BusinessModel {
     this.logoUrl,
     this.printerConfig,
     this.paymentInfo,
+    this.moneda = 'S/ (Soles)',
+    this.metodoPago,
     this.latitud,
     this.longitud,
   });
 
   factory BusinessModel.fromJson(Map<String, dynamic> json) {
+    String parsedMoneda = 'S/ (Soles)';
+    String? parsedMetodoPago = json['informacion_pago'];
+
+    if (json['moneda'] != null) {
+      parsedMoneda = json['moneda'];
+    } else if (json['informacion_pago'] != null && json['informacion_pago'].toString().contains('"moneda"')) {
+      try {
+        final decoded = jsonDecode(json['informacion_pago']);
+        if (decoded is Map && decoded['moneda'] != null) {
+          parsedMoneda = decoded['moneda'];
+          if (decoded.length == 1) {
+            parsedMetodoPago = null;
+          }
+        }
+      } catch (_) {}
+    }
+
     return BusinessModel(
       id: json['id'],
       commercialName: json['nombre_comercial'] ?? "Negocio Sin Nombre",
@@ -30,6 +53,8 @@ class BusinessModel {
       logoUrl: json['logo_url'],
       printerConfig: json['configuracion_impresora'], 
       paymentInfo: json['informacion_pago'], 
+      moneda: parsedMoneda,
+      metodoPago: parsedMetodoPago,
       latitud: json['latitud'] != null ? double.tryParse(json['latitud'].toString()) : null,
       longitud: json['longitud'] != null ? double.tryParse(json['longitud'].toString()) : null,
     );
@@ -43,7 +68,8 @@ class BusinessModel {
       'direccion': address,
       'logo_url': logoUrl,
       'configuracion_impresora': printerConfig,
-      'informacion_pago': paymentInfo,
+      'informacion_pago': paymentInfo ?? metodoPago,
+      'moneda': moneda,
       'latitud': latitud,
       'longitud': longitud,
       'id_dueno': idDueno,
@@ -55,7 +81,7 @@ class BusinessModel {
 class UserModel {
   final int id;
   final String? codigoUnicoUsuario; 
-  final String email;
+  final String? email;
   final String fullName;
   final String? phone;
   final bool isActive;
@@ -64,7 +90,7 @@ class UserModel {
   UserModel({
     required this.id,
     this.codigoUnicoUsuario,
-    required this.email,
+    this.email,
     required this.fullName,
     this.phone,
     required this.isActive,

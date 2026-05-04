@@ -18,6 +18,7 @@ class AuthProvider with ChangeNotifier {
   
   bool _isLoading = false;
   String _errorMessage = '';
+  bool _hasPinCache = false;
 
   AuthStatus get status => _status;
   List<UserModel> get localProfiles => _localProfiles;
@@ -31,6 +32,8 @@ class AuthProvider with ChangeNotifier {
 
   String get userName => _activeUser?.fullName ?? "Usuario";
   String get businessName => _activeUser?.business?.commercialName ?? "Mi Negocio";
+  String get currentCurrency => _activeUser?.business?.moneda ?? 'S/ (Soles)';
+  bool get hasPinCache => _hasPinCache;
 
   bool get isAuthenticated => _status == AuthStatus.authenticated && _activeUser != null;
   bool get hasActiveContext => activeBusinessId != null;
@@ -93,16 +96,28 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  Future<void> refreshActiveUser() async {
+    if (_activeUser != null) {
+      try {
+        _activeUser = await _authService.getUserProfile(_activeUser!.id);
+        _localProfiles = await _authService.getLocalProfiles();
+        notifyListeners();
+      } catch (e) {
+        // Ignore silent refresh errors
+      }
+    }
+  }
+
   // 🔥 SOLUCIÓN AL BUG DE NAVEGACIÓN Y CARGA INFINITA
   Future<bool> createProfileAndLogin({
     required String nombreDueno, required String telefono, required String nombreNegocio,
-    required String direccion, String? logoPath, required String moneda, String? pin
+    required String direccion, String? logoPath, required String moneda, String? pin, String? paymentInfo
   }) async {
     _setLoading(true);
     try {
       final newUser = await _authService.registerLocalProfile(
         nombreDueno: nombreDueno, telefono: telefono, nombreNegocio: nombreNegocio, 
-        direccion: direccion, logoPath: logoPath, moneda: moneda
+        direccion: direccion, logoPath: logoPath, moneda: moneda, informacionPago: paymentInfo
       );
 
       if (pin != null && pin.isNotEmpty) {
@@ -125,6 +140,7 @@ class AuthProvider with ChangeNotifier {
     
     _activeUser = await _authService.getUserProfile(userId);
     _localProfiles = await _authService.getLocalProfiles(); 
+    _hasPinCache = await profileHasPin(userId);
     
     _status = AuthStatus.authenticated;
     notifyListeners();
@@ -160,6 +176,7 @@ class AuthProvider with ChangeNotifier {
       bool deleted = await _authService.deleteLocalProfile(userId);
       if (deleted) {
         await _secureStorage.delete(key: 'pin_$userId');
+        _hasPinCache = false;
         if (_activeUser?.id == userId) {
           await logout();
         } else {
@@ -207,12 +224,12 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> createBusinessProfile(String name, String ruc, String address, String paymentInfo, double? lat, double? lng, bool showAddress, bool showRuc) async {
+  Future<bool> createBusinessProfile(String name, String ruc, String address, String? paymentInfo, double? lat, double? lng, bool showAddress, bool showRuc, {String moneda = 'S/ (Soles)'}) async {
     if (_activeUser == null) return false;
     _setLoading(true);
     try {
       String encodedConfig = json.encode({"show_address": showAddress, "show_ruc": showRuc});
-      await _authService.createBusiness(_activeUser!.id, name, ruc, address, paymentInfo, lat, lng, encodedConfig);
+      await _authService.createBusiness(_activeUser!.id, name, ruc, address, paymentInfo, lat, lng, encodedConfig, moneda: moneda);
       await loginWithProfile(_activeUser!.id); 
       return true;
     } catch (e) {
@@ -223,12 +240,12 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> updateBusinessProfile(String name, String ruc, String address, String paymentInfo, double? lat, double? lng, bool showAddress, bool showRuc, {bool clearLogo = false}) async {
+  Future<bool> updateBusinessProfile(String name, String ruc, String address, String? paymentInfo, double? lat, double? lng, bool showAddress, bool showRuc, {bool clearLogo = false, String? moneda}) async {
     if (_activeUser == null || activeBusinessId == null) return false;
     _setLoading(true);
     try {
       String encodedConfig = json.encode({"show_address": showAddress, "show_ruc": showRuc});
-      final updatedBusiness = await _authService.updateBusiness(activeBusinessId!, name, ruc, address, paymentInfo, lat, lng, encodedConfig, clearLogo: clearLogo);
+      final updatedBusiness = await _authService.updateBusiness(activeBusinessId!, name, ruc, address, paymentInfo, lat, lng, encodedConfig, clearLogo: clearLogo, moneda: moneda);
       
       if (_activeUser != null) {
          _activeUser = UserModel(

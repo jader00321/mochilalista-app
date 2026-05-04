@@ -111,7 +111,7 @@ class MochilaListaApp extends StatelessWidget {
         ), 
         ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>(
           create: (_) => NotificationProvider(), 
-          update: (_, auth, prov) => prov!..updateContext(auth.activeBusinessId)
+          update: (_, auth, prov) => prov!..updateContext(auth.activeBusinessId, usuarioId: auth.activeUserId)
         ),
         ChangeNotifierProxyProvider<AuthProvider, SmartQuotationProvider>(
           create: (_) => SmartQuotationProvider(), 
@@ -197,19 +197,11 @@ class MochilaListaApp extends StatelessWidget {
                 }
                 
                 if (auth.status == AuthStatus.authenticated && auth.user != null) {
-                  return FutureBuilder<bool>(
-                    future: auth.profileHasPin(auth.user!.id),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-                      
-                      final hasPin = snapshot.data!;
-                      if (hasPin) {
-                        return LockScreen(userId: auth.user!.id); 
-                      } else {
-                        return const HomeScreen(); 
-                      }
-                    },
-                  );
+                  if (auth.hasPinCache) {
+                    return LockScreen(userId: auth.user!.id); 
+                  } else {
+                    return const HomeScreen(); 
+                  }
                 }
                 
                 return const ProfileSelectionScreen();

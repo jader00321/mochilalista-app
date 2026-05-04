@@ -49,8 +49,18 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   void updateContext(int? negocioId, int? usuarioId) {
-    _negocioId = negocioId;
-    _usuarioId = usuarioId;
+    if (_negocioId != negocioId || _usuarioId != usuarioId) {
+      _negocioId = negocioId;
+      _usuarioId = usuarioId;
+      
+      _allQuotations.clear();
+      _inProcessList.clear();
+      _readyAndPacksList.clear();
+      _soldList.clear();
+      _archivedList.clear();
+      _trafficLights.clear();
+      _errorMessage = "";
+    }
   }
 
   void _handleException(dynamic e) {
@@ -76,7 +86,10 @@ class WorkbenchProvider with ChangeNotifier {
       final db = await dbHelper.database;
       
       final quotesRows = await db.query('smart_quotations', where: 'negocio_id = ?', whereArgs: [_negocioId]);
-      final itemsRows = await db.query('smart_quotation_items');
+      final itemsRows = await db.rawQuery(
+        'SELECT * FROM smart_quotation_items WHERE quotation_id IN (SELECT id FROM smart_quotations WHERE negocio_id = ?)',
+        [_negocioId]
+      );
 
       Map<int, List<Map<String, dynamic>>> itemsMap = {};
       for (var item in itemsRows) {
@@ -277,6 +290,11 @@ class WorkbenchProvider with ChangeNotifier {
     notifyListeners();
     try {
       final db = await dbHelper.database;
+      final qCheck = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      if (qCheck.isNotEmpty && qCheck.first['status'] == 'SOLD') {
+        throw Exception("No se puede eliminar una cotización que ya fue vendida.");
+      }
+
       await db.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
       await db.delete('smart_quotations', where: 'id = ?', whereArgs: [id]);
       

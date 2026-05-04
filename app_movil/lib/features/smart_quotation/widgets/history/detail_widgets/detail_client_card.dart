@@ -30,7 +30,7 @@ class DetailClientCard extends StatelessWidget {
             children: [
               Text("DATOS DEL CLIENTE", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey, letterSpacing: 1)),
               const SizedBox(height: 16),
-              Row(children: [Icon(Icons.person, size: 26, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey), const SizedBox(width: 12), Expanded(child: Text(saleData['cliente_nombre'] ?? "Cliente No Registrado", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)))]),
+              Row(children: [Icon(Icons.person, size: 26, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey), const SizedBox(width: 12), Expanded(child: Text(saleData['cliente_nombre'] ?? (saleData['cliente_info'] != null ? saleData['cliente_info']['nombre_completo'] : null) ?? "Cliente No Registrado", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)))]),
               
               if (saleData['cliente_telefono'] != null && saleData['cliente_telefono'].toString().isNotEmpty && saleData['cliente_telefono'] != "000000000") ...[
                 const SizedBox(height: 12),

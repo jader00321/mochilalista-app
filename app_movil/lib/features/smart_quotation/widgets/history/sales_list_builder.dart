@@ -121,26 +121,15 @@ class _SalesListBuilderState extends State<SalesListBuilder> {
                           const SizedBox(width: 12),
                           
                           Expanded(
-                            child: FutureBuilder(
-                              // 🔥 SOLUCIÓN: Buscamos la info de la cotización usando el método silencioso
-                              future: provider.getSaleDetailSilently(sale.id),
-                              builder: (context, snapshot) {
-                                String title = sale.origenVenta == 'pos_rapido' ? "Caja Rápida" : "Lista Cotizada";
+                            child: Builder(
+                              builder: (context) {
+                                String title = sale.clientName ?? (sale.origenVenta == 'pos_rapido' ? "Caja Rápida" : "Lista Cotizada");
                                 String subtitle = "";
                                 
-                                if (snapshot.hasData && snapshot.data != null) {
-                                  final data = snapshot.data!;
-                                  final cotizacion = data['cotizacion'] ?? {};
-                                  
-                                  // Nombre principal (El de la cotización/venta rápida)
-                                  title = cotizacion['client_name'] ?? title;
-
-                                  // Subtítulo del Cliente (si existe)
-                                  if (sale.clientId != null) {
-                                    subtitle = "Cliente: ${data['cliente_nombre'] ?? 'Desconocido'}";
-                                  } else {
-                                    subtitle = "Sin Cliente Registrado";
-                                  }
+                                if (sale.clientId != null) {
+                                  subtitle = "Cliente vinculado";
+                                } else {
+                                  subtitle = "Sin Cliente Registrado";
                                 }
 
                                 return Column(
@@ -149,7 +138,6 @@ class _SalesListBuilderState extends State<SalesListBuilder> {
                                     Text(
                                       title, 
                                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: sale.isArchived ? Colors.grey : textColor),
-                                      // 🔥 Aumentamos a 2 líneas por si el nombre es muy largo
                                       maxLines: 2, 
                                       overflow: TextOverflow.ellipsis,
                                     ),

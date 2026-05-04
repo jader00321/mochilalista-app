@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../providers/backup_provider.dart';
+import '../../../../providers/auth_provider.dart';
 import '../../../../widgets/custom_snackbar.dart';
 import '../../../../screens/onboarding/profile_selection_screen.dart';
 
@@ -51,6 +52,9 @@ class BackupScreen extends StatelessWidget {
               if (context.mounted) {
                 if (success) {
                   CustomSnackBar.show(context, message: "¡Datos restaurados con éxito! Reiniciando...", isError: false);
+                  final auth = Provider.of<AuthProvider>(context, listen: false);
+                  await auth.logout();
+                  await auth.checkInitialState();
                   Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()), (route) => false);
                 } else if (backupProvider.errorMessage.isNotEmpty) {
                   CustomSnackBar.show(context, message: backupProvider.errorMessage, isError: true);

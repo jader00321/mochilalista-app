@@ -61,8 +61,17 @@ class SaleProvider with ChangeNotifier {
   }
 
   void updateContext(int? negocioId, int? usuarioId) {
-    _negocioId = negocioId;
-    _usuarioId = usuarioId;
+    if (_negocioId != negocioId) {
+      _negocioId = negocioId;
+      _usuarioId = usuarioId;
+      _salesHistory = [];
+      _currentStats = null;
+      _currentSkip = 0;
+      _hasMoreData = true;
+    } else {
+      _negocioId = negocioId;
+      _usuarioId = usuarioId;
+    }
   }
 
   void _handleException(dynamic e) {
@@ -323,6 +332,22 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> updateInstallmentDate(int cuotaId, String newDate) async {
+    if (_negocioId == null) return false;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      return await _clientService.updateInstallmentDueDate(cuotaId, newDate);
+    } catch (e) {
+      _handleException(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   void setQuickFilter(String filterType, {DateTime? customStart, DateTime? customEnd}) {
     _activeQuickFilter = filterType;
     final now = DateTime.now();
@@ -392,9 +417,10 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
-  String generateCsvData() {
+  String generateCsvData(String currencyName) {
     if (_salesHistory.isEmpty) return "";
-    String csv = "ID Venta,Fecha,Metodo Pago,Estado Pago,Estado Entrega,Total(S/),Pagado(S/),Descuento(S/)\n";
+    String curr = currencyName.split(' ').first; 
+    String csv = "ID Venta,Fecha,Metodo Pago,Estado Pago,Estado Entrega,Total($curr),Pagado($curr),Descuento($curr)\n";
     for (var sale in _salesHistory) {
       final dateFormatted = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(sale.saleDate));
       csv += "${sale.id},$dateFormatted,${sale.paymentMethod},${sale.paymentStatus},${sale.deliveryStatus},${sale.totalAmount},${sale.paidAmount},${sale.discount}\n";

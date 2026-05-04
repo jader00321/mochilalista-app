@@ -235,6 +235,7 @@ class SaleModel {
   final int creadoPorUsuarioId; 
   final int? quotationId; 
   final int? clientId;
+  final String? clientName;
   final String origenVenta; 
   final bool isArchived;    
   final String paymentMethod;
@@ -253,6 +254,7 @@ class SaleModel {
     required this.creadoPorUsuarioId,
     this.quotationId,
     required this.clientId,
+    this.clientName,
     this.origenVenta = "smart_quotation",
     this.isArchived = false,
     required this.paymentMethod,
@@ -273,6 +275,7 @@ class SaleModel {
       creadoPorUsuarioId: json['creado_por_usuario_id'] ?? 0,
       quotationId: json['cotizacion_id'],
       clientId: json['cliente_id'],
+      clientName: json['cliente_nombre'] ?? (json['cliente_info'] != null ? json['cliente_info']['nombre_completo'] : null),
       origenVenta: json['origen_venta'] ?? "smart_quotation",
       isArchived: json['is_archived'] == 1 || json['is_archived'] == true,
       paymentMethod: json['metodo_pago'] ?? "",

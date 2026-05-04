@@ -50,8 +50,22 @@ class TrackingProvider with ChangeNotifier {
 
   // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
   void updateContext(int? negocioId, int? usuarioId) {
-    _negocioId = negocioId;
-    _usuarioId = usuarioId;
+    if (_negocioId != negocioId || _usuarioId != usuarioId) {
+      _negocioId = negocioId;
+      _usuarioId = usuarioId;
+      
+      _allClients.clear();
+      _currentClientLedger.clear();
+      _currentClientDebts.clear();
+      _currentClientQuotations.clear();
+      _errorMessage = "";
+      _searchQuery = "";
+      _filterHasDebt = false;
+      _filterPendingDelivery = false;
+      _filterConfidenceLevel = "todos"; 
+      _currentSort = "name_asc";
+      _filterIsAppClient = false; 
+    }
   }
 
   void _handleException(dynamic e) {
@@ -74,7 +88,7 @@ class TrackingProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _allClients = await _service.getTrackingClients(_negocioId!);
+      _allClients = await _service.getAllClients(_negocioId!);
     } catch (e) {
       _handleException(e);
     } finally {
@@ -230,13 +244,18 @@ class TrackingProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> registerPayment(int clientId, double amount, String method, {int? ventaId, int? cuotaId, bool guardarVuelto = false}) async {
+  Future<void> recalculateClientDebt(int clientId) async {
+    await _service.recalculateClientDebt(clientId);
+    await loadClients();
+  }
+
+  Future<bool> registerPayment(int clientId, double amount, String method, {int? ventaId, int? cuotaId, bool guardarVuelto = false, bool isAutomatic = false}) async {
     if (_negocioId == null || _usuarioId == null) return false;
     _isLoading = true;
     notifyListeners();
 
     try {
-      await _service.registerPayment(clientId, amount, method, _negocioId!, _usuarioId!, ventaId: ventaId, cuotaId: cuotaId, guardarVuelto: guardarVuelto);
+      await _service.registerPayment(clientId, amount, method, _negocioId!, _usuarioId!, ventaId: ventaId, cuotaId: cuotaId, guardarVuelto: guardarVuelto, isAutomatic: isAutomatic);
       await loadClients();
       await loadClientLedger(clientId); 
       await loadClientDebts(clientId);  

@@ -53,31 +53,29 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
     super.dispose();
   }
 
-  double _calculateMaxDebtAllowed(TrackingProvider provider) {
-    double maxDebt = widget.client.totalDebt;
+  double _calculateTargetDebt(TrackingProvider provider) {
+    if (_tabController.index == 0) return widget.client.totalDebt;
+
+    double targetDebt = widget.client.totalDebt;
 
     if (_tabController.index == 1 && _selectedTargetId != null) {
       if (_selectedTargetType == 'venta') {
         try {
           final sale = provider.currentClientDebts.firstWhere((s) => s.id == _selectedTargetId);
-          maxDebt = sale.totalAmount - sale.paidAmount;
+          targetDebt = sale.totalAmount - sale.paidAmount;
         } catch (_) {}
       } else if (_selectedTargetType == 'cuota') {
         for (var sale in provider.currentClientDebts) {
           try {
             final cuota = sale.installments.firstWhere((c) => c.id == _selectedTargetId);
-            maxDebt = cuota.amount - cuota.montoPagado;
+            targetDebt = cuota.amount - cuota.montoPagado;
             break;
           } catch (_) {}
         }
       }
     }
-
-    if (maxDebt > widget.client.totalDebt) {
-      maxDebt = widget.client.totalDebt;
-    }
     
-    return maxDebt;
+    return targetDebt;
   }
 
   @override
@@ -91,7 +89,8 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
     final textColor = isDark ? Colors.white : Colors.black87;
 
     double enteredAmount = double.tryParse(_amountCtrl.text) ?? 0.0;
-    double maxDebtAllowed = _calculateMaxDebtAllowed(provider);
+    double maxDebtAllowed = widget.client.totalDebt; // Ahora siempre es la deuda total (permite cascada global)
+    double targetDebt = _calculateTargetDebt(provider);
     
     bool isPayingWithSaldo = _method == "Saldo a Favor";
     bool generatesChange = !isPayingWithSaldo && (enteredAmount > maxDebtAllowed) && maxDebtAllowed > 0;
@@ -159,7 +158,8 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                           setState(() {
                             _method = m;
                             if (isSaldoBtn && _amountCtrl.text.isEmpty) {
-                              _amountCtrl.text = widget.client.saldoAFavor.toStringAsFixed(2);
+                              double capAmount = widget.client.saldoAFavor < targetDebt ? widget.client.saldoAFavor : targetDebt;
+                              _amountCtrl.text = capAmount.toStringAsFixed(2);
                             }
                           });
                         },
@@ -476,7 +476,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
 
     if (isPayingWithSaldo) {
       if (amount > widget.client.saldoAFavor) {
-        CustomSnackBar.show(context, message: "No tiene suficiente Saldo a Favor. Tiene ${widget.client.saldoAFavor}", isError: true);
+        CustomSnackBar.show(context, message: "No tiene suficiente Saldo a Favor. Disponible: S/ ${widget.client.saldoAFavor.toStringAsFixed(2)}", isError: true);
         return;
       }
       if (amount > maxDebtAllowed) {
@@ -495,8 +495,9 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
     try {
       final prov = Provider.of<TrackingProvider>(context, listen: false);
       
-      int? ventaId = _selectedTargetType == 'venta' ? _selectedTargetId : null;
-      int? cuotaId = _selectedTargetType == 'cuota' ? _selectedTargetId : null;
+      bool isAutomatic = _tabController.index == 0;
+      int? ventaId = (!isAutomatic && _selectedTargetType == 'venta') ? _selectedTargetId : null;
+      int? cuotaId = (!isAutomatic && _selectedTargetType == 'cuota') ? _selectedTargetId : null;
 
       String backendMethod = _method.toLowerCase().replaceAll(' ', '_');
 
@@ -506,7 +507,8 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
         backendMethod, 
         ventaId: ventaId, 
         cuotaId: cuotaId,
-        guardarVuelto: _keepAsCredit && !isPayingWithSaldo 
+        guardarVuelto: _keepAsCredit && !isPayingWithSaldo,
+        isAutomatic: isAutomatic
       );
 
       if (mounted) {

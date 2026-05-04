@@ -50,12 +50,12 @@ class DetailHeaderCard extends StatelessWidget {
              
           Text(
             currency.format(totalAmount), 
-            style: TextStyle(fontSize: 46, fontWeight: FontWeight.w900, color: saleData['is_archived'] ? Colors.grey : textColor, decoration: saleData['is_archived'] ? TextDecoration.lineThrough : null)
+            style: TextStyle(fontSize: 46, fontWeight: FontWeight.w900, color: (saleData['is_archived'] == 1 || saleData['is_archived'] == true) ? Colors.grey : textColor, decoration: (saleData['is_archived'] == 1 || saleData['is_archived'] == true) ? TextDecoration.lineThrough : null)
           ),
           const SizedBox(height: 6),
           Text(dateString, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w500, fontSize: 16)),
           
-          if (saleData['is_archived'])
+          if (saleData['is_archived'] == 1 || saleData['is_archived'] == true)
              Container(
                margin: const EdgeInsets.only(top: 16), 
                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), 

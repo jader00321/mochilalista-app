@@ -457,13 +457,14 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     final int cotizacionId = _saleData!['cotizacion_id'] ?? 0;
     final int? clientId = _saleData!['cliente_id'];
 
-    // Para evitar nulos si la venta original no fue una cotizacion
-    final String institution = "";
-    final String grade = "";
+    // Extraer datos de la cotización origen si existe
+    final Map<String, dynamic>? cotizacion = _saleData!['cotizacion'] as Map<String, dynamic>?;
+    final String institution = cotizacion?['institution_name'] ?? "";
+    final String grade = cotizacion?['grade_level'] ?? "";
     final String imageUrl = "";
 
     final String clientNote = _saleData!['cliente_notas'] ?? ""; 
-    final String saleNote = ""; 
+    final String saleNote = cotizacion?['notas'] ?? ""; 
 
     final double totalAmount = (_saleData!['monto_total'] ?? 0).toDouble();
     final double paidAmount = (_saleData!['monto_pagado'] ?? 0).toDouble();

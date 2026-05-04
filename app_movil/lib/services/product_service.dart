@@ -37,11 +37,15 @@ class ProductService {
         query += " AND pr.estado = ?";
         args.add(queryParams['estado']);
       }
-      if (queryParams['category_ids'] != null) {
-        query += " AND p.categoria_id IN (${queryParams['category_ids']})";
+      if (queryParams['category_ids'] != null && queryParams['category_ids'].toString().isNotEmpty) {
+        List<String> catIdsStr = queryParams['category_ids'].toString().split(',');
+        query += " AND p.categoria_id IN (${List.filled(catIdsStr.length, '?').join(',')})";
+        args.addAll(catIdsStr.map((id) => int.tryParse(id.trim()) ?? -1));
       }
-      if (queryParams['brand_ids'] != null) {
-        query += " AND p.marca_id IN (${queryParams['brand_ids']})";
+      if (queryParams['brand_ids'] != null && queryParams['brand_ids'].toString().isNotEmpty) {
+        List<String> brandIdsStr = queryParams['brand_ids'].toString().split(',');
+        query += " AND p.marca_id IN (${List.filled(brandIdsStr.length, '?').join(',')})";
+        args.addAll(brandIdsStr.map((id) => int.tryParse(id.trim()) ?? -1));
       }
       if (queryParams['has_offer'] == 'true') {
         query += " AND pr.precio_oferta IS NOT NULL AND pr.precio_oferta > 0";

@@ -48,6 +48,7 @@ class AuthService {
     required String direccion,
     String? logoPath,
     required String moneda,
+    String? informacionPago,
   }) async {
     final db = await dbHelper.database;
     int userId = 0;
@@ -56,8 +57,8 @@ class AuthService {
       await db.transaction((txn) async {
         userId = await txn.insert('usuarios', {
           'nombre_completo': nombreDueno,
-          'email': 'local_${DateTime.now().millisecondsSinceEpoch}@offline.com', 
-          'password_hash': 'offline_secured', 
+          'email': null, 
+          'password_hash': null, 
           'telefono': telefono,
           'activo': 1,
           'fecha_creacion': DateTime.now().toIso8601String()
@@ -72,7 +73,8 @@ class AuthService {
           'nombre_comercial': nombreNegocio,
           'direccion': direccion,
           'logo_url': finalLogoPath,
-          'informacion_pago': '{"moneda": "$moneda"}',
+          'moneda': moneda,
+          'informacion_pago': informacionPago,
           'id_dueno': userId,
           'fecha_creacion': DateTime.now().toIso8601String()
         });
@@ -91,10 +93,10 @@ class AuthService {
     return await getUserProfile(userId);
   }
 
-  Future<BusinessModel> createBusiness(int userId, String name, String ruc, String address, String? paymentInfo, double? latitud, double? longitud, String? printerConfig) async {
+  Future<BusinessModel> createBusiness(int userId, String name, String ruc, String address, String? paymentInfo, double? latitud, double? longitud, String? printerConfig, {String moneda = 'S/ (Soles)'}) async {
     final db = await dbHelper.database;
     int bizId = await db.insert('negocios', {
-      'nombre_comercial': name, 'ruc': ruc, 'direccion': address, 'informacion_pago': paymentInfo, 
+      'nombre_comercial': name, 'ruc': ruc, 'direccion': address, 'informacion_pago': paymentInfo, 'moneda': moneda,
       'latitud': latitud, 'longitud': longitud, 'configuracion_impresora': printerConfig, 'id_dueno': userId,
       'fecha_creacion': DateTime.now().toIso8601String()
     });
@@ -102,12 +104,13 @@ class AuthService {
     return BusinessModel.fromJson(biz.first);
   }
 
-  Future<BusinessModel> updateBusiness(int businessId, String name, String ruc, String address, String? paymentInfo, double? latitud, double? longitud, String? printerConfig, {bool clearLogo = false}) async {
+  Future<BusinessModel> updateBusiness(int businessId, String name, String ruc, String address, String? paymentInfo, double? latitud, double? longitud, String? printerConfig, {bool clearLogo = false, String? moneda}) async {
     final db = await dbHelper.database;
     Map<String, dynamic> updateData = {
       'nombre_comercial': name, 'ruc': ruc, 'direccion': address, 'informacion_pago': paymentInfo, 
       'latitud': latitud, 'longitud': longitud, 'configuracion_impresora': printerConfig
     };
+    if (moneda != null) updateData['moneda'] = moneda;
     
     if (clearLogo) {
       final oldBiz = await db.query('negocios', columns: ['logo_url'], where: 'id = ?', whereArgs: [businessId]);
