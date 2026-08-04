@@ -107,7 +107,7 @@ class _SuccessCheckoutModalState extends State<SuccessCheckoutModal> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             margin: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.15) : Colors.red[50], borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red[50], borderRadius: BorderRadius.circular(10)),
             child: Column(
               children: [
                 Text("Deuda Pendiente: S/ ${debt.toStringAsFixed(2)}", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red[800], fontWeight: FontWeight.bold, fontSize: 16)),

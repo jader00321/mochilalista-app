@@ -343,7 +343,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                       color: isDark ? const Color(0xFF1A1A24) : Colors.white,
                       border: Border.all(color: _isManualEdit ? Colors.orange.shade300 : (isDark ? Colors.white10 : Colors.grey.shade300), width: 1.5),
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
+                      boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]
                     ),
                     padding: const EdgeInsets.all(16),
                     child: TextField(
@@ -375,7 +375,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
           
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            decoration: BoxDecoration(color: Theme.of(context).cardTheme.color, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, -10))]),
+            decoration: BoxDecoration(color: Theme.of(context).cardTheme.color, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -10))]),
             child: SafeArea(
               child: SizedBox(
                 width: double.infinity,
@@ -474,7 +474,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                                     final client = snapshot.data![index];
                                     return ListTile(
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                                      leading: CircleAvatar(backgroundColor: isDark ? Colors.orange.withOpacity(0.2) : Colors.orange[100], child: Text(client.fullName.isNotEmpty ? client.fullName[0].toUpperCase() : "?", style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange, fontWeight: FontWeight.bold, fontSize: 18))),
+                                      leading: CircleAvatar(backgroundColor: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange[100], child: Text(client.fullName.isNotEmpty ? client.fullName[0].toUpperCase() : "?", style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange, fontWeight: FontWeight.bold, fontSize: 18))),
                                       title: Text(client.fullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                                       subtitle: Text(client.phone, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 14)),
                                       onTap: () {

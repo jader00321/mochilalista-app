@@ -1,9 +1,11 @@
 import '../models/crm_models.dart';
 import '../../../database/local_db.dart';
+import '../../../repositories/sale_repository.dart';
 import 'client_service.dart';
 
 class SalesService {
   final dbHelper = LocalDatabase.instance;
+  final _repository = SaleRepository();
 
   Future<SaleModel> createSale(
     Map<String, dynamic> saleData,
@@ -75,11 +77,13 @@ class SalesService {
             where: 'id = ?',
             whereArgs: [presId],
           );
-          if (presCheck.isEmpty)
+          if (presCheck.isEmpty) {
             throw Exception("Producto no encontrado en inventario.");
+          }
           int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-          if (currentStock < quantity)
+          if (currentStock < quantity) {
             throw Exception("Stock insuficiente para uno de los productos.");
+          }
 
           await txn.rawUpdate(
             'UPDATE presentaciones_producto SET stock_actual = stock_actual - ? WHERE id = ?',
@@ -239,49 +243,18 @@ class SalesService {
     String order = "desc",
   }) async {
     try {
-      final db = await dbHelper.database;
-      String query = '''
-        SELECT v.*, c.nombre_completo AS cliente_nombre, c.telefono AS cliente_telefono 
-        FROM ventas v
-        LEFT JOIN clientes c ON v.cliente_id = c.id
-        WHERE v.negocio_id = ? AND v.is_archived = ?
-      ''';
-      List<dynamic> args = [negocioId, isArchived ? 1 : 0];
-
-      if (startDate != null) {
-        query += " AND v.fecha_venta >= ?";
-        args.add(startDate);
-      }
-      if (endDate != null) {
-        query += " AND v.fecha_venta <= ?";
-        args.add(endDate);
-      }
-      if (origenVenta != null && origenVenta != "todas") {
-        query += " AND v.origen_venta = ?";
-        args.add(origenVenta);
-      }
-      if (searchQuery != null && searchQuery.isNotEmpty) {
-        query += " AND c.nombre_completo LIKE ?";
-        args.add('%$searchQuery%');
-      }
-
-      final validSortColumns = [
-        'fecha_venta',
-        'monto_total',
-        'estado_entrega',
-        'estado_pago',
-        'id',
-      ];
-      final safeSortBy = validSortColumns.contains(sortBy)
-          ? sortBy
-          : 'fecha_venta';
-      final safeOrder = order.toLowerCase() == 'asc' ? 'ASC' : 'DESC';
-
-      query += " ORDER BY v.$safeSortBy $safeOrder LIMIT ? OFFSET ?";
-      args.add(limit);
-      args.add(skip);
-
-      final List<Map<String, dynamic>> rows = await db.rawQuery(query, args);
+      final rows = await _repository.getHistoryRaw(
+        negocioId,
+        skip: skip,
+        limit: limit,
+        startDate: startDate,
+        endDate: endDate,
+        searchQuery: searchQuery,
+        isArchived: isArchived,
+        origenVenta: origenVenta,
+        sortBy: sortBy,
+        order: order
+      );
 
       return rows.map((e) {
         var map = Map<String, dynamic>.from(e);
@@ -306,37 +279,15 @@ class SalesService {
     String? origenVenta,
   }) async {
     try {
-      final db = await dbHelper.database;
-      String query = '''
-        SELECT 
-          SUM(monto_pagado) AS total_ingresos, 
-          SUM(CASE WHEN estado_pago != 'pagado' AND monto_total > monto_pagado THEN monto_total - monto_pagado ELSE 0 END) AS total_deuda, 
-          COUNT(id) AS cantidad_ventas
-        FROM ventas 
-        WHERE negocio_id = ? AND is_archived = ?
-      ''';
-      List<dynamic> args = [negocioId, isArchived ? 1 : 0];
-
-      if (startDate != null) {
-        query += " AND fecha_venta >= ?";
-        args.add(startDate);
-      }
-      if (endDate != null) {
-        query += " AND fecha_venta <= ?";
-        args.add(endDate);
-      }
-      if (origenVenta != null && origenVenta != "todas") {
-        query += " AND origen_venta = ?";
-        args.add(origenVenta);
-      }
-
-      final List<Map<String, dynamic>> rows = await db.rawQuery(query, args);
-      if (rows.isNotEmpty) return SalesStatsModel.fromJson(rows.first);
-      return SalesStatsModel(
-        totalIngresos: 0.0,
-        totalDeuda: 0.0,
-        cantidadVentas: 0,
+      final statsMap = await _repository.getStatsRaw(
+        negocioId,
+        startDate: startDate,
+        endDate: endDate,
+        isArchived: isArchived,
+        origenVenta: origenVenta,
       );
+      if (statsMap != null) return SalesStatsModel.fromJson(statsMap);
+      return SalesStatsModel(totalIngresos: 0.0, totalDeuda: 0.0, cantidadVentas: 0);
     } catch (e) {
       throw Exception("Error cargando estadísticas locales: $e");
     }
@@ -344,22 +295,11 @@ class SalesService {
 
   Future<bool> toggleArchive(int saleId) async {
     try {
-      final db = await dbHelper.database;
-      final sale = await db.query(
-        'ventas',
-        columns: ['is_archived'],
-        where: 'id = ?',
-        whereArgs: [saleId],
-      );
-      if (sale.isEmpty) throw Exception("Venta no encontrada.");
+      final saleRows = await _repository.getSaleByIdRaw(saleId);
+      if (saleRows.isEmpty) throw Exception("Venta no encontrada.");
 
-      int newVal = (sale.first['is_archived'] as int) == 1 ? 0 : 1;
-      await db.update(
-        'ventas',
-        {'is_archived': newVal},
-        where: 'id = ?',
-        whereArgs: [saleId],
-      );
+      int newVal = (saleRows.first['is_archived'] as int) == 1 ? 0 : 1;
+      await _repository.updateSaleField(saleId, {'is_archived': newVal});
       return newVal == 1;
     } catch (e) {
       throw Exception("Error local al archivar: $e");
@@ -368,13 +308,7 @@ class SalesService {
 
   Future<String> updateDeliveryStatus(int saleId, String newStatus) async {
     try {
-      final db = await dbHelper.database;
-      await db.update(
-        'ventas',
-        {'estado_entrega': newStatus},
-        where: 'id = ?',
-        whereArgs: [saleId],
-      );
+      await _repository.updateSaleField(saleId, {'estado_entrega': newStatus});
       return newStatus;
     } catch (e) {
       throw Exception("Error actualizando logística: $e");
@@ -383,57 +317,33 @@ class SalesService {
 
   Future<Map<String, dynamic>> getSaleDetail(int saleId) async {
     try {
-      final db = await dbHelper.database;
-      final vRows = await db.query(
-        'ventas',
-        where: 'id = ?',
-        whereArgs: [saleId],
-        limit: 1,
-      );
+      final vRows = await _repository.getSaleByIdRaw(saleId);
       if (vRows.isEmpty) throw Exception("Venta no encontrada");
       Map<String, dynamic> saleMap = Map<String, dynamic>.from(vRows.first);
 
       if (saleMap['cliente_id'] != null) {
-        final cRows = await db.query(
-          'clientes',
-          where: 'id = ?',
-          whereArgs: [saleMap['cliente_id']],
-          limit: 1,
-        );
-        if (cRows.isNotEmpty) {
-          saleMap['cliente_info'] = cRows.first;
-          saleMap['cliente_nombre'] = cRows.first['nombre_completo'];
-          saleMap['cliente_telefono'] = cRows.first['telefono'];
+        final clientService = ClientService();
+        final cData = await clientService.getClientById(saleMap['cliente_id']);
+        if (cData != null) {
+          saleMap['cliente_info'] = cData.toSqlite();
+          saleMap['cliente_nombre'] = cData.fullName;
+          saleMap['cliente_telefono'] = cData.phone;
         }
       }
-      saleMap['cuotas'] = await db.query(
-        'cuotas',
-        where: 'venta_id = ?',
-        whereArgs: [saleId],
-      );
-      saleMap['pagos'] = await db.query(
-        'pagos',
-        where: 'venta_id = ?',
-        whereArgs: [saleId],
-      );
+      
+      saleMap['cuotas'] = await _repository.getSaleInstallmentsRaw(saleId);
+      saleMap['pagos'] = await _repository.getSalePaymentsRaw(saleId);
 
+      // Re-using local database for simpler quotient retrieval since QuotationRepository doesn't exist
+      final db = await dbHelper.database; 
       if (saleMap['cotizacion_id'] != null) {
-        final qRows = await db.query(
-          'smart_quotations',
-          where: 'id = ?',
-          whereArgs: [saleMap['cotizacion_id']],
-          limit: 1,
-        );
+        final qRows = await db.query('smart_quotations', where: 'id = ?', whereArgs: [saleMap['cotizacion_id']], limit: 1);
         if (qRows.isNotEmpty) {
           saleMap['cotizacion'] = Map<String, dynamic>.from(qRows.first);
         }
       }
 
-      final vItems = await db.query(
-        'venta_items',
-        where: 'venta_id = ?',
-        whereArgs: [saleId],
-      );
+      final vItems = await _repository.getSaleItemsRaw(saleId);
       if (vItems.isNotEmpty) {
         saleMap['items'] = vItems
             .map(
@@ -455,11 +365,7 @@ class SalesService {
             )
             .toList();
       } else if (saleMap['cotizacion_id'] != null) {
-        saleMap['items'] = await db.query(
-          'smart_quotation_items',
-          where: 'quotation_id = ?',
-          whereArgs: [saleMap['cotizacion_id']],
-        );
+        saleMap['items'] = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [saleMap['cotizacion_id']]);
       } else {
         saleMap['items'] = [];
       }

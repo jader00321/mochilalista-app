@@ -147,7 +147,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     onPressed: () => notifProv.markAllAsRead(),
                     icon: Icon(Icons.done_all, color: isDark ? Colors.blue[300] : Colors.blue[700]),
                     label: Text("Marcar todo leídas", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)),
-                    style: TextButton.styleFrom(backgroundColor: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue.withOpacity(0.05), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    style: TextButton.styleFrom(backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.05), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   ),
                 )
             ],
@@ -245,15 +245,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: notif.isRead ? cardColor : (isDark ? iconColor.withOpacity(0.12) : iconColor.withOpacity(0.05)),
+            color: notif.isRead ? cardColor : (isDark ? iconColor.withValues(alpha: 0.12) : iconColor.withValues(alpha: 0.05)),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: notif.isRead ? (isDark ? Colors.white10 : Colors.grey.shade200) : iconColor.withOpacity(0.4), 
+              color: notif.isRead ? (isDark ? Colors.white10 : Colors.grey.shade200) : iconColor.withValues(alpha: 0.4), 
               width: 1.5
             ),
             boxShadow: [
-              if (!isDark && notif.isRead) BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
-              if (!isDark && !notif.isRead) BoxShadow(color: iconColor.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4)),
+              if (!isDark && notif.isRead) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4)),
+              if (!isDark && !notif.isRead) BoxShadow(color: iconColor.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4)),
             ],
           ),
           child: Row(
@@ -261,7 +261,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: iconColor.withOpacity(0.15), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.15), shape: BoxShape.circle),
                 child: Icon(iconData, color: iconColor, size: 28),
               ),
               const SizedBox(width: 16),
@@ -347,7 +347,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue.shade50, shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, shape: BoxShape.circle),
                     child: Icon(Icons.notifications_active_rounded, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 28),
                   ),
                   const SizedBox(width: 16),
@@ -406,7 +406,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(30),
-            decoration: BoxDecoration(color: isDark ? Colors.white.withOpacity(0.05) : Colors.blue.withOpacity(0.05), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.blue.withValues(alpha: 0.05), shape: BoxShape.circle),
             child: Icon(Icons.notifications_off_rounded, size: 80, color: isDark ? Colors.grey[600] : Colors.blue[300]),
           ),
           const SizedBox(height: 24),

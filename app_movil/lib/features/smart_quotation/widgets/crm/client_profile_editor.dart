@@ -238,8 +238,8 @@ class _ClientProfileEditorState extends State<ClientProfileEditor> {
                   spacing: 8, runSpacing: 8,
                   children: _suggestedTags.where((t) => !_currentTags.contains(t.toUpperCase())).map((tag) => ActionChip(
                     label: Text("+ $tag", style: TextStyle(fontSize: 13, color: isDark ? Colors.purple[200] : Colors.purple[700], fontWeight: FontWeight.bold)),
-                    backgroundColor: isDark ? Colors.purple.withOpacity(0.1) : Colors.purple[50],
-                    side: BorderSide(color: isDark ? Colors.purple.withOpacity(0.3) : Colors.purple.shade200),
+                    backgroundColor: isDark ? Colors.purple.withValues(alpha: 0.1) : Colors.purple[50],
+                    side: BorderSide(color: isDark ? Colors.purple.withValues(alpha: 0.3) : Colors.purple.shade200),
                     onPressed: () => _addTag(tag),
                   )).toList(),
                 ),
@@ -254,7 +254,7 @@ class _ClientProfileEditorState extends State<ClientProfileEditor> {
                         spacing: 8, runSpacing: 8,
                         children: _currentTags.map((tag) => Chip(
                           label: Text(tag, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : Colors.black87)),
-                          backgroundColor: isDark ? Colors.purple.withOpacity(0.3) : Colors.purple[100],
+                          backgroundColor: isDark ? Colors.purple.withValues(alpha: 0.3) : Colors.purple[100],
                           deleteIcon: Icon(Icons.cancel, size: 18, color: isDark ? Colors.purple[200] : Colors.black54),
                           onDeleted: () => _removeTag(tag),
                           side: BorderSide.none,
@@ -272,7 +272,7 @@ class _ClientProfileEditorState extends State<ClientProfileEditor> {
 
           Container(
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: surfaceColor, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, -5))]),
+            decoration: BoxDecoration(color: surfaceColor, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, -5))]),
             child: SizedBox(
               width: double.infinity, height: 55,
               child: ElevatedButton(

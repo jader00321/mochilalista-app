@@ -5,7 +5,7 @@ import '../models/category_model.dart';
 import '../models/brand_model.dart';
 import '../models/provider_model.dart';
 
-import '../services/master_data_service.dart';
+import '../services/master_data_cache.dart';
 import '../services/product_service.dart';
 import '../services/image_service.dart';
 
@@ -14,13 +14,10 @@ enum SortType { id, alpha }
 class InventoryProvider with ChangeNotifier {
   int? _negocioId;
   
-  final MasterDataService _masterDataService = MasterDataService();
+  final MasterDataCache _masterDataCache = MasterDataCache();
   final ProductService _productService = ProductService();
 
   List<InventoryWrapper> _inventoryItems = []; 
-  List<Category> _categories = [];
-  List<Brand> _brands = [];        
-  List<ProviderModel> _providers = [];   
   
   bool _isLoading = false;
   bool _isLoadingMore = false; 
@@ -100,7 +97,7 @@ class InventoryProvider with ChangeNotifier {
   }
 
   List<Category> get categories {
-    final list = List<Category>.from(_categories);
+    final list = List<Category>.from(_masterDataCache.categories);
     list.sort((a, b) {
       int cmp;
       switch (_catSort) {
@@ -113,7 +110,7 @@ class InventoryProvider with ChangeNotifier {
   }
 
   List<Brand> get brands {
-    final list = List<Brand>.from(_brands);
+    final list = List<Brand>.from(_masterDataCache.brands);
     list.sort((a, b) {
       int cmp;
       switch (_brandSort) {
@@ -126,7 +123,7 @@ class InventoryProvider with ChangeNotifier {
   }
 
   List<ProviderModel> get providers {
-    final list = List<ProviderModel>.from(_providers);
+    final list = List<ProviderModel>.from(_masterDataCache.providers);
     list.sort((a, b) {
       int cmp;
       switch (_provSort) {
@@ -149,13 +146,10 @@ class InventoryProvider with ChangeNotifier {
   void updateContext(int? negocioId) {
     if (_negocioId != negocioId) {
       _negocioId = negocioId;
-      _masterDataService.updateContext(negocioId);
+      _masterDataCache.updateContext(negocioId);
       _productService.updateContext(negocioId);
       
       _inventoryItems.clear();
-      _categories.clear();
-      _brands.clear();
-      _providers.clear();
       
       _currentSkip = 0;
       _hasMoreData = true;
@@ -171,13 +165,13 @@ class InventoryProvider with ChangeNotifier {
   void sortBrands(SortType type) { _brandSort = type; _brandAsc = _brandSort == type ? !_brandAsc : true; notifyListeners(); }
   void sortProviders(SortType type) { _provSort = type; _provAsc = _provSort == type ? !_provAsc : true; notifyListeners(); }
 
-  String getBrandName(int? id) => id == null ? "" : _brands.where((b) => b.id == id).firstOrNull?.nombre ?? "";
-  String getProviderName(int? id) => id == null ? "" : _providers.where((p) => p.id == id).firstOrNull?.nombreEmpresa ?? "";
+  String getBrandName(int? id) => id == null ? "" : _masterDataCache.brands.where((b) => b.id == id).firstOrNull?.nombre ?? "";
+  String getProviderName(int? id) => id == null ? "" : _masterDataCache.providers.where((p) => p.id == id).firstOrNull?.nombreEmpresa ?? "";
   
   String getCategoryName(int? categoryId) {
-    if (categoryId == null || _categories.isEmpty) return "";
+    if (categoryId == null || _masterDataCache.categories.isEmpty) return "";
     try {
-      final cat = _categories.firstWhere((c) => c.id == categoryId);
+      final cat = _masterDataCache.categories.firstWhere((c) => c.id == categoryId);
       return cat.nombre;
     } catch (_) {
       return "";
@@ -188,13 +182,8 @@ class InventoryProvider with ChangeNotifier {
 
   Future<void> loadMasterData({bool showAll = true}) async {
     try {
-      final result = await _masterDataService.fetchAllMasterData(showAll);
-      if (result != null) {
-        _categories = List<Category>.from(result['categories']);
-        _brands = List<Brand>.from(result['brands']);
-        _providers = List<ProviderModel>.from(result['providers']);
-        notifyListeners();
-      }
+      await _masterDataCache.load(true);
+      notifyListeners();
     } catch (e) {
       debugPrint("Error loading master data: $e");
     }
@@ -205,49 +194,49 @@ class InventoryProvider with ChangeNotifier {
   Future<void> loadProviders() async => await loadMasterData();
 
   Future<int?> createCategory(String nombre, {String? descripcion}) async {
-    int? id = await _masterDataService.createCategory(nombre, descripcion);
+    int? id = await _masterDataCache.createCategory(nombre, descripcion);
     if (id != null) await loadMasterData();
     return id;
   }
   Future<bool> updateCategory(int id, String nombre, {String? descripcion, bool? activo}) async {
-    bool ok = await _masterDataService.updateCategory(id, nombre, descripcion, activo);
+    bool ok = await _masterDataCache.updateCategory(id, nombre, descripcion, activo);
     if (ok) await loadMasterData();
     return ok;
   }
   Future<bool> deleteCategory(int id) async {
-    _lastActionError = await _masterDataService.deleteCategory(id);
+    _lastActionError = await _masterDataCache.deleteCategory(id);
     if (_lastActionError == null) { await loadMasterData(); return true; }
     return false;
   }
 
   Future<int?> createBrand(String nombre, {String? urlImagen}) async {
-    int? id = await _masterDataService.createBrand(nombre, urlImagen);
+    int? id = await _masterDataCache.createBrand(nombre, urlImagen);
     if (id != null) await loadMasterData();
     return id;
   }
   Future<bool> updateBrand(int id, String nombre, {String? urlImagen, bool? activo}) async {
-    bool ok = await _masterDataService.updateBrand(id, nombre, urlImagen, activo);
+    bool ok = await _masterDataCache.updateBrand(id, nombre, urlImagen, activo);
     if (ok) await loadMasterData();
     return ok;
   }
   Future<bool> deleteBrand(int id) async {
-    _lastActionError = await _masterDataService.deleteBrand(id);
+    _lastActionError = await _masterDataCache.deleteBrand(id);
     if (_lastActionError == null) { await loadMasterData(); return true; }
     return false;
   }
 
   Future<int?> createProvider(String nombre, {String? ruc, String? contacto, String? telefono, String? correo}) async {
-    int? id = await _masterDataService.createProvider(nombre, ruc, contacto, telefono, correo);
+    int? id = await _masterDataCache.createProvider(nombre, ruc, contacto, telefono, correo);
     if (id != null) await loadMasterData();
     return id;
   }
   Future<bool> updateProvider(int id, String nombre, {String? ruc, String? contacto, String? telefono, String? correo, bool? activo}) async {
-    bool ok = await _masterDataService.updateProvider(id, nombre, ruc, contacto, telefono, correo, activo);
+    bool ok = await _masterDataCache.updateProvider(id, nombre, ruc, contacto, telefono, correo, activo);
     if (ok) await loadMasterData();
     return ok;
   }
   Future<bool> deleteProvider(int id) async {
-    _lastActionError = await _masterDataService.deleteProvider(id);
+    _lastActionError = await _masterDataCache.deleteProvider(id);
     if (_lastActionError == null) { await loadMasterData(); return true; }
     return false;
   }
@@ -270,7 +259,7 @@ class InventoryProvider with ChangeNotifier {
       _isLoadingMore = true; notifyListeners();
     }
 
-    if (_brands.isEmpty) await loadMasterData();
+    if (_masterDataCache.brands.isEmpty) await loadMasterData();
 
     try {
       Map<String, String> queryParams = {

@@ -70,7 +70,7 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: hasOffer 
-                ? BorderSide(color: isDark ? Colors.red.withOpacity(0.5) : Colors.red.shade200, width: 1.5) 
+                ? BorderSide(color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade200, width: 1.5) 
                 : BorderSide(color: isDark ? Colors.white10 : Colors.transparent)
             ),
             child: Column(
@@ -141,7 +141,7 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue.shade50, 
+                                  color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, 
                                   borderRadius: BorderRadius.circular(6)
                                 ),
                                 child: Text(salesUnitBadge.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[700])),
@@ -184,7 +184,7 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: isDark ? Theme.of(context).primaryColor.withOpacity(0.2) : Theme.of(context).primaryColor.withOpacity(0.1),
+                                  color: isDark ? Theme.of(context).primaryColor.withValues(alpha: 0.2) : Theme.of(context).primaryColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10)
                                 ),
                                 child: Icon(Icons.add, color: isDark ? Colors.blue[300] : Theme.of(context).primaryColor, size: 24),
@@ -209,7 +209,7 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                   decoration: BoxDecoration(
                     color: isDark ? Colors.red[700] : const Color(0xFFFF5252),
                     borderRadius: BorderRadius.circular(10),
-                    boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.3), blurRadius: 6)]
+                    boxShadow: [BoxShadow(color: Colors.red.withValues(alpha: 0.3), blurRadius: 6)]
                   ),
                   child: Text("-$discountPercent%", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
@@ -220,7 +220,7 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.black.withOpacity(0.7) : Colors.white.withOpacity(0.6),
+                  color: isDark ? Colors.black.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Center(

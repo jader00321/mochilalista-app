@@ -113,7 +113,7 @@ class ManualQuoteSaveModal extends StatelessWidget {
         decoration: BoxDecoration(border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300), borderRadius: BorderRadius.circular(16)),
         child: Row(
           children: [
-            CircleAvatar(backgroundColor: color.withOpacity(0.15), radius: 26, child: Icon(icon, color: color, size: 26)),
+            CircleAvatar(backgroundColor: color.withValues(alpha: 0.15), radius: 26, child: Icon(icon, color: color, size: 26)),
             const SizedBox(width: 16),
             Expanded(
               child: Column(

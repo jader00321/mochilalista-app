@@ -37,7 +37,7 @@ class ProductOptionalInfo extends StatelessWidget {
           childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           leading: Container(
             padding: const EdgeInsets.all(10), 
-            decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange[50], borderRadius: BorderRadius.circular(10)), 
+            decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[50], borderRadius: BorderRadius.circular(10)), 
             child: Icon(Icons.settings_overscan, color: isDark ? Colors.orange[300] : Colors.orange[800], size: 24)
           ),
           children: [

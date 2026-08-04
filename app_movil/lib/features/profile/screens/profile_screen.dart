@@ -166,9 +166,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildSettingsContainer(Color color, List<Widget> children) => Container(decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))]), child: Column(children: children));
+  Widget _buildSettingsContainer(Color color, List<Widget> children) => Container(decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))]), child: Column(children: children));
   
-  Widget _buildDivider(bool isDark) => Divider(height: 1, indent: 65, endIndent: 20, color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[200]);
+  Widget _buildDivider(bool isDark) => Divider(height: 1, indent: 65, endIndent: 20, color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[200]);
 
   Widget _buildHeader(BuildContext context, AuthProvider auth, bool isDark) {
     final String? validLogoPath = _getValidLocalImagePath(auth.currentBusiness?.logoUrl);
@@ -202,7 +202,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     children: [
                       Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.15)),
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.15)),
                         child: CircleAvatar(
                           radius: 52, 
                           backgroundColor: Colors.white,
@@ -226,12 +226,12 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   Text(auth.userName, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
                   const SizedBox(height: 4),
                   if (auth.currentBusiness != null)
-                    Text(auth.businessName, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 16, fontWeight: FontWeight.w500)),
+                    Text(auth.businessName, style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 16, fontWeight: FontWeight.w500)),
                   
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.3))),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.3))),
                     child: const Text("DUEÑO DE NEGOCIO", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
                   ),
                 ],
@@ -261,7 +261,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 15),
-              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(10))),
+              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10))),
               const SizedBox(height: 20),
               
               if (validLogoPath != null && !validLogoPath.startsWith('http'))
@@ -302,7 +302,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       leading: Container(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
         child: Icon(icon, color: color, size: 22),
       ),
       title: Text(text, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDestructive ? Colors.red : (isDark ? Colors.white : Colors.black87))),
@@ -357,7 +357,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.logout, color: Colors.red)),
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.logout, color: Colors.red)),
             const SizedBox(width: 12),
             const Expanded(child: Text("Cambiar de Negocio", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
           ],

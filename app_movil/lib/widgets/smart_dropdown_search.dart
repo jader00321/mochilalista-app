@@ -160,7 +160,7 @@ class _SearchModalState<T> extends State<_SearchModal<T>> {
                   if (_query.isNotEmpty && !filtered.any((x) => widget.itemAsString(x).toLowerCase() == _query.toLowerCase())) {
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[50], shape: BoxShape.circle), child: Icon(Icons.add_circle, color: widget.isDark ? Colors.blue[300] : Colors.blue)),
+                      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50], shape: BoxShape.circle), child: Icon(Icons.add_circle, color: widget.isDark ? Colors.blue[300] : Colors.blue)),
                       title: Text("Crear nuevo: '$_query'", style: TextStyle(color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 16)),
                       onTap: () => widget.onAddNew(_query),
                     );

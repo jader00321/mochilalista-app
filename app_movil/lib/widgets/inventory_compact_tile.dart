@@ -47,7 +47,7 @@ class InventoryCompactTile extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: statusColor,
                   shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: statusColor.withOpacity(0.5), blurRadius: 4)]
+                  boxShadow: [BoxShadow(color: statusColor.withValues(alpha: 0.5), blurRadius: 4)]
                 ),
               ),
               const SizedBox(width: 16),

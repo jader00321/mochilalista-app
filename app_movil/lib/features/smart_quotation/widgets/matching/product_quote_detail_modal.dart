@@ -222,7 +222,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                   Container(
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -254,7 +254,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                           alignment: Alignment.center,
                           children: [
                             Container(width: 90, height: 90, decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade300), borderRadius: BorderRadius.circular(16)), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: UniversalImage(path: _selectedPresentation.imagenUrl ?? productDisplay.imagenUrl, fit: BoxFit.cover))),
-                            Container(width: 90, height: 90, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.black.withOpacity(0.2))),
+                            Container(width: 90, height: 90, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.black.withValues(alpha: 0.2))),
                             const Icon(Icons.zoom_in, color: Colors.white, size: 36)
                           ],
                         ),
@@ -290,13 +290,13 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                                decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
                                 child: Text("${_selectedPresentation.unidadVenta ?? 'Unidad'} (x${_selectedPresentation.unidadesPorVenta})", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[700])),
                               ),
                               if (_currentCategoryName.isNotEmpty)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(color: isDark ? Colors.grey.withOpacity(0.2) : Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
+                                  decoration: BoxDecoration(color: isDark ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
                                   child: Text(_currentCategoryName, style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[700])),
                                 ),
                             ],
@@ -345,7 +345,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                                 });
                               }
                             }, 
-                            selectedColor: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue[100],
+                            selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100],
                             backgroundColor: isDark ? Colors.white10 : Colors.grey[100],
                             labelStyle: TextStyle(
                                color: isDisabled 
@@ -363,7 +363,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
 
                 if (!isClient)
                   Container(
-                    decoration: BoxDecoration(color: _isManualPrice ? (isDark ? Colors.orange.withOpacity(0.1) : Colors.orange[50]) : (isDark ? Colors.white10 : Colors.grey[50]), borderRadius: BorderRadius.circular(16), border: Border.all(color: _isManualPrice ? (isDark ? Colors.orange.withOpacity(0.5) : Colors.orange.shade200) : (isDark ? Colors.transparent : Colors.grey.shade300))),
+                    decoration: BoxDecoration(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50]) : (isDark ? Colors.white10 : Colors.grey[50]), borderRadius: BorderRadius.circular(16), border: Border.all(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade200) : (isDark ? Colors.transparent : Colors.grey.shade300))),
                     child: Column(
                       children: [
                         SwitchListTile(
@@ -377,7 +377,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                           }),
                         ),
                         if (_isManualPrice) ...[
-                          Divider(height: 1, color: isDark ? Colors.orange.withOpacity(0.3) : Colors.orange[200]),
+                          Divider(height: 1, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[200]),
                           Padding(
                             padding: const EdgeInsets.all(20),
                             child: Row(
@@ -396,7 +396,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                                     ],
                                   ),
                                 ),
-                                Container(width: 1, height: 50, color: isDark ? Colors.orange.withOpacity(0.3) : Colors.orange[300]),
+                                Container(width: 1, height: 50, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[300]),
                                 const SizedBox(width: 20),
                                 Expanded(
                                   child: Column(

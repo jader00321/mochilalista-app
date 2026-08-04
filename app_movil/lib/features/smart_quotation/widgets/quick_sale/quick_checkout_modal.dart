@@ -179,7 +179,7 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: isDark ? Colors.amber.withOpacity(0.1) : Colors.amber.shade50, borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(color: isDark ? Colors.amber.withValues(alpha: 0.1) : Colors.amber.shade50, borderRadius: BorderRadius.circular(8)),
                         child: Text("Nota: ${provider.saleNote}", style: TextStyle(fontSize: 13, color: isDark ? Colors.amber[200] : Colors.amber[900], fontStyle: FontStyle.italic)),
                       ),
                     ),
@@ -220,7 +220,7 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
             Container(
               padding: const EdgeInsets.all(12),
               margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(color: isDark ? Colors.amber.withOpacity(0.1) : Colors.amber[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.amber.withOpacity(0.3) : Colors.amber.shade200)),
+              decoration: BoxDecoration(color: isDark ? Colors.amber.withValues(alpha: 0.1) : Colors.amber[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.amber.withValues(alpha: 0.3) : Colors.amber.shade200)),
               child: Text("El cliente tiene ${currency.format(provider.clientSaldo)} a favor, pero no alcanza para pagar la totalidad de esta compra. Debe elegir otro método.", style: TextStyle(color: isDark ? Colors.amber[300] : Colors.amber[900], fontSize: 13, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
             ),
 
@@ -236,12 +236,12 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 selected: isSelected,
                 onSelected: (val) => setState(() => _paymentMethod = m),
-                selectedColor: isDark ? Colors.pink.withOpacity(0.2) : Colors.pink[50],
+                selectedColor: isDark ? Colors.pink.withValues(alpha: 0.2) : Colors.pink[50],
                 backgroundColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
                 labelStyle: TextStyle(color: isSelected ? (isDark ? Colors.pink[300] : Colors.pink[800]) : textColor, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14), 
-                  side: BorderSide(color: isSelected ? (isDark ? Colors.pink.withOpacity(0.5) : Colors.pink.shade200) : (isDark ? Colors.white10 : Colors.transparent), width: 1.5)
+                  side: BorderSide(color: isSelected ? (isDark ? Colors.pink.withValues(alpha: 0.5) : Colors.pink.shade200) : (isDark ? Colors.white10 : Colors.transparent), width: 1.5)
                 ),
               );
             }).toList(),

@@ -423,9 +423,9 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                               duration: const Duration(milliseconds: 300),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
-                                color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue.withOpacity(0.1),
+                                color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.withOpacity(0.2)),
+                                border: Border.all(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.2)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -612,7 +612,7 @@ class _BottomSummaryBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: isDark ? color.withOpacity(0.15) : color[50],
+      color: isDark ? color.withValues(alpha: 0.15) : color[50],
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -621,14 +621,14 @@ class _BottomSummaryBtn extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16), 
-            border: Border.all(color: isDark ? color.withOpacity(0.4) : color.withOpacity(0.3), width: 1.5)
+            border: Border.all(color: isDark ? color.withValues(alpha: 0.4) : color.withValues(alpha: 0.3), width: 1.5)
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: isDark ? color.withOpacity(0.2) : Colors.white, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: isDark ? color.withValues(alpha: 0.2) : Colors.white, shape: BoxShape.circle),
                 child: Icon(icon, color: isDark ? color[300] : color[800], size: 22),
               ),
               const SizedBox(width: 8),

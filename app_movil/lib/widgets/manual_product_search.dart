@@ -79,7 +79,7 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF23232F) : Colors.white,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              boxShadow: [if(!isDark) BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 5))]
+              boxShadow: [if(!isDark) BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 5))]
             ),
             child: Column(
               children: [
@@ -159,7 +159,7 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
           color: isDark ? const Color(0xFF23232F) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-          boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3))]
+          boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))]
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,7 +183,7 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
                 children: [
                   Row(
                     children: [
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange[50], borderRadius: BorderRadius.circular(6)), child: Text(categoria.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.orange[300] : Colors.orange[800], letterSpacing: 0.5))),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[50], borderRadius: BorderRadius.circular(6)), child: Text(categoria.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.orange[300] : Colors.orange[800], letterSpacing: 0.5))),
                       const SizedBox(width: 8),
                       Text(marca, style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                     ],

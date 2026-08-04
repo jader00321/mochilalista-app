@@ -64,13 +64,13 @@ class ClientFilterBar extends StatelessWidget {
       selected: isSelected,
       onSelected: onSelected,
       backgroundColor: isDark ? const Color(0xFF23232F) : Colors.grey[100],
-      selectedColor: activeColor.withOpacity(0.15),
+      selectedColor: activeColor.withValues(alpha: 0.15),
       labelStyle: TextStyle(
         color: isSelected ? activeColor : (isDark ? Colors.white70 : Colors.black87),
         fontWeight: isSelected ? FontWeight.bold : FontWeight.w500
       ),
       showCheckmark: false,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: isSelected ? activeColor.withOpacity(0.5) : (isDark ? Colors.white10 : Colors.grey.shade300))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: isSelected ? activeColor.withValues(alpha: 0.5) : (isDark ? Colors.white10 : Colors.grey.shade300))),
     );
   }
 
@@ -94,14 +94,14 @@ class ClientFilterBar extends StatelessWidget {
       ),
       selected: isSelected,
       backgroundColor: isDark ? const Color(0xFF23232F) : Colors.grey[100],
-      selectedColor: activeColor.withOpacity(0.15),
+      selectedColor: activeColor.withValues(alpha: 0.15),
       labelStyle: TextStyle(
         color: isSelected ? activeColor : (isDark ? Colors.white70 : Colors.black87), 
         fontWeight: isSelected ? FontWeight.bold : FontWeight.w500
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14), 
-        side: BorderSide(color: isSelected ? activeColor.withOpacity(0.5) : (isDark ? Colors.white10 : Colors.grey.shade300))
+        side: BorderSide(color: isSelected ? activeColor.withValues(alpha: 0.5) : (isDark ? Colors.white10 : Colors.grey.shade300))
       ),
       showCheckmark: false,
       onPressed: () {

@@ -1,9 +1,9 @@
 import 'dart:typed_data';
 import 'dart:io'; 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
-import 'package:dio/dio.dart';
 import 'package:gal/gal.dart'; 
 import 'package:permission_handler/permission_handler.dart';
 
@@ -83,7 +83,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       if (Platform.isAndroid) {
         if (await Permission.photos.request().isGranted) {
           hasAccess = true;
-        } else if (await Permission.storage.request().isGranted) hasAccess = true;
+        } else if (await Permission.storage.request().isGranted) {
+          hasAccess = true;
+        }
       } else {
         if (await Permission.photosAddOnly.request().isGranted || await Permission.photos.request().isGranted) hasAccess = true;
       }
@@ -94,8 +96,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       }
       if (mounted) CustomSnackBar.show(context, message: "Descargando...", isError: false);
 
-      var response = await Dio().get(_fullQuotation!.sourceImageUrl!, options: Options(responseType: ResponseType.bytes));
-      await Gal.putImageBytes(Uint8List.fromList(response.data), name: "cotizacion_${_fullQuotation!.id}");
+      final url = Uri.parse(_fullQuotation!.sourceImageUrl!);
+      final httpClient = HttpClient();
+      final request = await httpClient.getUrl(url);
+      final httpResponse = await request.close();
+      final bytes = await consolidateHttpClientResponseBytes(httpResponse);
+      await Gal.putImageBytes(Uint8List.fromList(bytes), name: "cotizacion_${_fullQuotation!.id}");
 
       if (mounted) CustomSnackBar.show(context, message: "✅ Imagen guardada en Galería", isError: false);
     } on GalException catch (e) {
@@ -377,7 +383,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               children: [
                 Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: iconColor, fontSize: 16)), 
                 const SizedBox(height: 4),
-                Text(isCritical ? "Productos agotados detectados." : "Detectamos cambios de precio.", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.9)))
+                Text(isCritical ? "Productos agotados detectados." : "Detectamos cambios de precio.", style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.9)))
               ]
             )
           ),
@@ -423,7 +429,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      decoration: BoxDecoration(color: isDark ? Theme.of(context).colorScheme.surface : Colors.white, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, -10))], borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+      decoration: BoxDecoration(color: isDark ? Theme.of(context).colorScheme.surface : Colors.white, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -10))], borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
       child: SafeArea(
         child: Row(
           children: [
@@ -478,7 +484,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      decoration: BoxDecoration(color: isDark ? Theme.of(context).colorScheme.surface : Colors.white, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, -10))], borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+      decoration: BoxDecoration(color: isDark ? Theme.of(context).colorScheme.surface : Colors.white, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -10))], borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
       child: SafeArea(
         child: isSold 
           ? Row(
@@ -510,7 +516,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         tooltip: tooltip, 
         style: IconButton.styleFrom(
           padding: const EdgeInsets.all(12),
-          backgroundColor: isDisabled ? disabledBgColor.withOpacity(0.5) : activeColor.withOpacity(0.15), 
+          backgroundColor: isDisabled ? disabledBgColor.withValues(alpha: 0.5) : activeColor.withValues(alpha: 0.15), 
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
         )
       )

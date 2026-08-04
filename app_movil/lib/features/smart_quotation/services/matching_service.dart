@@ -1,6 +1,7 @@
 import '../models/extracted_list_model.dart';
 import '../models/matching_model.dart';
 import '../../../database/local_db.dart';
+import '../../../database/product_queries.dart';
 import 'dart:io';
 import '../../../services/image_service.dart';
 
@@ -21,11 +22,7 @@ class MatchingService {
       // Construimos una query para encontrar la mejor coincidencia.
       // Puedes implementar TheFuzz de Flutter aquí si lo deseas en el futuro.
       String query = '''
-        SELECT p.*, pr.id AS pres_id, pr.nombre_especifico, pr.unidad_venta, 
-               pr.precio_venta_final, pr.precio_oferta, pr.stock_actual, pr.activo AS pres_activo
-        FROM presentaciones_producto pr
-        INNER JOIN productos p ON pr.producto_id = p.id
-        WHERE p.negocio_id = ? AND pr.activo = 1
+        ${ProductQueries.fullInventoryQuery}
         AND (p.nombre LIKE ? OR pr.nombre_especifico LIKE ?)
       ''';
       
@@ -37,19 +34,21 @@ class MatchingService {
       final rows = await db.rawQuery(query, [negocioId, '%$searchName%', '%$searchName%']);
       
       if (rows.isNotEmpty) {
-        final row = rows.first;
+        final wrapper = ProductQueries.parseInventoryRow(rows.first);
+        final product = wrapper.product;
+        final pres = wrapper.presentation;
         
         MatchedProduct matchedProduct = MatchedProduct(
-          productId: row['id'] as int,
-          presentationId: row['pres_id'] as int,
-          fullName: "${row['nombre']} ${row['nombre_especifico'] ?? ''}".trim(),
-          productName: row['nombre'] as String,
-          specificName: row['nombre_especifico'] as String?,
-          price: (row['precio_venta_final'] as num).toDouble(),
-          offerPrice: row['precio_oferta'] != null ? (row['precio_oferta'] as num).toDouble() : null,
-          stock: row['stock_actual'] as int? ?? 0,
-          imageUrl: row['imagen_url'] as String?,
-          unit: row['unidad_venta'] as String? ?? "Unidad",
+          productId: product.id,
+          presentationId: pres.id!,
+          fullName: "${product.nombre} ${pres.nombreEspecifico ?? ''}".trim(),
+          productName: product.nombre,
+          specificName: pres.nombreEspecifico,
+          price: pres.precioVentaFinal,
+          offerPrice: pres.precioOferta,
+          stock: pres.stockActual,
+          imageUrl: pres.imagenUrl ?? product.imagenUrl,
+          unit: pres.unidadVenta ?? "Unidad",
           isAvailable: true,
         );
 

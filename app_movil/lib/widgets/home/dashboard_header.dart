@@ -94,7 +94,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
           bottomRight: Radius.circular(50),
         ),
         boxShadow: [
-          if (!isDark) BoxShadow(color: Colors.blue.shade900.withOpacity(0.3), blurRadius: 25, offset: const Offset(0, 10))
+          if (!isDark) BoxShadow(color: Colors.blue.shade900.withValues(alpha: 0.3), blurRadius: 25, offset: const Offset(0, 10))
         ]
       ),
       child: Column(
@@ -109,7 +109,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                   children: [
                     Text(
                       _getGreeting(),
-                      style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 4),
                     
@@ -128,9 +128,9 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: isGuest ? Colors.orange.withOpacity(0.8) : Colors.white.withOpacity(0.15),
+                            color: isGuest ? Colors.orange.withValues(alpha: 0.8) : Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white.withOpacity(0.2))
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.2))
                           ),
                           child: Text(
                             displayRole, 
@@ -183,7 +183,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       label: Text("$unreadCount", style: const TextStyle(fontWeight: FontWeight.bold)),
                       backgroundColor: Colors.orangeAccent,
                       offset: const Offset(4, -4),
-                      child: Icon(Icons.notifications_outlined, color: Colors.white.withOpacity(isGuest ? 0.3 : 1.0), size: 28),
+                      child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: isGuest ? 0.3 : 1.0), size: 28),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -204,8 +204,8 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: Colors.white, 
-                        border: Border.all(color: Colors.white.withOpacity(0.5), width: 2.0), 
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))]
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2.0), 
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))]
                       ),
                       child: ClipOval(
                         // 🔥 CARGA DE FOTOS OFFLINE O RED
@@ -257,15 +257,15 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        color: Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.2), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 24),
           ),
           const SizedBox(width: 12),
@@ -279,7 +279,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                   overflow: TextOverflow.ellipsis, 
                 ),
                 const SizedBox(height: 2),
-                Text(label, style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w600)),
+                Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.w600)),
               ],
             ),
           )

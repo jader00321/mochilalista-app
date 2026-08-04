@@ -103,7 +103,7 @@ class CatalogCartModal extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16), 
                             side: BorderSide(
-                              color: (exceedsStock && !isClient) ? (isDark ? Colors.orange.withOpacity(0.5) : Colors.orange.shade300) : (isDark ? Colors.white10 : Colors.transparent),
+                              color: (exceedsStock && !isClient) ? (isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300) : (isDark ? Colors.white10 : Colors.transparent),
                               width: 1.5
                             ),
                           ),
@@ -204,7 +204,7 @@ class CatalogCartModal extends StatelessWidget {
                                         borderRadius: BorderRadius.circular(20),
                                         child: Container(
                                           padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.15) : Colors.red[50], shape: BoxShape.circle),
+                                          decoration: BoxDecoration(color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red[50], shape: BoxShape.circle),
                                           child: Icon(Icons.delete_outline, color: isDark ? Colors.red[300] : Colors.red, size: 24),
                                         ),
                                       )
@@ -224,7 +224,7 @@ class CatalogCartModal extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
                   decoration: BoxDecoration(
                     color: surfaceColor,
-                    boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, -10))]
+                    boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -10))]
                   ),
                   child: Column(
                     children: [
@@ -242,7 +242,7 @@ class CatalogCartModal extends StatelessWidget {
                         child: ElevatedButton.icon(
                           onPressed: onProcessTap, 
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: isDark ? color.withOpacity(0.9) : color,
+                            backgroundColor: isDark ? color.withValues(alpha: 0.9) : color,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: isDark ? 0 : 4,

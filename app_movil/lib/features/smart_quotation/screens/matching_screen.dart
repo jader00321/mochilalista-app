@@ -242,7 +242,7 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                                     final c = snapshot.data![index];
                                     return ListTile(
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                                      leading: CircleAvatar(backgroundColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[50], child: Text(c.fullName.isNotEmpty ? c.fullName[0].toUpperCase() : "?", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 18))),
+                                      leading: CircleAvatar(backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50], child: Text(c.fullName.isNotEmpty ? c.fullName[0].toUpperCase() : "?", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 18))),
                                       title: Text(c.fullName, style: textTheme.titleMedium?.copyWith(color: textColor)),
                                       subtitle: Text(c.phone, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[700])),
                                       onTap: () { _selectClient(c); Navigator.pop(ctx); },

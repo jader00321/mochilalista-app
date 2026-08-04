@@ -57,7 +57,7 @@ class ManualQuoteClientHeader extends StatelessWidget {
             Container(
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.15) : Colors.green[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.green.withOpacity(0.4) : Colors.transparent)),
+              decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.green.withValues(alpha: 0.4) : Colors.transparent)),
               child: Row(
                 children: [
                   Icon(Icons.check_circle, size: 20, color: isDark ? Colors.green[400] : Colors.green),
@@ -99,7 +99,7 @@ class ManualQuoteClientHeader extends StatelessWidget {
           const SizedBox(height: 16),
           
           Container(
-            decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.1) : Colors.transparent, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.transparent, borderRadius: BorderRadius.circular(12)),
             child: CheckboxListTile(
               title: Text("Guardar/Actualizar en CRM", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
               subtitle: Text(isGuest ? "Bloqueado en Modo Exploración" : "Registra a esta persona como tu cliente", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey)),

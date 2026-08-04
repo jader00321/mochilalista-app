@@ -256,7 +256,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -321,13 +321,13 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                              decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
                               child: Text("${_currentSelection.unit} (x${_currentSelection.conversionFactor})", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[700])),
                             ),
                             if (widget.categoryName != null && widget.categoryName!.isNotEmpty)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(color: isDark ? Colors.grey.withOpacity(0.2) : Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
+                                decoration: BoxDecoration(color: isDark ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
                                 child: Text(widget.categoryName!, style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[700])),
                               ),
                           ],
@@ -361,7 +361,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                           label: Text(p.unidadVenta ?? "Unidad", style: textTheme.bodyMedium?.copyWith(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)), 
                           selected: isSelected, 
                           onSelected: (v) => v ? _updateVariant(p) : null, 
-                          selectedColor: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue[100],
+                          selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100],
                           backgroundColor: isDark ? Colors.white10 : Colors.grey[100],
                           labelStyle: TextStyle(color: isSelected ? (isDark ? Colors.blue[300] : Colors.blue[900]) : textColor),
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -376,7 +376,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
               // 3. SECCIÓN DE DESCUENTO (OCULTA PARA CLIENTES)
               if (!isClient)
                 Container(
-                  decoration: BoxDecoration(color: _isManualPrice ? (isDark ? Colors.orange.withOpacity(0.1) : Colors.orange[50]) : (isDark ? Colors.white10 : Colors.grey[50]), borderRadius: BorderRadius.circular(16), border: Border.all(color: _isManualPrice ? (isDark ? Colors.orange.withOpacity(0.5) : Colors.orange.shade200) : (isDark ? Colors.transparent : Colors.grey.shade300))),
+                  decoration: BoxDecoration(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50]) : (isDark ? Colors.white10 : Colors.grey[50]), borderRadius: BorderRadius.circular(16), border: Border.all(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade200) : (isDark ? Colors.transparent : Colors.grey.shade300))),
                   child: Column(
                     children: [
                       SwitchListTile(
@@ -390,7 +390,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                         }),
                       ),
                       if (_isManualPrice) ...[
-                        Divider(height: 1, color: isDark ? Colors.orange.withOpacity(0.3) : Colors.orange[200]),
+                        Divider(height: 1, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[200]),
                         Padding(
                           padding: const EdgeInsets.all(20),
                           child: Row(
@@ -409,7 +409,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                                   ],
                                 ),
                               ),
-                              Container(width: 1, height: 50, color: isDark ? Colors.orange.withOpacity(0.3) : Colors.orange[300]),
+                              Container(width: 1, height: 50, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[300]),
                               const SizedBox(width: 20),
                               Expanded(
                                 child: Column(

@@ -32,9 +32,9 @@ class BusinessInfoCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         decoration: BoxDecoration(
-          color: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue[50], 
+          color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50], 
           borderRadius: BorderRadius.circular(20), 
-          border: Border.all(color: Colors.blue.withOpacity(0.3))
+          border: Border.all(color: Colors.blue.withValues(alpha: 0.3))
         ),
         child: Column(
           children: [
@@ -75,15 +75,15 @@ class BusinessInfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF23232F) : Colors.white, 
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-        border: isDark ? Border.all(color: Colors.white.withOpacity(0.05)) : null,
+        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        border: isDark ? Border.all(color: Colors.white.withValues(alpha: 0.05)) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(color: isDark ? Colors.blue[900]?.withOpacity(0.5) : Colors.blue[900]),
+            decoration: BoxDecoration(color: isDark ? Colors.blue[900]?.withValues(alpha: 0.5) : Colors.blue[900]),
             child: Row(
               children: [
                 const Icon(Icons.storefront, color: Colors.white, size: 24),
@@ -92,7 +92,7 @@ class BusinessInfoCard extends StatelessWidget {
                 if (canSeeRuc)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
                     child: Text("RUC: ${business!.ruc ?? '---'}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                   )
               ],

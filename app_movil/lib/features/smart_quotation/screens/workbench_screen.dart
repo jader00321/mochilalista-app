@@ -262,7 +262,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
       width: 140, 
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), 
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.12), 
+        color: Colors.white.withValues(alpha: 0.12), 
         borderRadius: BorderRadius.circular(16)
       ),
       child: Column(
@@ -342,7 +342,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
           final filter = filters[i];
           final isSelected = _selectedFilter == filter;
           
-          Color activeBgColor = filter.contains("⚠️") ? (isDark ? Colors.red.withOpacity(0.2) : Colors.red[50]!) : (isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[50]!);
+          Color activeBgColor = filter.contains("⚠️") ? (isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red[50]!) : (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50]!);
           Color activeTextColor = filter.contains("⚠️") ? (isDark ? Colors.red[300]! : Colors.red[900]!) : (isDark ? Colors.blue[300]! : Colors.blue[900]!);
 
           return ChoiceChip(
@@ -414,9 +414,9 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+          color: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: isSelected ? color.withOpacity(0.5) : Colors.transparent),
+          border: Border.all(color: isSelected ? color.withValues(alpha: 0.5) : Colors.transparent),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

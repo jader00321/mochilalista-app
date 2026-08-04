@@ -46,13 +46,13 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
           child: Wrap(
             children: [
               ListTile(
-                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.photo_library, color: Colors.blue)),
+                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.photo_library, color: Colors.blue)),
                 title: Text('Galería', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: widget.isDark ? Colors.white : Colors.black87)),
                 onTap: () { Navigator.pop(context); _pickImage(ImageSource.gallery); },
               ),
               const Divider(height: 1, indent: 60),
               ListTile(
-                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.camera_alt, color: Colors.orange)),
+                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.camera_alt, color: Colors.orange)),
                 title: Text('Cámara', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: widget.isDark ? Colors.white : Colors.black87)),
                 onTap: () { Navigator.pop(context); _pickImage(ImageSource.camera); },
               ),

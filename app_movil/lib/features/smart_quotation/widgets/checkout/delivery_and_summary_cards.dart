@@ -54,14 +54,14 @@ class _DeliveryConfigCardState extends State<DeliveryConfigCard> {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withOpacity(0.1) : (isDark ? const Color(0xFF23232F) : Colors.white),
+          color: isSelected ? activeColor.withValues(alpha: 0.1) : (isDark ? const Color(0xFF23232F) : Colors.white),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: isSelected ? activeColor : (isDark ? Colors.white10 : Colors.grey.shade300), width: isSelected ? 2 : 1),
-          boxShadow: [if (!isDark && !isSelected) BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))]
+          boxShadow: [if (!isDark && !isSelected) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))]
         ),
         child: Row(
           children: [
-            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: isSelected ? activeColor.withOpacity(0.2) : (isDark ? Colors.white10 : Colors.grey[100]), shape: BoxShape.circle), child: Icon(icon, color: isSelected ? activeColor : (isDark ? Colors.grey[500] : Colors.grey[400]), size: 24)),
+            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: isSelected ? activeColor.withValues(alpha: 0.2) : (isDark ? Colors.white10 : Colors.grey[100]), shape: BoxShape.circle), child: Icon(icon, color: isSelected ? activeColor : (isDark ? Colors.grey[500] : Colors.grey[400]), size: 24)),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -91,7 +91,7 @@ class _DeliveryConfigCardState extends State<DeliveryConfigCard> {
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: isDark ? Colors.purple.withOpacity(0.15) : Colors.purple[50], shape: BoxShape.circle),
+              decoration: BoxDecoration(color: isDark ? Colors.purple.withValues(alpha: 0.15) : Colors.purple[50], shape: BoxShape.circle),
               child: Icon(Icons.local_shipping, color: isDark ? Colors.purple[300] : Colors.purple[800], size: 22)
             ),
             const SizedBox(width: 12),
@@ -129,7 +129,7 @@ class _DeliveryConfigCardState extends State<DeliveryConfigCard> {
             borderRadius: BorderRadius.circular(16),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(color: isDark ? Colors.purple.withOpacity(0.1) : Colors.purple[50], borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.purple.withOpacity(0.4) : Colors.purple.shade200, width: 1.5)),
+              decoration: BoxDecoration(color: isDark ? Colors.purple.withValues(alpha: 0.1) : Colors.purple[50], borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.purple.withValues(alpha: 0.4) : Colors.purple.shade200, width: 1.5)),
               child: Row(
                 children: [
                   Icon(Icons.calendar_month, color: isDark ? Colors.purple[300] : Colors.purple, size: 28),
@@ -266,7 +266,7 @@ class CheckoutSummaryCard extends StatelessWidget {
               const SizedBox(height: 24),
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.15) : Colors.red[50], borderRadius: BorderRadius.circular(16)),
+                decoration: BoxDecoration(color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red[50], borderRadius: BorderRadius.circular(16)),
                 child: Column(
                   children: [
                     _rowSummary("Abonado Hoy:", paidAmount, isDark, color: isDark ? Colors.green[300] : Colors.green[800], fontSize: 16),
@@ -279,7 +279,7 @@ class CheckoutSummaryCard extends StatelessWidget {
               const SizedBox(height: 24),
               Container(
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.15) : Colors.green[50], borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50], borderRadius: BorderRadius.circular(12)),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

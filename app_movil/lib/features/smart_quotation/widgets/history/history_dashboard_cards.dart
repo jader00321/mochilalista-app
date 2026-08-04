@@ -89,9 +89,9 @@ class _AnimatedStatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? color.withOpacity(0.1) : color.withOpacity(0.05),
+        color: isDark ? color.withValues(alpha: 0.1) : color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(isDark ? 0.3 : 0.2)),
+        border: Border.all(color: color.withValues(alpha: isDark ? 0.3 : 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,7 +112,7 @@ class _AnimatedStatCard extends StatelessWidget {
               String displayText = isInteger ? animatedValue.toInt().toString() : format!.format(animatedValue);
               return Text(
                 displayText,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: isDark ? Colors.white : color.withOpacity(0.9)),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: isDark ? Colors.white : color.withValues(alpha: 0.9)),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               );

@@ -183,12 +183,12 @@ class _CatalogFilterDrawerState extends State<CatalogFilterDrawer> {
                             val ? _selectedCategories.add(cat.id) : _selectedCategories.remove(cat.id);
                           });
                         },
-                        selectedColor: isDark ? Colors.blue.withOpacity(0.2) : theme.primaryColor.withOpacity(0.1),
+                        selectedColor: isDark ? Colors.blue.withValues(alpha: 0.2) : theme.primaryColor.withValues(alpha: 0.1),
                         checkmarkColor: isDark ? Colors.blue[200] : theme.primaryColor,
                         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.grey[100],
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withOpacity(0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.transparent)),
+                        side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.transparent)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       );
                     }).toList(),
@@ -212,12 +212,12 @@ class _CatalogFilterDrawerState extends State<CatalogFilterDrawer> {
                             val ? _selectedBrands.add(brand.id) : _selectedBrands.remove(brand.id);
                           });
                         },
-                        selectedColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.1),
+                        selectedColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.withValues(alpha: 0.1),
                         checkmarkColor: isDark ? Colors.blue[300] : Colors.blue,
                         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.grey[100],
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withOpacity(0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.transparent)),
+                        side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.transparent)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       );
                     }).toList(),

@@ -137,7 +137,7 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
-              color: widget.isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], 
+              color: widget.isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], 
               borderRadius: const BorderRadius.vertical(top: Radius.circular(14))
             ),
             child: Row(
@@ -208,7 +208,7 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
                 // SECCIÓN 3: Fraccionamiento (Para costo real)
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: widget.isDark ? Colors.green.withOpacity(0.1) : Colors.green[50], borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(color: widget.isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green[50], borderRadius: BorderRadius.circular(10)),
                   child: Row(
                     children: [
                       Expanded(
@@ -229,7 +229,7 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
                 // 🔥 SECCIÓN 4: INTENCIÓN DE VENTA (NUEVO)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(color: widget.isDark ? Colors.purple.withOpacity(0.1) : Colors.purple[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: widget.isDark ? Colors.purple.withOpacity(0.3) : Colors.purple.shade200)),
+                  decoration: BoxDecoration(color: widget.isDark ? Colors.purple.withValues(alpha: 0.1) : Colors.purple[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: widget.isDark ? Colors.purple.withValues(alpha: 0.3) : Colors.purple.shade200)),
                   child: Row(
                     children: [
                       Icon(Icons.storefront, size: 18, color: widget.isDark ? Colors.purple[300] : Colors.purple[700]),
@@ -288,7 +288,7 @@ class _MiniInput extends StatelessWidget {
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), 
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300)),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isDark ? Colors.blue.withOpacity(0.5) : Colors.blue.withOpacity(0.5), width: 1.5)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.withValues(alpha: 0.5), width: 1.5)),
               filled: true, 
               fillColor: isDark ? const Color(0xFF14141C) : Colors.white,
             ),

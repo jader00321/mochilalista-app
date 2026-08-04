@@ -41,7 +41,7 @@ class DetailClientCard extends StatelessWidget {
                  const SizedBox(height: 16),
                  Container(
                    padding: const EdgeInsets.all(16),
-                   decoration: BoxDecoration(color: isDark ? Colors.indigo.withOpacity(0.15) : Colors.indigo[50], borderRadius: BorderRadius.circular(12)),
+                   decoration: BoxDecoration(color: isDark ? Colors.indigo.withValues(alpha: 0.15) : Colors.indigo[50], borderRadius: BorderRadius.circular(12)),
                    child: Column(
                      children: [
                        if (institution.isNotEmpty) Row(children: [Icon(Icons.school, size: 22, color: isDark ? Colors.indigo[200] : Colors.indigo), const SizedBox(width: 12), Expanded(child: Text(institution, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: isDark ? Colors.white : Colors.black87)))]),

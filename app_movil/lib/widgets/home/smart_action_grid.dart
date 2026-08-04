@@ -202,17 +202,17 @@ class SmartActionGrid extends StatelessWidget {
     return Material(
       color: isDark ? const Color(0xFF23232F) : Colors.white,
       elevation: isDark ? 0 : 8,
-      shadowColor: isDark ? Colors.transparent : color.withOpacity(0.15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: isDark ? BorderSide(color: Colors.white.withOpacity(0.1), width: 1.5) : BorderSide.none),
+      shadowColor: isDark ? Colors.transparent : color.withValues(alpha: 0.15),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: isDark ? BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 1.5) : BorderSide.none),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(24),
-        splashColor: color.withOpacity(0.15),
-        highlightColor: color.withOpacity(0.05),
+        splashColor: color.withValues(alpha: 0.15),
+        highlightColor: color.withValues(alpha: 0.05),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            gradient: isDark ? LinearGradient(colors: [color.withOpacity(0.05), Colors.transparent], begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
+            gradient: isDark ? LinearGradient(colors: [color.withValues(alpha: 0.05), Colors.transparent], begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), 
           child: Column(
@@ -221,7 +221,7 @@ class SmartActionGrid extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: isDark ? color.withOpacity(0.2) : color.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: isDark ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0.1), shape: BoxShape.circle),
                 child: Icon(icon, color: color, size: 28),
               ),
               const SizedBox(height: 12), 

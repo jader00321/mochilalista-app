@@ -206,7 +206,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                       alignment: Alignment.center,
                       children: [
                         Container(width: 90, height: 90, decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300), borderRadius: BorderRadius.circular(12)), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: UniversalImage(path: _currentSelection.imageUrl, fit: BoxFit.cover))),
-                        Container(width: 90, height: 90, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.black.withOpacity(0.3))),
+                        Container(width: 90, height: 90, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.black.withValues(alpha: 0.3))),
                         const Icon(Icons.zoom_in, color: Colors.white, size: 30)
                       ],
                     ),
@@ -250,7 +250,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                           label: Text(p.umpCompra ?? "Unidad", style: TextStyle(fontSize: 15, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)), 
                           selected: isSelected, 
                           onSelected: (v) => v ? _updateVariant(p) : null, 
-                          selectedColor: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue[100],
+                          selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100],
                           backgroundColor: isDark ? Colors.white10 : Colors.grey[100],
                           labelStyle: TextStyle(color: isSelected ? (isDark ? Colors.blue[300] : Colors.blue[900]) : textColor),
                         ),
@@ -263,7 +263,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
 
               // 3. SECCIÓN DE DESCUENTO
               Container(
-                decoration: BoxDecoration(color: _isManualPrice ? (isDark ? Colors.orange.withOpacity(0.1) : Colors.orange[50]) : (isDark ? Colors.white10 : Colors.grey[50]), borderRadius: BorderRadius.circular(16), border: Border.all(color: _isManualPrice ? (isDark ? Colors.orange.withOpacity(0.5) : Colors.orange.shade300) : (isDark ? Colors.transparent : Colors.grey.shade300))),
+                decoration: BoxDecoration(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50]) : (isDark ? Colors.white10 : Colors.grey[50]), borderRadius: BorderRadius.circular(16), border: Border.all(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300) : (isDark ? Colors.transparent : Colors.grey.shade300))),
                 child: Column(
                   children: [
                     SwitchListTile(
@@ -277,7 +277,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                       }),
                     ),
                     if (_isManualPrice) ...[
-                      Divider(height: 1, color: isDark ? Colors.orange.withOpacity(0.3) : Colors.orange[200]),
+                      Divider(height: 1, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[200]),
                       Padding(
                         padding: const EdgeInsets.all(20),
                         child: Row(
@@ -296,7 +296,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                                 ],
                               ),
                             ),
-                            Container(width: 1, height: 50, color: isDark ? Colors.orange.withOpacity(0.3) : Colors.orange[300]),
+                            Container(width: 1, height: 50, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[300]),
                             const SizedBox(width: 20),
                             Expanded(
                               child: Column(

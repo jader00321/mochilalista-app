@@ -167,8 +167,8 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
-            border: Border.all(color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05))
+            color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+            border: Border.all(color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05))
           ),
           child: Text(number, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
         ),
@@ -210,12 +210,12 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                   shape: BoxShape.circle,
                   border: Border.all(color: isDark ? Colors.blue[400]! : Colors.blue[700]!, width: 2),
                   boxShadow: [
-                    if (!isDark) BoxShadow(color: Colors.blue.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10))
+                    if (!isDark) BoxShadow(color: Colors.blue.withValues(alpha: 0.2), blurRadius: 20, offset: const Offset(0, 10))
                   ]
                 ),
                 child: CircleAvatar(
                   radius: 45,
-                  backgroundColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.shade50,
+                  backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50,
                   child: Icon(Icons.person_rounded, size: 50, color: isDark ? Colors.blue[300] : Colors.blue[800]),
                 ),
               ),
@@ -278,7 +278,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                           child: InkWell(
                             onTap: _authenticateWithBiometrics,
                             borderRadius: BorderRadius.circular(40),
-                            splashColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.1),
+                            splashColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.withValues(alpha: 0.1),
                             child: Container(
                               width: 75, height: 75,
                               alignment: Alignment.center,
@@ -293,7 +293,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                           child: InkWell(
                             onTap: _onDeletePressed,
                             borderRadius: BorderRadius.circular(40),
-                            splashColor: isDark ? Colors.red.withOpacity(0.2) : Colors.red.withOpacity(0.1),
+                            splashColor: isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red.withValues(alpha: 0.1),
                             child: Container(
                               width: 75, height: 75,
                               alignment: Alignment.center,

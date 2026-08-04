@@ -97,9 +97,9 @@ class _SortButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+          color: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? color.withOpacity(0.5) : Colors.transparent),
+          border: Border.all(color: isSelected ? color.withValues(alpha: 0.5) : Colors.transparent),
         ),
         child: Row(
           children: [

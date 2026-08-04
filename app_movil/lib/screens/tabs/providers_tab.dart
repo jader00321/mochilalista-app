@@ -183,7 +183,7 @@ class _ProvidersTabState extends State<ProvidersTab> {
         fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[50],
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.transparent)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.purple.withOpacity(0.5) : Colors.purple)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.purple.withValues(alpha: 0.5) : Colors.purple)),
         prefixIcon: Icon(icon, color: isDark ? Colors.blueGrey[300] : Colors.grey),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),

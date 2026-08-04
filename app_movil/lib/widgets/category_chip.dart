@@ -23,7 +23,7 @@ class CategoryChip extends StatelessWidget {
         selected: isSelected,
         onSelected: (_) => onTap(),
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        selectedColor: isDark ? Colors.blue.withOpacity(0.2) : Theme.of(context).primaryColor.withOpacity(0.15),
+        selectedColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Theme.of(context).primaryColor.withValues(alpha: 0.15),
         labelStyle: TextStyle(
           color: isSelected ? (isDark ? Colors.blue[300] : Theme.of(context).primaryColor) : (isDark ? Colors.white70 : Colors.black87),
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
@@ -32,7 +32,7 @@ class CategoryChip extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: BorderSide(
-            color: isSelected ? (isDark ? Colors.blue.withOpacity(0.5) : Theme.of(context).primaryColor) : (isDark ? Colors.white10 : Colors.grey.shade300),
+            color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Theme.of(context).primaryColor) : (isDark ? Colors.white10 : Colors.grey.shade300),
           ),
         ),
         showCheckmark: false, 

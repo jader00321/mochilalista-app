@@ -244,7 +244,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4), 
                   decoration: BoxDecoration(
-                    color: dragging ? (isDark ? Colors.blue.withOpacity(0.3) : Colors.blue[100]) : (isDark ? const Color(0xFF23232F) : Colors.white),
+                    color: dragging ? (isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100]) : (isDark ? const Color(0xFF23232F) : Colors.white),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: dragging ? Colors.transparent : (isDark ? Colors.white10 : Colors.grey.shade300)),
                   ),
@@ -297,7 +297,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(color: statusColor.withOpacity(0.15), borderRadius: BorderRadius.circular(8), border: Border.all(color: statusColor.withOpacity(0.5))),
+                              decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8), border: Border.all(color: statusColor.withValues(alpha: 0.5))),
                               child: Row(
                                 children: [
                                   Text(_invoice!.estado.toUpperCase(), style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
@@ -361,7 +361,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                             const SizedBox(height: 12),
                             Row(
                               children: [
-                                CircleAvatar(backgroundColor: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], child: Icon(Icons.store, color: isDark ? Colors.blue[300] : Colors.blue)),
+                                CircleAvatar(backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], child: Icon(Icons.store, color: isDark ? Colors.blue[300] : Colors.blue)),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
@@ -395,7 +395,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(color: isDark ? Colors.purple.withOpacity(0.1) : Colors.purple[50], borderRadius: BorderRadius.circular(6)),
+                                  decoration: BoxDecoration(color: isDark ? Colors.purple.withValues(alpha: 0.1) : Colors.purple[50], borderRadius: BorderRadius.circular(6)),
                                   child: Text("${_invoice!.cantidadItemsExtraidos ?? 0} ítems", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.purple[200] : Colors.purple[800])),
                                 )
                               ],
@@ -413,7 +413,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                       onTap: () => setState(() => _showRawJson = false),
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(vertical: 8),
-                                        decoration: BoxDecoration(color: !_showRawJson ? (isDark ? Colors.blue[800] : Colors.white) : Colors.transparent, borderRadius: BorderRadius.circular(10), boxShadow: !_showRawJson && !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)] : []),
+                                        decoration: BoxDecoration(color: !_showRawJson ? (isDark ? Colors.blue[800] : Colors.white) : Colors.transparent, borderRadius: BorderRadius.circular(10), boxShadow: !_showRawJson && !isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)] : []),
                                         child: Center(child: Text("Vista Detallada", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: !_showRawJson ? (isDark ? Colors.white : Colors.blue[800]) : Colors.grey))),
                                       ),
                                     ),
@@ -423,7 +423,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                       onTap: () => setState(() => _showRawJson = true),
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(vertical: 8),
-                                        decoration: BoxDecoration(color: _showRawJson ? (isDark ? Colors.blue[800] : Colors.white) : Colors.transparent, borderRadius: BorderRadius.circular(10), boxShadow: _showRawJson && !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)] : []),
+                                        decoration: BoxDecoration(color: _showRawJson ? (isDark ? Colors.blue[800] : Colors.white) : Colors.transparent, borderRadius: BorderRadius.circular(10), boxShadow: _showRawJson && !isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)] : []),
                                         child: Center(child: Text("Código JSON", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _showRawJson ? (isDark ? Colors.white : Colors.blue[800]) : Colors.grey))),
                                       ),
                                     ),

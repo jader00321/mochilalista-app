@@ -1,6 +1,25 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:image/image.dart' as img;
+
+Future<Uint8List?> _compressImage(Uint8List bytes) async {
+  final decodedImage = img.decodeImage(bytes);
+  if (decodedImage == null) return null;
+  int targetWidth = 800;
+  int targetHeight = 800;
+  if (decodedImage.width <= targetWidth && decodedImage.height <= targetHeight) {
+    return img.encodeJpg(decodedImage, quality: 75);
+  }
+  img.Image resized;
+  if (decodedImage.width > decodedImage.height) {
+    resized = img.copyResize(decodedImage, width: targetWidth);
+  } else {
+    resized = img.copyResize(decodedImage, height: targetHeight);
+  }
+  return img.encodeJpg(resized, quality: 75);
+}
 
 class ImageService {
   
@@ -24,10 +43,18 @@ class ImageService {
 
       final directory = await getApplicationDocumentsDirectory();
       
-      final String fileName = 'img_${DateTime.now().microsecondsSinceEpoch}.png';
+      final String fileName = 'img_${DateTime.now().microsecondsSinceEpoch}.jpg';
       final String localPath = p.join(directory.path, fileName);
       
-      final File savedImage = await tempImage.copy(localPath);
+      final imageBytes = await tempImage.readAsBytes();
+      final compressedBytes = await compute(_compressImage, imageBytes);
+      
+      final File savedImage = File(localPath);
+      if (compressedBytes != null) {
+        await savedImage.writeAsBytes(compressedBytes);
+      } else {
+        await tempImage.copy(localPath);
+      }
       
       if (oldImagePath != null && oldImagePath.isNotEmpty && !oldImagePath.startsWith('http')) {
         await deleteLocalImage(oldImagePath);
@@ -35,7 +62,7 @@ class ImageService {
       
       return savedImage.path; 
     } catch (e) {
-      print("Error guardando imagen localmente: $e");
+      debugPrint("Error guardando imagen localmente: $e");
       return oldImagePath; 
     }
   }
@@ -48,7 +75,33 @@ class ImageService {
         await file.delete();
       }
     } catch (e) {
-      print("Error eliminando imagen local: $e");
+      debugPrint("Error eliminando imagen local: $e");
+    }
+  }
+
+  // Tarea 3.4 (3): Limpieza de imágenes huérfanas
+  static Future<void> cleanupOrphanImages(List<String> activeImagePaths) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final activeSet = activeImagePaths.map((p) => p).toSet();
+      
+      final entities = directory.listSync();
+      int deletedCount = 0;
+      for (var entity in entities) {
+        if (entity is File) {
+          final fileName = p.basename(entity.path);
+          // Sólo verificamos imágenes locales
+          if (fileName.startsWith('img_') && (fileName.endsWith('.jpg') || fileName.endsWith('.png'))) {
+            if (!activeSet.contains(entity.path)) {
+              await entity.delete();
+              deletedCount++;
+            }
+          }
+        }
+      }
+      debugPrint("Cleanup: Se eliminaron $deletedCount imágenes huérfanas.");
+    } catch (e) {
+      debugPrint("Error limpiando imágenes huérfanas: $e");
     }
   }
 }

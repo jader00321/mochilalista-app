@@ -85,7 +85,7 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
                     width: double.infinity,
                     margin: const EdgeInsets.only(top: 20),
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.shade300, width: 1.5)),
+                    decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.shade300, width: 1.5)),
                     child: Row(
                       children: [
                         const Icon(Icons.error_outline, color: Colors.red, size: 28),

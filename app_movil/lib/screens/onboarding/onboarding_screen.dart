@@ -107,13 +107,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                 ),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 5))]),
+                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 15, offset: const Offset(0, 5))]),
                   child: Image.asset('assets/logo.png', width: 50, height: 50, fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.storefront, size: 50, color: Color(0xFF1565C0))),
                 ),
                 const SizedBox(height: 12),
                 const Text("Configura tu Negocio", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                 const SizedBox(height: 4),
-                Text("Solo te tomará un minuto", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 15)),
+                Text("Solo te tomará un minuto", style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 15)),
               ],
             ),
           );
@@ -139,7 +139,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               color: surfaceColor,
               borderRadius: BorderRadius.circular(32),
               border: Border.all(color: isDark ? Colors.white10 : Colors.transparent),
-              boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 25, offset: const Offset(0, 10))],
+              boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 25, offset: const Offset(0, 10))],
             ),
             child: Form(
               key: _formKey,
@@ -214,9 +214,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   
                   Container(
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withOpacity(0.03) : Colors.blue.withOpacity(0.05),
+                      color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.blue.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withOpacity(0.2))
+                      border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.2))
                     ),
                     child: SwitchListTile(
                       title: const Text("Proteger con PIN y Huella", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),

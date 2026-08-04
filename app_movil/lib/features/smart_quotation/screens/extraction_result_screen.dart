@@ -179,10 +179,10 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
                         duration: const Duration(milliseconds: 150),
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
                         decoration: BoxDecoration(
-                          color: dragging ? (isDark ? Colors.blue.withOpacity(0.3) : Colors.blue[100]) : (isDark ? const Color(0xFF23232F) : Colors.white),
+                          color: dragging ? (isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100]) : (isDark ? const Color(0xFF23232F) : Colors.white),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: dragging ? Colors.transparent : (isDark ? Colors.white10 : Colors.grey.shade300)),
-                          boxShadow: [if (!dragging && !isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
+                          boxShadow: [if (!dragging && !isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -282,7 +282,7 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                          side: BorderSide(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.withOpacity(0.5), width: 1.5),
+                          side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.5), width: 1.5),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
@@ -472,7 +472,7 @@ class _InternalItemCardState extends State<_InternalItemCard> {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), 
-                  decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], borderRadius: BorderRadius.circular(8)), 
+                  decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], borderRadius: BorderRadius.circular(8)), 
                   child: Text("Fila #${widget.index + 1}", style: TextStyle(color: widget.isDark ? Colors.blue[300] : Colors.blue[900], fontWeight: FontWeight.bold, fontSize: 14))
                 ),
                 if (widget.item.originalText.isNotEmpty && widget.item.originalText != "Agregado manual") 
@@ -517,12 +517,12 @@ class _InternalItemCardState extends State<_InternalItemCard> {
         isDense: true, 
         filled: true, 
         fillColor: isDark 
-            ? (isSoft ? Colors.orange.withOpacity(0.05) : const Color(0xFF14141C)) 
+            ? (isSoft ? Colors.orange.withValues(alpha: 0.05) : const Color(0xFF14141C)) 
             : (isSoft ? Colors.orange[50] : Colors.white), 
         prefixIcon: icon != null ? Icon(icon, size: 20, color: isDark ? Colors.grey[400] : Colors.grey[600]) : null, 
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none), 
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300)), 
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.blue.withOpacity(0.5) : Colors.blue.withOpacity(0.3))), 
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.withValues(alpha: 0.3))), 
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
       )
     );

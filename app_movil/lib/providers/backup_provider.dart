@@ -6,6 +6,7 @@ import '../utils/backup_manager.dart';
 class BackupProvider with ChangeNotifier {
   bool _isLoading = false;
   String _errorMessage = "";
+  String _statusMessage = "";
 
   bool _isAutoBackupEnabled = false;
   String _autoBackupLocation = 'Local'; // 'Local' o 'Drive'
@@ -13,6 +14,7 @@ class BackupProvider with ChangeNotifier {
 
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
+  String get statusMessage => _statusMessage;
   bool get isAutoBackupEnabled => _isAutoBackupEnabled;
   String get autoBackupLocation => _autoBackupLocation;
   int get autoBackupIntervalDays => _autoBackupIntervalDays;
@@ -98,6 +100,7 @@ class BackupProvider with ChangeNotifier {
   }
 
   Future<bool> backupToGoogleDrive() async {
+    _statusMessage = "Autenticando con Google Drive...";
     _setLoading(true);
     try {
       bool success = await BackupManager.exportToGoogleDrive();
@@ -107,6 +110,7 @@ class BackupProvider with ChangeNotifier {
       return false;
     } finally {
       _setLoading(false);
+      _statusMessage = "";
     }
   }
 

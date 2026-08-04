@@ -32,17 +32,17 @@ class QuoteItemListRow extends StatelessWidget {
 
     Color borderColor = isDark ? Colors.white10 : Colors.grey.shade300;
     Color bgColor = isDark ? const Color(0xFF23232F) : Colors.white;
-    Color shadowColor = isDark ? Colors.transparent : Colors.black.withOpacity(0.05);
+    Color shadowColor = isDark ? Colors.transparent : Colors.black.withValues(alpha: 0.05);
     double borderWidth = 1.0;
 
     if (hasStockIssue) {
-      borderColor = isDark ? Colors.red.withOpacity(0.5) : Colors.red.shade300;
-      bgColor = isDark ? Colors.red.withOpacity(0.1) : Colors.red[50]!;
-      shadowColor = isDark ? Colors.transparent : Colors.red.withOpacity(0.15);
+      borderColor = isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade300;
+      bgColor = isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red[50]!;
+      shadowColor = isDark ? Colors.transparent : Colors.red.withValues(alpha: 0.15);
       borderWidth = 1.5;
     } else if (hasPriceIssue) {
-      borderColor = isDark ? Colors.orange.withOpacity(0.3) : Colors.orange.shade200;
-      shadowColor = isDark ? Colors.transparent : Colors.orange.withOpacity(0.05);
+      borderColor = isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200;
+      shadowColor = isDark ? Colors.transparent : Colors.orange.withValues(alpha: 0.05);
       borderWidth = 1.2;
     }
 
@@ -134,7 +134,7 @@ class QuoteItemListRow extends StatelessWidget {
                     if (isStructured && item.salesUnit != null)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                        decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
                         child: Text(item.salesUnit!.toUpperCase(), style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontSize: 11, fontWeight: FontWeight.bold)),
                       ),
                   ],
@@ -158,7 +158,7 @@ class QuoteItemListRow extends StatelessWidget {
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
-                        decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.1) : Colors.orange[50], borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? Colors.orange.withOpacity(0.3) : Colors.orange.shade200)), 
+                        decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50], borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200)), 
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [

@@ -109,7 +109,7 @@ class StagingVendorCard extends StatelessWidget {
                     padding: const EdgeInsets.all(10),
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.green.withOpacity(0.1) : Colors.green[50],
+                      color: isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green[50],
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -187,7 +187,7 @@ class StagingVendorCard extends StatelessWidget {
         child: Row(
           children: [
             CircleAvatar(
-              backgroundColor: isDark ? color.withOpacity(0.15) : color.withOpacity(0.1),
+              backgroundColor: isDark ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.1),
               radius: 22,
               child: Icon(icon, color: color, size: 24),
             ),
@@ -198,7 +198,7 @@ class StagingVendorCard extends StatelessWidget {
                 children: [
                   Text(title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                   const SizedBox(height: 4),
-                  Text(subtitle, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : color.withOpacity(0.9))),
+                  Text(subtitle, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : color.withValues(alpha: 0.9))),
                 ],
               ),
             ),
@@ -272,7 +272,7 @@ class _LocalProviderSearchState extends State<_LocalProviderSearch> {
                     if (query.isNotEmpty && !filtered.any((p) => p.nombreEmpresa.toLowerCase() == query.toLowerCase())) {
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                        leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[50], shape: BoxShape.circle), child: Icon(Icons.add_business, color: widget.isDark ? Colors.blue[300] : Colors.blue)),
+                        leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50], shape: BoxShape.circle), child: Icon(Icons.add_business, color: widget.isDark ? Colors.blue[300] : Colors.blue)),
                         title: Text("Crear nuevo: '$query'", style: TextStyle(color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 16)),
                         onTap: () => widget.onCreate(query),
                       );

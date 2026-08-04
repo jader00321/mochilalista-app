@@ -121,6 +121,36 @@ class ProductPresentation {
       'valor_descuento': valorDescuento,
     };
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'nombre_especifico': nombreEspecifico,
+      'codigo_barras': codigoBarras,
+      'descripcion': descripcion,
+      'imagen_url': imagenUrl,
+      'proveedor_id': proveedorId,
+      'ump_compra': umpCompra,
+      'precio_ump_proveedor': precioUmpProveedor,
+      'cantidad_ump_comprada': cantidadUmpComprada,
+      'total_pago_lote': totalPagoLote,
+      'unidades_por_lote': unidadesPorLote,
+      'factura_carga_id': facturaCargaId,
+      'unidad_venta': unidadVenta,
+      'unidades_por_venta': unidadesPorVenta,
+      'costo_unitario_calculado': costoUnitarioCalculado,
+      'factor_ganancia_venta': factorGananciaVenta,
+      'precio_venta_final': precioVentaFinal,
+      'stock_actual': stockActual,
+      'stock_alerta': stockAlerta,
+      'es_default': esDefault ? 1 : 0,
+      'precio_oferta': precioOferta,
+      'tipo_descuento': tipoDescuento,
+      'valor_descuento': valorDescuento,
+      'estado': estado,
+      'activo': activo ? 1 : 0,
+    };
+  }
 }
 
 class Product {
@@ -178,6 +208,21 @@ class Product {
       'imagen_url': imagenUrl,
       'estado': estado,
       'fecha_actualizacion': DateTime.now().toIso8601String(),
+    };
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'nombre': nombre,
+      'marca_id': marcaId,
+      'descripcion': descripcion,
+      'categoria_id': categoriaId,
+      'imagen_url': imagenUrl,
+      'codigo_barras': codigoBarras,
+      'estado': estado,
+      'stock_total_calculado': stockTotalCalculado,
+      'presentaciones': presentaciones.map((p) => p.toJson()).toList(),
     };
   }
 }

@@ -118,7 +118,7 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
                             color: isDark ? const Color(0xFF23232F) : Colors.white,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-                            boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3))]
+                            boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))]
                           ),
                           child: Row(
                             children: [
@@ -126,7 +126,7 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
                               Container(
                                 width: 60, height: 60,
                                 decoration: BoxDecoration(
-                                  color: isDark ? statusColor.withOpacity(0.15) : statusColor.withOpacity(0.1),
+                                  color: isDark ? statusColor.withValues(alpha: 0.15) : statusColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Icon(_getStatusIcon(invoice.estado), color: statusColor, size: 30),
@@ -153,7 +153,7 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
                                       children: [
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(color: isDark ? Colors.blueGrey.withOpacity(0.3) : Colors.grey[100], borderRadius: BorderRadius.circular(6)),
+                                          decoration: BoxDecoration(color: isDark ? Colors.blueGrey.withValues(alpha: 0.3) : Colors.grey[100], borderRadius: BorderRadius.circular(6)),
                                           child: Text(
                                             "ID: ${invoice.id}",
                                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[100] : Colors.blueGrey[700]),
@@ -162,7 +162,7 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
                                         const SizedBox(width: 8),
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(color: isDark ? statusColor.withOpacity(0.2) : statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                                          decoration: BoxDecoration(color: isDark ? statusColor.withValues(alpha: 0.2) : statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
                                           child: Text(
                                             invoice.estado.toUpperCase(),
                                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor, letterSpacing: 0.5),

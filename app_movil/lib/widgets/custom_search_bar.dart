@@ -161,9 +161,9 @@ class _CustomSearchBarState extends State<CustomSearchBar> {
                   child: Container(
                     height: 50, width: 50,
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.red.withOpacity(0.15) : Colors.red.withOpacity(0.1),
+                      color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: isDark ? Colors.red.withOpacity(0.4) : Colors.red.withOpacity(0.3))
+                      border: Border.all(color: isDark ? Colors.red.withValues(alpha: 0.4) : Colors.red.withValues(alpha: 0.3))
                     ),
                     child: Icon(Icons.cleaning_services_rounded, color: isDark ? Colors.red[300] : Colors.red, size: 24),
                   ),
@@ -179,9 +179,9 @@ class _CustomSearchBarState extends State<CustomSearchBar> {
                 child: Container(
                   height: 50, width: 50,
                   decoration: BoxDecoration(
-                    color: hasFilters ? (isDark ? Colors.orange.withOpacity(0.15) : Colors.orange.shade50) : (isDark ? Colors.blue[800] : Colors.blue.shade100),
+                    color: hasFilters ? (isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50) : (isDark ? Colors.blue[800] : Colors.blue.shade100),
                     borderRadius: BorderRadius.circular(14),
-                    border: hasFilters ? Border.all(color: isDark ? Colors.orange.withOpacity(0.5) : Colors.orange.shade300) : null,
+                    border: hasFilters ? Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300) : null,
                   ),
                   child: Icon(
                     hasFilters ? Icons.tune_rounded : Icons.filter_alt_rounded, 
@@ -213,11 +213,11 @@ class _CustomSearchBarState extends State<CustomSearchBar> {
                   selected: isSelected,
                   onSelected: (val) => _toggleCategory(cat.id, val, provider),
                   showCheckmark: false,
-                  backgroundColor: isDark ? Colors.white10 : Colors.white.withOpacity(0.2), 
-                  selectedColor: isDark ? Colors.blue.withOpacity(0.3) : const Color.fromARGB(255, 230, 230, 230), 
+                  backgroundColor: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.2), 
+                  selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : const Color.fromARGB(255, 230, 230, 230), 
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withOpacity(0.5) : Colors.transparent) : Colors.transparent), 
+                    side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.transparent) : Colors.transparent), 
                   ),
                   labelStyle: TextStyle(
                     color: isSelected ? (isDark ? Colors.blue[200] : theme.primaryColor) : (isDark ? Colors.white70 : const Color.fromARGB(255, 48, 48, 48)),

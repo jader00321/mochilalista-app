@@ -35,7 +35,7 @@ class MasterItemTile extends StatelessWidget {
           color: isActive ? (isDark ? Colors.white10 : Colors.transparent) : (isDark ? Colors.white10 : Colors.grey.shade300),
         ),
         boxShadow: isActive && !isDark 
-            ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))]
+            ? [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))]
             : [], 
       ),
       child: Material(
@@ -51,7 +51,7 @@ class MasterItemTile extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: displayColor.withOpacity(0.15),
+                    color: displayColor.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, color: displayColor, size: 28),
@@ -92,9 +92,9 @@ class MasterItemTile extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: isActive ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green.withOpacity(0.1)) : (isDark ? Colors.grey.withOpacity(0.1) : Colors.grey.withOpacity(0.1)),
+                    color: isActive ? (isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.withValues(alpha: 0.1)) : (isDark ? Colors.grey.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: isActive ? (isDark ? Colors.green.withOpacity(0.4) : Colors.green.withOpacity(0.3)) : (isDark ? Colors.grey.withOpacity(0.3) : Colors.grey.withOpacity(0.3)))
+                    border: Border.all(color: isActive ? (isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.withValues(alpha: 0.3)) : (isDark ? Colors.grey.withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.3)))
                   ),
                   child: Text(
                     isActive ? "ACTIVO" : "SUSPENDIDO",

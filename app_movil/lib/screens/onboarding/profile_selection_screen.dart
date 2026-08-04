@@ -85,7 +85,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> with Si
                   decoration: BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 5))]
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 15, offset: const Offset(0, 5))]
                   ),
                   child: Image.asset(
                     'assets/logo.png', width: 55, height: 55, fit: BoxFit.contain,
@@ -95,7 +95,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> with Si
                 const SizedBox(height: 16),
                 const Text("MochilaLista", style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                 const SizedBox(height: 6),
-                Text("Selecciona tu espacio de trabajo", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 16, fontWeight: FontWeight.w500)),
+                Text("Selecciona tu espacio de trabajo", style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 16, fontWeight: FontWeight.w500)),
               ],
             ),
           );
@@ -118,7 +118,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> with Si
             color: surfaceColor,
             borderRadius: BorderRadius.circular(32),
             border: Border.all(color: isDark ? Colors.white10 : Colors.transparent),
-            boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 25, offset: const Offset(0, 10))],
+            boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 25, offset: const Offset(0, 10))],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -162,7 +162,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> with Si
                               children: [
                                 CircleAvatar(
                                   radius: 28,
-                                  backgroundColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.shade50,
+                                  backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50,
                                   child: ClipOval(
                                     child: UniversalImage(
                                       path: business?.logoUrl,

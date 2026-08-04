@@ -156,7 +156,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isDark ? Colors.white10 : Colors.transparent)),
       elevation: isDark ? 0 : 4,
-      shadowColor: Colors.black.withOpacity(0.05),
+      shadowColor: Colors.black.withValues(alpha: 0.05),
       child: InkWell(
         onTap: () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => QuotationDetailScreen(quotationId: order.id, clientName: order.clientName)));
@@ -186,11 +186,11 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: isDark ? typeColor.withOpacity(0.2) : typeColor.withOpacity(0.1),
+                              color: isDark ? typeColor.withValues(alpha: 0.2) : typeColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: isDark ? typeColor.withOpacity(0.5) : typeColor.withOpacity(0.3))
+                              border: Border.all(color: isDark ? typeColor.withValues(alpha: 0.5) : typeColor.withValues(alpha: 0.3))
                             ),
-                            child: Text(typeLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? typeColor : typeColor.withOpacity(0.8))),
+                            child: Text(typeLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? typeColor : typeColor.withValues(alpha: 0.8))),
                           )
                       ],
                     ),
@@ -229,7 +229,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
                  Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.15) : Colors.red[50], borderRadius: BorderRadius.circular(12)),
+                    decoration: BoxDecoration(color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red[50], borderRadius: BorderRadius.circular(12)),
                     child: Row(
                       children: [
                         Icon(Icons.cancel, color: isDark ? Colors.red[300] : Colors.red),
@@ -267,7 +267,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isActive ? color.withOpacity(0.15) : Colors.transparent,
+              color: isActive ? color.withValues(alpha: 0.15) : Colors.transparent,
               shape: BoxShape.circle,
               border: Border.all(color: color, width: 2)
             ),
@@ -350,7 +350,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isDark ? Colors.white10 : Colors.green.shade200)),
       elevation: isDark ? 0 : 4,
-      shadowColor: Colors.black.withOpacity(0.05),
+      shadowColor: Colors.black.withValues(alpha: 0.05),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -372,16 +372,16 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: isDark ? deliveryColor.withOpacity(0.2) : deliveryColor.withOpacity(0.1),
+                    color: isDark ? deliveryColor.withValues(alpha: 0.2) : deliveryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isDark ? deliveryColor.withOpacity(0.5) : deliveryColor.withOpacity(0.3))
+                    border: Border.all(color: isDark ? deliveryColor.withValues(alpha: 0.5) : deliveryColor.withValues(alpha: 0.3))
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(deliveryIcon, size: 14, color: isDark ? deliveryColor : deliveryColor.withOpacity(0.8)),
+                      Icon(deliveryIcon, size: 14, color: isDark ? deliveryColor : deliveryColor.withValues(alpha: 0.8)),
                       const SizedBox(width: 6),
-                      Text(deliveryText, style: TextStyle(color: isDark ? deliveryColor : deliveryColor.withOpacity(0.8), fontWeight: FontWeight.bold, fontSize: 10)),
+                      Text(deliveryText, style: TextStyle(color: isDark ? deliveryColor : deliveryColor.withValues(alpha: 0.8), fontWeight: FontWeight.bold, fontSize: 10)),
                     ],
                   ),
                 )
@@ -433,7 +433,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
                 },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                  side: BorderSide(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.shade200),
+                  side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.shade200),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 12)
                 ),
@@ -458,7 +458,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
           children: [
             Container(
               padding: const EdgeInsets.all(30),
-              decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue[50], shape: BoxShape.circle),
+              decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50], shape: BoxShape.circle),
               child: Icon(Icons.shopping_bag_outlined, size: 80, color: isDark ? Colors.blue[300] : Colors.blue[400]),
             ),
             const SizedBox(height: 30),

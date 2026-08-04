@@ -226,12 +226,12 @@ class _FilterDrawerState extends State<FilterDrawer> {
                       return FilterChip(
                         label: Text(cat.nombre, style: TextStyle(fontSize: 14, color: isSelected ? (isDark ? Colors.blue[200] : theme.primaryColor) : textColor)),
                         selected: isSelected,
-                        selectedColor: isDark ? Colors.blue.withOpacity(0.2) : theme.primaryColor.withOpacity(0.1),
+                        selectedColor: isDark ? Colors.blue.withValues(alpha: 0.2) : theme.primaryColor.withValues(alpha: 0.1),
                         checkmarkColor: isDark ? Colors.blue[300] : theme.primaryColor,
                         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.grey[100],
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withOpacity(0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.transparent)),
+                        side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.transparent)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         onSelected: (selected) {
                           setState(() {
@@ -255,12 +255,12 @@ class _FilterDrawerState extends State<FilterDrawer> {
                       return FilterChip(
                         label: Text(brand.nombre, style: TextStyle(fontSize: 14, color: isSelected ? (isDark ? Colors.blue[200] : Colors.blue[800]) : textColor)),
                         selected: isSelected,
-                        selectedColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.1),
+                        selectedColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.withValues(alpha: 0.1),
                         checkmarkColor: isDark ? Colors.blue[300] : Colors.blue,
                         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.grey[100],
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withOpacity(0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.transparent)),
+                        side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.transparent)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         onSelected: (selected) {
                           setState(() {
@@ -282,12 +282,12 @@ class _FilterDrawerState extends State<FilterDrawer> {
                       return FilterChip(
                         label: Text(prov.nombreEmpresa, style: TextStyle(fontSize: 14, color: isSelected ? (isDark ? Colors.purple[200] : Colors.purple[900]) : textColor)),
                         selected: isSelected,
-                        selectedColor: isDark ? Colors.purple.withOpacity(0.2) : Colors.purple.withOpacity(0.1),
+                        selectedColor: isDark ? Colors.purple.withValues(alpha: 0.2) : Colors.purple.withValues(alpha: 0.1),
                         checkmarkColor: isDark ? Colors.purple[300] : Colors.purple,
                         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.grey[100],
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        side: BorderSide(color: isSelected ? (isDark ? Colors.purple.withOpacity(0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.transparent)),
+                        side: BorderSide(color: isSelected ? (isDark ? Colors.purple.withValues(alpha: 0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.transparent)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         onSelected: (selected) {
                           setState(() {
@@ -307,7 +307,7 @@ class _FilterDrawerState extends State<FilterDrawer> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF23232F) : Colors.white,
-                boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, -5))],
+                boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -5))],
               ),
               child: SizedBox(
                 width: double.infinity,
@@ -358,7 +358,7 @@ class _FilterDrawerState extends State<FilterDrawer> {
       label: Text(label),
       selected: selected,
       onSelected: (_) => onSelected(),
-      selectedColor: activeColor.withOpacity(0.15),
+      selectedColor: activeColor.withValues(alpha: 0.15),
       backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
       labelStyle: TextStyle(
         color: selected ? activeColor : (isDark ? Colors.white70 : Colors.black87),
@@ -367,7 +367,7 @@ class _FilterDrawerState extends State<FilterDrawer> {
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: selected ? (isDark ? activeColor.withOpacity(0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.grey.shade300))
+        side: BorderSide(color: selected ? (isDark ? activeColor.withValues(alpha: 0.5) : Colors.transparent) : (isDark ? Colors.white10 : Colors.grey.shade300))
       ),
     );
   }

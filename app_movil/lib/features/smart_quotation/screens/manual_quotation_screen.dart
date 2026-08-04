@@ -696,7 +696,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.orange.withOpacity(0.15)),
+                    decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.15)),
                     child: Row(
                       children: [
                         Icon(Icons.info_outline, color: Colors.orange[700]),

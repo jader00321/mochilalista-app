@@ -132,7 +132,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                     prefixStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 28, color: isDark ? Colors.green[400] : Colors.green),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                     filled: true,
-                    fillColor: isDark ? Colors.green.withOpacity(0.1) : Colors.green[50],
+                    fillColor: isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green[50],
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -163,13 +163,13 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                             }
                           });
                         },
-                        selectedColor: isSaldoBtn ? (isDark ? Colors.amber.withOpacity(0.3) : Colors.amber[100]) : (isDark ? Colors.green.withOpacity(0.3) : Colors.green[100]),
-                        backgroundColor: isSaldoBtn ? (isDark ? Colors.amber.withOpacity(0.1) : Colors.amber[50]) : (isDark ? const Color(0xFF14141C) : Colors.grey[100]),
+                        selectedColor: isSaldoBtn ? (isDark ? Colors.amber.withValues(alpha: 0.3) : Colors.amber[100]) : (isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green[100]),
+                        backgroundColor: isSaldoBtn ? (isDark ? Colors.amber.withValues(alpha: 0.1) : Colors.amber[50]) : (isDark ? const Color(0xFF14141C) : Colors.grey[100]),
                         labelStyle: TextStyle(
                           color: isSelected ? (isSaldoBtn ? (isDark ? Colors.amber[200] : Colors.amber[900]) : (isDark ? Colors.green[300] : Colors.green[900])) : (isDark ? Colors.white70 : Colors.black), 
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
                         ),
-                        side: BorderSide(color: isSaldoBtn ? (isDark ? Colors.amber.withOpacity(0.5) : Colors.amber.shade300) : Colors.transparent),
+                        side: BorderSide(color: isSaldoBtn ? (isDark ? Colors.amber.withValues(alpha: 0.5) : Colors.amber.shade300) : Colors.transparent),
                       );
                     }).toList(),
                   ),
@@ -222,7 +222,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: isDark ? Colors.amber.withOpacity(0.1) : Colors.amber[50], borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.amber.withOpacity(0.3) : Colors.amber.shade300)),
+              decoration: BoxDecoration(color: isDark ? Colors.amber.withValues(alpha: 0.1) : Colors.amber[50], borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.amber.withValues(alpha: 0.3) : Colors.amber.shade300)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -265,7 +265,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 30),
             decoration: BoxDecoration(
               color: surfaceColor,
-              boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))]
+              boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))]
             ),
             child: SizedBox(
               width: double.infinity,
@@ -356,7 +356,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF14141C) : Colors.white, 
-        border: Border.all(color: saldado ? (isDark ? Colors.green.withOpacity(0.3) : Colors.green.shade200) : (isDark ? Colors.orange.withOpacity(0.3) : Colors.orange.shade200)), 
+        border: Border.all(color: saldado ? (isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.shade200) : (isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200)), 
         borderRadius: BorderRadius.circular(12)
       ),
       child: Row(
@@ -381,7 +381,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          color: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue[50],
+          color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50],
           child: Row(
             children: [
               Icon(Icons.ads_click, color: isDark ? Colors.blue[300] : Colors.blue, size: 24),

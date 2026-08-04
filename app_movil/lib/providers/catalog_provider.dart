@@ -3,13 +3,14 @@ import '../database/local_db.dart';
 import '../models/inventory_wrapper.dart';
 import '../models/category_model.dart';
 import '../models/brand_model.dart';
-import '../services/master_data_service.dart';
+import '../services/master_data_cache.dart';
 import '../services/product_service.dart';
 
 String normalizeText(String input) {
-  return input.toLowerCase()
+  return input.trim().toLowerCase()
       .replaceAll('á', 'a').replaceAll('é', 'e').replaceAll('í', 'i')
-      .replaceAll('ó', 'o').replaceAll('ú', 'u').replaceAll('ü', 'u');
+      .replaceAll('ó', 'o').replaceAll('ú', 'u').replaceAll('ü', 'u')
+      .replaceAll('ñ', 'n');
 }
 
 class CartItem {
@@ -29,12 +30,10 @@ class CatalogProvider with ChangeNotifier {
   int? _negocioId;
   int? _userId;
   
-  final MasterDataService _masterDataService = MasterDataService();
+  final MasterDataCache _masterDataCache = MasterDataCache();
   final ProductService _productService = ProductService();
   final dbHelper = LocalDatabase.instance;
 
-  List<Category> _categories = [];
-  List<Brand> _brands = []; 
   final List<InventoryWrapper> _displayItems = []; 
 
   bool _isLoading = false;
@@ -53,8 +52,8 @@ class CatalogProvider with ChangeNotifier {
   final List<CartItem> _utilityList = [];
 
   List<InventoryWrapper> get displayItems => _displayItems;
-  List<Category> get categories => _categories;
-  List<Brand> get brands => _brands;
+  List<Category> get categories => _masterDataCache.categories;
+  List<Brand> get brands => _masterDataCache.brands;
 
   bool get isLoading => _isLoading;
   int? get selectedCategoryId => _selectedCategoryId;
@@ -81,11 +80,9 @@ class CatalogProvider with ChangeNotifier {
       _negocioId = negocioId;
       _userId = userId;
       
-      _masterDataService.updateContext(negocioId);
+      _masterDataCache.updateContext(negocioId);
       _productService.updateContext(negocioId);
 
-      _categories.clear();
-      _brands.clear();
       _displayItems.clear();
       _shoppingCart.clear();
       _utilityList.clear();
@@ -159,14 +156,10 @@ class CatalogProvider with ChangeNotifier {
   }
 
   Future<void> _fetchMasters() async {
-    if (_categories.isNotEmpty && _brands.isNotEmpty) return; 
+    if (_masterDataCache.isLoaded) return; 
     try {
-      final masters = await _masterDataService.fetchAllMasterData(false);
-      if (masters != null) {
-        _categories = List<Category>.from(masters['categories']);
-        _brands = List<Brand>.from(masters['brands']);
-        notifyListeners();
-      }
+      await _masterDataCache.load(false);
+      notifyListeners();
     } catch (e) { debugPrint("Error cargando maestros: $e"); }
   }
 
@@ -181,6 +174,7 @@ class CatalogProvider with ChangeNotifier {
         'skip': (_page * _limit).toString(),
         'limit': _limit.toString(),
         'estado': 'publico',
+        'sortDir': _isSortAscending ? 'ASC' : 'DESC',
       };
 
       if (_searchQuery.isNotEmpty) params['q'] = _searchQuery;
@@ -206,16 +200,8 @@ class CatalogProvider with ChangeNotifier {
 
       if (newItems != null) {
         if (newItems.length < _limit) _hasMoreData = false;
-        
         _displayItems.addAll(newItems);
         _page++; 
-        
-        if (_searchQuery.isEmpty) {
-           _displayItems.sort((a, b) {
-             int cmp = a.product.nombre.toLowerCase().compareTo(b.product.nombre.toLowerCase());
-             return _isSortAscending ? cmp : -cmp;
-           });
-        }
       }
     } catch (e) {
       _errorMessage = "Error cargando catálogo: $e";
@@ -256,15 +242,7 @@ class CatalogProvider with ChangeNotifier {
 
   void toggleSortOrder() {
     _isSortAscending = !_isSortAscending;
-    if (_searchQuery.isEmpty && _displayItems.isNotEmpty) {
-       _displayItems.sort((a, b) {
-         int cmp = a.product.nombre.toLowerCase().compareTo(b.product.nombre.toLowerCase());
-         return _isSortAscending ? cmp : -cmp;
-       });
-       notifyListeners();
-    } else {
-       _resetAndReload();
-    }
+    _resetAndReload();
   }
 
   void _resetAndReload() {
@@ -379,16 +357,16 @@ class CatalogProvider with ChangeNotifier {
   }
 
   String getBrandName(int? id) {
-    if (id == null || _brands.isEmpty) return "";
+    if (id == null || brands.isEmpty) return "";
     try {
-      return _brands.firstWhere((b) => b.id == id).nombre;
+      return brands.firstWhere((b) => b.id == id).nombre;
     } catch (_) { return ""; }
   }
 
   String getCategoryName(int? id) {
-    if (id == null || _categories.isEmpty) return "";
+    if (id == null || categories.isEmpty) return "";
     try {
-      return _categories.firstWhere((c) => c.id == id).nombre;
+      return categories.firstWhere((c) => c.id == id).nombre;
     } catch (_) { return ""; }
   }
 

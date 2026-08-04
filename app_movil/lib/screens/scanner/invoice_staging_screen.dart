@@ -219,9 +219,9 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                             label: const Text("AGREGAR PRODUCTO MANUALMENTE", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                              side: BorderSide(color: isDark ? Colors.blue.withOpacity(0.5) : Colors.blue.shade800, width: 2),
+                              side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade800, width: 2),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              backgroundColor: isDark ? Colors.blue.withOpacity(0.05) : Colors.white
+                              backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.05) : Colors.white
                             ),
                           ),
                         );

@@ -122,7 +122,7 @@ class _TeamMembersTab extends StatelessWidget {
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           leading: CircleAvatar(
-                            backgroundColor: isSuspended ? Colors.red.withOpacity(0.2) : Colors.blue.withOpacity(0.2),
+                            backgroundColor: isSuspended ? Colors.red.withValues(alpha: 0.2) : Colors.blue.withValues(alpha: 0.2),
                             child: Icon(Icons.person, color: isSuspended ? Colors.red : Colors.blue),
                           ),
                           title: Text(
@@ -548,7 +548,7 @@ class _AccessCodesTab extends StatelessWidget {
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.grey.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green, width: 2)),
+              decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green, width: 2)),
               child: Text(codigo, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
             ),
           ],

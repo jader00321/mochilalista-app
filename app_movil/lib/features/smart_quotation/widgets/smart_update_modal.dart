@@ -54,7 +54,7 @@ class SmartUpdateModal extends StatelessWidget {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.15) : Colors.green[100], shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[100], shape: BoxShape.circle),
                     child: Icon(Icons.check_circle, color: isDark ? Colors.green[300] : Colors.green[700], size: 32),
                   ),
                   const SizedBox(width: 16),
@@ -78,7 +78,7 @@ class SmartUpdateModal extends StatelessWidget {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange[100], shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[100], shape: BoxShape.circle),
                     child: Icon(Icons.build_circle, color: isDark ? Colors.orange[300] : Colors.orange[900], size: 32),
                   ),
                   const SizedBox(width: 16),
@@ -99,7 +99,7 @@ class SmartUpdateModal extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(16),
                           margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.1) : Colors.red[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.red.withOpacity(0.3) : Colors.red.shade200)),
+                          decoration: BoxDecoration(color: isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.red.withValues(alpha: 0.3) : Colors.red.shade200)),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -117,7 +117,7 @@ class SmartUpdateModal extends StatelessWidget {
                             onPressed: () { Navigator.pop(context); onFixStock(); },
                             icon: const Icon(Icons.delete_sweep, size: 20),
                             label: const Text("Eliminar Productos Agotados", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.red[300] : Colors.red[800], side: BorderSide(color: isDark ? Colors.red.withOpacity(0.5) : Colors.red[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.red[300] : Colors.red[800], side: BorderSide(color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                           ),
                         ),
                         Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),
@@ -129,7 +129,7 @@ class SmartUpdateModal extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(16),
                           margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.1) : Colors.orange[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.orange.withOpacity(0.3) : Colors.orange.shade200)),
+                          decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200)),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -147,7 +147,7 @@ class SmartUpdateModal extends StatelessWidget {
                             onPressed: () { Navigator.pop(context); onUpdatePrices(); },
                             icon: const Icon(Icons.refresh, size: 20),
                             label: const Text("Actualizar Todo a Precios de Hoy", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800], side: BorderSide(color: isDark ? Colors.orange.withOpacity(0.5) : Colors.orange[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800], side: BorderSide(color: isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                           ),
                         ),
                         Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import 'package:share_plus/share_plus.dart';
@@ -8,8 +7,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../database/local_db.dart'; 
+import '../utils/app_logger.dart';
 import 'google_auth_client.dart';
 
 class BackupManager {
@@ -35,8 +36,8 @@ class BackupManager {
         text: '📦 Backup Mochila Lista\nFecha: ${DateTime.now().toLocal().toString().split('.')[0]}\n\nGuarda este archivo (.db) en un lugar seguro para poder restaurarlo cuando lo necesites.'
       );
       return true;
-    } catch (e) {
-      debugPrint("Error exportando a WhatsApp: $e");
+    } catch (e, stack) {
+      AppLogger.error('BackupManager.exportToWhatsApp', e, stack);
       throw Exception("No se pudo preparar el archivo para compartir.");
     }
   }
@@ -71,8 +72,8 @@ class BackupManager {
       
       await dbFile.copy(newPath);
       return true;
-    } catch (e) {
-      debugPrint("Error guardando en descargas: $e");
+    } catch (e, stack) {
+      AppLogger.error('BackupManager.exportToDownloads', e, stack);
       throw Exception(e.toString().replaceAll("Exception:", "").trim());
     }
   }
@@ -106,8 +107,8 @@ class BackupManager {
 
       authenticateClient.close();
       return true; 
-    } catch (e) {
-      debugPrint("Error subiendo a Google Drive: $e");
+    } catch (e, stack) {
+      AppLogger.error('BackupManager.exportToGoogleDrive', e, stack);
       throw Exception(e.toString().replaceAll("Exception:", "").trim());
     }
   }
@@ -127,7 +128,36 @@ class BackupManager {
         }
 
         File backupFile = File(filePath);
+        
+        // 1. Validar cabecera SQLite
+        final bytes = await backupFile.openRead(0, 16).first;
+        final header = String.fromCharCodes(bytes);
+        if (header != "SQLite format 3\x00") {
+          throw Exception("El archivo seleccionado está corrupto o no es una base de datos válida.");
+        }
+
+        // 2. Validar tablas requeridas
+        final tempDb = await openDatabase(filePath, readOnly: true);
+        final tables = await tempDb.rawQuery("SELECT name FROM sqlite_master WHERE type='table'");
+        final tableNames = tables.map((e) => e['name'] as String).toList();
+        await tempDb.close();
+        
+        final requiredTables = ['usuarios', 'negocios', 'productos', 'ventas'];
+        for (var table in requiredTables) {
+          if (!tableNames.contains(table)) {
+            throw Exception("El backup es inválido. Faltan tablas críticas como '\$table'.");
+          }
+        }
+
         final currentDbFile = await _getDatabaseFile();
+        
+        // 3. Crear backup automático antes de sobreescribir
+        if (await currentDbFile.exists()) {
+          final tempBackupDir = await getTemporaryDirectory();
+          final safeBackupPath = p.join(tempBackupDir.path, 'safe_backup_${DateTime.now().millisecondsSinceEpoch}.db');
+          await currentDbFile.copy(safeBackupPath);
+          AppLogger.info('BackupManager.restoreBackup', 'Backup de seguridad creado en \$safeBackupPath antes de restaurar');
+        }
         
         // 🔥 CRÍTICO: Cerramos la conexión activa
         await LocalDatabase.instance.closeConnection();
@@ -136,8 +166,8 @@ class BackupManager {
         return true; 
       }
       return false; 
-    } catch (e) {
-      debugPrint("Error restaurando backup: $e");
+    } catch (e, stack) {
+      AppLogger.error('BackupManager.restoreBackup', e, stack);
       throw Exception(e.toString().replaceAll("Exception:", "").trim());
     }
   }

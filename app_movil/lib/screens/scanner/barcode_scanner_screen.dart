@@ -158,7 +158,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               decoration: BoxDecoration(
                 border: Border.all(color: highlightColor, width: 4), 
                 borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: highlightColor.withOpacity(0.5), blurRadius: 20, spreadRadius: 2)]
+                boxShadow: [BoxShadow(color: highlightColor.withValues(alpha: 0.5), blurRadius: 20, spreadRadius: 2)]
               ),
             ),
           ),
@@ -172,7 +172,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           ),
           if (_isProcessing || provider.isLoading)
             Container(
-              color: Colors.black.withOpacity(0.7),
+              color: Colors.black.withValues(alpha: 0.7),
               child: const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

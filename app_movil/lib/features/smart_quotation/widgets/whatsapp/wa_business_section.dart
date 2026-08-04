@@ -83,7 +83,7 @@ class WaBusinessSection extends StatelessWidget {
                 hintText: "Ej: Yape 999...\nBCP 123...",
                 hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey),
                 filled: true,
-                fillColor: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue[50],
+                fillColor: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50],
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               ),
               onChanged: (_) => onDataChanged(),
@@ -91,7 +91,7 @@ class WaBusinessSection extends StatelessWidget {
             
             const SizedBox(height: 16),
             Container(
-              decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.05) : Colors.transparent, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.05) : Colors.transparent, borderRadius: BorderRadius.circular(12)),
               child: CheckboxListTile(
                 title: Text("Actualizar mis datos por defecto", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue)),
                 value: updateBusinessData,

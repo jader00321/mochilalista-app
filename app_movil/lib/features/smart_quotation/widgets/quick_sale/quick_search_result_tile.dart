@@ -89,7 +89,7 @@ class QuickSearchResultTile extends StatelessWidget {
                   if (isOut)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.2) : Colors.red[100], borderRadius: BorderRadius.circular(6)),
+                      decoration: BoxDecoration(color: isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red[100], borderRadius: BorderRadius.circular(6)),
                       child: Text("AGOTADO", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red[800], fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                     )
                   else

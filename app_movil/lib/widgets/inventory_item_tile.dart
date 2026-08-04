@@ -76,7 +76,7 @@ class InventoryItemTile extends StatelessWidget {
                           UniversalImage(path: displayImage),
                           if (isOutOfStock)
                             Container(
-                              color: isDark ? Colors.black.withOpacity(0.7) : Colors.white.withOpacity(0.7),
+                              color: isDark ? Colors.black.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.7),
                               child: Center(child: Icon(Icons.block, color: isDark ? Colors.red[400] : Colors.red, size: 36))
                             )
                         ],
@@ -119,9 +119,9 @@ class InventoryItemTile extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.15),
+                            color: statusColor.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: statusColor.withOpacity(0.4))
+                            border: Border.all(color: statusColor.withValues(alpha: 0.4))
                           ),
                           child: Text(statusText, style: TextStyle(fontSize: 9, color: statusColor, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                         )
@@ -167,9 +167,9 @@ class InventoryItemTile extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: stockColor.withOpacity(0.15), 
+                            color: stockColor.withValues(alpha: 0.15), 
                             borderRadius: BorderRadius.circular(8), 
-                            border: Border.all(color: stockColor.withOpacity(0.4))
+                            border: Border.all(color: stockColor.withValues(alpha: 0.4))
                           ),
                           child: Row(
                             children: [

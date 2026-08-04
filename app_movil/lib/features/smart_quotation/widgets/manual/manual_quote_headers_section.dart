@@ -103,7 +103,7 @@ class ManualQuoteHeadersSection extends StatelessWidget {
                               labelStyle: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700]),
                               prefixIcon: Icon(Icons.description, color: isDark ? Colors.blue[300] : Colors.blue),
                               filled: true,
-                              fillColor: isDark ? Colors.blue.withOpacity(0.05) : Colors.blue.shade50,
+                              fillColor: isDark ? Colors.blue.withValues(alpha: 0.05) : Colors.blue.shade50,
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                             ),
                           ),

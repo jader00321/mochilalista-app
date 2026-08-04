@@ -102,7 +102,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+        color: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
         border: Border.all(color: isSelected ? color : (isDark ? Colors.white10 : Colors.grey.shade300)),
         borderRadius: BorderRadius.circular(14)
       ),
@@ -187,7 +187,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                   color: isDark ? const Color(0xFF14141C) : Colors.blueGrey[900], 
                   borderRadius: BorderRadius.circular(20), 
                   border: isDark ? Border.all(color: Colors.white10) : null,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)]
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]
                 ),
                 child: Column(
                   children: [
@@ -281,7 +281,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                         child: ExpansionTile(
                           iconColor: textColor,
                           collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey,
-                          leading: CircleAvatar(backgroundColor: statusColor.withOpacity(0.15), child: Icon(statusIcon, color: statusColor)),
+                          leading: CircleAvatar(backgroundColor: statusColor.withValues(alpha: 0.15), child: Icon(statusIcon, color: statusColor)),
                           title: Text("Cuota ${c['numero_cuota']}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                           subtitle: Text(
                             daysDiff < 0 && !isPaid ? "Venció hace ${daysDiff.abs()} días" : "Vence: ${DateFormat('dd/MM/yyyy').format(dueDate)}", 
@@ -424,10 +424,10 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.3), width: 1.5)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5)),
       child: Row(
         children: [
-          CircleAvatar(radius: 24, backgroundColor: color.withOpacity(0.2), child: Icon(icon, color: color, size: 24)),
+          CircleAvatar(radius: 24, backgroundColor: color.withValues(alpha: 0.2), child: Icon(icon, color: color, size: 24)),
           const SizedBox(width: 16),
           Expanded(
             child: Column(

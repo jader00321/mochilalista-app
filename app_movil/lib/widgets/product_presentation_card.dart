@@ -250,14 +250,14 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
         color: isDark ? const Color(0xFF23232F) : Colors.white,
         border: Border.all(color: isDefault ? (isDark ? Colors.teal[400]! : Colors.teal) : (isDark ? Colors.white10 : Colors.grey.shade300), width: isDefault ? 2 : 1),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
+        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]
       ),
       child: Column(
         children: [
           // CABECERA
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(color: isDefault ? (isDark ? Colors.teal.withOpacity(0.15) : Colors.teal.withOpacity(0.1)) : (isDark ? Colors.white10 : Colors.grey[100]), borderRadius: const BorderRadius.vertical(top: Radius.circular(14))),
+            decoration: BoxDecoration(color: isDefault ? (isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal.withValues(alpha: 0.1)) : (isDark ? Colors.white10 : Colors.grey[100]), borderRadius: const BorderRadius.vertical(top: Radius.circular(14))),
             child: Row(
               children: [
                 Icon(isDefault ? Icons.star : Icons.layers, size: 24, color: isDefault ? (isDark ? Colors.teal[300] : Colors.teal[800]) : (isDark ? Colors.grey[400] : Colors.grey[600])),
@@ -317,7 +317,7 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
                 // 4. Inventario
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.05) : Colors.green.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: isDark ? Colors.green.withOpacity(0.2) : Colors.green.shade100)),
+                  decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.05) : Colors.green.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade100)),
                   child: Row(children: [
                     Expanded(flex: 4, child: _MiniInput(ctrl: _stockInicialCtrl, label: "Stock Inicial", isNum: true, hint: "0", isDark: isDark, onChanged: _recalcularStock)),
                     const SizedBox(width: 8),
@@ -334,7 +334,7 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(color: Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade300)),
+                    decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade300)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -376,7 +376,7 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
                     title: Text("Datos de Compra / Factura (Opcional)", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.teal[300] : Colors.teal[800])),
                     iconColor: isDark ? Colors.teal[300] : Colors.teal[800], collapsedIconColor: isDark ? Colors.teal[300] : Colors.teal[800],
                     tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0), childrenPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                    collapsedBackgroundColor: isDark ? Colors.teal.withOpacity(0.05) : Colors.teal[50], backgroundColor: isDark ? Colors.teal.withOpacity(0.05) : Colors.teal[50],
+                    collapsedBackgroundColor: isDark ? Colors.teal.withValues(alpha: 0.05) : Colors.teal[50], backgroundColor: isDark ? Colors.teal.withValues(alpha: 0.05) : Colors.teal[50],
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     children: [
                       Text("Si llenas estos datos, calcularemos tu Costo y Stock automáticamente.", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)),
@@ -456,7 +456,7 @@ class _MiniInput extends StatelessWidget {
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0), 
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.blue.withOpacity(0.5) : Colors.blue.withOpacity(0.5), width: 1.5)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.withValues(alpha: 0.5), width: 1.5)),
               filled: true, 
               fillColor: isDark ? const Color(0xFF14141C) : Colors.white,
             ),

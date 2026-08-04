@@ -76,7 +76,7 @@ class QuoteDetailHeader extends StatelessWidget {
                     ] else ...[
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(color: typeColor.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(color: typeColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -106,7 +106,7 @@ class QuoteDetailHeader extends StatelessWidget {
                     Container(
                       margin: const EdgeInsets.only(top: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.15) : Colors.green[50], borderRadius: BorderRadius.circular(6)),
+                      decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50], borderRadius: BorderRadius.circular(6)),
                       child: Text("Ahorro: ${currency.format(savings)}", style: TextStyle(color: isDark ? Colors.green[300] : Colors.green[800], fontSize: 13, fontWeight: FontWeight.bold)),
                     ),
                 ],

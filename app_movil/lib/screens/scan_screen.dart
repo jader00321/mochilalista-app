@@ -94,7 +94,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
         showDialog(
           context: context,
           barrierDismissible: false,
-          barrierColor: Colors.black.withOpacity(0.7), 
+          barrierColor: Colors.black.withValues(alpha: 0.7), 
           builder: (ctx) => _ScanningDialog(mode: widget.mode),
         );
         
@@ -186,13 +186,13 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
               Container(
                 padding: const EdgeInsets.all(40),
                 decoration: BoxDecoration(
-                  color: isDark ? mainColor.withOpacity(0.15) : mainColor.withOpacity(0.1),
+                  color: isDark ? mainColor.withValues(alpha: 0.15) : mainColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                   boxShadow: [
-                    if (!isDark) BoxShadow(color: mainColor.withOpacity(0.1), blurRadius: 25, spreadRadius: 5)
+                    if (!isDark) BoxShadow(color: mainColor.withValues(alpha: 0.1), blurRadius: 25, spreadRadius: 5)
                   ]
                 ),
-                child: Icon(mainIcon, size: 90, color: isDark ? mainColor.withOpacity(0.9) : mainColor),
+                child: Icon(mainIcon, size: 90, color: isDark ? mainColor.withValues(alpha: 0.9) : mainColor),
               ),
               const SizedBox(height: 40),
               
@@ -214,9 +214,9 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                   margin: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.orange.withOpacity(0.5))
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.5))
                   ),
                   child: Row(
                     children: [
@@ -267,25 +267,25 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(28),
-        splashColor: color.withOpacity(0.2),
-        highlightColor: color.withOpacity(0.1),
+        splashColor: color.withValues(alpha: 0.2),
+        highlightColor: color.withValues(alpha: 0.1),
         child: Container(
           width: 150,
           height: 150,
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF23232F) : Colors.white,
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: isDark ? color.withOpacity(0.3) : color.withOpacity(0.2), width: 2),
+            border: Border.all(color: isDark ? color.withValues(alpha: 0.3) : color.withValues(alpha: 0.2), width: 2),
             boxShadow: [
-              if (!isDark) BoxShadow(color: color.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, 8))
+              if (!isDark) BoxShadow(color: color.withValues(alpha: 0.15), blurRadius: 15, offset: const Offset(0, 8))
             ]
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 50, color: isDark ? color.withOpacity(0.9) : color),
+              Icon(icon, size: 50, color: isDark ? color.withValues(alpha: 0.9) : color),
               const SizedBox(height: 16),
-              Text(label, style: TextStyle(color: isDark ? color.withOpacity(0.9) : color, fontWeight: FontWeight.bold, fontSize: 18)),
+              Text(label, style: TextStyle(color: isDark ? color.withValues(alpha: 0.9) : color, fontWeight: FontWeight.bold, fontSize: 18)),
             ],
           ),
         ),
@@ -337,9 +337,9 @@ class _ScanningDialogState extends State<_ScanningDialog> with SingleTickerProvi
               width: 280,
               padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
+                color: Colors.black.withValues(alpha: 0.7),
                 borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -350,8 +350,8 @@ class _ScanningDialogState extends State<_ScanningDialog> with SingleTickerProvi
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: mainColor.withOpacity(0.2),
-                        boxShadow: [BoxShadow(color: mainColor.withOpacity(0.5), blurRadius: 25, spreadRadius: 2)]
+                        color: mainColor.withValues(alpha: 0.2),
+                        boxShadow: [BoxShadow(color: mainColor.withValues(alpha: 0.5), blurRadius: 25, spreadRadius: 2)]
                       ),
                       child: Icon(icon, color: mainColor, size: 50),
                     ),
@@ -370,7 +370,7 @@ class _ScanningDialogState extends State<_ScanningDialog> with SingleTickerProvi
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: LinearProgressIndicator(
-                        backgroundColor: Colors.white.withOpacity(0.1),
+                        backgroundColor: Colors.white.withValues(alpha: 0.1),
                         valueColor: AlwaysStoppedAnimation<Color>(mainColor),
                         minHeight: 5,
                       ),

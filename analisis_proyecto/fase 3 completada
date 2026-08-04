@@ -1,0 +1,37 @@
+# 🚀 Walkthrough de la Fase 3: Optimización de Rendimiento y Memoria
+
+¡Hola! Hemos completado con éxito la **Fase 3** del plan de trabajo, que se enfocó enteramente en optimizar cómo la aplicación maneja el rendimiento de las consultas y la memoria en el dispositivo para escalar a un número gigantesco de productos en modo offline.
+
+Aquí están los detalles de las mejoras implementadas:
+
+## 1. Índices SQLite (Optimización de Consultas) ⚡
+- **Implementación**: Se ha actualizado la base de datos local a la Versión 5 introduciendo una serie de **Índices (`CREATE INDEX`)** sobre las columnas más frecuentemente utilizadas en los comandos `WHERE` y `JOIN` de SQLite.
+- **Beneficio**: Las consultas al catálogo (filtradas por `negocio_id`, `categoria_id`, `estado`, etc.) ya no requerirán escaneos de tabla completa. Esto multiplica significativamente la velocidad de carga en catálogos de 500 a más productos.
+
+## 2. Abstracción y Eliminación de Queries SQL Duplicadas 📊
+- **Implementación**: Se ha creado un archivo exclusivo y dedicado en `lib/database/product_queries.dart` que agrupa el Query gigante utilizado para listar el inventario, así como su lógica de "parsing" (conversión de JSON a Modelos Dart).
+- **Beneficio**: Se ha eliminado cientos de líneas de código duplicadas entre `ProductService`, `ScannerProvider`, `QuickSearchProvider` y `MatchingService`. Ahora el mapeo y la búsqueda comparten el mismo código exacto.
+
+## 3. Caché Centralizada de Datos Maestros 🧠
+- **Implementación**: Se creó la clase **Singleton** `MasterDataCache` (`lib/services/master_data_cache.dart`).
+- **Beneficio**: Anteriormente el `InventoryProvider` y el `CatalogProvider` pedían y guardaban en memoria las Listas de Categorías, Marcas y Proveedores de manera independiente. Si cambiabas algo, había que refrescar ambos por separado. Ahora, la aplicación mantiene **una sola fuente de la verdad en RAM**, ahorrando notablemente memoria y evitando errores de desincronización en la UI.
+
+## 4. Ordenamiento SQL Nativo en lugar de Memoria 🔄
+- **Implementación**: Se ha desactivado el `List.sort()` de Dart que operaba en memoria en el `CatalogProvider` y se ha transferido el trabajo al motor de SQLite inyectando el parámetro `ORDER BY p.nombre ASC/DESC` en el API SQL nativo a través del `ProductService`.
+- **Beneficio**: Menor consumo de CPU y RAM del celular, así como la garantía de que el paginado (`OFFSET`/`LIMIT`) devuelva los productos en el estricto orden alfabético esperado desde la base de datos sin bugs en la UI.
+
+## 5. Compresión Local de Imágenes y Cleanup (Preparado para Cloudinary) 🖼️
+- **Implementación**: Hemos actualizado el `ImageService` aprovechando la librería `image`. Ahora, toda imagen seleccionada se procesa de forma asíncrona mediante un `compute` en un thread (Isolate) separado:
+  1. Se redimensiona asegurando que ni el alto ni el ancho excedan los **800px**.
+  2. Se guarda con una calidad de compresión JPG del **75%**.
+  3. Adicionalmente, se creó un script estático `cleanupOrphanImages()` capaz de escanear la carpeta de almacenamiento de la app para eliminar archivos `.jpg` / `.png` huérfanos generados temporalmente (lo que libera espacio no deseado del almacenamiento del móvil de los clientes).
+
+---
+
+> [!TIP]
+> Dado que se ha subido la versión de la Base de Datos a v5 para inyectar los índices, **no perderás nada** de lo que tenías actualmente; la migración se hará limpiamente y automáticamente al iniciar.
+
+## Próximos Pasos ➡️
+Con la memoria y velocidad de carga optimizadas, estaríamos listos para proceder con la **Fase 4: Refactorización Arquitectural**, donde aplicaremos Principios SOLID para hacer que tu aplicación sea mucho más limpia, descomponiendo los Providers gigantes en servicios más pequeños y manejables. 
+
+¿Estás de acuerdo en que prosigamos con la Fase 4?

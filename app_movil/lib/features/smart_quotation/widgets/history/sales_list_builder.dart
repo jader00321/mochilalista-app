@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/sale_provider.dart';
-import 'sale_action_bottom_sheet.dart'; 
+import 'sale_action_bottom_sheet.dart';
+import '../../../../widgets/empty_state_widget.dart';
 
 class SalesListBuilder extends StatefulWidget {
   const SalesListBuilder({super.key});
@@ -49,15 +50,10 @@ class _SalesListBuilderState extends State<SalesListBuilder> {
     }
 
     if (provider.salesHistory.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.receipt_long, size: 80, color: isDark ? Colors.white10 : Colors.grey[300]),
-            const SizedBox(height: 16),
-            Text("No hay ventas en este filtro", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
-        ),
+      return const EmptyStateWidget(
+        icon: Icons.receipt_long,
+        title: "Sin Ventas",
+        subtitle: "No hay ventas registradas en este filtro.",
       );
     }
 
@@ -99,7 +95,7 @@ class _SalesListBuilderState extends State<SalesListBuilder> {
                     color: sale.isArchived ? (isDark ? Colors.white10 : Colors.grey[100]) : cardColor, 
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-                    boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 4))]
+                    boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 4))]
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,7 +113,7 @@ class _SalesListBuilderState extends State<SalesListBuilder> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          CircleAvatar(backgroundColor: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], radius: 22, child: Icon(Icons.person, size: 24, color: isDark ? Colors.blue[300] : Colors.blue[800])),
+                          CircleAvatar(backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], radius: 22, child: Icon(Icons.person, size: 24, color: isDark ? Colors.blue[300] : Colors.blue[800])),
                           const SizedBox(width: 12),
                           
                           Expanded(
@@ -218,7 +214,7 @@ class _Badge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
       child: Row(
         children: [
           Icon(icon, size: 14, color: color),

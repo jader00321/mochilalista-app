@@ -61,9 +61,9 @@ class _HistoryFilterBarState extends State<HistoryFilterBar> {
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             decoration: BoxDecoration(
-              color: isActive ? (isDark ? Colors.blue.withOpacity(0.15) : Colors.blue.withOpacity(0.08)) : Colors.transparent,
+              color: isActive ? (isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.withValues(alpha: 0.08)) : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isActive ? (isDark ? Colors.blue.withOpacity(0.5) : Colors.blue.shade300) : Colors.transparent),
+              border: Border.all(color: isActive ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade300) : Colors.transparent),
             ),
             child: ListTile(
               leading: Icon(icon, color: isActive ? (isDark ? Colors.blue[300] : Colors.blue[800]) : (isDark ? Colors.grey[400] : Colors.grey[600])),
@@ -162,8 +162,8 @@ class _HistoryFilterBarState extends State<HistoryFilterBar> {
                 
                 ActionChip(
                   label: const Text("📅 Rango", style: TextStyle(fontWeight: FontWeight.bold)), 
-                  backgroundColor: provider.activeQuickFilter == 'personalizado' ? (isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[100]) : (isDark ? const Color(0xFF23232F) : Colors.grey[100]), 
-                  side: BorderSide(color: provider.activeQuickFilter == 'personalizado' ? (isDark ? Colors.blue.withOpacity(0.5) : Colors.blue.shade200) : Colors.transparent),
+                  backgroundColor: provider.activeQuickFilter == 'personalizado' ? (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[100]) : (isDark ? const Color(0xFF23232F) : Colors.grey[100]), 
+                  side: BorderSide(color: provider.activeQuickFilter == 'personalizado' ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade200) : Colors.transparent),
                   onPressed: () => _pickDateRange(context, provider, isDark)
                 ),
                 const SizedBox(width: 8),

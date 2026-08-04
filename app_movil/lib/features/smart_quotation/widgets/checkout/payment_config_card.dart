@@ -167,10 +167,10 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isSelected ? activeColor.withOpacity(0.1) : (isDark ? const Color(0xFF1E1E2A) : Colors.white),
+            color: isSelected ? activeColor.withValues(alpha: 0.1) : (isDark ? const Color(0xFF1E1E2A) : Colors.white),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: isSelected ? activeColor : (isDark ? Colors.white10 : Colors.grey.shade300), width: isSelected ? 2 : 1),
-            boxShadow: [if (!isDark && !isSelected) BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))]
+            boxShadow: [if (!isDark && !isSelected) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))]
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,10 +201,10 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
       padding: const EdgeInsets.symmetric(vertical: 10),
       selected: isSelected,
       onSelected: (val) { setState(() => _paymentMethod = label.toLowerCase()); _notifyParent(); },
-      selectedColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[50],
+      selectedColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50],
       backgroundColor: isDark ? const Color(0xFF1E1E2A) : Colors.white,
       labelStyle: TextStyle(color: isSelected ? (isDark ? Colors.blue[300] : Colors.blue[800]) : textColor, fontWeight: isSelected ? FontWeight.bold : FontWeight.w500),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withOpacity(0.5) : Colors.blue.shade200) : (isDark ? Colors.white10 : Colors.grey.shade300))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade200) : (isDark ? Colors.white10 : Colors.grey.shade300))),
     );
   }
 
@@ -228,7 +228,7 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.15) : Colors.green[50], shape: BoxShape.circle),
+              decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50], shape: BoxShape.circle),
               child: Icon(Icons.payments_rounded, color: isDark ? Colors.green[300] : Colors.green[800], size: 22)
             ),
             const SizedBox(width: 12),
@@ -286,7 +286,7 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
           const SizedBox(height: 24),
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: isDark ? const Color(0xFF23232F) : Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200), boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0,4))]),
+            decoration: BoxDecoration(color: isDark ? const Color(0xFF23232F) : Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200), boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0,4))]),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -361,7 +361,7 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text("Cronograma", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.1) : Colors.red[50], borderRadius: BorderRadius.circular(6)), child: Text("Total Financiado: ${currency.format(finalDebt)}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: isDark ? Colors.red[300] : Colors.red[800]))),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red[50], borderRadius: BorderRadius.circular(6)), child: Text("Total Financiado: ${currency.format(finalDebt)}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: isDark ? Colors.red[300] : Colors.red[800]))),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -377,7 +377,7 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           child: Row(
                             children: [
-                              CircleAvatar(radius: 16, backgroundColor: isDark ? Colors.orange.withOpacity(0.2) : Colors.orange[100], child: Text("${cuota.installmentNumber}", style: TextStyle(fontSize: 14, color: isDark ? Colors.orange[300] : Colors.orange[900], fontWeight: FontWeight.bold))),
+                              CircleAvatar(radius: 16, backgroundColor: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange[100], child: Text("${cuota.installmentNumber}", style: TextStyle(fontSize: 14, color: isDark ? Colors.orange[300] : Colors.orange[900], fontWeight: FontWeight.bold))),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: InkWell(

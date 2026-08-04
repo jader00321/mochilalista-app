@@ -33,7 +33,7 @@ class ClientSelectionCard extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], shape: BoxShape.circle),
+              decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], shape: BoxShape.circle),
               child: Icon(Icons.person_pin_rounded, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 22)
             ),
             const SizedBox(width: 12),
@@ -49,14 +49,14 @@ class ClientSelectionCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1E1E2A) : Colors.white, 
               borderRadius: BorderRadius.circular(24), 
-              border: Border.all(color: isDark ? Colors.orange.withOpacity(0.3) : Colors.orange.shade200, width: 1.5),
-              boxShadow: [if (!isDark) BoxShadow(color: Colors.orange.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
+              border: Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200, width: 1.5),
+              boxShadow: [if (!isDark) BoxShadow(color: Colors.orange.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]
             ),
             child: Column(
               children: [
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.1) : Colors.orange[50], shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50], shape: BoxShape.circle),
                   child: Icon(Icons.person_search_rounded, color: isDark ? Colors.orange[300] : Colors.orange[700], size: 36)
                 ),
                 const SizedBox(height: 16),
@@ -88,7 +88,7 @@ class ClientSelectionCard extends StatelessWidget {
               color: isDark ? const Color(0xFF23232F) : Colors.white, 
               borderRadius: BorderRadius.circular(24), 
               border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-              boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]
+              boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))]
             ),
             child: Column(
               children: [
@@ -96,7 +96,7 @@ class ClientSelectionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     CircleAvatar(
-                      backgroundColor: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], 
+                      backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], 
                       radius: 28,
                       child: Text(selectedClient!.fullName.isNotEmpty ? selectedClient!.fullName[0].toUpperCase() : "?", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 24))
                     ),
@@ -115,7 +115,7 @@ class ClientSelectionCard extends StatelessWidget {
                                 Container(
                                   margin: const EdgeInsets.only(left: 8),
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: Colors.teal.withOpacity(0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.teal.withOpacity(0.5))),
+                                  decoration: BoxDecoration(color: Colors.teal.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.teal.withValues(alpha: 0.5))),
                                   child: const Row(
                                     children: [
                                       Icon(Icons.phone_android, size: 12, color: Colors.teal),
@@ -155,7 +155,7 @@ class ClientSelectionCard extends StatelessWidget {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: isDark ? Colors.amber.withOpacity(0.05) : Colors.amber.shade50, borderRadius: BorderRadius.circular(12)),
+                    decoration: BoxDecoration(color: isDark ? Colors.amber.withValues(alpha: 0.05) : Colors.amber.shade50, borderRadius: BorderRadius.circular(12)),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -193,7 +193,7 @@ class ClientSelectionCard extends StatelessWidget {
                         label: const Text("Editar Datos"),
                         style: TextButton.styleFrom(
                           foregroundColor: isDark ? Colors.blue[300] : Colors.blue[700],
-                          backgroundColor: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue[50],
+                          backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50],
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                         )
                       ),

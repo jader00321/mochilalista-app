@@ -323,7 +323,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
       return Container(
         margin: const EdgeInsets.only(top: 24),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.greenAccent.withOpacity(0.3))),
+        decoration: BoxDecoration(color: Colors.greenAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3))),
         child: Row(
           children: [
             const Icon(Icons.check_circle, color: Colors.greenAccent),
@@ -338,7 +338,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
       return Container(
         margin: const EdgeInsets.only(top: 24),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent.withOpacity(0.3))),
+        decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3))),
         child: Row(
           children: [
             const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 32),
@@ -393,8 +393,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF23232F) : Colors.white,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withOpacity(isDark ? 0.2 : 0.3)),
-              boxShadow: [if (!isDark) BoxShadow(color: color.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 4))]
+              border: Border.all(color: color.withValues(alpha: isDark ? 0.2 : 0.3)),
+              boxShadow: [if (!isDark) BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4))]
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,7 +459,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                 children: [
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
                     child: Icon(icon, color: color, size: 28),
                   ),
                   const SizedBox(width: 16),
@@ -486,7 +486,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.15) : Colors.green[50], borderRadius: BorderRadius.circular(8)),
+                              decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50], borderRadius: BorderRadius.circular(8)),
                               child: Text("Pagado: ${currency.format(sale.montoPagado)}", style: TextStyle(fontSize: 13, color: isDark ? Colors.green[400] : Colors.green[700], fontWeight: FontWeight.bold)),
                             ),
                           ],
@@ -502,7 +502,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                       if (deudaVenta > 0.01)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(color: isDark ? Colors.red.withOpacity(0.15) : Colors.red[50], borderRadius: BorderRadius.circular(8)),
+                          decoration: BoxDecoration(color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red[50], borderRadius: BorderRadius.circular(8)),
                           child: Text("Debe\n${currency.format(deudaVenta)}", textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: isDark ? Colors.red[300] : Colors.red)),
                         )
                       else
@@ -548,7 +548,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
           elevation: isDark ? 0 : 2,
           color: isDark ? const Color(0xFF23232F) : Colors.white,
           margin: const EdgeInsets.only(bottom: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.shade200)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.shade200)),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: () {
@@ -558,7 +558,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
               padding: const EdgeInsets.all(20),
               child: Row(
                 children: [
-                  CircleAvatar(radius: 28, backgroundColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[50], child: Icon(Icons.list_alt, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 28)),
+                  CircleAvatar(radius: 28, backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50], child: Icon(Icons.list_alt, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 28)),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(

@@ -218,7 +218,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(10)))),
+              Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10)))),
               const SizedBox(height: 20),
               Row(
                 children: [
@@ -233,7 +233,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
               
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], child: Icon(Icons.shopping_cart_checkout, color: isDark ? Colors.blue[300] : Colors.blue)),
+                leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], child: Icon(Icons.shopping_cart_checkout, color: isDark ? Colors.blue[300] : Colors.blue)),
                 title: Text("Vender Nuevamente (Genérica)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                 subtitle: Text("Crea una copia editable exacta para asignársela a un nuevo cliente.", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[500] : Colors.grey[600])),
                 onTap: () {
@@ -245,7 +245,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
               
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.purple.withOpacity(0.15) : Colors.purple[50], child: Icon(Icons.inventory_2, color: isDark ? Colors.purple[300] : Colors.purple)),
+                leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.purple.withValues(alpha: 0.15) : Colors.purple[50], child: Icon(Icons.inventory_2, color: isDark ? Colors.purple[300] : Colors.purple)),
                 title: Text("Guardar como Plantilla (Pack)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                 subtitle: Text("Convierte esta lista en un catálogo recurrente.", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[500] : Colors.grey[600])),
                 onTap: () {
@@ -385,7 +385,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withOpacity(0.3), borderRadius: BorderRadius.circular(10)))),
+              Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10)))),
               const SizedBox(height: 20),
               Row(
                 children: [
@@ -400,7 +400,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
               
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange[50], child: Icon(Icons.speaker_notes, color: isDark ? Colors.orange[300] : Colors.orange[800])),
+                leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[50], child: Icon(Icons.speaker_notes, color: isDark ? Colors.orange[300] : Colors.orange[800])),
                 title: Text(currentSaleNote.isEmpty ? "Agregar Nota de Venta" : "Editar Nota de Venta", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                 subtitle: Text("Detalles exclusivos para este recibo en particular.", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[500] : Colors.grey[600])),
                 onTap: () {
@@ -417,7 +417,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                 Divider(height: 20, color: isDark ? Colors.white10 : Colors.grey[200]),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], child: Icon(Icons.assignment_ind, color: isDark ? Colors.blue[300] : Colors.blue[800])),
+                  leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], child: Icon(Icons.assignment_ind, color: isDark ? Colors.blue[300] : Colors.blue[800])),
                   title: Text(currentClientNote.isEmpty ? "Agregar Nota al Cliente (CRM)" : "Editar Nota del Cliente", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                   subtitle: Text("Se guardará en el perfil general del cliente.", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[500] : Colors.grey[600])),
                   onTap: () {
@@ -552,7 +552,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Card(
-                      elevation: 0, color: isDark ? Colors.purple.withOpacity(0.15) : Colors.purple.shade50, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.purple.withOpacity(0.3) : Colors.purple.shade200)),
+                      elevation: 0, color: isDark ? Colors.purple.withValues(alpha: 0.15) : Colors.purple.shade50, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.purple.withValues(alpha: 0.3) : Colors.purple.shade200)),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         leading: Icon(Icons.image, color: isDark ? Colors.purple[200] : Colors.purple, size: 30), 
@@ -627,7 +627,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                                           if (isStructured && item['sales_unit'] != null)
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                                              decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
                                               child: Text(item['sales_unit'].toString().toUpperCase(), style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontSize: 10, fontWeight: FontWeight.bold)),
                                             ),
                                         ],
@@ -676,7 +676,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             decoration: BoxDecoration(
               color: cardColor,
-              boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, -10))],
+              boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -10))],
               borderRadius: const BorderRadius.vertical(top: Radius.circular(28))
             ),
             child: SafeArea( 
@@ -737,7 +737,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(16)),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(16)),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [Icon(icon, color: color, size: 26)],

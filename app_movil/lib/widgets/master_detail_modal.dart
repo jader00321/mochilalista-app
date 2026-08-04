@@ -59,7 +59,7 @@ class MasterDetailModal extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(color: (isActive ? color : Colors.grey).withOpacity(0.15), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: (isActive ? color : Colors.grey).withValues(alpha: 0.15), shape: BoxShape.circle),
                 child: Icon(icon, color: isActive ? color : (isDark ? Colors.grey[400] : Colors.grey), size: 36),
               ),
               const SizedBox(width: 16),
@@ -81,9 +81,9 @@ class MasterDetailModal extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isActive ? (isDark ? Colors.green.withOpacity(0.1) : Colors.green.withOpacity(0.05)) : (isDark ? Colors.orange.withOpacity(0.1) : Colors.orange.withOpacity(0.05)),
+              color: isActive ? (isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.05)) : (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.05)),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isActive ? (isDark ? Colors.green.withOpacity(0.4) : Colors.green.withOpacity(0.2)) : (isDark ? Colors.orange.withOpacity(0.4) : Colors.orange.withOpacity(0.2))),
+              border: Border.all(color: isActive ? (isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.withValues(alpha: 0.2)) : (isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.withValues(alpha: 0.2))),
             ),
             child: Row(
               children: [
@@ -137,7 +137,7 @@ class MasterDetailModal extends StatelessWidget {
                   },
                   icon: const Icon(Icons.edit, size: 20),
                   label: const Text("EDITAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800], side: BorderSide(color: isDark ? Colors.blue.withOpacity(0.5) : Colors.blue.shade200), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800], side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade200), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                 ),
               ),
               const SizedBox(width: 16),
@@ -152,7 +152,7 @@ class MasterDetailModal extends StatelessWidget {
                     },
                     icon: const Icon(Icons.delete_outline, size: 20),
                     label: const Text("ELIMINAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: isDark ? Colors.red[300] : Colors.red[700], side: BorderSide(color: isDark ? Colors.red.withOpacity(0.5) : Colors.red.shade200), backgroundColor: isDark ? Colors.red.withOpacity(0.1) : Colors.red.withOpacity(0.05), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: isDark ? Colors.red[300] : Colors.red[700], side: BorderSide(color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade200), backgroundColor: isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.05), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                   )
                 : Container(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),

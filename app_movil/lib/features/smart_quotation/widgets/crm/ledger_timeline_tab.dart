@@ -55,7 +55,7 @@ class LedgerTimelineTab extends StatelessWidget {
                     Container(
                       width: 32, height: 32,
                       decoration: BoxDecoration(
-                        color: highlightColor.withOpacity(0.15),
+                        color: highlightColor.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                         border: Border.all(color: highlightColor, width: 2)
                       ),
@@ -86,7 +86,7 @@ class LedgerTimelineTab extends StatelessWidget {
                       color: cardColor,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-                      boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 3))],
+                      boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 3))],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,8 +131,8 @@ class LedgerTimelineTab extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
                                 color: item.saldoResultante < 0 
-                                    ? (isDark ? Colors.amber.withOpacity(0.2) : Colors.amber[50]) 
-                                    : (isDark ? Colors.blueGrey.withOpacity(0.2) : Colors.blueGrey[50]), 
+                                    ? (isDark ? Colors.amber.withValues(alpha: 0.2) : Colors.amber[50]) 
+                                    : (isDark ? Colors.blueGrey.withValues(alpha: 0.2) : Colors.blueGrey[50]), 
                                 borderRadius: BorderRadius.circular(8)
                               ),
                               child: Text(

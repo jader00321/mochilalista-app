@@ -4,6 +4,86 @@ import '../../../../providers/backup_provider.dart';
 import '../../../../providers/auth_provider.dart';
 import '../../../../widgets/custom_snackbar.dart';
 import '../../../../screens/onboarding/profile_selection_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class PinDelayConfigWidget extends StatefulWidget {
+  final bool isDark;
+  const PinDelayConfigWidget({super.key, required this.isDark});
+
+  @override
+  State<PinDelayConfigWidget> createState() => _PinDelayConfigWidgetState();
+}
+
+class _PinDelayConfigWidgetState extends State<PinDelayConfigWidget> {
+  int _delayMinutes = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDelay();
+  }
+
+  Future<void> _loadDelay() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _delayMinutes = prefs.getInt('pin_delay_minutes') ?? 1;
+    });
+  }
+
+  Future<void> _setDelay(int value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('pin_delay_minutes', value);
+    setState(() {
+      _delayMinutes = value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text("Seguridad", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+        const SizedBox(height: 16),
+        Container(
+          decoration: BoxDecoration(
+            color: widget.isDark ? const Color(0xFF1E1E28) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: widget.isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("Bloqueo automático", style: TextStyle(fontSize: 15, color: widget.isDark ? Colors.white70 : Colors.black87, fontWeight: FontWeight.w600)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(color: widget.isDark ? Colors.black26 : Colors.grey[100], borderRadius: BorderRadius.circular(10)),
+                  child: DropdownButton<int>(
+                    value: _delayMinutes,
+                    underline: const SizedBox(),
+                    icon: const Icon(Icons.keyboard_arrow_down, size: 20),
+                    items: const [
+                      DropdownMenuItem(value: 0, child: Text("Inmediato")),
+                      DropdownMenuItem(value: 1, child: Text("1 minuto")),
+                      DropdownMenuItem(value: 5, child: Text("5 minutos")),
+                      DropdownMenuItem(value: 15, child: Text("15 minutos")),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) _setDelay(val);
+                    },
+                  ),
+                )
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 
 class BackupScreen extends StatelessWidget {
   const BackupScreen({super.key});
@@ -21,7 +101,7 @@ class BackupScreen extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.15), shape: BoxShape.circle),
               child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
             ),
             const SizedBox(width: 12),
@@ -94,7 +174,7 @@ class BackupScreen extends StatelessWidget {
               const SizedBox(height: 16),
               
               Container(
-                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200), boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]),
+                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200), boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))]),
                 child: Column(
                   children: [
                     _ActionButton(
@@ -140,7 +220,7 @@ class BackupScreen extends StatelessWidget {
               const SizedBox(height: 16),
               
               Container(
-                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withOpacity(0.3)), boxShadow: [if (!isDark) BoxShadow(color: Colors.blue.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]),
+                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.3)), boxShadow: [if (!isDark) BoxShadow(color: Colors.blue.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]),
                 child: Column(
                   children: [
                     SwitchListTile(
@@ -219,6 +299,8 @@ class BackupScreen extends StatelessWidget {
                 ),
               ),
 
+              const SizedBox(height: 30),
+              PinDelayConfigWidget(isDark: isDark),
               const SizedBox(height: 50),
 
               const Text("Restaurar Sistema", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.red, letterSpacing: 0.5)),
@@ -231,8 +313,8 @@ class BackupScreen extends StatelessWidget {
                 label: const Text("Cargar Backup .db", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 18),
-                  side: BorderSide(color: Colors.red.withOpacity(0.5), width: 2),
-                  backgroundColor: Colors.red.withOpacity(0.05),
+                  side: BorderSide(color: Colors.red.withValues(alpha: 0.5), width: 2),
+                  backgroundColor: Colors.red.withValues(alpha: 0.05),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 onPressed: () => _confirmRestore(context, backupProvider),
@@ -243,11 +325,11 @@ class BackupScreen extends StatelessWidget {
 
           if (backupProvider.isLoading)
             Container(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withValues(alpha: 0.6),
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.all(30),
-                  decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20)]),
+                  decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 20)]),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -287,7 +369,7 @@ class _ActionButton extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
               child: Icon(icon, color: color, size: 22),
             ),
             const SizedBox(width: 16),

@@ -150,7 +150,7 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
                                 decoration: BoxDecoration(
                                   color: !showRawJson ? (isDark ? Colors.blue[800] : Colors.white) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(12),
-                                  boxShadow: !showRawJson && !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)] : []
+                                  boxShadow: !showRawJson && !isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)] : []
                                 ),
                                 child: Center(child: Text("Vista Resumida", style: TextStyle(fontWeight: FontWeight.bold, color: !showRawJson ? (isDark ? Colors.white : Colors.blue[800]) : Colors.grey))),
                               ),
@@ -164,7 +164,7 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
                                 decoration: BoxDecoration(
                                   color: showRawJson ? (isDark ? Colors.blue[800] : Colors.white) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(12),
-                                  boxShadow: showRawJson && !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)] : []
+                                  boxShadow: showRawJson && !isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)] : []
                                 ),
                                 child: Center(child: Text("Código JSON", style: TextStyle(fontWeight: FontWeight.bold, color: showRawJson ? (isDark ? Colors.white : Colors.blue[800]) : Colors.grey))),
                               ),
@@ -400,7 +400,7 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
               icon: const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 18),
               label: const Text("Resumen", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
               style: TextButton.styleFrom(
-                backgroundColor: isDark ? Colors.green.withOpacity(0.2) : Colors.white.withOpacity(0.2),
+                backgroundColor: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.2),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)
               ),
@@ -451,7 +451,7 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
                     duration: const Duration(milliseconds: 150),
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6), 
                     decoration: BoxDecoration(
-                      color: dragging ? (isDark ? Colors.green.withOpacity(0.3) : Colors.green[100]) : (isDark ? const Color(0xFF23232F) : Colors.white),
+                      color: dragging ? (isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green[100]) : (isDark ? const Color(0xFF23232F) : Colors.white),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: dragging ? Colors.transparent : (isDark ? Colors.white10 : Colors.grey.shade300)),
                     ),
@@ -540,7 +540,7 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                            side: BorderSide(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.withOpacity(0.5), width: 1.5),
+                            side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.5), width: 1.5),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),

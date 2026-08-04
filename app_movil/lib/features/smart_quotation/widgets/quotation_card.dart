@@ -103,9 +103,9 @@ class QuotationCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: isCritical 
-            ? BorderSide(color: isDark ? Colors.red.withOpacity(0.5) : Colors.red.shade300, width: 1.5) 
+            ? BorderSide(color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade300, width: 1.5) 
             : isWarning
-                ? BorderSide(color: isDark ? Colors.amber.withOpacity(0.5) : Colors.amber.shade400, width: 1.5)
+                ? BorderSide(color: isDark ? Colors.amber.withValues(alpha: 0.5) : Colors.amber.shade400, width: 1.5)
                 : BorderSide(color: isDark ? Colors.white10 : Colors.transparent)
       ),
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -113,7 +113,7 @@ class QuotationCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        splashColor: stripColor.withOpacity(0.15),
+        splashColor: stripColor.withValues(alpha: 0.15),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -193,9 +193,9 @@ class QuotationCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.4))
+        border: Border.all(color: color.withValues(alpha: 0.4))
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -211,7 +211,7 @@ class QuotationCard extends StatelessWidget {
   Widget _buildTag(String text, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withOpacity(0.5))),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withValues(alpha: 0.5))),
       child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5)),
     );
   }

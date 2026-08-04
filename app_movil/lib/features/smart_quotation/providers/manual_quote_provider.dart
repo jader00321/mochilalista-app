@@ -65,7 +65,7 @@ class ManualQuoteProvider with ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print("Error cargando maestros: $e");
+      debugPrint("Error cargando maestros: $e");
     }
   }
 

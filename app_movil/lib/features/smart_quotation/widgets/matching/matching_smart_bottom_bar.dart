@@ -19,7 +19,7 @@ class MatchingSmartBottomBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       decoration: BoxDecoration(
         color: isDark ? Theme.of(context).colorScheme.surface : Colors.white, 
-        boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, -5))],
+        boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, -5))],
         border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.black12))
       ),
       child: SafeArea(

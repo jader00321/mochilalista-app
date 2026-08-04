@@ -79,7 +79,7 @@ class ManualQuoteItemCard extends StatelessWidget {
           side: BorderSide(
             // 🔥 El rojo/naranja solo se dibuja si no hay stock, o si supera el stock (y no es cliente)
             color: (isOutOfStock || (exceedsStock && !isClient)) 
-                ? (isDark ? Colors.red.withOpacity(0.5) : Colors.red.shade300) 
+                ? (isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade300) 
                 : (isDark ? Colors.white10 : Colors.transparent), 
             width: 1.5
           )
@@ -97,7 +97,7 @@ class ManualQuoteItemCard extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 8.0, left: 36),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange.shade50, borderRadius: BorderRadius.circular(6)),
+                      decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50, borderRadius: BorderRadius.circular(6)),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -155,7 +155,7 @@ class ManualQuoteItemCard extends StatelessWidget {
                           const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                            decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
                             child: Text("${item.unit} (x${item.conversionFactor})", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[700])),
                           ),
                           

@@ -78,7 +78,7 @@ class QuoteEvidencePanel extends StatelessWidget {
                             onPressed: onTextEvidenceTap,
                             icon: const Icon(Icons.description, size: 20),
                             label: const Text("Ver Texto Original", style: TextStyle(fontWeight: FontWeight.bold)),
-                            style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.purple[300] : Colors.purple, side: BorderSide(color: isDark ? Colors.purple.withOpacity(0.5) : Colors.purple.shade200), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+                            style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.purple[300] : Colors.purple, side: BorderSide(color: isDark ? Colors.purple.withValues(alpha: 0.5) : Colors.purple.shade200), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
                         ),
                         const SizedBox(height: 8),
                         Text("Toca para comparar lo que leyó la IA.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 12)),

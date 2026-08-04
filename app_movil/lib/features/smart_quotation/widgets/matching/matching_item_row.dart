@@ -50,7 +50,7 @@ class MatchingItemRow extends StatelessWidget {
                 child: GestureDetector(
                   onTap: onChangeRequest,
                   child: Container(
-                    decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.red.withOpacity(0.5) : Colors.red.shade300, width: 2, style: BorderStyle.solid)),
+                    decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade300, width: 2, style: BorderStyle.solid)),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -97,7 +97,7 @@ class MatchingItemRow extends StatelessWidget {
                   color: isDark ? const Color(0xFF23232F) : Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: borderColor, width: (noStock || (isClient && exceedsStock)) ? 2.0 : 1.5),
-                  boxShadow: [if (pair.isModified && !isDark) BoxShadow(color: Colors.blue.withOpacity(0.08), blurRadius: 4, offset: const Offset(0, 2))],
+                  boxShadow: [if (pair.isModified && !isDark) BoxShadow(color: Colors.blue.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 2))],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -142,7 +142,7 @@ class MatchingItemRow extends StatelessWidget {
 
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                                    decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
                                     child: Text("${product.unit.toUpperCase()} (x${product.conversionFactor})", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontSize: 10, fontWeight: FontWeight.bold)),
                                   ),
 
@@ -154,7 +154,7 @@ class MatchingItemRow extends StatelessWidget {
                                         if (isRepeated)
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? Colors.transparent : Colors.blue.shade200)),
+                                            decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? Colors.transparent : Colors.blue.shade200)),
                                             child: Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
@@ -267,7 +267,7 @@ class MatchingItemRow extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50,
+                                  color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red.shade50,
                                   borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12))
                                 ),
                                 child: Row(
@@ -289,7 +289,7 @@ class MatchingItemRow extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue.shade50,
+                                  color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50,
                                   borderRadius: const BorderRadius.only(bottomRight: Radius.circular(12))
                                 ),
                                 child: Row(
@@ -321,12 +321,12 @@ class MatchingItemRow extends StatelessWidget {
       flex: 35, 
       child: Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.1) : const Color(0xFFFFF8E1), borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.transparent : Colors.orange.shade100)),
+        decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.1) : const Color(0xFFFFF8E1), borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.transparent : Colors.orange.shade100)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.2) : Colors.orange.shade100, borderRadius: BorderRadius.circular(6)), child: Text("#${index + 1}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.orange[300] : Colors.orange.shade900))),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade100, borderRadius: BorderRadius.circular(6)), child: Text("#${index + 1}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.orange[300] : Colors.orange.shade900))),
             const SizedBox(height: 8),
             Text(pair.sourceItem.fullName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87), maxLines: 4, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 6),

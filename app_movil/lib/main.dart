@@ -178,11 +178,26 @@ class MochilaListaApp extends StatelessWidget {
             darkTheme: ThemeData(
               brightness: Brightness.dark,
               primarySwatch: Colors.blue,
-              colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF42A5F5), brightness: Brightness.dark, surface: const Color(0xFF23232F)),
-              scaffoldBackgroundColor: const Color(0xFF14141C), 
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF42A5F5), 
+                brightness: Brightness.dark, 
+                surface: const Color(0xFF1E1E28),
+              ),
+              scaffoldBackgroundColor: const Color(0xFF12121A), 
               useMaterial3: true,
-              cardTheme: const CardThemeData(color: Color(0xFF23232F)),
-              appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF14141C), foregroundColor: Colors.white, elevation: 0),
+              cardTheme: CardThemeData(
+                color: const Color(0xFF1E1E28),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Colors.white10, width: 1),
+                ),
+                elevation: 0,
+              ),
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Color(0xFF12121A), 
+                foregroundColor: Colors.white, 
+                elevation: 0
+              ),
               textTheme: ThemeProvider.appTextTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
             ),
 

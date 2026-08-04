@@ -301,10 +301,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   cursorColor: Colors.white,
                   decoration: InputDecoration(
                     hintText: "Buscar por nombre o código...",
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 15),
+                    hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 15),
                     prefixIcon: const Icon(Icons.search, color: Colors.white, size: 24),
                     filled: true,
-                    fillColor: isDark ? Colors.white10 : Colors.white.withOpacity(0.2),
+                    fillColor: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.2),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                     suffixIcon: Row(
@@ -331,7 +331,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               if (quickProv.cartItems.isNotEmpty && searchProv.searchResults.isEmpty)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                  decoration: BoxDecoration(color: Theme.of(context).cardTheme.color, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, -5))]),
+                  decoration: BoxDecoration(color: Theme.of(context).cardTheme.color, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -5))]),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [

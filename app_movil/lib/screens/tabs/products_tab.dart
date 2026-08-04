@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../widgets/empty_state_widget.dart';
 import '../../providers/inventory_provider.dart';
 import '../../providers/auth_provider.dart'; // 🔥 FASE 4
 import '../../models/inventory_wrapper.dart';
@@ -156,7 +157,7 @@ class _ProductsTabState extends State<ProductsTab> with SingleTickerProviderStat
           children: [
             CircleAvatar(
               radius: 35,
-              backgroundColor: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50],
+              backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50],
               child: Icon(icon, size: 32, color: isDark ? Colors.blue[300] : Theme.of(context).primaryColor),
             ),
             const SizedBox(height: 12),
@@ -285,9 +286,9 @@ class _ProductsTabState extends State<ProductsTab> with SingleTickerProviderStat
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+          color: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? color.withOpacity(0.5) : Colors.transparent),
+          border: Border.all(color: isSelected ? color.withValues(alpha: 0.5) : Colors.transparent),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -439,7 +440,7 @@ class _ProductsTabState extends State<ProductsTab> with SingleTickerProviderStat
             child: GestureDetector(
               onTap: _closeFab,
               child: Container(
-                color: Colors.black.withOpacity(0.6), 
+                color: Colors.black.withValues(alpha: 0.6), 
               ),
             ),
           ),
@@ -625,7 +626,11 @@ class _ProductsTabState extends State<ProductsTab> with SingleTickerProviderStat
   }
 
   Widget _buildEmptyState(bool isDark) {
-    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.search_off, size: 80, color: isDark ? Colors.white10 : Colors.grey[300]), const SizedBox(height: 16), Text("No se encontraron productos", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 16, fontWeight: FontWeight.bold))]));
+    return const EmptyStateWidget(
+      icon: Icons.inventory_2_outlined,
+      title: "Inventario Vacío",
+      subtitle: "Aún no tienes productos registrados. Escanea una factura o agrega uno manualmente para empezar.",
+    );
   }
 }
 

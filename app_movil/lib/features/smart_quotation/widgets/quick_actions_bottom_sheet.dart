@@ -117,7 +117,7 @@ class QuickActionsBottomSheet extends StatelessWidget {
   Widget _buildListTile({required IconData icon, required Color color, required String title, String? subtitle, required bool isDark, required VoidCallback onTap}) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-      leading: CircleAvatar(backgroundColor: color.withOpacity(0.15), radius: 24, child: Icon(icon, color: color, size: 24)),
+      leading: CircleAvatar(backgroundColor: color.withValues(alpha: 0.15), radius: 24, child: Icon(icon, color: color, size: 24)),
       title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
       subtitle: subtitle != null ? Text(subtitle, style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600])) : null,
       onTap: onTap,

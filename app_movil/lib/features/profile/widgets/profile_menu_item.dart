@@ -23,8 +23,8 @@ class ProfileMenuItem extends StatelessWidget {
     final textColor = isDestructive ? Colors.red : (isDark ? Colors.white : Colors.black87);
     final iconColor = isDestructive ? Colors.red : (isDark ? Colors.blue[300] : Colors.blue[700]);
     final iconBgColor = isDestructive 
-        ? Colors.red.withOpacity(0.1) 
-        : (isDark ? Colors.white.withOpacity(0.05) : Colors.blue.withOpacity(0.1));
+        ? Colors.red.withValues(alpha: 0.1) 
+        : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.blue.withValues(alpha: 0.1));
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),

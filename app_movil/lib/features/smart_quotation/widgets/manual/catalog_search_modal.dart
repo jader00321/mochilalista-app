@@ -279,7 +279,7 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                       margin: const EdgeInsets.only(bottom: 16),
                       elevation: isDark ? 0 : 2,
                       color: isDark 
-                        ? (isOutOfStock ? const Color(0xFF1A1A24).withOpacity(0.5) : const Color(0xFF14141C)) 
+                        ? (isOutOfStock ? const Color(0xFF1A1A24).withValues(alpha: 0.5) : const Color(0xFF14141C)) 
                         : (isOutOfStock ? Colors.grey.shade50 : Colors.white),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.white10 : Colors.transparent)),
                       child: InkWell(
@@ -335,7 +335,7 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                                           Text("${pres.unidadVenta ?? 'Unidad'} (x${pres.unidadesPorVenta})", style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[800], fontWeight: FontWeight.bold)),
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(color: stockColor.withOpacity(0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: stockColor.withOpacity(0.4))),
+                                            decoration: BoxDecoration(color: stockColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: stockColor.withValues(alpha: 0.4))),
                                             child: Text(stockText, style: textTheme.labelSmall?.copyWith(color: stockColor)),
                                           ),
                                         ],

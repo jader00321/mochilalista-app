@@ -101,7 +101,7 @@ class QuickSaleHeader extends StatelessWidget {
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.search, size: 20),
                   label: const Text("Buscar Cliente en BD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800], side: BorderSide(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.shade200), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800], side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.shade200), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   onPressed: () => _openClientSearch(context, provider),
                 ),
               ),
@@ -112,7 +112,7 @@ class QuickSaleHeader extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(color: isDark ? Colors.amber.withOpacity(0.1) : Colors.amber[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: isDark ? Colors.amber.withOpacity(0.3) : Colors.amber.shade200)),
+                  decoration: BoxDecoration(color: isDark ? Colors.amber.withValues(alpha: 0.1) : Colors.amber[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: isDark ? Colors.amber.withValues(alpha: 0.3) : Colors.amber.shade200)),
                   child: Text("💰 Este cliente tiene un Saldo a Favor de ${currency.format(provider.clientSaldo)}", style: TextStyle(color: isDark ? Colors.amber[300] : Colors.amber[900], fontWeight: FontWeight.bold, fontSize: 14)),
                 ),
 
@@ -127,7 +127,7 @@ class QuickSaleHeader extends StatelessWidget {
                   child: Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[200], 
+                        backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[200], 
                         radius: 26,
                         child: Text(provider.clientName!.isNotEmpty ? provider.clientName![0].toUpperCase() : "?", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.white, fontWeight: FontWeight.bold, fontSize: 24))
                       ),
@@ -166,7 +166,7 @@ class QuickSaleHeader extends StatelessWidget {
                     }, 
                     icon: const Icon(Icons.person_off, color: Colors.red, size: 20),
                     label: const Text("Desvincular Cliente", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 15)),
-                    style: TextButton.styleFrom(backgroundColor: Colors.red.withOpacity(0.1), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    style: TextButton.styleFrom(backgroundColor: Colors.red.withValues(alpha: 0.1), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                   ),
                 )
               ] 

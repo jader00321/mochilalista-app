@@ -83,7 +83,7 @@ class PrinterConfigScreen extends StatelessWidget {
 
                   return ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    tileColor: isSelected ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green[50]) : cardColor,
+                    tileColor: isSelected ? (isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50]) : cardColor,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: isSelected ? BorderSide(color: Colors.green.shade400, width: 1.5) : BorderSide.none),
                     leading: Icon(Icons.print, color: isSelected ? Colors.green : (isDark ? Colors.blue[300] : Colors.grey), size: 28),
                     title: Text(device.name ?? "Dispositivo Desconocido", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
@@ -91,7 +91,7 @@ class PrinterConfigScreen extends StatelessWidget {
                     trailing: isSelected 
                       ? ElevatedButton(
                           onPressed: () => printerProv.disconnect(),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red.withOpacity(0.1), foregroundColor: Colors.red, elevation: 0),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red.withValues(alpha: 0.1), foregroundColor: Colors.red, elevation: 0),
                           child: const Text("Desconectar", style: TextStyle(fontWeight: FontWeight.bold)),
                         )
                       : ElevatedButton(
@@ -101,7 +101,7 @@ class PrinterConfigScreen extends StatelessWidget {
                               CustomSnackBar.show(context, message: "No se pudo conectar. Verifica que esté encendida.", isError: true);
                             }
                           },
-                          style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[50], foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800], elevation: 0),
+                          style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50], foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800], elevation: 0),
                           child: const Text("Conectar", style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                   );
@@ -118,9 +118,9 @@ class PrinterConfigScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
       decoration: BoxDecoration(
-        color: prov.isConnected ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green[600]) : defaultCardColor,
+        color: prov.isConnected ? (isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[600]) : defaultCardColor,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         children: [
@@ -164,7 +164,7 @@ class PrinterConfigScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: isSelected ? (isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[50]) : (isDark ? const Color(0xFF2C2C3A) : Colors.white),
+          color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50]) : (isDark ? const Color(0xFF2C2C3A) : Colors.white),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: isSelected ? (isDark ? Colors.blue[300]! : Colors.blue) : Colors.transparent, width: 2),
         ),

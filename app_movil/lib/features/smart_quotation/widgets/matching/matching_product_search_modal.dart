@@ -260,13 +260,13 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withOpacity(0.15) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                                    decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
                                     child: Text("${matched.unit.toUpperCase()} (x${matched.conversionFactor})", style: textTheme.labelSmall?.copyWith(color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
                                   ),
                                   if (catName.isNotEmpty)
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(color: widget.isDark ? Colors.grey.withOpacity(0.15) : Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
+                                      decoration: BoxDecoration(color: widget.isDark ? Colors.grey.withValues(alpha: 0.15) : Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
                                       child: Text(catName, style: textTheme.labelSmall?.copyWith(color: widget.isDark ? Colors.grey[400] : Colors.grey[700])),
                                     ),
                                 ],
@@ -280,7 +280,7 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
                           const SizedBox(height: 4),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(color: stockColor.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                            decoration: BoxDecoration(color: stockColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
                             child: Text(stockText, style: textTheme.labelSmall?.copyWith(color: stockColor))
                           ),
                         ]),

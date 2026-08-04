@@ -274,7 +274,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
                       // 🔥 DATOS DE LOS PRODUCTOS (SISTEMA CASCADA / SUBNIVELES)
                       Container(
-                        decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.05) : Colors.green[50], borderRadius: BorderRadius.circular(16)),
+                        decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.05) : Colors.green[50], borderRadius: BorderRadius.circular(16)),
                         child: Theme(
                           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                           child: ExpansionTile(
@@ -319,7 +319,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
                       // 🔥 TOTALES FINANCIEROS (SISTEMA CASCADA / SUBNIVELES)
                       Container(
-                        decoration: BoxDecoration(color: isDark ? Colors.teal.withOpacity(0.05) : Colors.teal[50], borderRadius: BorderRadius.circular(16)),
+                        decoration: BoxDecoration(color: isDark ? Colors.teal.withValues(alpha: 0.05) : Colors.teal[50], borderRadius: BorderRadius.circular(16)),
                         child: Theme(
                           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                           child: ExpansionTile(
@@ -361,7 +361,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                       const SizedBox(height: 16),
 
                       Container(
-                        decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.05) : Colors.blue[50], borderRadius: BorderRadius.circular(16)),
+                        decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.05) : Colors.blue[50], borderRadius: BorderRadius.circular(16)),
                         child: Theme(
                           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                           child: ExpansionTile(
@@ -383,7 +383,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                       const SizedBox(height: 16),
 
                       Container(
-                        decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.05) : Colors.orange[50], borderRadius: BorderRadius.circular(16)),
+                        decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.05) : Colors.orange[50], borderRadius: BorderRadius.circular(16)),
                         child: Theme(
                           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                           child: ExpansionTile(
@@ -411,7 +411,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
                       const SizedBox(height: 24),
                       Container(
-                        decoration: BoxDecoration(color: isDark ? Colors.purple.withOpacity(0.05) : Colors.purple[50], borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.purple.withOpacity(0.2) : Colors.purple.shade100)),
+                        decoration: BoxDecoration(color: isDark ? Colors.purple.withValues(alpha: 0.05) : Colors.purple[50], borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.purple.withValues(alpha: 0.2) : Colors.purple.shade100)),
                         child: SwitchListTile(
                           secondary: Icon(Icons.image, color: isDark ? Colors.purple[300] : Colors.purple[700]),
                           title: Text("Incluir Imágenes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.purple[300] : Colors.purple[900])),

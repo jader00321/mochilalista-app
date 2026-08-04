@@ -88,10 +88,10 @@ class _SaleClientDetailScreenState extends State<SaleClientDetailScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.3), width: 1.5)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5)),
       child: Row(
         children: [
-          CircleAvatar(radius: 24, backgroundColor: color.withOpacity(0.2), child: Icon(icon, color: color, size: 24)),
+          CircleAvatar(radius: 24, backgroundColor: color.withValues(alpha: 0.2), child: Icon(icon, color: color, size: 24)),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -188,7 +188,7 @@ class _SaleClientDetailScreenState extends State<SaleClientDetailScreen> {
                   decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF14141C) : Colors.red[50], 
                     borderRadius: BorderRadius.circular(20), 
-                    border: Border.all(color: isDark ? Colors.red.withOpacity(0.3) : Colors.red.shade200),
+                    border: Border.all(color: isDark ? Colors.red.withValues(alpha: 0.3) : Colors.red.shade200),
                   ),
                   child: Column(
                     children: [
@@ -234,7 +234,7 @@ class _SaleClientDetailScreenState extends State<SaleClientDetailScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Card(
-                    elevation: 0, color: isDark ? Colors.purple.withOpacity(0.15) : Colors.purple.shade50, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.purple.withOpacity(0.3) : Colors.purple.shade200)),
+                    elevation: 0, color: isDark ? Colors.purple.withValues(alpha: 0.15) : Colors.purple.shade50, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.purple.withValues(alpha: 0.3) : Colors.purple.shade200)),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       leading: Icon(Icons.image, color: isDark ? Colors.purple[200] : Colors.purple, size: 30), 
@@ -308,7 +308,7 @@ class _SaleClientDetailScreenState extends State<SaleClientDetailScreen> {
                                   if (isStructured && item['sales_unit'] != null)
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                                      decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
                                       child: Text(item['sales_unit'].toString().toUpperCase(), style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontSize: 10, fontWeight: FontWeight.bold)),
                                     ),
                                 ],

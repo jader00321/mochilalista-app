@@ -1,9 +1,22 @@
 # Variables de entorno generales
 .env
+.env.*
 
-# Configuraciones del editor
+# Configuraciones de IDE y Editores
 .vscode/
+.idea/
+*.swp
+*.swo
 
-# Archivos del sistema
+# Archivos del sistema (OS)
 .DS_Store
 Thumbs.db
+
+# Bases de datos locales (pruebas)
+*.db
+*.sqlite
+*.sqlite3
+
+# Compilación y caché
+build/
+.dart_tool/

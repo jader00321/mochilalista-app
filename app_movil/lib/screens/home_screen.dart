@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/auth_provider.dart';
 import '../providers/notification_provider.dart';
 import '../features/smart_quotation/providers/workbench_provider.dart';
 import '../features/smart_quotation/providers/sale_provider.dart';
+import '../widgets/connectivity_banner.dart';
 
 import 'inventory_screen.dart';
 import 'catalog/catalog_screen.dart';
@@ -47,19 +49,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _pausedTime = DateTime.now();
     } else if (state == AppLifecycleState.resumed) {
       if (_pausedTime != null) {
-        final auth = Provider.of<AuthProvider>(context, listen: false);
-        final difference = DateTime.now().difference(_pausedTime!);
-        // Delay de gracia de 1 minuto
-        if (difference.inMinutes >= 1 && auth.hasPinCache && auth.user != null) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => LockScreen(userId: auth.user!.id)),
-            (route) => false,
-          );
-        }
+        _checkPinDelay();
       }
-      _pausedTime = null;
     }
+  }
+
+  Future<void> _checkPinDelay() async {
+    final prefs = await SharedPreferences.getInstance();
+    final delayMinutes = prefs.getInt('pin_delay_minutes') ?? 1;
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final difference = DateTime.now().difference(_pausedTime!);
+    
+    if (difference.inMinutes >= delayMinutes && auth.hasPinCache && auth.user != null) {
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => LockScreen(userId: auth.user!.id)),
+          (route) => false,
+        );
+      }
+    }
+    _pausedTime = null;
   }
 
   @override
@@ -115,9 +126,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor, 
-      body: IndexedStack(
-        index: _currentIndex,
-        children: screens,
+      body: ConnectivityBanner(
+        child: IndexedStack(
+          index: _currentIndex,
+          children: screens,
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
@@ -132,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white, 
         elevation: 15,
         shadowColor: Colors.black,
-        indicatorColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.15),
+        indicatorColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.withValues(alpha: 0.15),
         destinations: destinations,
       ),
     );
@@ -218,11 +231,11 @@ class _HomeDashboardView extends StatelessWidget {
     final cardColor = isDark ? const Color(0xFF23232F) : Colors.white;
     return Material(
       elevation: isDark ? 0 : 10, 
-      shadowColor: isDark ? Colors.transparent : Colors.orange.withOpacity(0.3),
+      shadowColor: isDark ? Colors.transparent : Colors.orange.withValues(alpha: 0.3),
       color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(28),
-        side: isDark ? BorderSide(color: Colors.orange.withOpacity(0.3), width: 1.5) : BorderSide.none,
+        side: isDark ? BorderSide(color: Colors.orange.withValues(alpha: 0.3), width: 1.5) : BorderSide.none,
       ),
       child: InkWell(
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.quotation))),
@@ -237,7 +250,7 @@ class _HomeDashboardView extends StatelessWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange[50], borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[50], borderRadius: BorderRadius.circular(10)),
                       child: Text("MODO EXPLORACIÓN", style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange[800], fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
                     ),
                     const SizedBox(height: 12),
@@ -250,7 +263,7 @@ class _HomeDashboardView extends StatelessWidget {
               const SizedBox(width: 16),
               Container(
                 height: 80, width: 80,
-                decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.1) : Colors.orange[100], shape: BoxShape.circle),
+                decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[100], shape: BoxShape.circle),
                 child: Icon(Icons.auto_awesome, size: 40, color: isDark ? Colors.orange[300] : Colors.orange[700]),
               )
             ],

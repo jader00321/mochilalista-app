@@ -31,11 +31,11 @@ class QuotationBanner extends StatelessWidget {
 
     return Material(
       elevation: isDark ? 0 : 12,
-      shadowColor: isDark ? Colors.transparent : Colors.blue.withOpacity(0.15),
+      shadowColor: isDark ? Colors.transparent : Colors.blue.withValues(alpha: 0.15),
       color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(28),
-        side: isDark ? BorderSide(color: Colors.white.withOpacity(0.1), width: 1.5) : BorderSide.none,
+        side: isDark ? BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 1.5) : BorderSide.none,
       ),
       child: InkWell(
         onTap: () {
@@ -70,7 +70,7 @@ class QuotationBanner extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(28),
             gradient: isDark 
-              ? LinearGradient(colors: [Colors.white.withOpacity(0.05), Colors.transparent], begin: Alignment.topLeft, end: Alignment.bottomRight)
+              ? LinearGradient(colors: [Colors.white.withValues(alpha: 0.05), Colors.transparent], begin: Alignment.topLeft, end: Alignment.bottomRight)
               : null,
           ),
           padding: const EdgeInsets.all(24.0),
@@ -79,7 +79,7 @@ class QuotationBanner extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], borderRadius: BorderRadius.circular(8)),
                 child: Text(isClient ? "INTELIGENCIA ARTIFICIAL" : "MESA DE TRABAJO", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
               ),
               const SizedBox(height: 16),
@@ -100,9 +100,9 @@ class QuotationBanner extends StatelessWidget {
                   Container(
                     width: 75, height: 75,
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue[50], 
+                      color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50], 
                       shape: BoxShape.circle,
-                      boxShadow: [if(!isDark) BoxShadow(color: Colors.blue.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))]
+                      boxShadow: [if(!isDark) BoxShadow(color: Colors.blue.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))]
                     ),
                     child: Icon(isClient ? Icons.document_scanner_rounded : Icons.checklist_rtl_rounded, size: 36, color: isDark ? Colors.blue[300] : Colors.blue[700]),
                   )

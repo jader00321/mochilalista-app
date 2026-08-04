@@ -574,12 +574,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             children: [
               // 1. BLOQUE INFO GENERAL
               Container(
-                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withOpacity(0.15)), boxShadow: [if(!isDark) BoxShadow(color: Colors.blue.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]),
+                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.15)), boxShadow: [if(!isDark) BoxShadow(color: Colors.blue.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]),
                 child: Column(
                   children: [
                     Container(
                       width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue[50], borderRadius: const BorderRadius.vertical(top: Radius.circular(16))),
+                      decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], borderRadius: const BorderRadius.vertical(top: Radius.circular(16))),
                       child: Row(children: [Icon(Icons.info_outline, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 20), const SizedBox(width: 10), Text("Información General", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[100] : Colors.blue[900]))]),
                     ),
                     Padding(
@@ -663,7 +663,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   onPressed: _addPresentation,
                   icon: const Icon(Icons.add_circle_outline, size: 20),
                   label: const Text("AÑADIR OTRA PRESENTACIÓN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), foregroundColor: isDark ? Colors.teal[300] : Colors.teal[700], side: BorderSide(color: isDark ? Colors.teal.withOpacity(0.5) : Colors.teal.shade300, width: 2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), foregroundColor: isDark ? Colors.teal[300] : Colors.teal[700], side: BorderSide(color: isDark ? Colors.teal.withValues(alpha: 0.5) : Colors.teal.shade300, width: 2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                 ),
               ),
               const SizedBox(height: 20),
@@ -702,7 +702,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                           decoration: BoxDecoration(
                             color: current == 0 ? (isDark ? Colors.orange[800] : Colors.white) : (isDark ? Colors.green[700] : Colors.white),
                             borderRadius: BorderRadius.circular(10),
-                            boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))] : [],
+                            boxShadow: !isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4, offset: const Offset(0, 2))] : [],
                           ),
                         ),
                       ),

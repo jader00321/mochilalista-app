@@ -175,7 +175,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                           contentPadding: const EdgeInsets.symmetric(vertical: 12),
                           leading: CircleAvatar(
                             radius: 26,
-                            backgroundColor: isSent ? Colors.green.withOpacity(0.2) : (isDark ? Colors.white10 : Colors.grey[200]),
+                            backgroundColor: isSent ? Colors.green.withValues(alpha: 0.2) : (isDark ? Colors.white10 : Colors.grey[200]),
                             child: Icon(isSent ? Icons.check : Icons.person, color: isSent ? Colors.green : (isDark ? Colors.white54 : Colors.grey)),
                           ),
                           title: Text(client.fullName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor, decoration: isSent ? TextDecoration.lineThrough : null)),
@@ -246,7 +246,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF23232F) : Colors.white, 
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
+                boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]
               ),
               child: TextField(
                 controller: _searchCtrl,
@@ -273,7 +273,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
           if (!Provider.of<AuthProvider>(context).hasActiveContext)
              Container(
                width: double.infinity,
-               color: Colors.orange.withOpacity(0.15),
+               color: Colors.orange.withValues(alpha: 0.15),
                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                child: const Row(
                  children: [
@@ -374,7 +374,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
       bottomSheet: (provider.filterHasDebt && debtorsList.isNotEmpty)
         ? Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: surfaceColor, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, -5))]),
+            decoration: BoxDecoration(color: surfaceColor, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, -5))]),
             child: SafeArea(
               child: Row(
                 children: [

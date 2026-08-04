@@ -85,9 +85,9 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                     child: Container(
                       height: 55, width: 55,
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.red.withOpacity(0.15) : Colors.red.withOpacity(0.1),
+                        color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: isDark ? Colors.red.withOpacity(0.4) : Colors.red.withOpacity(0.3))
+                        border: Border.all(color: isDark ? Colors.red.withValues(alpha: 0.4) : Colors.red.withValues(alpha: 0.3))
                       ),
                       child: Icon(Icons.delete_outline, color: isDark ? Colors.red[300] : Colors.red, size: 26),
                     ),
@@ -104,7 +104,7 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                     decoration: BoxDecoration(
                       color: isDark ? Colors.blue[800] : theme.primaryColor,
                       borderRadius: BorderRadius.circular(14),
-                      boxShadow: [if (!isDark) BoxShadow(color: theme.primaryColor.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 3))]
+                      boxShadow: [if (!isDark) BoxShadow(color: theme.primaryColor.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 3))]
                     ),
                     child: const Icon(Icons.tune, color: Colors.white, size: 26),
                   ),

@@ -151,7 +151,7 @@ class _DbInspectorScreenState extends State<DbInspectorScreen> {
                           columnSpacing: 24,
                           headingRowHeight: 45,
                           dataRowMinHeight: 45,
-                          headingRowColor: MaterialStateProperty.all(isDark ? Colors.white10 : Colors.indigo.withOpacity(0.05)),
+                          headingRowColor: MaterialStateProperty.all(isDark ? Colors.white10 : Colors.indigo.withValues(alpha: 0.05)),
                           columns: _columns.map((col) => DataColumn(
                             label: Text(col.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.indigoAccent))
                           )).toList(),
@@ -162,7 +162,7 @@ class _DbInspectorScreenState extends State<DbInspectorScreen> {
                                 return DataCell(
                                   Text(cellValue?.toString() ?? "NULL", style: TextStyle(
                                     fontSize: 13, 
-                                    color: cellValue == null ? Colors.red.withOpacity(0.5) : (isDark ? Colors.white70 : Colors.black87)
+                                    color: cellValue == null ? Colors.red.withValues(alpha: 0.5) : (isDark ? Colors.white70 : Colors.black87)
                                   )),
                                   onTap: col == 'id' ? null : () => _editCell(row['id'], col, cellValue),
                                 );

@@ -84,7 +84,7 @@ class InventoryGridCard extends StatelessWidget {
                   if (isOut)
                     Container(
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.black.withOpacity(0.7) : Colors.white.withOpacity(0.7),
+                        color: isDark ? Colors.black.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.7),
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(16))
                       ), 
                       child: Center(child: Icon(Icons.block, color: isDark ? Colors.red[400] : Colors.red, size: 40))

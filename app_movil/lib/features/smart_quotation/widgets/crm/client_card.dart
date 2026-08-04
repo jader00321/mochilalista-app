@@ -81,7 +81,7 @@ class ClientCard extends StatelessWidget {
       color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: confidenceColor.withOpacity(0.4), width: 1.5)
+        side: BorderSide(color: confidenceColor.withValues(alpha: 0.4), width: 1.5)
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -141,9 +141,9 @@ class ClientCard extends StatelessWidget {
                                 margin: const EdgeInsets.only(left: 8),
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.teal.withOpacity(0.15), 
+                                  color: Colors.teal.withValues(alpha: 0.15), 
                                   borderRadius: BorderRadius.circular(6), 
-                                  border: Border.all(color: Colors.teal.withOpacity(0.5))
+                                  border: Border.all(color: Colors.teal.withValues(alpha: 0.5))
                                 ),
                                 child: const Row(
                                   children: [
@@ -162,7 +162,7 @@ class ClientCard extends StatelessWidget {
                             runSpacing: 6,
                             children: client.etiquetas.take(2).map((e) => Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(color: isDark ? Colors.purple.withOpacity(0.15) : Colors.purple[50], borderRadius: BorderRadius.circular(8)),
+                              decoration: BoxDecoration(color: isDark ? Colors.purple.withValues(alpha: 0.15) : Colors.purple[50], borderRadius: BorderRadius.circular(8)),
                               child: Text(e, style: TextStyle(fontSize: 12, color: isDark ? Colors.purple[200] : Colors.purple[800], fontWeight: FontWeight.bold)),
                             )).toList(),
                           )

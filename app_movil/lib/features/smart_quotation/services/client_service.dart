@@ -2,47 +2,44 @@ import 'dart:convert';
 import '../models/crm_models.dart';
 import '../models/smart_quotation_model.dart';
 import '../../../database/local_db.dart';
+import '../../../utils/app_logger.dart';
+import '../../../repositories/client_repository.dart';
 
 class ClientService {
-  final dbHelper = LocalDatabase.instance;
+  final _repository = ClientRepository();
+  final dbHelper = LocalDatabase.instance; // Mantenido solo para transacciones complejas inter-tabla
 
   Future<ClientModel?> getClientById(int id) async {
     try {
-      final db = await dbHelper.database;
-      final rows = await db.query('clientes', where: 'id = ?', whereArgs: [id], limit: 1);
-      if (rows.isNotEmpty) {
-        Map<String, dynamic> clientData = Map.from(rows.first);
-        final salesRows = await db.rawQuery('''
-          SELECT v.*, (SELECT COUNT(id) FROM venta_items WHERE venta_id = v.id) as items_count 
-          FROM ventas v 
-          WHERE v.cliente_id = ? 
-          ORDER BY v.fecha_venta DESC 
-          LIMIT 5
-        ''', [id]);
+      final clientDataRaw = await _repository.getClientRawById(id);
+      if (clientDataRaw != null) {
+        final salesRows = await _repository.getClientSales(id);
+        final paymentsRows = await _repository.getClientPayments(id);
+        
+        Map<String, dynamic> clientData = Map.from(clientDataRaw);
         clientData['ultimas_ventas'] = salesRows;
-        clientData['ultimos_pagos'] = await db.query('pagos', where: 'cliente_id = ?', whereArgs: [id], orderBy: 'fecha_pago DESC', limit: 5);
+        clientData['ultimos_pagos'] = paymentsRows;
         return ClientModel.fromJson(clientData);
       }
       return null;
-    } catch (e) { return null; }
+    } catch (e, stack) { 
+      AppLogger.error('ClientService.getClientById', e, stack); 
+      return null; 
+    }
   }
   
   Future<List<ClientModel>> searchClients(String query, int negocioId) async {
     try {
-      final db = await dbHelper.database;
-      final rows = await db.query(
-        'clientes', 
-        where: 'negocio_id = ? AND (nombre_completo LIKE ? OR dni_ruc LIKE ? OR telefono LIKE ?)', 
-        whereArgs: [negocioId, '%$query%', '%$query%', '%$query%'],
-        limit: 20
-      );
+      final rows = await _repository.searchClientsRaw(query, negocioId);
       return rows.map((e) => ClientModel.fromJson(e)).toList();
-    } catch (e) { return []; }
+    } catch (e, stack) { 
+      AppLogger.error('ClientService.searchClients', e, stack); 
+      return []; 
+    }
   }
 
   Future<ClientModel> createClient(Map<String, dynamic> clientData, int negocioId, int usuarioId) async {
     try {
-      final db = await dbHelper.database;
       Map<String, dynamic> insertData = {
         'negocio_id': negocioId,
         'creado_por_usuario_id': usuarioId,
@@ -57,52 +54,41 @@ class ClientService {
         'deuda_total': 0.0, 'saldo_a_favor': 0.0, 'entregas_pendientes': 0,
         'fecha_registro': DateTime.now().toIso8601String()
       };
-      int id = await db.insert('clientes', insertData);
+      int id = await _repository.insertClient(insertData);
       return (await getClientById(id))!;
     } catch (e) { throw Exception("Error creando cliente localmente: $e"); }
   }
 
   Future<ClientModel> updateClient(int id, Map<String, dynamic> clientData) async {
     try {
-      final db = await dbHelper.database;
-      
       Map<String, dynamic> updateData = Map.from(clientData);
       if (updateData.containsKey('etiquetas') && updateData['etiquetas'] is List) {
         updateData['etiquetas'] = jsonEncode(updateData['etiquetas']);
       }
-      
-      await db.update('clientes', updateData, where: 'id = ?', whereArgs: [id]);
+      await _repository.updateClient(id, updateData);
       return (await getClientById(id))!;
     } catch (e) { throw Exception("Error actualizando cliente localmente: $e"); }
   }
   
   Future<List<ClientModel>> getTrackingClients(int negocioId, {bool debtorsOnly = false}) async {
     try {
-      final db = await dbHelper.database;
-      String whereClause = debtorsOnly ? 'negocio_id = ? AND deuda_total > 0' : 'negocio_id = ? AND (deuda_total > 0 OR entregas_pendientes > 0)';
-      final rows = await db.query('clientes', where: whereClause, whereArgs: [negocioId]);
+      final rows = await _repository.getTrackingClientsRaw(negocioId, debtorsOnly: debtorsOnly);
       return rows.map((e) => ClientModel.fromJson(e)).toList();
     } catch (e) { return []; }
   }
 
   Future<List<ClientModel>> getAllClients(int negocioId) async {
     try {
-      final db = await dbHelper.database;
-      final rows = await db.query('clientes', where: 'negocio_id = ?', whereArgs: [negocioId]);
+      final rows = await _repository.getAllClientsRaw(negocioId);
       
       List<ClientModel> clients = [];
       for (var row in rows) {
         Map<String, dynamic> clientData = Map.from(row);
         int clientId = clientData['id'] as int;
-        final salesRows = await db.rawQuery('''
-          SELECT v.*, (SELECT COUNT(id) FROM venta_items WHERE venta_id = v.id) as items_count 
-          FROM ventas v 
-          WHERE v.cliente_id = ? 
-          ORDER BY v.fecha_venta DESC 
-          LIMIT 5
-        ''', [clientId]);
-        clientData['ultimas_ventas'] = salesRows;
-        clientData['ultimos_pagos'] = await db.query('pagos', where: 'cliente_id = ?', whereArgs: [clientId], orderBy: 'fecha_pago DESC', limit: 5);
+        
+        clientData['ultimas_ventas'] = await _repository.getClientSales(clientId);
+        clientData['ultimos_pagos'] = await _repository.getClientPayments(clientId);
+        
         clients.add(ClientModel.fromJson(clientData));
       }
       return clients;
@@ -195,7 +181,7 @@ class ClientService {
         totalDeuda = (debtsRows.first['debt'] as num).toDouble();
       }
       if (totalDeuda < 0.02) totalDeuda = 0.0;
-      await db.update('clientes', {'deuda_total': totalDeuda}, where: 'id = ?', whereArgs: [clientId]);
+      await _repository.updateClient(clientId, {'deuda_total': totalDeuda});
     } catch (e) {
       // Ignorar en caso de error
     }

@@ -139,7 +139,7 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> {
                                   final c = _searchResults[i];
                                   return ListTile(
                                     contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                                    leading: CircleAvatar(backgroundColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[50], radius: 24, child: Icon(Icons.person, color: isDark ? Colors.blue[300] : Colors.blue)),
+                                    leading: CircleAvatar(backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50], radius: 24, child: Icon(Icons.person, color: isDark ? Colors.blue[300] : Colors.blue)),
                                     title: Text(c.fullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                                     subtitle: Text("Tel: ${c.phone}", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600])),
                                     trailing: ElevatedButton(

@@ -54,7 +54,7 @@ class WaClientSection extends StatelessWidget {
                 ),
                 if (!isUsingSelectedClient)
                   Material(
-                    color: isDark ? Colors.orange.withOpacity(0.15) : Colors.orange.withOpacity(0.1),
+                    color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                     child: InkWell(
                       onTap: onSearchTap,
@@ -103,7 +103,7 @@ class WaClientSection extends StatelessWidget {
             const SizedBox(height: 16),
             
             Container(
-              decoration: BoxDecoration(color: isDark ? Colors.orange.withOpacity(0.1) : Colors.orange[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.orange.withOpacity(0.3) : Colors.transparent)),
+              decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.transparent)),
               child: CheckboxListTile(
                 title: Text(
                   isUsingSelectedClient 

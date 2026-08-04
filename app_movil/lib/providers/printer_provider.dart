@@ -120,7 +120,7 @@ class PrinterProvider extends ChangeNotifier {
       
       notifyListeners();
     } catch (e) {
-      print("Error desconectando: $e");
+      debugPrint("Error desconectando: $e");
     }
   }
 

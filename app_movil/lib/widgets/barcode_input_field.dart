@@ -48,7 +48,7 @@ class _BarcodeInputFieldState extends State<BarcodeInputField> {
         fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[50],
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.transparent)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.blue.withOpacity(0.5) : Colors.blue.shade300, width: 2)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade300, width: 2)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         prefixIcon: Icon(Icons.qr_code, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey, size: 22),
         suffixIcon: IconButton(
@@ -106,7 +106,7 @@ class _ScannerScreenState extends State<_ScannerScreen> {
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.greenAccent, width: 3), 
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.greenAccent.withOpacity(0.3), blurRadius: 15, spreadRadius: 2)]
+                boxShadow: [BoxShadow(color: Colors.greenAccent.withValues(alpha: 0.3), blurRadius: 15, spreadRadius: 2)]
               ),
             ),
           ),

@@ -144,7 +144,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
           if (isGuest)
             Container(
               width: double.infinity,
-              color: Colors.orange.withOpacity(0.15),
+              color: Colors.orange.withValues(alpha: 0.15),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [

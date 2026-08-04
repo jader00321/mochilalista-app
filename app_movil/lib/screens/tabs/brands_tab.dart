@@ -300,7 +300,7 @@ class _BrandFormDialogState extends State<_BrandFormDialog> {
                 fillColor: widget.isDark ? const Color(0xFF14141C) : Colors.grey[50],
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: widget.isDark ? Colors.white10 : Colors.transparent)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: widget.isDark ? Colors.orange.withOpacity(0.5) : Colors.orange)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: widget.isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange)),
                 prefixIcon: Icon(Icons.branding_watermark, color: widget.isDark ? Colors.blueGrey[300] : Colors.grey),
               ),
             ),

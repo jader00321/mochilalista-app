@@ -224,7 +224,7 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                     
                     Container(
                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                       decoration: BoxDecoration(color: hasOffer ? (isDark ? Colors.red.withOpacity(0.15) : Colors.red[50]) : (isDark ? Colors.green.withOpacity(0.15) : const Color(0xFFF0FDF4)), borderRadius: BorderRadius.circular(16)),
+                       decoration: BoxDecoration(color: hasOffer ? (isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red[50]) : (isDark ? Colors.green.withValues(alpha: 0.15) : const Color(0xFFF0FDF4)), borderRadius: BorderRadius.circular(16)),
                        child: Column(
                           children: [
                              Row(
@@ -356,9 +356,9 @@ class _DetailPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark ? color.withOpacity(0.15) : color[50],
+        color: isDark ? color.withValues(alpha: 0.15) : color[50],
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? color.withOpacity(0.3) : color.withOpacity(0.2))
+        border: Border.all(color: isDark ? color.withValues(alpha: 0.3) : color.withValues(alpha: 0.2))
       ),
       child: Column(
         children: [

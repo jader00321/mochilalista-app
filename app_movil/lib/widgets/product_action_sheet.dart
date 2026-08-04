@@ -97,7 +97,7 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: isDark ? Colors.teal.withOpacity(0.15) : Colors.teal[50], borderRadius: BorderRadius.circular(16)),
+                        decoration: BoxDecoration(color: isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal[50], borderRadius: BorderRadius.circular(16)),
                         child: Icon(Icons.inventory_2_outlined, color: isDark ? Colors.teal[300] : Colors.teal, size: 36),
                       ),
                       const SizedBox(width: 16),
@@ -124,7 +124,7 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: isDark ? Colors.teal.withOpacity(0.2) : Colors.teal.withOpacity(0.1),
+                                      color: isDark ? Colors.teal.withValues(alpha: 0.2) : Colors.teal.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(6)
                                     ),
                                     child: Text(
@@ -149,9 +149,9 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
 
                   Container(
                     decoration: BoxDecoration(
-                      color: isPublic ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green[50]) : (isDark ? const Color(0xFF14141C) : Colors.grey[100]),
+                      color: isPublic ? (isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50]) : (isDark ? const Color(0xFF14141C) : Colors.grey[100]),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isPublic ? (isDark ? Colors.green.withOpacity(0.3) : Colors.green.withOpacity(0.3)) : Colors.transparent),
+                      border: Border.all(color: isPublic ? (isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)) : Colors.transparent),
                     ),
                     child: SwitchListTile(
                       title: Text(
@@ -231,7 +231,7 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                             padding: const EdgeInsets.symmetric(vertical: 16), 
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                            side: BorderSide(color: isDark ? Colors.blue.withOpacity(0.5) : Colors.blue.shade200)
+                            side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade200)
                           ),
                           onPressed: () {
                             if (selectedPresentation.id == -1) return;
@@ -249,7 +249,7 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                             padding: const EdgeInsets.symmetric(vertical: 16), 
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800],
-                            side: BorderSide(color: isDark ? Colors.orange.withOpacity(0.5) : Colors.orange.shade200)
+                            side: BorderSide(color: isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade200)
                           ),
                           onPressed: () {
                             Navigator.pop(context);
@@ -284,14 +284,14 @@ class _BigSmartButton extends StatelessWidget {
     if (type == _ButtonType.price) {
       final bool hasOffer = presentation.precioOferta != null && presentation.precioOferta! > 0;
       final Color color = hasOffer ? (isDark ? Colors.blue[300]! : Colors.blue) : (isDark ? Colors.white : Colors.grey[800]!);
-      final Color bg = hasOffer ? (isDark ? Colors.blue.withOpacity(0.1) : Colors.blue[50]!) : (isDark ? Colors.white10 : Colors.grey[100]!);
+      final Color bg = hasOffer ? (isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50]!) : (isDark ? Colors.white10 : Colors.grey[100]!);
       
       return InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.3))),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.3))),
           child: Column(
             children: [
               Row(
@@ -339,7 +339,7 @@ class _BigSmartButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.3))),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.3))),
           child: Column(
             children: [
               Row(
@@ -355,7 +355,7 @@ class _BigSmartButton extends StatelessWidget {
               Container(
                 margin: const EdgeInsets.only(top: 4),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
                 child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
               )
             ],
@@ -529,9 +529,9 @@ class _PriceEditorDialogState extends State<_PriceEditorDialog> {
               margin: const EdgeInsets.only(top: 24),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: widget.isDark ? Colors.green.withOpacity(0.15) : Colors.green[50],
+                color: widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50],
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: widget.isDark ? Colors.green.withOpacity(0.4) : Colors.green.withOpacity(0.5))
+                border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.withValues(alpha: 0.5))
               ),
               child: Column(
                 children: [
@@ -679,10 +679,10 @@ class _TabButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? (isDark ? Colors.blue.withOpacity(0.2) : Colors.white) : Colors.transparent,
+          color: selected ? (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.white) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: selected ? [if(!isDark) BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)] : null,
-          border: selected ? Border.all(color: isDark ? Colors.blue.withOpacity(0.5) : Colors.transparent) : null
+          boxShadow: selected ? [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)] : null,
+          border: selected ? Border.all(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.transparent) : null
         ),
         alignment: Alignment.center,
         child: Text(label, style: TextStyle(color: selected ? (isDark ? Colors.blue[300] : Colors.black87) : (isDark ? Colors.grey[500] : Colors.grey), fontWeight: FontWeight.bold, fontSize: 14)),

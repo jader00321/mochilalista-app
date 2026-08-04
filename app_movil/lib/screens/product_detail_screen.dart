@@ -263,9 +263,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: isPublic ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green.withOpacity(0.1)) : (isDark ? Colors.orange.withOpacity(0.15) : Colors.grey.withOpacity(0.2)),
+                            color: isPublic ? (isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.withValues(alpha: 0.1)) : (isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.2)),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: isPublic ? (isDark ? Colors.green.withOpacity(0.4) : Colors.green) : (isDark ? Colors.orange.withOpacity(0.4) : Colors.grey))
+                            border: Border.all(color: isPublic ? (isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green) : (isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.grey))
                           ),
                           child: Row(
                             children: [
@@ -301,13 +301,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               width: 155,
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               decoration: BoxDecoration(
-                                color: isSelected ? (isDark ? Colors.teal.withOpacity(0.15) : Colors.teal.withOpacity(0.05)) : (isDark ? const Color(0xFF23232F) : Colors.white),
+                                color: isSelected ? (isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal.withValues(alpha: 0.05)) : (isDark ? const Color(0xFF23232F) : Colors.white),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: isSelected ? (isDark ? Colors.teal[300]! : Colors.teal) : (isDark ? Colors.white10 : Colors.grey.shade300),
                                   width: isSelected ? 2 : 1
                                 ),
-                                boxShadow: isSelected ? [] : [if(!isDark) BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 5, offset: const Offset(0, 2))]
+                                boxShadow: isSelected ? [] : [if(!isDark) BoxShadow(color: Colors.grey.withValues(alpha: 0.05), blurRadius: 5, offset: const Offset(0, 2))]
                               ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -421,7 +421,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         color: isDark ? const Color(0xFF23232F) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))]
+        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))]
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start, 
@@ -431,7 +431,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             width: double.infinity, 
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
             decoration: BoxDecoration(
-              color: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue.shade50,
+              color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue.shade50,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(20))
             ),
             child: Column(
@@ -502,7 +502,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           const SizedBox(height: 4),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(color: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                            decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
                             child: Text("+$margenPorcentaje%", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue[700])),
                           ),
                         ],
@@ -525,7 +525,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         children: [
                           Container(
                             padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.15) : Colors.green.shade50, shape: BoxShape.circle),
+                            decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.shade50, shape: BoxShape.circle),
                             child: Icon(Icons.attach_money, color: isDark ? Colors.green[400] : Colors.green[700], size: 24),
                           ),
                           const SizedBox(width: 12),
@@ -599,13 +599,13 @@ class _InfoCard extends StatelessWidget {
         color: isDark ? const Color(0xFF23232F) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: isDark ? Colors.white10 : Colors.transparent),
-        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))]
+        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2))]
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: isDark ? Colors.teal.withOpacity(0.15) : Colors.teal.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal.withValues(alpha: 0.1), shape: BoxShape.circle),
             child: Icon(icon, color: isDark ? Colors.teal[300] : Colors.teal[700], size: 20),
           ),
           const SizedBox(width: 10),

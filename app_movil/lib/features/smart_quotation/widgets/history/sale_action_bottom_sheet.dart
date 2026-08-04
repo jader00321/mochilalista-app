@@ -166,7 +166,7 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       leading: Container(
         padding: const EdgeInsets.all(12), 
-        decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), 
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle), 
         child: Icon(icon, color: color, size: 24)
       ),
       title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: isDark ? Colors.white : Colors.black87)),

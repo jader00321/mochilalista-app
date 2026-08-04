@@ -60,7 +60,7 @@ class QuickSaleCartItem extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16), 
         side: BorderSide(
-          color: isOut ? (isDark ? Colors.red.withOpacity(0.5) : Colors.red.shade300) : (isDark ? Colors.white10 : Colors.transparent),
+          color: isOut ? (isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade300) : (isDark ? Colors.white10 : Colors.transparent),
           width: isOut ? 1.5 : 1.0
         )
       ),

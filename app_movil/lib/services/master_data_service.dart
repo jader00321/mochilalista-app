@@ -2,6 +2,7 @@ import '../database/local_db.dart';
 import '../models/category_model.dart';
 import '../models/brand_model.dart';
 import '../models/provider_model.dart';
+import '../utils/app_logger.dart';
 import 'image_service.dart';
 
 class MasterDataService {
@@ -43,7 +44,7 @@ class MasterDataService {
         'brands': brandsData.map((e) => Brand.fromJson(e)).toList(),
         'providers': provsData.map((e) => ProviderModel.fromJson(e)).toList(),
       };
-    } catch (e) { print("Error MasterData: $e"); }
+    } catch (e, stack) { AppLogger.error('MasterDataService.fetchAllMasterData', e, stack); }
     return null;
   }
 
@@ -77,7 +78,7 @@ class MasterDataService {
       }
       await db.delete('categorias', where: 'id = ?', whereArgs: [id]);
       return null;
-    } catch (e) { return "Error al eliminar la categoría."; }
+    } catch (e, stack) { AppLogger.error('MasterDataService.deleteCategory', e, stack); return "Error al eliminar la categoría."; }
   }
 
   Future<int?> createBrand(String nombre, String? urlImagen) async {
@@ -120,7 +121,7 @@ class MasterDataService {
         await ImageService.deleteLocalImage(oldData.first['imagen_url'] as String);
       }
       return null;
-    } catch (e) { return "Error al eliminar la marca."; }
+    } catch (e, stack) { AppLogger.error('MasterDataService.deleteBrand', e, stack); return "Error al eliminar la marca."; }
   }
 
   Future<int?> createProvider(String nombre, String? ruc, String? contacto, String? telefono, String? correo) async {
@@ -160,6 +161,6 @@ class MasterDataService {
       }
       await db.delete('proveedores', where: 'id = ?', whereArgs: [id]);
       return null;
-    } catch (e) { return "Error al eliminar el proveedor."; }
+    } catch (e, stack) { AppLogger.error('MasterDataService.deleteProvider', e, stack); return "Error al eliminar el proveedor."; }
   }
 }
