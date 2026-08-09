@@ -17,7 +17,7 @@ class QuotationService {
       Map<String, dynamic> cloneData = Map.from(qRows.first);
       cloneData.remove('id'); 
       cloneData['status'] = 'DRAFT';
-      cloneData['client_name'] = cloneData['client_name'].toString() + " (Copia)";
+      cloneData['client_name'] = "${cloneData['client_name']} (Copia)";
       cloneData['is_template'] = 0;
       cloneData['clone_source_id'] = quotationId;
       cloneData['creado_por_usuario_id'] = usuarioId; 
@@ -55,47 +55,92 @@ class QuotationService {
       bool canSell = true;
       List<StockWarning> warnings = [];
       List<PriceChange> prices = [];
+      List<NameChange> nameChanges = [];
 
       for (var item in iRows) {
         if (item['presentation_id'] == null) continue;
         int pId = item['presentation_id'] as int;
         
         final prRows = await db.query('presentaciones_producto', where: 'id = ?', whereArgs: [pId]);
-        if (prRows.isEmpty) continue; 
+        if (prRows.isEmpty) {
+          hasIssues = true;
+          canSell = false;
+          warnings.add(StockWarning(
+            itemId: item['id'] as int,
+            productName: item['product_name'] as String? ?? "Desconocido",
+            requested: item['quantity'] as int,
+            available: 0,
+            message: "Este producto ya no existe en el catálogo.",
+          ));
+          continue; 
+        }
         
         final pres = prRows.first;
+        
+        // --- Validación de Nombre ---
+        String? itemName = item['product_name'] as String?;
+        String? realName;
+        final prodRows = await db.query('productos', where: 'id = ?', whereArgs: [item['product_id']]);
+        if (prodRows.isNotEmpty) {
+           realName = prodRows.first['nombre'] as String?;
+        }
+        
+        if (itemName != null && realName != null && itemName.toLowerCase() != realName.toLowerCase()) {
+           hasIssues = true;
+           nameChanges.add(NameChange(
+              itemId: item['id'] as int,
+              oldName: itemName,
+              newName: realName,
+              message: "El nombre del producto cambió en el catálogo."
+           ));
+        }
+
+        // --- Validación de Precios y Ofertas ---
+        double basePrice = (pres['precio_venta_final'] as num).toDouble();
         double currentPrice = (pres['precio_oferta'] != null && (pres['precio_oferta'] as num) > 0) 
             ? (pres['precio_oferta'] as num).toDouble() 
-            : (pres['precio_venta_final'] as num).toDouble();
+            : basePrice;
             
         int currentStock = pres['stock_actual'] as int;
         
-        // Validación de precios (Cuidado con los booleanos de SQLite que vienen como int)
         bool isManual = item['is_manual_price'] == 1 || item['is_manual_price'] == true;
-        if (!isManual && (item['unit_price_applied'] as num).toDouble() != currentPrice) {
+        double appliedPrice = (item['unit_price_applied'] as num).toDouble();
+        double originalPrice = (item['original_unit_price'] as num).toDouble();
+        
+        if (!isManual && appliedPrice != currentPrice) {
           hasIssues = true;
+          
+          String message = "";
+          if (appliedPrice == originalPrice && currentPrice < basePrice) {
+             message = "¡Se activó un descuento en la tienda!";
+          } else if (appliedPrice < originalPrice && currentPrice == basePrice) {
+             message = "El producto ya no está en oferta.";
+          }
+          
           prices.add(PriceChange(
             itemId: item['id'] as int,
-            productName: item['product_name'] as String,
-            oldPrice: (item['unit_price_applied'] as num).toDouble(),
-            newPrice: currentPrice
+            productName: itemName ?? "Desconocido",
+            oldPrice: appliedPrice,
+            newPrice: currentPrice,
+            newBasePrice: basePrice,
+            message: message,
           ));
         }
 
-        // Validación de stock
+        // --- Validación de stock ---
         if (currentStock < (item['quantity'] as int)) {
           hasIssues = true;
           canSell = false;
           warnings.add(StockWarning(
             itemId: item['id'] as int,
-            productName: item['product_name'] as String,
+            productName: itemName ?? "Desconocido",
             requested: item['quantity'] as int,
             available: currentStock
           ));
         }
       }
 
-      return ValidationResult(hasIssues: hasIssues, canSell: canSell, stockWarnings: warnings, priceChanges: prices);
+      return ValidationResult(hasIssues: hasIssues, canSell: canSell, stockWarnings: warnings, priceChanges: prices, nameChanges: nameChanges);
     } catch (e) {
       throw Exception("Error local al validar integridad: $e");
     }
@@ -136,8 +181,10 @@ class QuotationService {
             'unit_price_applied': item['unit_price_applied'],
             'original_unit_price': item['original_unit_price'],
             'product_name': item['product_name'],
+            'brand_name': item['brand_name'],
             'specific_name': item['specific_name'],
             'sales_unit': item['sales_unit'],
+            'image_url': item['image_url'],
             'is_manual_price': item['is_manual_price'] == true || item['is_manual_price'] == 1 ? 1 : 0,
             'is_available': 1
           });
@@ -155,7 +202,7 @@ class QuotationService {
     } catch (e) { throw Exception("Error al actualizar estado local: $e"); }
   }
 
-  Future<bool> refreshQuotation(int id, {bool fixPrices = true, bool fixStock = false}) async {
+  Future<bool> refreshQuotation(int id, {bool fixPrices = true, bool fixStock = false, bool fixNames = false}) async {
     try {
       final db = await dbHelper.database;
       final items = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
@@ -183,6 +230,22 @@ class QuotationService {
                 updates['is_available'] = currentStock < reqQty ? 0 : 1;
               }
               
+              if (fixNames) {
+                final prod = await txn.query('productos', where: 'id = ?', whereArgs: [item['product_id']]);
+                if (prod.isNotEmpty) {
+                   updates['product_name'] = prod.first['nombre'];
+                   // Obtener nombre de marca vía marca_id (FK)
+                   if (prod.first['marca_id'] != null) {
+                     final marcaRows = await txn.query('marcas', columns: ['nombre'], where: 'id = ?', whereArgs: [prod.first['marca_id']]);
+                     updates['brand_name'] = marcaRows.isNotEmpty ? marcaRows.first['nombre'] : item['brand_name'];
+                   } else {
+                     updates['brand_name'] = item['brand_name'];
+                   }
+                }
+                updates['specific_name'] = p['nombre_especifico'];
+                updates['sales_unit'] = p['unidad_venta'];
+              }
+              
               if (updates.isNotEmpty) {
                 await txn.update('smart_quotation_items', updates, where: 'id = ?', whereArgs: [item['id']]);
               }
@@ -191,6 +254,26 @@ class QuotationService {
             }
           }
         }
+        
+        // --- Recalcular Totales ---
+        final updatedItems = await txn.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
+        double newTotalAmount = 0.0;
+        double newTotalSavings = 0.0;
+        
+        for(var item in updatedItems) {
+           double applied = (item['unit_price_applied'] as num).toDouble();
+           double original = (item['original_unit_price'] as num).toDouble();
+           int qty = item['quantity'] as int;
+           
+           newTotalAmount += (applied * qty);
+           newTotalSavings += ((original - applied) * qty);
+        }
+        
+        await txn.update('smart_quotations', {
+           'total_amount': newTotalAmount,
+           'total_savings': newTotalSavings > 0 ? newTotalSavings : 0.0
+        }, where: 'id = ?', whereArgs: [id]);
+        
       });
       return true;
     } catch (e) {

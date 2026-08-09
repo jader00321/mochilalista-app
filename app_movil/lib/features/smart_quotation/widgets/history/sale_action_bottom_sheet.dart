@@ -45,7 +45,7 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
       }
       
     } catch (e) {
-      CustomSnackBar.show(context, message: e.toString(), isError: true);
+      if (mounted) CustomSnackBar.show(context, message: e.toString(), isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

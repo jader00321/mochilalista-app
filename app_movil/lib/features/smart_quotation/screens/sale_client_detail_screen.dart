@@ -281,7 +281,16 @@ class _SaleClientDetailScreenState extends State<SaleClientDetailScreen> {
                             children: [
                               if (isStructured) ...[
                                 if (item['brand_name'] != null && item['brand_name'].toString().isNotEmpty)
-                                   Text(item['brand_name'].toString().toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: isDark ? Colors.indigo[300] : Colors.indigo[600], letterSpacing: 0.5)),
+                                   Container(
+                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                     margin: const EdgeInsets.only(bottom: 4),
+                                     decoration: BoxDecoration(
+                                       color: isDark ? Colors.indigo.withValues(alpha: 0.2) : Colors.indigo.shade50,
+                                       borderRadius: BorderRadius.circular(4),
+                                       border: Border.all(color: isDark ? Colors.indigo.withValues(alpha: 0.3) : Colors.indigo.shade100)
+                                     ),
+                                     child: Text(item['brand_name'].toString().toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: isDark ? Colors.indigo[300] : Colors.indigo[700], letterSpacing: 0.5)),
+                                   ),
                                 
                                 Text(item['product_name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, height: 1.2, color: textColor), maxLines: 2, overflow: TextOverflow.ellipsis),
                                 

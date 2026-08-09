@@ -525,7 +525,7 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
         final shouldPop = await _onWillPop(isDark);
-        if (shouldPop && mounted) Navigator.of(context).pop();
+        if (shouldPop && context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
         backgroundColor: bgColor,

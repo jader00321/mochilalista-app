@@ -3,6 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/scanner_provider.dart';
+import '../../providers/inventory_provider.dart';
 import '../product_detail_screen.dart';
 import '../product_create_screen.dart';
 import '../../models/product_model.dart';
@@ -48,9 +49,16 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 
       if (result != null && result['found'] == true) {
         
-        final productMap = result['product'];
-        final productObj = Product.fromJson(productMap); 
+        final invProv = Provider.of<InventoryProvider>(context, listen: false);
+        final productObj = await invProv.getFullProductWithFallback(result['product']['id']);
+        if (productObj == null) {
+          setState(() => _isProcessing = false);
+          return;
+        }
+        
         final presentationId = result['presentation'] != null ? result['presentation']['id'] : null;
+
+        if (!mounted) return;
 
         // ========================================================
         // FLUJO A: FUE LLAMADO DESDE CAJA RÁPIDA

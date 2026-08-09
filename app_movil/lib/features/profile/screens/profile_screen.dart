@@ -139,7 +139,12 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       _buildSectionHeader("Seguridad de la Cuenta", textColor),
                       const SizedBox(height: 12),
                       _buildSettingsContainer(cardColor, [
-                        ProfileMenuItem(title: "Cambiar PIN de Seguridad", icon: Icons.lock_outline, isDark: isDark, onTap: () => _showChangePassword(context)),
+                        ProfileMenuItem(
+                          title: auth.hasPinCache ? "Cambiar PIN de Seguridad" : "Crear PIN de Seguridad", 
+                          icon: Icons.lock_outline, 
+                          isDark: isDark, 
+                          onTap: () => _showChangePassword(context)
+                        ),
                         _buildDivider(isDark),
                         ProfileMenuItem(title: "Cambiar de Negocio / Cerrar Sesión", icon: Icons.logout, isDark: isDark, isDestructive: true, onTap: () => _confirmLogout(context, auth, isDark)),
                       ]),

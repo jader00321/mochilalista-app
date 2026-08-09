@@ -245,6 +245,8 @@ class SaleModel {
   final double totalAmount;
   final double paidAmount;
   final double discount;
+  final double abonoInicial;
+  final double porcentajeInteres;
   final String saleDate;
   final List<InstallmentModel> installments; 
 
@@ -264,6 +266,8 @@ class SaleModel {
     required this.totalAmount,
     required this.paidAmount,
     required this.discount,
+    this.abonoInicial = 0.0,
+    this.porcentajeInteres = 0.0,
     required this.saleDate,
     this.installments = const [],
   });
@@ -285,6 +289,8 @@ class SaleModel {
       totalAmount: _parseDouble(json['monto_total']),
       paidAmount: _parseDouble(json['monto_pagado']),
       discount: _parseDouble(json['descuento_aplicado']),
+      abonoInicial: _parseDouble(json['abono_inicial']),
+      porcentajeInteres: _parseDouble(json['porcentaje_interes']),
       saleDate: json['fecha_venta'] ?? "",
       installments: (json['cuotas'] as List?)?.map((e) => InstallmentModel.fromJson(e)).toList() ?? [],
     );
@@ -306,6 +312,8 @@ class SaleModel {
       'monto_total': totalAmount,
       'monto_pagado': paidAmount,
       'descuento_aplicado': discount,
+      'abono_inicial': abonoInicial,
+      'porcentaje_interes': porcentajeInteres,
       'fecha_venta': saleDate.isEmpty ? DateTime.now().toIso8601String() : saleDate,
     };
   }
@@ -336,12 +344,14 @@ class ValidationResult {
   final bool canSell;
   final List<StockWarning> stockWarnings;
   final List<PriceChange> priceChanges;
+  final List<NameChange> nameChanges;
 
   ValidationResult({
     required this.hasIssues,
     required this.canSell,
     required this.stockWarnings,
     required this.priceChanges,
+    this.nameChanges = const [],
   });
 
   factory ValidationResult.fromJson(Map<String, dynamic> json) {
@@ -350,6 +360,30 @@ class ValidationResult {
       canSell: json['can_sell'] == 1 || json['can_sell'] == true || json['can_sell'] == null,
       stockWarnings: (json['stock_warnings'] as List?)?.map((e) => StockWarning.fromJson(e)).toList() ?? [],
       priceChanges: (json['price_changes'] as List?)?.map((e) => PriceChange.fromJson(e)).toList() ?? [],
+      nameChanges: (json['name_changes'] as List?)?.map((e) => NameChange.fromJson(e)).toList() ?? [],
+    );
+  }
+}
+
+class NameChange {
+  final int itemId;
+  final String oldName;
+  final String newName;
+  final String message;
+
+  NameChange({
+    required this.itemId,
+    required this.oldName,
+    required this.newName,
+    this.message = "",
+  });
+
+  factory NameChange.fromJson(Map<String, dynamic> json) {
+    return NameChange(
+      itemId: json['item_id'] ?? -1,
+      oldName: json['old_name'] ?? 'Desconocido',
+      newName: json['new_name'] ?? 'Desconocido',
+      message: json['message'] ?? "",
     );
   }
 }

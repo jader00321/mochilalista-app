@@ -1,0 +1,43 @@
+# Plan 12 Mejorado: Analítica Avanzada y UI Premium
+
+Tras analizar profundamente el código del motor de análisis (`AnalyticsProvider`) y la interfaz (`AnalyticsDashboardScreen`), he identificado por qué la ventana lanza un error y no procesa los datos. Además, he diseñado una estrategia para elevar la calidad de esta pantalla al máximo nivel profesional.
+
+## 🐞 Problemas Identificados (Por qué falla)
+1. **Errores SQL Críticos**: Las consultas para los productos más vendidos y mejores clientes están utilizando nombres de columnas que no existen en el esquema actual. 
+   - Se intentó usar `vi.presentacion_id`, pero en la tabla `venta_items` se llama `presentation_id`.
+   - Se intentó usar `c.nombre_razon_social`, pero en la tabla `clientes` se llama `nombre_completo`.
+   - Estos errores ocultan el error tras el bloque `catch (e)` y dejan el proceso colgado en "Ocurrió un error al procesar los datos".
+2. **Métodos Obsoletos**: La librería de compartir archivos lanza warnings porque `Share.shareXFiles` ha sido deprecado en favor de la nueva API de `SharePlus`.
+
+---
+
+## 🚀 Mejoras y Reformas a Implementar (Llevándolo al siguiente nivel)
+
+### 1. Corrección y Optimización del Motor (`AnalyticsProvider`)
+- [x] Corregir los nombres de columnas en las consultas SQL para evitar fallos.
+- [x] **Nuevas Métricas**: Añadir el cálculo de **"Ticket Promedio"** (cuánto gasta en promedio cada cliente) para dar más valor al reporte.
+- [x] Añadir una función matemática simple para predecir las ventas del mes en curso basándose en la velocidad de ventas de los últimos meses.
+
+### 2. Estética Premium y Componentes Avanzados (`AnalyticsDashboardScreen`)
+- [x] **Tema de Colores Empresarial**: Integrar degradados modernos (Azul Oscuro hacia Púrpura) que denotan "tecnología y finanzas".
+- [x] **Glassmorphism**: Usar contenedores semitransparentes con bordes iluminados para las tarjetas de resumen.
+- [x] **Gráficos Dinámicos (`fl_chart`)**:
+   - **Gráfico de Líneas Curvo**: Para visualizar las "Ventas de los últimos 6 meses" con un degradado debajo de la línea y animaciones de dibujo.
+   - **Gráfico Circular (Doughnut)**: Para los "Mejores Clientes".
+   - **Gráfico de Barras**: Para los "Top 5 Productos".
+- [x] **Micro-interacciones**: Animaciones de escala al hacer scroll y al cargar los datos.
+
+### 3. Actualización de Exportación
+- [x] Corregir la integración con `share_plus` utilizando la sintaxis moderna para evitar errores amarillos.
+
+---
+
+## 🙋‍♂️ Preguntas Abiertas
+
+> [!WARNING]
+> La nueva interfaz con gráficos requerirá mostrar información financiera. ¿Te gustaría que añadamos un botón de "Ocultar Saldos" (el clásico ojo tachado) en esta pantalla para que el dueño pueda revisar las gráficas frente a empleados sin revelar los montos exactos de ganancias?
+
+> [!TIP]
+> Actualmente la app usa `fl_chart`. ¿Te parece bien si para el reporte en Excel (CSV) descargo toda la tabla cruda de ventas para que el contador pueda hacer tablas dinámicas libremente?
+
+Si estás de acuerdo con esta reforma total que corregirá el bug y le dará una cara muy profesional a tu app, haz clic en **Proceed** para comenzar la ejecución.

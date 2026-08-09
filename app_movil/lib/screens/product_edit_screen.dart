@@ -7,10 +7,9 @@ import '../../../models/provider_model.dart';
 import '../../../models/category_model.dart'; 
 import '../../../models/brand_model.dart';
 
-import '../../../widgets/custom_text_field.dart';
-import '../../../widgets/safe_dropdown.dart';
+import 'widgets/product_edit/product_general_info.dart';
+import 'widgets/product_edit/product_presentation_list.dart';
 import '../../../widgets/product_optional_info.dart';
-import '../../../widgets/product_presentation_card.dart';
 
 class ProductEditScreen extends StatefulWidget {
   final Product productToEdit;
@@ -186,6 +185,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       setState(() { for (var c in _presentationControllers) { c['providerId'] = newId; } });
       return;
     }
+    if (!mounted) return;
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -361,16 +361,19 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   // ==========================================================
   Future<int?> _handleCreateBrand(bool isDark) async {
     String? newName = await _showSimpleDialog("Nueva Marca", "Nombre de la marca", isDark);
+    if (!mounted) return null;
     if (newName != null && newName.isNotEmpty) return await Provider.of<InventoryProvider>(context, listen: false).createBrand(newName);
     return null;
   }
   Future<int?> _handleCreateCategory(bool isDark) async {
     String? newName = await _showSimpleDialog("Nueva Categoría", "Nombre de la categoría", isDark);
+    if (!mounted) return null;
     if (newName != null && newName.isNotEmpty) return await Provider.of<InventoryProvider>(context, listen: false).createCategory(newName);
     return null;
   }
   Future<int?> _handleCreateProvider(bool isDark) async {
     String? newName = await _showSimpleDialog("Nuevo Proveedor", "Nombre de la empresa", isDark);
+    if (!mounted) return null;
     if (newName != null && newName.isNotEmpty) return await Provider.of<InventoryProvider>(context, listen: false).createProvider(newName);
     return null;
   }
@@ -414,9 +417,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return; 
     
-    if (_selectedCategoryId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("La categoría es obligatoria", style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.red));
-        return;
+    if (_nameCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Completa la Información General (Nombre)"), backgroundColor: Colors.red));
+      return;
     }
 
     if (_presentationControllers.isEmpty) {
@@ -488,9 +491,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       productId: widget.productToEdit.id,
       nombre: _nameCtrl.text,
       descripcion: pDesc.isEmpty ? null : pDesc,
-      marcaId: _selectedBrandId,
-      categoriaId: _selectedCategoryId!, 
-      estado: _generalState == 2 ? 'publico' : 'privado', // Conserva consistencia general si aplica
+      marcaId: _selectedBrandId == 0 ? null : _selectedBrandId,
+      categoriaId: _selectedCategoryId == 0 ? null : _selectedCategoryId, 
+      estado: _generalState == 2 ? 'publico' : 'privado',
       imagenUrl: pImg.isEmpty ? null : pImg, 
       codigoBarras: pCode.isEmpty ? null : pCode,
       presentaciones: presentacionesFinales,
@@ -509,7 +512,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
-    final surfaceColor = isDark ? const Color(0xFF14141C) : Colors.white;
+
     final textColor = isDark ? Colors.white : Colors.black87;
 
     if (_isLoading) return Scaffold(backgroundColor: bgColor, body: const Center(child: CircularProgressIndicator()));
@@ -517,10 +520,18 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     final provider = Provider.of<InventoryProvider>(context);
 
     List<ProviderModel> providerListForDropdown = List.from(provider.providers);
+    providerListForDropdown.insert(0, ProviderModel(id: 0, nombreEmpresa: "Ninguno", idNegocio: 0, activo: true));
+    
     int? currentGenProv = _generalProviderId;
     if (currentGenProv == -2) {
       providerListForDropdown.insert(0, ProviderModel(id: -2, nombreEmpresa: "Múltiples Proveedores (Mixto)", idNegocio: 0, activo: true));
     }
+
+    List<Category> categoryListForDropdown = List.from(provider.categories);
+    categoryListForDropdown.insert(0, Category(id: 0, nombre: "Ninguno", activo: true));
+
+    List<Brand> brandListForDropdown = List.from(provider.brands);
+    brandListForDropdown.insert(0, Brand(id: 0, nombre: "Ninguno", activo: true));
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -572,56 +583,32 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. BLOQUE INFO GENERAL
-              Container(
-                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.15)), boxShadow: [if(!isDark) BoxShadow(color: Colors.blue.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]),
-                child: Column(
-                  children: [
-                    Container(
-                      width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], borderRadius: const BorderRadius.vertical(top: Radius.circular(16))),
-                      child: Row(children: [Icon(Icons.info_outline, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 20), const SizedBox(width: 10), Text("Información General", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[100] : Colors.blue[900]))]),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          CustomTextField(label: "Nombre del Producto *", icon: Icons.edit, controller: _nameCtrl, maxLines: 1),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(child: SafeDropdown<Brand>(label: "Marca", icon: Icons.branding_watermark_outlined, value: _selectedBrandId, items: provider.brands, getId: (b) => b.id, getName: (b) => b.nombre, isActive: (b) => b.activo == true, onChanged: (v) { if (v == -1) {
-                                _handleCreateBrand(isDark).then((id) { if (id != null) setState(() => _selectedBrandId = id); });
-                              } else {
-                                setState(() => _selectedBrandId = v);
-                              } })),
-                              const SizedBox(width: 12),
-                              Expanded(child: SafeDropdown<Category>(label: "Categoría *", icon: Icons.category_outlined, value: _selectedCategoryId, items: provider.categories, getId: (c) => c.id, getName: (c) => c.nombre, isActive: (c) => c.activo == true, onChanged: (v) { if (v == -1) {
-                                _handleCreateCategory(isDark).then((id) { if (id != null) setState(() => _selectedCategoryId = id); });
-                              } else {
-                                setState(() => _selectedCategoryId = v);
-                              } })),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          SafeDropdown<ProviderModel>(label: "Proveedor General", icon: Icons.local_shipping_outlined, value: currentGenProv, items: providerListForDropdown, getId: (p) => p.id, getName: (p) => p.nombreEmpresa, isActive: (p) => p.activo == true, onChanged: (v) => _handleGeneralProviderChange(v, isDark)),
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isDark ? Colors.black26 : Colors.grey[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300)),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(children: [Icon(Icons.visibility, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]), const SizedBox(width: 8), Text("Visibilidad de Variantes", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor))]),
-                                const SizedBox(height: 12),
-                                _buildSuperSwitch(isDark),
-                              ],
-                            ),
-                          )
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              ProductGeneralInfo(
+                nameCtrl: _nameCtrl,
+                selectedBrandId: _selectedBrandId,
+                selectedCategoryId: _selectedCategoryId,
+                generalProviderId: currentGenProv,
+                generalState: _generalState,
+                brandListForDropdown: brandListForDropdown,
+                categoryListForDropdown: categoryListForDropdown,
+                providerListForDropdown: providerListForDropdown,
+                isDark: isDark,
+                onBrandChanged: (v) {
+                  if (v == -1) {
+                    _handleCreateBrand(isDark).then((id) { if (id != null) setState(() => _selectedBrandId = id); });
+                  } else {
+                    setState(() => _selectedBrandId = v);
+                  }
+                },
+                onCategoryChanged: (v) {
+                  if (v == -1) {
+                    _handleCreateCategory(isDark).then((id) { if (id != null) setState(() => _selectedCategoryId = id); });
+                  } else {
+                    setState(() => _selectedCategoryId = v);
+                  }
+                },
+                onProviderChanged: (v) => _handleGeneralProviderChange(v, isDark),
+                onStateChanged: _setGeneralState,
               ),
               const SizedBox(height: 16),
               ProductOptionalInfo(descCtrl: _descCtrl, imgCtrl: _imgUrlCtrl, barcodeCtrl: _parentBarcodeCtrl),
@@ -630,31 +617,16 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               Text(" PRESENTACIONES / VARIANTES", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: isDark ? Colors.teal[300] : Colors.teal[800], letterSpacing: 0.5)),
               const SizedBox(height: 12),
 
-              ..._presentationControllers.asMap().entries.map((entry) {
-                int index = entry.key;
-                var ctrlMap = entry.value;
-
-                return ProductPresentationCard(
-                  key: ValueKey(ctrlMap['id']), // 🔥 CRÍTICO: Key única para no cruzar estados en edición
-                  controllerMap: ctrlMap,
-                  onDelete: () => _deletePresentation(index, isDark),
-                  onStateChange: (val) => setState(() => ctrlMap['estado'] = val ? 'publico' : 'privado'),
-                  
-                  // Funciones de sobrantes
-                  onCreateLeftover: (leftoverStock, costoBaseIndiv) {
-                    _handleCreateLeftover(ctrlMap['id'], leftoverStock, costoBaseIndiv);
-                  },
-                  onInvalidateLeftover: () {
-                    _invalidateLeftover(ctrlMap['id']);
-                  },
-
-                  providerDropdown: SafeDropdown<ProviderModel>(
-                    label: "Proveedor Específico", icon: null, value: ctrlMap['providerId'], items: provider.providers,
-                    getId: (p) => p.id, getName: (p) => p.nombreEmpresa, isActive: (p) => p.activo == true, allowNull: true,
-                    onChanged: (v) { if (v == -1) { _handleCreateProvider(isDark).then((id) { if (id != null) setState(() => ctrlMap['providerId'] = id); }); } else { setState(() => ctrlMap['providerId'] = v); } }
-                  ),
-                );
-              }),
+              ProductPresentationList(
+                presentationControllers: _presentationControllers,
+                isDark: isDark,
+                providerListForDropdown: providerListForDropdown,
+                handleCreateProvider: _handleCreateProvider,
+                deletePresentation: _deletePresentation,
+                handleCreateLeftover: _handleCreateLeftover,
+                invalidateLeftover: _invalidateLeftover,
+                onStateChange: () => setState(() {}),
+              ),
 
               const SizedBox(height: 8),
               SizedBox(
@@ -674,49 +646,5 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     );
   }
 
-  Widget _buildSuperSwitch(bool isDark) {
-    int current = _generalState;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (current == 1)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Text("Estado actual: Variado (Seleccione uno para unificar)", style: TextStyle(fontSize: 12, color: isDark ? Colors.orange[300] : Colors.orange[800], fontStyle: FontStyle.italic)),
-          ),
-        Container(
-          height: 42,
-          decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.grey[200], borderRadius: BorderRadius.circular(12)),
-          child: Stack(
-            children: [
-              AnimatedAlign(
-                alignment: current == 0 ? Alignment.centerLeft : (current == 2 ? Alignment.centerRight : Alignment.center),
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
-                child: current == 1 
-                    ? const SizedBox.shrink() 
-                    : FractionallySizedBox(
-                        widthFactor: 0.5, 
-                        child: Container(
-                          margin: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            color: current == 0 ? (isDark ? Colors.orange[800] : Colors.white) : (isDark ? Colors.green[700] : Colors.white),
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: !isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4, offset: const Offset(0, 2))] : [],
-                          ),
-                        ),
-                      ),
-              ),
-              Row(
-                children: [
-                  Expanded(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => _setGeneralState(0), child: Center(child: Text("Ocultar Todos", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: current == 0 ? (isDark ? Colors.white : Colors.orange[800]) : Colors.grey))))),
-                  Expanded(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => _setGeneralState(2), child: Center(child: Text("Publicar Todos", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: current == 2 ? (isDark ? Colors.white : Colors.green[700]) : Colors.grey))))),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+
 }

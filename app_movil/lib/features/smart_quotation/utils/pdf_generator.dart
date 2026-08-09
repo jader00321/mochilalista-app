@@ -345,7 +345,7 @@ class PdfGenerator {
           }
 
           return pw.TableRow(decoration: config.theme != PdfTheme.classic ? pw.BoxDecoration(color: bgColor, border: border) : null, children: cells);
-        }).toList()
+        })
       ]
     );
   }

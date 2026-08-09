@@ -21,6 +21,7 @@ class _BarcodeInputFieldState extends State<BarcodeInputField> {
       return;
     }
 
+    if (!mounted) return;
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const _ScannerScreen()),

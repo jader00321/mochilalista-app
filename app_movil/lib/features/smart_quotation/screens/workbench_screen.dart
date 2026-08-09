@@ -8,6 +8,8 @@ import 'quotation_detail_screen.dart';
 import 'manual_quotation_screen.dart';
 import 'sale_history_detail_screen.dart'; 
 import '../../../screens/home_screen.dart';
+import '../widgets/workbench/archived_lists_modal.dart';
+import '../widgets/workbench/dashboard_header.dart';
 
 class WorkbenchScreen extends StatefulWidget {
   const WorkbenchScreen({super.key});
@@ -129,7 +131,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
                   IconButton(
                     icon: const Icon(Icons.archive, size: 26), 
                     tooltip: "Ver Listas Archivadas",
-                    onPressed: () => _showArchivedModal(context, provider, isDark),
+                    onPressed: () => ArchivedListsModal.show(context, provider, isDark),
                   ),
                 ],
                 backgroundColor: isDark ? const Color(0xFF0D47A1) : const Color(0xFF1565C0),
@@ -147,7 +149,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildDashboardHeader(provider, isDark),
+                        DashboardHeader(provider: provider, isDark: isDark),
                         _buildTabBarSection(isDark, surfaceColor),
                       ],
                     ),
@@ -217,79 +219,6 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
               Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualQuotationScreen(quotationId: null)))
                 .then((_) => provider.loadDashboard());
             },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDashboardHeader(WorkbenchProvider provider, bool isDark) {
-    int prepCount = provider.inProcessList.length;
-    int readyCount = provider.readyAndPacksList.length;
-    int alertCount = provider.criticalAlertsCount; 
-
-    return Container(
-      height: 126, 
-      width: double.infinity,
-      padding: const EdgeInsets.only(bottom: 20, top: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark 
-            ? [const Color(0xFF0D47A1), const Color(0xFF001633)] 
-            : [const Color(0xFF1565C0), const Color(0xFF0D47A1)], 
-          begin: Alignment.topCenter, end: Alignment.bottomCenter 
-        ),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          children: [
-            _buildKpiCard("En Revisión", "$prepCount", Icons.pending_actions, Colors.orange),
-            const SizedBox(width: 12),
-            _buildKpiCard("Preparadas", "$readyCount", Icons.check_circle_outline, Colors.greenAccent),
-            const SizedBox(width: 12),
-            _buildKpiCard("Alertas ⚠️", "$alertCount", Icons.warning_amber, Colors.redAccent),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildKpiCard(String label, String value, IconData icon, Color color) {
-    return Container(
-      width: 140, 
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), 
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12), 
-        borderRadius: BorderRadius.circular(16)
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 18), 
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label, 
-                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold), 
-                  maxLines: 1, 
-                  overflow: TextOverflow.ellipsis
-                )
-              ), 
-            ],
-          ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-            ),
           ),
         ],
       ),
@@ -489,72 +418,11 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
         parentContext: context, 
       ),
     ).then((_) {
+      if (!context.mounted) return;
       Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
     });
   }
 
-  void _showArchivedModal(BuildContext context, WorkbenchProvider provider, bool isDark) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.8,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (_, scrollController) {
-            return Container(
-              decoration: BoxDecoration(color: isDark ? const Color(0xFF23232F) : Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
-                        Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                        const SizedBox(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.archive, color: isDark ? Colors.grey[400] : Colors.grey, size: 28),
-                            const SizedBox(width: 10),
-                            Text("Listas Archivadas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: provider.archivedList.isEmpty
-                      ? Center(child: Text("No tienes listas archivadas", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 18)))
-                      : ListView.builder(
-                          controller: scrollController,
-                          itemCount: provider.archivedList.length,
-                          itemBuilder: (context, index) {
-                            final q = provider.archivedList[index];
-                            return QuotationCard(
-                              quotation: q,
-                              isDark: isDark,
-                              onTap: () {
-                                Navigator.pop(ctx);
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => QuotationDetailScreen(quotationId: q.id, clientName: q.clientName)))
-                                  .then((_) => provider.loadDashboard());
-                              },
-                              onLongPress: () {}, 
-                            );
-                          },
-                        ),
-                  )
-                ],
-              ),
-            );
-          }
-        );
-      }
-    );
-  }
 }
 
 class _WorkbenchFixedHeaderDelegate extends SliverPersistentHeaderDelegate {

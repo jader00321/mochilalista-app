@@ -94,6 +94,31 @@ class QuickActionsBottomSheet extends StatelessWidget {
               }
             ),
 
+            _buildListTile(
+              icon: Icons.sync, 
+              color: isDark ? Colors.cyan[400]! : Colors.cyan, 
+              title: "Sincronizar", 
+              subtitle: "Actualizar precios, stock y nombres", 
+              isDark: isDark, 
+              onTap: () {
+                Navigator.pop(context);
+                _handleSync();
+              }
+            ),
+
+            if (quotation.status != 'ARCHIVED' && quotation.status != 'SOLD')
+              _buildListTile(
+                icon: Icons.archive, 
+                color: isDark ? Colors.purple[400]! : Colors.purple, 
+                title: "Archivar", 
+                subtitle: "Ocultar de las listas activas", 
+                isDark: isDark, 
+                onTap: () {
+                  Navigator.pop(context);
+                  _handleArchive();
+                }
+              ),
+
             Divider(color: isDark ? Colors.white10 : Colors.grey[200], indent: 70),
 
             _buildListTile(
@@ -136,6 +161,38 @@ class QuickActionsBottomSheet extends StatelessWidget {
         Navigator.push(parentContext, MaterialPageRoute(builder: (_) => ManualQuotationScreen(quotationId: newId)));
       } else {
         CustomSnackBar.show(parentContext, message: "Error al duplicar la lista.", isError: true);
+      }
+    }
+  }
+
+  Future<void> _handleSync() async {
+    showDialog(context: parentContext, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    
+    final prov = Provider.of<WorkbenchProvider>(parentContext, listen: false);
+    bool success = await prov.refreshQuotation(quotation.id, fixPrices: true, fixStock: true, fixNames: true);
+    
+    if (parentContext.mounted) {
+      Navigator.pop(parentContext);
+      if (success) {
+        CustomSnackBar.show(parentContext, message: "Cotización sincronizada correctamente", isError: false);
+      } else {
+        CustomSnackBar.show(parentContext, message: "Error al sincronizar", isError: true);
+      }
+    }
+  }
+
+  Future<void> _handleArchive() async {
+    showDialog(context: parentContext, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    
+    final prov = Provider.of<WorkbenchProvider>(parentContext, listen: false);
+    bool success = await prov.changeQuotationStatus(quotation.id, 'ARCHIVED');
+    
+    if (parentContext.mounted) {
+      Navigator.pop(parentContext);
+      if (success) {
+        CustomSnackBar.show(parentContext, message: "Cotización archivada", isError: false);
+      } else {
+        CustomSnackBar.show(parentContext, message: "Error al archivar", isError: true);
       }
     }
   }
@@ -273,6 +330,7 @@ class QuickActionsBottomSheet extends StatelessWidget {
     
     text += "\n¡Quedamos a tu disposición para confirmar la venta!";
     
+    // ignore: deprecated_member_use
     await Share.share(text, subject: 'Cotización - ${quotation.clientName}');
   }
 }
@@ -336,7 +394,7 @@ class _DeletingProgressDialogState extends State<_DeletingProgressDialog> {
 
       await Future.delayed(const Duration(milliseconds: 500)); 
 
-      if (mounted) {
+    if (mounted && widget.parentContext.mounted) {
         Navigator.pop(context); 
         if (success) {
           CustomSnackBar.show(widget.parentContext, message: "Lista eliminada exitosamente", isError: false);
@@ -345,7 +403,7 @@ class _DeletingProgressDialogState extends State<_DeletingProgressDialog> {
         }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && widget.parentContext.mounted) {
         Navigator.pop(context);
         CustomSnackBar.show(widget.parentContext, message: "Hubo un error de conexión durante el proceso.", isError: true);
       }

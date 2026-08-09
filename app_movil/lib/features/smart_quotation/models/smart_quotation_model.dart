@@ -150,6 +150,7 @@ class QuotationItem {
   final double unitPriceApplied;
   final double originalUnitPrice;
   final bool isAvailable; 
+  final bool isManualPrice; 
   final String? originalText;
   final String? imageUrl; 
 
@@ -167,6 +168,7 @@ class QuotationItem {
     required this.unitPriceApplied,
     required this.originalUnitPrice,
     this.isAvailable = true,
+    this.isManualPrice = false,
     this.originalText,
     this.imageUrl, 
   });
@@ -186,6 +188,7 @@ class QuotationItem {
       unitPriceApplied: (json['unit_price_applied'] ?? 0.0).toDouble(),
       originalUnitPrice: (json['original_unit_price'] ?? 0.0).toDouble(),
       isAvailable: json['is_available'] == 1 || json['is_available'] == true || json['is_available'] == null, 
+      isManualPrice: json['is_manual_price'] == 1 || json['is_manual_price'] == true,
       originalText: json['original_text'],
       imageUrl: json['image_url'], 
     );
@@ -205,7 +208,8 @@ class QuotationItem {
       'specific_name': specificName,
       'sales_unit': salesUnit,
       'original_text': originalText,
-      'is_manual_price': unitPriceApplied != originalUnitPrice ? 1 : 0, 
+      'image_url': imageUrl,
+      'is_manual_price': isManualPrice ? 1 : 0, 
       'is_available': isAvailable ? 1 : 0,
     };
   }

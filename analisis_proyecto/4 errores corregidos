@@ -1,0 +1,22 @@
+# Walkthrough: Correcciones de UI y BD V2.2
+
+He completado con éxito la ejecución del plan aprobado. Aquí tienes el resumen de las modificaciones realizadas:
+
+## 1. Corrección del Modal de Cotización Manual
+Se corrigió la lógica en `manual_quote_detail_modal.dart` para asegurar que el descuento pueda desactivarse correctamente, y se ajustaron los límites de tamaño del modal (`DraggableScrollableSheet`) para que el teclado no interrumpa la visualización.
+
+## 2. Marca Omitida en Cotizaciones Manuales
+Se modificó `quotation_service.dart` para asegurar que la columna `brand_name` reciba la marca del producto al momento de guardarse la cotización localmente.
+
+## 3. Autocarga de 5 Últimos Clientes
+- Se añadió `getRecentClientsRaw` en `client_repository.dart`.
+- El modal de búsqueda de clientes (`client_search_modal.dart`) ahora ejecuta esta búsqueda por defecto al abrirse (`initState`) y cada vez que borras el contenido del input.
+- Se filtró "Caja Rápida" para no contaminar los resultados de clientes recientes.
+
+## 4. ID de Marca en Recibos de Caja Rápida
+- Se ajustó la consulta base en `product_queries.dart` para realizar un `LEFT JOIN` con `marcas_producto` y extraer el nombre de la marca.
+- Ahora el modelo de `Product` y el proveedor de venta rápida (`quick_sale_provider.dart`) utilizan `marcaNombre` directamente, guardando el string correcto en el recibo.
+- Se añadió una pequeña validación visual en `sale_history_detail_screen.dart` para ocultar la marca en recibos antiguos si ésta llega como un valor numérico.
+
+> [!TIP]
+> **Siguientes Pasos**: Puedes compilar nuevamente la app para probar en tu dispositivo Android y confirmar que todo fluye correctamente.

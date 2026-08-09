@@ -79,8 +79,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                 return RadioListTile<String>(
                   title: Text(opcion.toUpperCase(), style: TextStyle(color: _getStatusColor(opcion, isDark), fontWeight: FontWeight.bold)),
                   value: opcion,
+                  // ignore: deprecated_member_use
                   groupValue: tempStatus,
                   activeColor: isDark ? Colors.blue[300] : Colors.blue,
+                  // ignore: deprecated_member_use
                   onChanged: (val) {
                     setStateDialog(() => tempStatus = val!);
                   },
@@ -179,6 +181,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     bool success = await invcProv.updateInvoice(widget.invoiceId, estado: estado, proveedorId: proveedorId);
     if (success && mounted) {
       await _loadInvoiceDetails(); 
+      if (!mounted) return;
       CustomSnackBar.show(context, message: "Factura actualizada con éxito", isError: false);
     } else if (mounted) {
       CustomSnackBar.show(context, message: "Error al actualizar factura", isError: true);

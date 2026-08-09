@@ -75,6 +75,7 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
     );
 
     if (shouldPop == true) {
+      if (!mounted) return false;
       Provider.of<ScannerProvider>(context, listen: false).saveProgress();
       return true;
     }
@@ -125,11 +126,11 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
 
   void _confirmSave(BuildContext context, ScannerProvider provider) async {
     bool success = await provider.executeBatchSave();
-    if (success && mounted) {
+    if (success && context.mounted) {
       CustomSnackBar.show(context, message: "¡Inventario actualizado con éxito!", isError: false);
       provider.clearData(); 
       Navigator.of(context).popUntil((route) => route.isFirst);
-    } else if (mounted) {
+    } else if (context.mounted) {
       CustomSnackBar.show(context, message: provider.statusMessage, isError: true);
     }
   }
@@ -162,7 +163,7 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         final shouldPop = await _onWillPop();
-        if (shouldPop && mounted) Navigator.of(context).pop();
+        if (shouldPop && context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
         backgroundColor: bgColor,

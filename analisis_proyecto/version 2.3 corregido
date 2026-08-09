@@ -1,0 +1,20 @@
+# Resumen de Implementaciones (Versión 2.3)
+
+Se completaron con éxito todas las tareas requeridas de acuerdo con el plan aprobado, modernizando el sistema de notificaciones y reforzando la fiabilidad matemática del sistema de créditos.
+
+## 🛡️ Mejoras en Créditos y Validación de Ventas
+1. **Recálculo Automático**: Ahora, cuando el total de una venta cambia (por un descuento global, por ejemplo), las cuotas a crédito se regeneran automáticamente manteniendo los intervalos de tiempo configurados.
+2. **Registro de Adelantos fluido**: Al teclear el abono o adelanto en la configuración de cuotas, el sistema ahora detecta la escritura y actualiza instantáneamente los montos de cada cuota restante.
+3. **Bloqueo Matemático Estricto**: Si por cualquier alteración, la suma de lo que pagó por adelantado más las cuotas generadas **no coincide** con el total adeudado de la venta, el botón `COBRAR` cambia a estado gris bloqueado y se muestra el mensaje **"RECALCULAR CUOTAS"**. Esto previene que se emitan transacciones inconsistentes y descuadres de caja.
+
+## 🔔 Nuevo Sistema de Notificaciones Dinámico
+1. **Separación Inteligente**: Se añadieron Choice Chips para organizar la bandeja en `Pendientes`, `Resueltas` y `Todas`.
+2. **Resolución Automática**: Cuando entras a las notificaciones, el sistema cruza las alertas de "Cuota Vencida" con la base de datos de cuotas. Si detecta que la cuota reportada ya fue pagada con anterioridad, automáticamente la moverá de la bandeja "Pendientes" a "Resueltas" para no causar desorden visual.
+3. **Notificación de Éxito**: Cuando pagas una cuota, el motor transaccional ahora genera en automático una nueva notificación de confirmación de éxito verde (Ej: *"El cliente X acaba de cancelar la cuota"*).
+4. **Modal de Interacción Rico**: Al presionar una "Cuota Vencida", el sistema ya no abre la tarjeta genérica aburrida, sino un modal dinámico inferior (`_showCuotaVencidaModal`). Este modal va a la base de datos en tiempo real, saca los detalles de la deuda, el estado, nombre del cliente y te presenta:
+   - Resumen del monto y estado actual.
+   - Botón directo para iniciar un **Chat de WhatsApp** con el cliente para cobrarle (si tiene número).
+   - Botón directo de navegación rápida al **Perfil del Cliente** para inspeccionar toda la deuda o registrar el pago.
+
+## 🧪 Cómo Probarlo
+Puedes abrir la App, ir a caja, realizar un pedido, darle a Crédito y tratar de insertar un descuento extra. Verás cómo las cuotas cambian o se bloquea el botón. En las notificaciones, presiona cualquier alerta antigua de cuota para probar el nuevo modal interactivo.

@@ -21,6 +21,7 @@ class MatchedProduct {
   final String unit; 
   final int conversionFactor;
   final bool isAvailable;
+  final bool isOriginalItem;
 
   MatchedProduct({
     required this.productId,
@@ -36,6 +37,7 @@ class MatchedProduct {
     this.unit = "Unidad",
     this.conversionFactor = 1,
     this.isAvailable = true,
+    this.isOriginalItem = false,
   });
 
   factory MatchedProduct.fromJson(Map<String, dynamic> json) {
@@ -77,6 +79,7 @@ class MatchedProduct {
       productName: productName, specificName: specificName, brand: brand,
       price: price, offerPrice: offerPrice, stock: stock, imageUrl: imageUrl,
       unit: unit, conversionFactor: conversionFactor, isAvailable: isAvailable,
+      isOriginalItem: isOriginalItem,
     );
   }
 }
@@ -171,6 +174,7 @@ class MatchPair {
       "brand_name": selectedProduct!.brand,
       "specific_name": selectedProduct!.specificName,
       "sales_unit": selectedProduct!.unit,
+      "image_url": selectedProduct!.imageUrl,
       
       "original_text": sourceItem.originalText,
       "is_manual_price": overridePrice != null ? 1 : 0, // SQLite

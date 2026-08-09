@@ -135,18 +135,17 @@ class WorkbenchProvider with ChangeNotifier {
 
   bool _isRealQuotation(SmartQuotationModel q) {
     final tipo = q.type.toLowerCase();
-    if (tipo == 'pos_rapido' || tipo == 'quick_sale' || tipo == 'caja') {
+    // Excluir ventas de caja rápida/POS
+    if (tipo == 'pos_rapido' || tipo == 'quick_sale' || tipo == 'caja' || tipo == 'venta_paso') {
       return false; 
     }
-    if (q.institutionName != null) {
-      final inst = q.institutionName!.toLowerCase();
-      if (inst.contains('venta al paso pos') || inst.contains('venta al paso')) return false;
-    }
+    
+    // Filtro legacy para cotizaciones antiguas que no tengan el type correcto
+    if (q.institutionName != null && q.institutionName!.toLowerCase().contains('venta al paso')) return false;
     if (q.clientName != null) {
       final name = q.clientName!.toLowerCase();
       if (name.contains('caja') && name.contains('rápida')) return false;
-      if (name.contains('caja rapida')) return false;
-      if (name.startsWith('sin cliente')) return false; 
+      if (name == 'sin cliente') return false; 
     }
     return true;
   }
@@ -170,6 +169,16 @@ class WorkbenchProvider with ChangeNotifier {
       _organizeLists();
       notifyListeners();
     }
+  }
+
+  Future<void> refreshAll() async {
+    _isLoading = true;
+    notifyListeners();
+    
+    await _evaluateHealthAndAutoDowngrade();
+    
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<void> checkTrafficLight(int quotationId) async {
@@ -232,11 +241,11 @@ class WorkbenchProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> refreshQuotation(int id, {bool fixPrices = true, bool fixStock = false}) async {
+  Future<bool> refreshQuotation(int id, {bool fixPrices = true, bool fixStock = false, bool fixNames = false}) async {
     _isLoading = true;
     notifyListeners();
     try {
-      final success = await _quotationService.refreshQuotation(id, fixPrices: fixPrices, fixStock: fixStock);
+      final success = await _quotationService.refreshQuotation(id, fixPrices: fixPrices, fixStock: fixStock, fixNames: fixNames);
       if (success) {
         await checkTrafficLight(id); 
         await loadDashboard(); 

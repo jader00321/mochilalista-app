@@ -95,6 +95,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
       final file = File('${dir.path}/Reporte_Ventas.csv');
       await file.writeAsString(csvData);
       
+      // ignore: deprecated_member_use
       await Share.shareXFiles([XFile(file.path)], text: 'Adjunto el reporte de ventas (Formato Excel/CSV).');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al exportar: $e")));

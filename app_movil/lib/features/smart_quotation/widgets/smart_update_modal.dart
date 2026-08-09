@@ -11,6 +11,8 @@ class SmartUpdateModal extends StatelessWidget {
   final Function(int itemId, int newQty)? onFixSingleStock;
   final Function(int itemId)? onRemoveSingleItem;
   final Function(int itemId, double newPrice, double newBase)? onAcceptSinglePrice;
+  final Function(int itemId, String newName)? onAcceptSingleName;
+  final VoidCallback? onUpdateNames;
 
   const SmartUpdateModal({
     super.key,
@@ -21,6 +23,8 @@ class SmartUpdateModal extends StatelessWidget {
     this.onFixSingleStock,
     this.onRemoveSingleItem,
     this.onAcceptSinglePrice,
+    this.onAcceptSingleName,
+    this.onUpdateNames,
   });
 
   @override
@@ -28,12 +32,13 @@ class SmartUpdateModal extends StatelessWidget {
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final stockIssues = validation.stockWarnings;
     final priceIssues = validation.priceChanges;
+    final nameIssues = validation.nameChanges;
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    bool hasNoRealIssues = stockIssues.isEmpty && priceIssues.isEmpty;
+    bool hasNoRealIssues = stockIssues.isEmpty && priceIssues.isEmpty && nameIssues.isEmpty;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -150,6 +155,37 @@ class SmartUpdateModal extends StatelessWidget {
                             style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800], side: BorderSide(color: isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                           ),
                         ),
+                        Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),
+                      ],
+
+                      // 3. BLOQUE DE NOMBRES
+                      if (nameIssues.isNotEmpty) ...[
+                        _buildSectionHeader("Cambios en Inventario", Icons.edit_note, isDark ? Colors.indigo[300]! : Colors.indigo[800]!),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(color: isDark ? Colors.indigo.withValues(alpha: 0.1) : Colors.indigo[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.indigo.withValues(alpha: 0.3) : Colors.indigo.shade200)),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.sync_problem, color: isDark ? Colors.indigo[300] : Colors.indigo[800], size: 24),
+                              const SizedBox(width: 12),
+                              Expanded(child: Text("Algunos productos han cambiado de nombre en el catálogo. Te recomendamos actualizarlos.", style: TextStyle(fontSize: 14, color: isDark ? Colors.indigo[200] : Colors.indigo[900]))),
+                            ],
+                          ),
+                        ),
+                        ...nameIssues.map((n) => _buildNameRow(n, isDark, context)),
+                        const SizedBox(height: 12),
+                        if (onUpdateNames != null)
+                          SizedBox(
+                            width: double.infinity, height: 50,
+                            child: OutlinedButton.icon(
+                              onPressed: () { Navigator.pop(context); onUpdateNames!(); },
+                              icon: const Icon(Icons.drive_file_rename_outline, size: 20),
+                              label: const Text("Actualizar Todos los Nombres", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.indigo[300] : Colors.indigo[800], side: BorderSide(color: isDark ? Colors.indigo.withValues(alpha: 0.5) : Colors.indigo[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            ),
+                          ),
                         Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),
                       ],
                     ],
@@ -288,19 +324,139 @@ class SmartUpdateModal extends StatelessWidget {
                 ),
               if (s.available > 0) const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
+                child: _HoldToConfirmButton(
+                  isDark: isDark,
+                  onConfirm: () {
                     Navigator.pop(context);
                     if (onRemoveSingleItem != null) onRemoveSingleItem!(s.itemId);
                   },
-                  icon: const Icon(Icons.delete, size: 16),
-                  label: const Text("Descartar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), foregroundColor: isDark ? Colors.red[300] : Colors.red, side: BorderSide(color: isDark ? Colors.red[300]! : Colors.red), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                 ),
               )
             ],
           )
         ],
+      ),
+    );
+  }
+
+  Widget _buildNameRow(NameChange n, bool isDark, BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.white10 : Colors.indigo.shade200)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.history, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+              const SizedBox(width: 8),
+              Expanded(child: Text(n.oldName, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600], decoration: TextDecoration.lineThrough), maxLines: 2, overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.check_circle, size: 16, color: isDark ? Colors.indigo[300] : Colors.indigo[700]),
+              const SizedBox(width: 8),
+              Expanded(child: Text(n.newName, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.indigo[300] : Colors.indigo[800]), maxLines: 2, overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+          if (n.message.isNotEmpty)
+             Padding(padding: const EdgeInsets.only(top: 8, bottom: 8), child: Text(n.message, style: TextStyle(fontSize: 13, color: isDark ? Colors.indigo[200] : Colors.indigo[600], fontStyle: FontStyle.italic))),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                if (onAcceptSingleName != null) onAcceptSingleName!(n.itemId, n.newName);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.indigo[800] : Colors.indigo, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+              child: const Text("Aceptar Nuevo Nombre", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class _HoldToConfirmButton extends StatefulWidget {
+  final VoidCallback onConfirm;
+  final bool isDark;
+
+  const _HoldToConfirmButton({required this.onConfirm, required this.isDark});
+
+  @override
+  State<_HoldToConfirmButton> createState() => _HoldToConfirmButtonState();
+}
+
+class _HoldToConfirmButtonState extends State<_HoldToConfirmButton> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 3));
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        widget.onConfirm();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.isDark ? Colors.red[300]! : Colors.red;
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) => _controller.reverse(),
+      onTapCancel: () => _controller.reverse(),
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: color),
+                  color: Colors.transparent,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: _controller.value,
+                      child: Container(color: color.withValues(alpha: 0.3)),
+                    ),
+                  ),
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.delete, size: 16, color: color),
+                  const SizedBox(width: 8),
+                  Text(
+                    _controller.value > 0 ? "Mantén para borrar" : "Borrar",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }

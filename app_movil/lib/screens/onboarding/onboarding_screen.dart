@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/image_picker_field.dart'; 
@@ -154,10 +155,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   ),
                   const SizedBox(height: 12),
                   CustomTextField(
-                    label: 'Teléfono / WhatsApp', icon: Icons.phone_android_rounded, controller: _telefonoCtrl, keyboardType: TextInputType.phone,
-                    validator: (v) => v!.isEmpty ? 'Requerido' : null,
+                    label: 'Teléfono / WhatsApp', 
+                    icon: Icons.phone_android_rounded, 
+                    controller: _telefonoCtrl, 
+                    keyboardType: TextInputType.phone,
+                    maxLength: 11, // 9 digits + 2 spaces max
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      _PhoneNumberFormatter(),
+                    ],
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Requerido';
+                      final digits = v.replaceAll(RegExp(r'\D'), '');
+                      if (digits.length != 9) return 'Debe tener 9 dígitos exactos';
+                      return null;
+                    },
                   ),
-                  
                   const SizedBox(height: 30),
                   Text("Datos del Negocio", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
                   const SizedBox(height: 16),
@@ -179,7 +192,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: DropdownButtonFormField<String>(
-                      value: _monedaSeleccionada,
+                      initialValue: _monedaSeleccionada,
                       decoration: InputDecoration(
                         labelText: 'Moneda Principal',
                         labelStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 13),
@@ -222,7 +235,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                       title: const Text("Proteger con PIN y Huella", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                       subtitle: const Text("Recomendado si compartes tu dispositivo", style: TextStyle(fontSize: 12)),
                       value: _usarSeguridad,
-                      activeColor: Colors.blue,
+                      activeThumbColor: Colors.blue,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       onChanged: (val) => setState(() => _usarSeguridad = val),
                     ),
@@ -255,6 +268,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PhoneNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    String digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    if (digits.length > 9) digits = digits.substring(0, 9);
+    
+    String formatted = '';
+    for (int i = 0; i < digits.length; i++) {
+      if (i > 0 && i % 3 == 0) {
+        formatted += ' ';
+      }
+      formatted += digits[i];
+    }
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

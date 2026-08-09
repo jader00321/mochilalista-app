@@ -56,6 +56,22 @@ class ClientRepository {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getRecentClientsRaw(int negocioId, {int limit = 5}) async {
+    try {
+      final db = await _dbHelper.database;
+      return await db.query(
+        'clientes', 
+        where: 'negocio_id = ? AND nombre_completo NOT LIKE ?', 
+        whereArgs: [negocioId, 'Caja Rápida -%'],
+        orderBy: 'fecha_registro DESC',
+        limit: limit
+      );
+    } catch (e, stack) {
+      AppLogger.error('ClientRepository.getRecentClientsRaw', e, stack);
+      return [];
+    }
+  }
+
   Future<int> insertClient(Map<String, dynamic> insertData) async {
     final db = await _dbHelper.database;
     return await db.insert('clientes', insertData);

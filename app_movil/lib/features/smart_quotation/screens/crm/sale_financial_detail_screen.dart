@@ -106,19 +106,24 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
         border: Border.all(color: isSelected ? color : (isDark ? Colors.white10 : Colors.grey.shade300)),
         borderRadius: BorderRadius.circular(14)
       ),
-      child: RadioListTile(
-        title: Row(
-          children: [
-            Icon(icon, size: 20, color: isSelected ? color : Colors.grey),
-            const SizedBox(width: 10),
-            Expanded(child: Text(title, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 15, color: isSelected ? color : (isDark ? Colors.white : Colors.black87)))),
-          ],
+      child: IgnorePointer(
+        ignoring: false,
+        child: RadioListTile(
+          title: Row(
+            children: [
+              Icon(icon, size: 20, color: isSelected ? color : Colors.grey),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 15, color: isSelected ? color : (isDark ? Colors.white : Colors.black87)))),
+            ],
+          ),
+          value: value,
+          // ignore: deprecated_member_use
+          groupValue: groupValue,
+          activeColor: color,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+          // ignore: deprecated_member_use
+          onChanged: (val) => onChanged(val.toString()),
         ),
-        value: value,
-        groupValue: groupValue,
-        activeColor: color,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-        onChanged: (val) => onChanged(val.toString()),
       ),
     );
   }
@@ -141,9 +146,13 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     
     // 🔥 Parseo double seguro desde SQLite
-    final double total = (num.tryParse(_saleData!['monto_total'].toString()) ?? 0.0).toDouble();
+    final double baseTotal = (num.tryParse(_saleData!['monto_total'].toString()) ?? 0.0).toDouble();
     final double pagado = (num.tryParse(_saleData!['monto_pagado'].toString()) ?? 0.0).toDouble();
+    final double abonoInicial = (num.tryParse(_saleData!['abono_inicial']?.toString() ?? '0') ?? 0.0).toDouble();
+    final double interes = (num.tryParse(_saleData!['porcentaje_interes']?.toString() ?? '0') ?? 0.0).toDouble();
     
+    final double total = (baseTotal - abonoInicial) * (1 + (interes / 100)) + abonoInicial;
+
     double saldo = total - pagado;
     if (saldo <= 0.02) saldo = 0.0;
 
@@ -187,12 +196,19 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                   color: isDark ? const Color(0xFF14141C) : Colors.blueGrey[900], 
                   borderRadius: BorderRadius.circular(20), 
                   border: isDark ? Border.all(color: Colors.white10) : null,
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]
+                  boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.1 * 255).toInt()), blurRadius: 10)]
                 ),
                 child: Column(
                   children: [
                     const Text("Saldo Pendiente de esta Venta", style: TextStyle(color: Colors.white70, fontSize: 14)),
                     const SizedBox(height: 8),
+                    if (interes > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(color: Colors.orange.withAlpha((0.2 * 255).toInt()), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.withAlpha((0.5 * 255).toInt()))),
+                        child: Text("Interés aplicado: ${interes.toStringAsFixed(1)}%", style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
                     Text(currency.format(saldo), style: TextStyle(color: saldo == 0 ? Colors.greenAccent : Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
                     const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(color: Colors.white24, height: 1)),
                     Row(
@@ -335,13 +351,14 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                                         );
                                         if (newDate != null && newDate.isAtSameMomentAs(dueDate) == false) {
                                           setState(() => _isLoading = true);
+                                          if (!context.mounted) return;
                                           final provider = Provider.of<SaleProvider>(context, listen: false);
                                           final success = await provider.updateInstallmentDate(c['id'] as int, newDate.toIso8601String());
                                           if (success) {
-                                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fecha actualizada exitosamente"), backgroundColor: Colors.green));
+                                            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fecha actualizada exitosamente"), backgroundColor: Colors.green));
                                             await _loadData();
                                           } else {
-                                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al actualizar la fecha"), backgroundColor: Colors.red));
+                                            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al actualizar la fecha"), backgroundColor: Colors.red));
                                             setState(() => _isLoading = false);
                                           }
                                         }
@@ -371,21 +388,75 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                 itemCount: items.length,
                 itemBuilder: (ctx, i) {
                   final item = items[i];
-                  double unitP = (num.tryParse(item['unit_price_applied'].toString()) ?? 0.0).toDouble();
-                  int quantity = int.tryParse(item['quantity'].toString()) ?? 1;
+                  String brand = item['brand_name']?.toString() ?? "";
+                  String prodName = item['product_name']?.toString() ?? "Producto";
+                  String specificName = item['specific_name']?.toString() ?? "";
+                  
+                  String fullName = brand.isNotEmpty ? "[$brand] $prodName" : prodName;
+                  if (specificName.isNotEmpty && specificName != 'null') fullName += " ($specificName)";
+                  
+                  String salesUnit = item['sales_unit']?.toString() ?? "Unidad";
+                  double unitP = (num.tryParse(item['unit_price_applied']?.toString() ?? '0') ?? 0.0).toDouble();
+                  double originalP = (num.tryParse(item['original_unit_price']?.toString() ?? '0') ?? unitP).toDouble();
+                  int quantity = int.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
 
+                  String imageUrl = item['image_url']?.toString() ?? "";
+                  String originalText = item['original_text']?.toString() ?? "";
+                  
                   return Card(
                     elevation: 0,
                     color: cardColor,
                     margin: const EdgeInsets.only(bottom: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: isDark ? Colors.white10 : Colors.transparent)),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      leading: Icon(Icons.check_box, color: isDark ? Colors.green[400] : Colors.green),
-                      title: Text(item['product_name'] ?? "Producto", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
-                      subtitle: Text("Cantidad: $quantity", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])),
-                      trailing: Text(currency.format(unitP * quantity), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
-                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (imageUrl.isNotEmpty)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(imageUrl, width: 45, height: 45, fit: BoxFit.cover, errorBuilder: (c, e, s) => Icon(Icons.inventory, color: isDark ? Colors.blueGrey[400] : Colors.blueGrey, size: 30)),
+                            )
+                          else
+                            Container(
+                              width: 45, height: 45,
+                              decoration: BoxDecoration(color: Colors.blueGrey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                              child: Icon(Icons.inventory_2_outlined, color: isDark ? Colors.blueGrey[400] : Colors.blueGrey, size: 24),
+                            ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(fullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
+                                if (originalText.isNotEmpty && originalText != "null") ...[
+                                  const SizedBox(height: 2),
+                                  Text("Cotizado como: $originalText", style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                                ],
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: Colors.blueGrey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                                      child: Text("$quantity $salesUnit", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700])),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text("x ${currency.format(unitP)}", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
+                                    if (originalP > unitP) ...[
+                                      const SizedBox(width: 6),
+                                      Text(currency.format(originalP), style: TextStyle(color: Colors.red[300], fontSize: 11, decoration: TextDecoration.lineThrough)),
+                                    ]
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(currency.format(unitP * quantity), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
+                        ],
+                      ),
+                    )
                   );
                 }
               ),

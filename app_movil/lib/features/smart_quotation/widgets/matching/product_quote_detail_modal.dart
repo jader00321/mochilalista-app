@@ -129,7 +129,10 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     double disc = double.tryParse(val) ?? 0.0;
     
     if (disc < 0) disc = 0;
-    if (disc > sysPrice) disc = sysPrice;
+    if (disc > sysPrice) {
+      disc = sysPrice;
+      _discountCtrl.text = sysPrice.toStringAsFixed(2);
+    }
 
     double newPrice = sysPrice - disc;
     _priceCtrl.text = newPrice.toStringAsFixed(2);
@@ -142,8 +145,17 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     _isSyncing = true;
     double sysPrice = _getCurrentListPrice();
     double price = double.tryParse(val) ?? sysPrice;
-    double disc = sysPrice - price;
     
+    if (price < 0) {
+      price = 0;
+      _priceCtrl.text = "0.00";
+    }
+    if (price > sysPrice) {
+      price = sysPrice;
+      _priceCtrl.text = sysPrice.toStringAsFixed(2);
+    }
+    
+    double disc = sysPrice - price;
     _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
     _isSyncing = false;
     setState(() {}); 

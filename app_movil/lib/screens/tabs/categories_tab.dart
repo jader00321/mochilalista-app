@@ -147,7 +147,7 @@ class _CategoriesTabState extends State<CategoriesTab> {
                 success = id != null;
               }
 
-              if (mounted) {
+              if (context.mounted) {
                 Navigator.pop(ctx); 
                 
                 if (success) {
@@ -180,7 +180,7 @@ class _CategoriesTabState extends State<CategoriesTab> {
     final provider = Provider.of<InventoryProvider>(context, listen: false);
     bool success = await provider.deleteCategory(id);
     
-    if (mounted) {
+    if (context.mounted) {
       if (success) {
         CustomSnackBar.show(context, message: "Categoría eliminada correctamente", isError: false);
       } else {
@@ -293,7 +293,7 @@ class _CategoriesTabState extends State<CategoriesTab> {
                                       return;
                                     }
                                     await provider.updateCategory(cat.id, cat.nombre, activo: val);
-                                    if(mounted) {
+                                    if(context.mounted) {
                                         CustomSnackBar.show(
                                             context, 
                                             message: val ? "Categoría activada" : "Categoría suspendida",

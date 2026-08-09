@@ -20,7 +20,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 9,
       onCreate: _createDB,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -112,6 +112,38 @@ class LocalDatabase {
         await db.execute('CREATE INDEX IF NOT EXISTS idx_quotations_negocio ON smart_quotations(negocio_id)');
       } catch (e) {
         debugPrint("Error en migración V5 (índices): $e");
+      }
+    }
+    if (oldVersion < 6) {
+      // Migración V5 -> V6: Agregar image_url a items de cotización y venta
+      try {
+        await db.execute("ALTER TABLE smart_quotation_items ADD COLUMN image_url TEXT");
+      } catch (e) {
+        debugPrint("Error migración V6 (quotation_items image_url): $e");
+      }
+      try {
+        await db.execute("ALTER TABLE venta_items ADD COLUMN image_url TEXT");
+      } catch (e) {
+        debugPrint("Error migración V6 (venta_items image_url): $e");
+      }
+    }
+    if (oldVersion < 7) {
+      // Migración V6 -> V7: Refactorización financiera de Pagos y Créditos
+      try {
+        await db.execute("ALTER TABLE ventas ADD COLUMN abono_inicial REAL DEFAULT 0.0");
+        await db.execute("ALTER TABLE ventas ADD COLUMN porcentaje_interes REAL DEFAULT 0.0");
+        // Establecer abono inicial retrospectivo (si ya fue pagado, se asume que el monto pagado actual fue el abono inicial)
+        await db.execute("UPDATE ventas SET abono_inicial = monto_pagado");
+      } catch (e) {
+        debugPrint("Error migración V7 (abono_inicial y porcentaje_interes): $e");
+      }
+    }
+    if (oldVersion < 9) {
+      // Migración V8 -> V9: Solución Analíticas Crash (stock_alerta)
+      try {
+        await db.execute("ALTER TABLE presentaciones_producto ADD COLUMN stock_alerta INTEGER DEFAULT 5");
+      } catch (e) {
+        debugPrint("Error migración V9 (stock_alerta en presentaciones_producto): $e");
       }
     }
   }
@@ -208,15 +240,15 @@ class LocalDatabase {
       '''CREATE TABLE smart_quotations (id $idType, negocio_id $intType, creado_por_usuario_id $intType, client_id $intNullable, client_name $textNullable, institution_name $textNullable, grade_level $textNullable, notas $textNullable, total_amount $realNullable DEFAULT 0.0, total_savings $realNullable DEFAULT 0.0, status $textNullable DEFAULT 'PENDING', type $textNullable DEFAULT 'manual', is_template $boolTypeFalse, clone_source_id $intNullable, valid_until $textNullable, source_image_url $textNullable, original_text_dump $textNullable, created_at $textNullable, updated_at $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (client_id) REFERENCES clientes (id))''',
     );
     await db.execute(
-      '''CREATE TABLE smart_quotation_items (id $idType, quotation_id $intType, product_id $intNullable, presentation_id $intNullable, quantity $intNullable DEFAULT 1, unit_price_applied $realType, original_unit_price $realType, product_name $textNullable, brand_name $textNullable, specific_name $textNullable, sales_unit $textNullable, original_text $textNullable, is_manual_price $boolTypeFalse, is_available $boolType, FOREIGN KEY (quotation_id) REFERENCES smart_quotations (id), FOREIGN KEY (product_id) REFERENCES productos (id), FOREIGN KEY (presentation_id) REFERENCES presentaciones_producto (id))''',
+      '''CREATE TABLE smart_quotation_items (id $idType, quotation_id $intType, product_id $intNullable, presentation_id $intNullable, quantity $intNullable DEFAULT 1, unit_price_applied $realType, original_unit_price $realType, product_name $textNullable, brand_name $textNullable, specific_name $textNullable, sales_unit $textNullable, original_text $textNullable, image_url $textNullable, is_manual_price $boolTypeFalse, is_available $boolType, FOREIGN KEY (quotation_id) REFERENCES smart_quotations (id), FOREIGN KEY (product_id) REFERENCES productos (id), FOREIGN KEY (presentation_id) REFERENCES presentaciones_producto (id))''',
     );
 
     // 4. Ventas y Pagos
     await db.execute(
-      '''CREATE TABLE ventas (id $idType, negocio_id $intType, creado_por_usuario_id $intType, cotizacion_id $intNullable UNIQUE, cliente_id $intNullable, origen_venta $textNullable DEFAULT 'smart_quotation', is_archived $boolTypeFalse, metodo_pago $textType, estado_pago $textNullable DEFAULT 'pagado', estado_entrega $textNullable DEFAULT 'entregado', fecha_entrega $textNullable, monto_total $realType, monto_pagado $realType, descuento_aplicado $realNullable DEFAULT 0.00, fecha_venta $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (cotizacion_id) REFERENCES smart_quotations (id), FOREIGN KEY (cliente_id) REFERENCES clientes (id))''',
+      '''CREATE TABLE ventas (id $idType, negocio_id $intType, creado_por_usuario_id $intType, cotizacion_id $intNullable UNIQUE, cliente_id $intNullable, origen_venta $textNullable DEFAULT 'smart_quotation', is_archived $boolTypeFalse, metodo_pago $textType, estado_pago $textNullable DEFAULT 'pagado', estado_entrega $textNullable DEFAULT 'entregado', fecha_entrega $textNullable, monto_total $realType, monto_pagado $realType, descuento_aplicado $realNullable DEFAULT 0.00, abono_inicial $realNullable DEFAULT 0.0, porcentaje_interes $realNullable DEFAULT 0.0, fecha_venta $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (cotizacion_id) REFERENCES smart_quotations (id), FOREIGN KEY (cliente_id) REFERENCES clientes (id))''',
     );
     await db.execute(
-      '''CREATE TABLE venta_items (id $idType, venta_id $intType, presentation_id $intNullable, product_id $intNullable, cantidad $intType DEFAULT 1, precio_unitario $realType, original_unit_price $realNullable, subtotal $realType, nombre_producto $textType, brand_name $textNullable, specific_name $textNullable, unidad_medida $textNullable, original_text $textNullable, is_manual_price $boolTypeFalse, FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE, FOREIGN KEY (presentation_id) REFERENCES presentaciones_producto (id))''',
+      '''CREATE TABLE venta_items (id $idType, venta_id $intType, presentation_id $intNullable, product_id $intNullable, cantidad $intType DEFAULT 1, precio_unitario $realType, original_unit_price $realNullable, subtotal $realType, nombre_producto $textType, brand_name $textNullable, specific_name $textNullable, unidad_medida $textNullable, original_text $textNullable, image_url $textNullable, is_manual_price $boolTypeFalse, FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE, FOREIGN KEY (presentation_id) REFERENCES presentaciones_producto (id))''',
     );
     await db.execute(
       '''CREATE TABLE cuotas (id $idType, venta_id $intType, numero_cuota $intType, monto $realType, monto_pagado $realNullable DEFAULT 0.00, fecha_vencimiento $textType, estado $textNullable DEFAULT 'pendiente', FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE)''',

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/scanner_provider.dart';
 import '../../../providers/inventory_provider.dart';
@@ -281,7 +281,7 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
       decoration: BoxDecoration(color: isDark ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? color.withValues(alpha: 0.3) : color.withValues(alpha: 0.5))), 
-      child: Text(text, style: TextStyle(fontSize: 10, color: isDark ? color : color.withRed((color.red * 0.8).toInt()), fontWeight: FontWeight.bold, letterSpacing: 0.5))
+      child: Text(text, style: TextStyle(fontSize: 10, color: isDark ? color : Color.lerp(color, Colors.black, 0.2)!, fontWeight: FontWeight.bold, letterSpacing: 0.5))
     ); 
   }
 }

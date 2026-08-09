@@ -28,6 +28,7 @@ import 'features/smart_quotation/providers/tracking_provider.dart';
 import 'features/smart_quotation/providers/manual_quote_provider.dart'; 
 import 'features/smart_quotation/providers/quick_sale_provider.dart'; 
 import 'features/smart_quotation/providers/quick_search_provider.dart';
+import 'features/analytics/providers/analytics_provider.dart';
 
 // Screens Principales de Navegación y Seguridad
 import 'screens/home_screen.dart';
@@ -52,7 +53,7 @@ void callbackDispatcher() {
           final String location = prefs.getString('auto_backup_location') ?? 'Local';
           
           if (location == 'Drive') {
-            await BackupManager.exportToGoogleDrive();
+            await BackupManager.exportToCloud();
           } else {
             await BackupManager.exportToDownloads();
           }
@@ -71,8 +72,7 @@ void main() async {
 
   // 🔥 INICIALIZAR WORKMANAGER Y PROGRAMAR TAREA
   Workmanager().initialize(
-    callbackDispatcher, 
-    isInDebugMode: false // Cambiar a true solo para ver logs de depuración
+    callbackDispatcher
   );
 
   Workmanager().registerPeriodicTask(
@@ -148,6 +148,10 @@ class MochilaListaApp extends StatelessWidget {
         ),
         ChangeNotifierProxyProvider<AuthProvider, QuickSearchProvider>(
           create: (_) => QuickSearchProvider(), 
+          update: (_, auth, prov) => prov!..updateContext(auth.activeBusinessId)
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, AnalyticsProvider>(
+          create: (_) => AnalyticsProvider(), 
           update: (_, auth, prov) => prov!..updateContext(auth.activeBusinessId)
         ),
         ChangeNotifierProxyProvider<AuthProvider, InvoiceProvider>(

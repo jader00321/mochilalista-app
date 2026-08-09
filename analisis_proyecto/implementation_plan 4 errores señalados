@@ -1,0 +1,60 @@
+# Plan de Corrección y Mejoras (Versión 2.2)
+
+Se ha realizado un análisis profundo de los cuatro problemas reportados en las vistas y modelos del sistema. A continuación, se detalla el origen de cada error y la solución que se implementará.
+
+## User Review Required
+
+Por favor, revisa las soluciones propuestas para cada uno de los problemas. Si estás de acuerdo con el enfoque, procede a aprobar este plan para que inicie la ejecución de los cambios en el código.
+
+## Open Questions
+
+- En el Issue #4, los recibos antiguos que ya se guardaron con el ID (ej: "10") no se corregirán solos a menos que los busquemos en los maestros en tiempo de renderizado. ¿Deseas que añada una pequeña validación visual en el historial para ocultar la marca si detecta que es un número (evitando que se vea feo el "10"), o lo dejamos como está y solo aplicamos la corrección para las nuevas ventas?
+
+## Proposed Changes
+
+### 1. Corrección del Modal de Cotización Manual (Descuento y Layout)
+
+**Problema:** Al desactivar el descuento, el sistema pasa un precio `null` (indicando que no hay cambios manuales), lo que provoca que la tarjeta vuelva a utilizar el precio de oferta (`offerPrice`) por defecto. Además, el teclado cubre el modal.
+**Solución:** 
+- Obligar a que si el producto tiene `offerPrice` y el usuario desactiva el descuento, se envíe el `_systemPrice` (precio normal) como sobreescritura manual, cancelando la oferta.
+- Ajustar las proporciones del `DraggableScrollableSheet` (`initialChildSize: 0.8` y `maxChildSize: 0.95`) para que el modal se expanda correctamente cuando se abre el teclado, aprovechando el padding dinámico que ya tiene.
+
+#### [MODIFY] [manual_quote_detail_modal.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/manual/manual_quote_detail_modal.dart)
+
+### 2. Corrección de la Marca Omitida en Cotizaciones Manuales
+
+**Problema:** El servicio que guarda las cotizaciones manuales en SQLite (`saveManualQuotation`) hace el INSERT de todos los datos pero omite la columna `brand_name`.
+**Solución:**
+- Añadir `'brand_name': item['brand_name']` al mapa de datos insertados en `smart_quotation_items` dentro de `quotation_service.dart`.
+
+#### [MODIFY] [quotation_service.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/services/quotation_service.dart)
+
+### 3. Autocarga de los Últimos 5 Clientes en Búsqueda
+
+**Problema:** El modal de clientes aparece vacío hasta que se busca algo.
+**Solución:**
+- Crear el método `getRecentClientsRaw` en `ClientRepository` que obtenga los últimos 5 clientes registrados o interactuados (omitiendo "Caja Rápida").
+- Conectarlo con `ClientService` y cargarlo automáticamente en el `initState` de `ClientSearchModal`, así como cuando el input de búsqueda se quede vacío.
+
+#### [MODIFY] [client_repository.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/repositories/client_repository.dart)
+#### [MODIFY] [client_service.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/services/client_service.dart)
+#### [MODIFY] [client_search_modal.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/manual/client_search_modal.dart)
+
+### 4. Corrección del ID de Marca en Recibos de Caja Rápida
+
+**Problema:** En el flujo de escáner y caja rápida, el objeto `Product` no cargaba el nombre de la marca. Por ello, `QuickSaleProvider` enviaba el `marcaId` convertido a `String` (ej: "10") a la base de datos de la venta.
+**Solución:**
+- Modificar la consulta SQL base (`ProductQueries.selectInventoryCols`) para añadir un `LEFT JOIN marcas_producto` y extraer `marca_nombre`.
+- Añadir el atributo `marcaNombre` al modelo `Product` en `product_model.dart`.
+- Modificar `QuickSaleProvider` para usar `marcaNombre` en lugar del `marcaId` al armar los productos para el carrito.
+
+#### [MODIFY] [product_queries.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/database/product_queries.dart)
+#### [MODIFY] [product_model.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/models/product_model.dart)
+#### [MODIFY] [quick_sale_provider.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/providers/quick_sale_provider.dart)
+
+## Verification Plan
+
+### Manual Verification
+1. **Modal Cotización**: Seleccionar un producto con oferta, desactivar el descuento, guardar y verificar que el precio normal permanece. Probar abrir el teclado y validar que no tape los botones.
+2. **Marca en BD**: Hacer una cotización manual y una venta rápida, generar el recibo PDF/WhatsApp y verificar que la marca aparezca correctamente (no como ID, no omitida).
+3. **Caché Clientes**: Abrir el modal de cliente y comprobar que sin escribir nada aparezcan los 5 últimos registrados en la cuenta.

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../providers/quick_sale_provider.dart';
 import 'dart:async';
 import '../../providers/sale_provider.dart';
+import '../../../../providers/auth_provider.dart';
 
 class QuickSaleHeader extends StatelessWidget {
   final bool isGuest;
@@ -251,12 +252,35 @@ class _ClientSearchModalState extends State<_ClientSearchModal> {
   List<dynamic> _results = [];
   bool _isLoading = false;
   Timer? _searchDebounce; 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRecentClients();
+    });
+  }
 
   @override
   void dispose() {
     _ctrl.dispose(); 
     _searchDebounce?.cancel();
     super.dispose();
+  }
+
+  void _loadRecentClients() async {
+    setState(() => _isLoading = true);
+    final authProv = Provider.of<AuthProvider>(context, listen: false);
+    if (authProv.activeBusinessId != null) {
+      final results = await Provider.of<SaleProvider>(context, listen: false).searchClients("");
+      if (mounted) {
+        setState(() {
+          _results = results;
+          _isLoading = false;
+        });
+      }
+    } else {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _onSearchInput(String query) {
@@ -268,7 +292,7 @@ class _ClientSearchModalState extends State<_ClientSearchModal> {
 
   void _search(String query) async {
     if (query.isEmpty) {
-      setState(() { _results = []; _isLoading = false; });
+      _loadRecentClients();
       return;
     }
     setState(() => _isLoading = true);
@@ -279,6 +303,14 @@ class _ClientSearchModalState extends State<_ClientSearchModal> {
         _isLoading = false;
       });
     }
+  }
+
+  String _formatPhone(String phone) {
+    String clean = phone.replaceAll(RegExp(r'\D'), '');
+    if (clean.length == 9) {
+      return "${clean.substring(0, 3)} ${clean.substring(3, 6)} ${clean.substring(6, 9)}";
+    }
+    return phone;
   }
 
   @override
@@ -322,7 +354,31 @@ class _ClientSearchModalState extends State<_ClientSearchModal> {
             child: _isLoading 
               ? const Center(child: CircularProgressIndicator())
               : _results.isEmpty && _ctrl.text.isNotEmpty
-                ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.search_off, size: 60, color: isDark ? Colors.white10 : Colors.grey[300]), const SizedBox(height: 10), Text("Sin resultados", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey))]))
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center, 
+                      children: [
+                        Icon(Icons.search_off, size: 60, color: isDark ? Colors.white10 : Colors.grey[300]), 
+                        const SizedBox(height: 10), 
+                        Text("No encontramos a '${_ctrl.text}'", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 16)),
+                        const SizedBox(height: 20),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
+                            if (RegExp(r'^[0-9]+$').hasMatch(_ctrl.text.trim())) {
+                               quickProv.setClientInfo(phone: _ctrl.text.trim(), name: null, id: null, saldo: 0, saleNote: quickProv.saleNote);
+                            } else {
+                               quickProv.setClientInfo(name: _ctrl.text.trim(), phone: null, id: null, saldo: 0, saleNote: quickProv.saleNote);
+                            }
+                          },
+                          icon: const Icon(Icons.person_add),
+                          label: const Text("Usar como cliente rápido"),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        )
+                      ]
+                    )
+                  )
                 : _results.isEmpty
                   ? Center(child: Text("Empieza a escribir para buscar...", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey)))
                   : ListView.separated(
@@ -330,11 +386,55 @@ class _ClientSearchModalState extends State<_ClientSearchModal> {
                       separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
                       itemBuilder: (ctx, i) {
                         final c = _results[i];
+                        final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                          leading: CircleAvatar(backgroundColor: isDark ? Colors.white10 : Colors.blue[50], child: Icon(Icons.person, color: isDark ? Colors.blue[300] : Colors.blue)),
-                          title: Text(c.fullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                          subtitle: Text(c.phone, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                          leading: CircleAvatar(
+                            backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[100], 
+                            child: Text(
+                              c.fullName.isNotEmpty ? c.fullName[0].toUpperCase() : "?",
+                              style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 18)
+                            )
+                          ),
+                          title: Row(
+                            children: [
+                              Expanded(child: Text(c.fullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                              if (c.usuarioVinculadoId != null)
+                                Container(
+                                  margin: const EdgeInsets.only(left: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  decoration: BoxDecoration(color: Colors.teal.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.teal.withValues(alpha: 0.5))),
+                                  child: const Text("APP", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.teal)),
+                                )
+                            ],
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(Icons.phone_android, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                  const SizedBox(width: 4),
+                                  Text(_formatPhone(c.phone), style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                                ],
+                              ),
+                              if (c.etiquetas.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(c.etiquetas.take(3).join(" • "), style: TextStyle(fontSize: 12, color: isDark ? Colors.purple[300] : Colors.purple[600]), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ]
+                            ],
+                          ),
+                          trailing: (c.totalDebt > 0 || c.saldoAFavor > 0) ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if (c.totalDebt > 0)
+                                Text("-${currency.format(c.totalDebt)}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                              if (c.saldoAFavor > 0)
+                                Text("+${currency.format(c.saldoAFavor)}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ) : null,
                           onTap: () => Navigator.pop(context, c),
                         );
                       },

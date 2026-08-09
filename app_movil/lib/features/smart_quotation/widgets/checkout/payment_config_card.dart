@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:intl/intl.dart';
 import '../../models/crm_models.dart';
 
 class PaymentConfigCard extends StatefulWidget {
   final double totalAmount;
-  final Function(String method, String status, double paid, List<InstallmentModel> installments) onChanged;
+  final Function(String method, String status, double paid, double interest, List<InstallmentModel> installments) onChanged;
 
   const PaymentConfigCard({super.key, required this.totalAmount, required this.onChanged});
 
@@ -24,18 +25,45 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
   String _frecuencia = "mensual"; 
   final List<InstallmentModel> _installments = [];
   final List<TextEditingController> _cuotaCtrls = []; 
+  
+  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
-    _amountPaidCtrl.addListener(_notifyParent);
+    _amountPaidCtrl.addListener(() {
+      _notifyParent();
+      if (_paymentStatus == "pendiente" && _installments.isNotEmpty) {
+        if (_debounce?.isActive ?? false) _debounce!.cancel();
+        _debounce = Timer(const Duration(milliseconds: 500), () {
+          _generateInstallments();
+        });
+      }
+    });
     _interestCtrl.addListener(() {
       if (_installments.isNotEmpty) _generateInstallments(); 
     });
   }
 
   @override
+  void didUpdateWidget(covariant PaymentConfigCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.totalAmount != widget.totalAmount) {
+      if (_paymentStatus == "pendiente" && _installments.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _generateInstallments();
+        });
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _notifyParent();
+        });
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    _debounce?.cancel();
     _amountPaidCtrl.dispose();
     _numCuotasCtrl.dispose();
     _interestCtrl.dispose();
@@ -53,7 +81,8 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
     if (widget.totalAmount - paid <= 0) {
       _installments.clear();
     }
-    widget.onChanged(_paymentMethod, _paymentStatus, paid, _installments);
+    double interestRate = double.tryParse(_interestCtrl.text) ?? 0.0;
+    widget.onChanged(_paymentMethod, _paymentStatus, paid, interestRate, _installments);
   }
 
   void _generateInstallments() {
@@ -78,9 +107,13 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
     for (int i = 1; i <= numCuotas; i++) {
       if (_frecuencia == "diario") {
         currentDate = currentDate.add(const Duration(days: 1));
-      } else if (_frecuencia == "semanal") currentDate = currentDate.add(const Duration(days: 7));
-      else if (_frecuencia == "quincenal") currentDate = currentDate.add(const Duration(days: 15));
-      else if (_frecuencia == "mensual") currentDate = DateTime(currentDate.year, currentDate.month + 1, currentDate.day);
+      } else if (_frecuencia == "semanal") {
+        currentDate = currentDate.add(const Duration(days: 7));
+      } else if (_frecuencia == "quincenal") {
+        currentDate = currentDate.add(const Duration(days: 15));
+      } else if (_frecuencia == "mensual") {
+        currentDate = DateTime(currentDate.year, currentDate.month + 1, currentDate.day);
+      }
 
       double amount = (i == numCuotas) ? (finalDebt - accumulated) : double.parse(basePerQuota.toStringAsFixed(2));
       accumulated += amount;

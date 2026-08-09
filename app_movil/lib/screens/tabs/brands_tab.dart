@@ -69,7 +69,7 @@ class _BrandsTabState extends State<BrandsTab> {
     final provider = Provider.of<InventoryProvider>(context, listen: false);
     bool success = await provider.deleteBrand(id);
     
-    if (mounted) {
+    if (context.mounted) {
       if (success) {
         CustomSnackBar.show(context, message: "Marca eliminada", isError: false);
       } else {
@@ -181,7 +181,7 @@ class _BrandsTabState extends State<BrandsTab> {
                                       return;
                                     }
                                     await provider.updateBrand(brand.id, brand.nombre, activo: val);
-                                    if(mounted) CustomSnackBar.show(context, message: val ? "Activada" : "Suspendida", backgroundColor: val ? Colors.green[800]! : Colors.orange[800]!);
+                                    if(context.mounted) CustomSnackBar.show(context, message: val ? "Activada" : "Suspendida", backgroundColor: val ? Colors.green[800]! : Colors.orange[800]!);
                                   },
                                 ),
                               );

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/smart_quotation_model.dart';
 import '../../../../models/user_model.dart';
 import '../../utils/receipt_manager.dart';
+import '../../../../providers/inventory_provider.dart';
+import '../../../../providers/catalog_provider.dart';
+import '../../../../providers/notification_provider.dart';
 
 class SuccessCheckoutModal extends StatefulWidget {
   final SmartQuotationModel quotation;
@@ -25,6 +29,14 @@ class SuccessCheckoutModal extends StatefulWidget {
 class _SuccessCheckoutModalState extends State<SuccessCheckoutModal> {
   bool _showViewB = false;
   bool _isGeneratingPdf = false;
+
+  void _refreshProvidersAfterSale() {
+    try {
+      Provider.of<InventoryProvider>(context, listen: false).refreshAfterSale();
+      Provider.of<CatalogProvider>(context, listen: false).initCatalog();
+      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+    } catch (_) {}
+  }
 
   void _downloadAndOpenPdf() async {
     setState(() => _isGeneratingPdf = true);
@@ -51,6 +63,7 @@ class _SuccessCheckoutModalState extends State<SuccessCheckoutModal> {
       );
       
       if (mounted) {
+        _refreshProvidersAfterSale();
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
@@ -187,6 +200,7 @@ class _SuccessCheckoutModalState extends State<SuccessCheckoutModal> {
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
+                  _refreshProvidersAfterSale();
                   Navigator.of(context).popUntil((route) => route.isFirst);
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900], foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),

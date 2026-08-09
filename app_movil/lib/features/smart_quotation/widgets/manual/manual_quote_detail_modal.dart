@@ -9,6 +9,7 @@ import '../../../../providers/auth_provider.dart';
 import '../../../../widgets/universal_image.dart';
 import '../../../../widgets/full_screen_image_viewer.dart';
 import '../../../../widgets/custom_snackbar.dart'; 
+import 'manual_price_modifier.dart';
 
 class ManualQuoteDetailModal extends StatefulWidget {
   final MatchedProduct product;
@@ -97,7 +98,10 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
     double disc = double.tryParse(val) ?? 0.0;
     
     if (disc < 0) disc = 0;
-    if (disc > _systemPrice) disc = _systemPrice;
+    if (disc > _systemPrice) {
+      disc = _systemPrice;
+      _discountCtrl.text = _systemPrice.toStringAsFixed(2);
+    }
 
     double newPrice = _systemPrice - disc;
     _priceCtrl.text = newPrice.toStringAsFixed(2);
@@ -109,8 +113,17 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
     if (_isSyncing) return;
     _isSyncing = true;
     double price = double.tryParse(val) ?? _systemPrice;
-    double disc = _systemPrice - price;
     
+    if (price < 0) {
+      price = 0;
+      _priceCtrl.text = "0.00";
+    }
+    if (price > _systemPrice) {
+      price = _systemPrice;
+      _priceCtrl.text = _systemPrice.toStringAsFixed(2);
+    }
+    
+    double disc = _systemPrice - price;
     _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
     _isSyncing = false;
     setState(() {}); 
@@ -176,7 +189,13 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
   void _confirm() {
     int finalQty = int.tryParse(_qtyCtrl.text) ?? 1;
     double finalPrice = double.tryParse(_priceCtrl.text) ?? _systemPrice;
-    double? overridePrice = (finalPrice == _systemPrice) ? null : finalPrice;
+    
+    double? overridePrice;
+    if (finalPrice == _systemPrice && widget.product.offerPrice == null) {
+      overridePrice = null;
+    } else {
+      overridePrice = finalPrice;
+    }
     
     String finalName = widget.initialCustomName ?? ""; 
     widget.onConfirm(_currentSelection, finalQty, overridePrice, finalName.isNotEmpty ? finalName : null);
@@ -235,12 +254,13 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                           !originalName.toLowerCase().contains("nuevo ítem") &&
                           !hasCustomName;
 
-    final double initialSize = isClient ? 0.50 : 0.55;
-    final double maxSize = isClient ? 0.60 : 0.65;
+    final double initialSize = isClient ? 0.60 : 0.85;
+    final double maxSize = isClient ? 0.75 : 0.95;
+    final double minSize = isClient ? 0.50 : 0.60;
 
     return DraggableScrollableSheet(
       initialChildSize: initialSize, 
-      minChildSize: 0.4,
+      minChildSize: minSize,
       maxChildSize: maxSize, 
       builder: (_, controller) {
         return Container(
@@ -375,62 +395,21 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
 
               // 3. SECCIÓN DE DESCUENTO (OCULTA PARA CLIENTES)
               if (!isClient)
-                Container(
-                  decoration: BoxDecoration(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50]) : (isDark ? Colors.white10 : Colors.grey[50]), borderRadius: BorderRadius.circular(16), border: Border.all(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade200) : (isDark ? Colors.transparent : Colors.grey.shade300))),
-                  child: Column(
-                    children: [
-                      SwitchListTile(
-                        title: Text("Aplicar Descuento", style: textTheme.titleMedium?.copyWith(color: _isManualPrice ? (isDark ? Colors.orange[300] : Colors.orange[900]) : textColor)),
-                        subtitle: Text("Precio Base: ${currency.format(_systemPrice)}", style: textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[700])),
-                        value: _isManualPrice,
-                        activeThumbColor: Colors.orange,
-                        onChanged: (v) => setState(() {
-                          _isManualPrice = v;
-                          if (!v) { _priceCtrl.text = _systemPrice.toStringAsFixed(2); _discountCtrl.text = ""; }
-                        }),
-                      ),
-                      if (_isManualPrice) ...[
-                        Divider(height: 1, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[200]),
-                        Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text("S/ a Descontar", style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900])),
-                                    TextField(
-                                      controller: _discountCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      style: textTheme.displayMedium?.copyWith(color: textColor),
-                                      decoration: InputDecoration(prefixText: "- ", prefixStyle: textTheme.displayMedium?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900]), isDense: true, border: InputBorder.none),
-                                      onChanged: _onDiscountChanged,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(width: 1, height: 50, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[300]),
-                              const SizedBox(width: 20),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text("Precio Final Unit.", style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[900])),
-                                    TextField(
-                                      controller: _priceCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      style: textTheme.displayMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue),
-                                      decoration: InputDecoration(prefixText: "S/ ", prefixStyle: textTheme.displayMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue), isDense: true, border: InputBorder.none),
-                                      onChanged: _onPriceChanged,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      ]
-                    ],
-                  ),
+                ManualPriceModifier(
+                  isManualPrice: _isManualPrice,
+                  systemPrice: _systemPrice,
+                  discountCtrl: _discountCtrl,
+                  priceCtrl: _priceCtrl,
+                  onToggle: (v) {
+                    setState(() {
+                      _isManualPrice = v;
+                      if (!v) { _priceCtrl.text = _systemPrice.toStringAsFixed(2); _discountCtrl.text = ""; }
+                    });
+                  },
+                  onDiscountChanged: _onDiscountChanged,
+                  onPriceChanged: _onPriceChanged,
+                  isDark: isDark,
+                  currency: currency,
                 ),
               if (!isClient) const SizedBox(height: 30),
 

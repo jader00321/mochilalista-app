@@ -90,6 +90,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       MaterialPageRoute(builder: (_) => const BarcodeScannerScreen(isFromQuickSale: true)),
     ).then((_) {
       _searchCtrl.clear();
+      if (!mounted) return;
       Provider.of<QuickSearchProvider>(context, listen: false).clearSearch();
     });
   }

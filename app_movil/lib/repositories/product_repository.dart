@@ -53,7 +53,7 @@ class ProductRepository {
           queryParams['sortDir']?.toString().toUpperCase() == 'DESC'
               ? 'DESC'
               : 'ASC';
-      query += " ORDER BY p.nombre $sortDir LIMIT ? OFFSET ?";
+      query += " ORDER BY LOWER(p.nombre) $sortDir LIMIT ? OFFSET ?";
       args.add(int.parse(queryParams['limit'] ?? '20'));
       args.add(int.parse(queryParams['skip'] ?? '0'));
 
@@ -66,7 +66,12 @@ class ProductRepository {
 
   Future<Map<String, dynamic>?> getProductByIdRaw(int productId) async {
     final db = await _dbHelper.database;
-    final pRows = await db.query('productos', where: 'id = ?', whereArgs: [productId]);
+    final pRows = await db.rawQuery('''
+      SELECT p.*, m.nombre AS marca_nombre
+      FROM productos p
+      LEFT JOIN marcas m ON p.marca_id = m.id
+      WHERE p.id = ?
+    ''', [productId]);
     if (pRows.isEmpty) return null;
 
     final prRows = await db.query('presentaciones_producto',
@@ -76,6 +81,7 @@ class ProductRepository {
     fullJson['presentaciones'] = prRows;
     return fullJson;
   }
+
 
   Future<void> deleteProductRaw(int id) async {
     final db = await _dbHelper.database;

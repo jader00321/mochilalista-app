@@ -38,6 +38,16 @@ class ClientService {
     }
   }
 
+  Future<List<ClientModel>> getRecentClients(int negocioId, {int limit = 5}) async {
+    try {
+      final rows = await _repository.getRecentClientsRaw(negocioId, limit: limit);
+      return rows.map((e) => ClientModel.fromJson(e)).toList();
+    } catch (e, stack) {
+      AppLogger.error('ClientService.getRecentClients', e, stack);
+      return [];
+    }
+  }
+
   Future<ClientModel> createClient(Map<String, dynamic> clientData, int negocioId, int usuarioId) async {
     try {
       Map<String, dynamic> insertData = {
@@ -100,7 +110,13 @@ class ClientService {
       final db = await dbHelper.database;
       List<LedgerItem> ledger = [];
 
-      final sales = await db.query('ventas', where: 'cliente_id = ? AND is_archived = 0', whereArgs: [clientId]);
+      final sales = await db.rawQuery('''
+        SELECT id, fecha_venta, 
+        ((monto_total - IFNULL(abono_inicial, 0)) * (1 + (IFNULL(porcentaje_interes, 0) / 100.0))) + IFNULL(abono_inicial, 0) as monto_total
+        FROM ventas 
+        WHERE cliente_id = ? AND is_archived = 0
+      ''', [clientId]);
+      
       final payments = await db.rawQuery('''
         SELECT p.*, c.numero_cuota 
         FROM pagos p 
@@ -118,6 +134,14 @@ class ClientService {
         
         if (p['nota'] != null && p['nota'].toString().isNotEmpty) {
            detail = '${p['nota']} (${p['metodo_pago']})';
+           
+           // 🔥 FASE 3: Identificar de qué venta es el Abono Inicial
+           String notaLower = p['nota'].toString().toLowerCase();
+           if (notaLower.contains('abono inicial') || notaLower.contains('pago adelantado')) {
+             if (p['venta_id'] != null) {
+               detail += ' de Venta #${p['venta_id']}';
+             }
+           }
         } else if (p['numero_cuota'] != null) {
            detail += ' (Cuota ${p['numero_cuota']} de Venta #${p['venta_id']})';
         } else if (p['cuota_id'] != null) {
@@ -175,13 +199,36 @@ class ClientService {
   Future<void> recalculateClientDebt(int clientId) async {
     try {
       final db = await dbHelper.database;
-      final debtsRows = await db.rawQuery('SELECT SUM(monto_total - monto_pagado) as debt FROM ventas WHERE cliente_id = ? AND estado_pago != ? AND is_archived = 0', [clientId, 'pagado']);
+      final debtsRows = await db.rawQuery('''
+        SELECT SUM(
+          ((monto_total - IFNULL(abono_inicial, 0)) * (1 + (IFNULL(porcentaje_interes, 0) / 100.0))) + IFNULL(abono_inicial, 0) - monto_pagado
+        ) as debt 
+        FROM ventas 
+        WHERE cliente_id = ? AND estado_pago != ? AND is_archived = 0
+      ''', [clientId, 'pagado']);
       double totalDeuda = 0.0;
       if (debtsRows.isNotEmpty && debtsRows.first['debt'] != null) {
         totalDeuda = (debtsRows.first['debt'] as num).toDouble();
       }
       if (totalDeuda < 0.02) totalDeuda = 0.0;
       await _repository.updateClient(clientId, {'deuda_total': totalDeuda});
+    } catch (e) {
+      // Ignorar en caso de error
+    }
+  }
+
+  Future<void> recalculateClientDeliveries(int clientId) async {
+    try {
+      final db = await dbHelper.database;
+      final result = await db.rawQuery(
+        'SELECT COUNT(*) as pendientes FROM ventas WHERE cliente_id = ? AND estado_entrega != ? AND is_archived = 0',
+        [clientId, 'entregado']
+      );
+      int pendientes = 0;
+      if (result.isNotEmpty && result.first['pendientes'] != null) {
+        pendientes = result.first['pendientes'] as int;
+      }
+      await _repository.updateClient(clientId, {'entregas_pendientes': pendientes});
     } catch (e) {
       // Ignorar en caso de error
     }
@@ -268,6 +315,23 @@ class ClientService {
               
               await txn.update('cuotas', {'monto_pagado': newPagadoCents / 100.0, 'estado': cStatus}, where: 'id = ?', whereArgs: [cId]);
               await txn.insert('pagos', {'negocio_id': negocioId, 'creado_por_usuario_id': usuarioId, 'cliente_id': clientId, 'venta_id': vId, 'cuota_id': cId, 'monto': abonoCents / 100.0, 'metodo_pago': method, 'fecha_pago': DateTime.now().toIso8601String()});
+
+              if (cStatus == 'pagado') {
+                 final cRows = await txn.query('clientes', columns: ['nombre_completo'], where: 'id = ?', whereArgs: [clientId], limit: 1);
+                 String cName = cRows.isNotEmpty ? cRows.first['nombre_completo'] as String : "Cliente";
+                 await txn.insert('notificaciones', {
+                    'user_id': usuarioId,
+                    'negocio_id': negocioId,
+                    'titulo': "Cuota Pagada",
+                    'mensaje': "El cliente $cName acaba de cancelar la cuota.",
+                    'tipo': 'exito',
+                    'prioridad': 'Media',
+                    'leida': 0,
+                    'objeto_relacionado_tipo': 'cuota',
+                    'objeto_relacionado_id': cId,
+                    'fecha_creacion': DateTime.now().toIso8601String()
+                 });
+              }
            }
         }
 
@@ -281,7 +345,12 @@ class ClientService {
         for (var vRow in ventasSinCuotas) {
            if (remainingCents <= 0) break;
            int vId = vRow['id'] as int;
-           int vMontoCents = ((vRow['monto_total'] as num).toDouble() * 100).round();
+           double vMontoTotal = (vRow['monto_total'] as num).toDouble();
+           double abonoInicial = ((vRow['abono_inicial'] as num?) ?? 0.0).toDouble();
+           double interes = ((vRow['porcentaje_interes'] as num?) ?? 0.0).toDouble();
+           double vMontoConInteres = (vMontoTotal - abonoInicial) * (1 + (interes / 100)) + abonoInicial;
+           
+           int vMontoCents = (vMontoConInteres * 100).round();
            int vPagadoCents = ((vRow['monto_pagado'] as num).toDouble() * 100).round();
            int vDeudaCents = vMontoCents - vPagadoCents;
            
@@ -301,8 +370,13 @@ class ClientService {
            int vId = vRow['id'] as int;
            final vCuotas = await txn.query('cuotas', where: 'venta_id = ?', whereArgs: [vId]);
            if (vCuotas.isNotEmpty) {
-              int vTotalCents = ((vRow['monto_total'] as num).toDouble() * 100).round();
-              int vNewPagadoCents = 0;
+              double vMontoTotal = (vRow['monto_total'] as num).toDouble();
+              double abonoInicial = ((vRow['abono_inicial'] as num?) ?? 0.0).toDouble();
+              double interes = ((vRow['porcentaje_interes'] as num?) ?? 0.0).toDouble();
+              double vMontoConInteres = (vMontoTotal - abonoInicial) * (1 + (interes / 100)) + abonoInicial;
+              
+              int vTotalCents = (vMontoConInteres * 100).round();
+              int vNewPagadoCents = (abonoInicial * 100).round();
               for (var c in vCuotas) { vNewPagadoCents += ((c['monto_pagado'] as num).toDouble() * 100).round(); }
               String vStatus = (vTotalCents - vNewPagadoCents) <= 10 ? 'pagado' : 'parcial';
               await txn.update('ventas', {'monto_pagado': vNewPagadoCents / 100.0, 'estado_pago': vStatus}, where: 'id = ?', whereArgs: [vId]);

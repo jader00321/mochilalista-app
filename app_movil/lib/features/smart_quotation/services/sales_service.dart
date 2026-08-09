@@ -30,6 +30,8 @@ class SalesService {
             'monto_total': saleData['monto_total'],
             'monto_pagado': saleData['monto_pagado'],
             'descuento_aplicado': saleData['descuento_aplicado'] ?? 0.0,
+            'abono_inicial': saleData['abono_inicial'] ?? 0.0,
+            'porcentaje_interes': saleData['porcentaje_interes'] ?? 0.0,
             'fecha_venta': DateTime.now().toIso8601String(),
             'is_archived': 0,
           });
@@ -60,6 +62,7 @@ class SalesService {
                   'specific_name': e['specific_name'],
                   'unidad_medida': e['sales_unit'],
                   'original_text': e['original_text'],
+                  'image_url': e['image_url'],
                   'is_manual_price': e['is_manual_price'],
                 },
               )
@@ -73,7 +76,7 @@ class SalesService {
 
           final presCheck = await txn.query(
             'presentaciones_producto',
-            columns: ['stock_actual'],
+            columns: ['stock_actual', 'stock_alerta'],
             where: 'id = ?',
             whereArgs: [presId],
           );
@@ -81,14 +84,44 @@ class SalesService {
             throw Exception("Producto no encontrado en inventario.");
           }
           int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
+          int stockAlerta = (presCheck.first['stock_alerta'] as int?) ?? 5;
+          
           if (currentStock < quantity) {
             throw Exception("Stock insuficiente para uno de los productos.");
           }
+          
+          int newStock = currentStock - quantity;
 
           await txn.rawUpdate(
-            'UPDATE presentaciones_producto SET stock_actual = stock_actual - ? WHERE id = ?',
-            [quantity, presId],
+            'UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?',
+            [newStock, presId],
           );
+          
+          if (newStock <= stockAlerta && item['product_id'] != null) {
+             String prodName = item['nombre_producto'] ?? item['product_name'] ?? 'Producto';
+             final existNotif = await txn.query('notificaciones', where: 'negocio_id = ? AND objeto_relacionado_tipo = ? AND objeto_relacionado_id = ?', whereArgs: [negocioId, 'producto', item['product_id']]);
+             if (existNotif.isNotEmpty) {
+                 await txn.update('notificaciones', {
+                     'titulo': '⚠️ Stock Bajo: $prodName',
+                     'mensaje': 'Una venta reciente provocó que el stock cayera por debajo del nivel de alerta configurado. Toca para ver el estado actual y reabastecer.',
+                     'leida': 0,
+                     'fecha_creacion': DateTime.now().toIso8601String()
+                 }, where: 'id = ?', whereArgs: [existNotif.first['id']]);
+             } else {
+                 await txn.insert('notificaciones', {
+                     'user_id': usuarioId,
+                     'negocio_id': negocioId,
+                     'titulo': '⚠️ Stock Bajo: $prodName',
+                     'mensaje': 'Una venta reciente provocó que el stock cayera por debajo del nivel de alerta configurado. Toca para ver el estado actual y reabastecer.',
+                     'tipo': 'alerta',
+                     'prioridad': 'Alta',
+                     'leida': 0,
+                     'objeto_relacionado_tipo': 'producto',
+                     'objeto_relacionado_id': item['product_id'],
+                     'fecha_creacion': DateTime.now().toIso8601String()
+                 });
+             }
+          }
 
           double unitPrice =
               (item['unit_price'] ?? item['precio_unitario'] ?? 0.0).toDouble();
@@ -111,6 +144,7 @@ class SalesService {
             'unidad_medida':
                 item['unidad_medida'] ?? item['sales_unit'] ?? 'Unidad',
             'original_text': item['original_text'],
+            'image_url': item['image_url'],
             'is_manual_price': item['is_manual_price'] ?? 0,
           });
         }
@@ -118,81 +152,40 @@ class SalesService {
         // 🔥 FIX ÉPICO 1: Parseo de Montos Adelantados estricto
         double pagadoRaw =
             (saleData['monto_pagado'] as num?)?.toDouble() ?? 0.0;
-        int remainingCents = (pagadoRaw * 100).round();
 
         List<dynamic> cuotas = saleData['cuotas'] ?? [];
 
+        // 🔥 FIX ÉPICO 2: Separación de Abono Inicial y Cuotas
+        // Las cuotas recibidas de la UI ya tienen el abono descontado del saldo total.
+        // No debemos volver a restar el abono de las cuotas.
         if (cuotas.isNotEmpty) {
           for (var c in cuotas) {
-            int cMontoCents = ((c['monto'] as num).toDouble() * 100).round();
-            int abonoCents = 0;
-            if (remainingCents > 0) {
-              abonoCents = remainingCents >= cMontoCents
-                  ? cMontoCents
-                  : remainingCents;
-              remainingCents -= abonoCents;
-            }
-
-            double cMontoPagado = abonoCents / 100.0;
-            String estado = (cMontoCents - abonoCents) <= 10
-                ? 'pagado'
-                : (abonoCents > 0 ? 'parcial' : 'pendiente');
-
-            int cId = await txn.insert('cuotas', {
+            await txn.insert('cuotas', {
               'venta_id': saleId,
               'numero_cuota': c['numero_cuota'],
               'monto': c['monto'],
-              'monto_pagado': cMontoPagado,
+              'monto_pagado': 0.0,
               'fecha_vencimiento': c['fecha_vencimiento'],
-              'estado': estado,
+              'estado': 'pendiente',
             });
+          }
+        }
 
-            if (abonoCents > 0) {
-              await txn.insert('pagos', {
-                'negocio_id': negocioId,
-                'creado_por_usuario_id': usuarioId,
-                'cliente_id': saleData['cliente_id'],
-                'venta_id': saleId,
-                'cuota_id': cId,
-                'monto': cMontoPagado,
-                'metodo_pago': saleData['metodo_pago'] != 'credito'
-                    ? saleData['metodo_pago']
-                    : 'efectivo',
-                'nota': 'Pago Adelantado',
-                'fecha_pago': DateTime.now().toIso8601String(),
-              });
-            }
-          }
-
-          if (remainingCents > 0) {
-            await txn.insert('pagos', {
-              'negocio_id': negocioId,
-              'creado_por_usuario_id': usuarioId,
-              'cliente_id': saleData['cliente_id'],
-              'venta_id': saleId,
-              'monto': remainingCents / 100.0,
-              'metodo_pago': saleData['metodo_pago'] != 'credito'
-                  ? saleData['metodo_pago']
-                  : 'efectivo',
-              'nota': 'Pago Adelantado (Excedente)',
-              'fecha_pago': DateTime.now().toIso8601String(),
-            });
-          }
-        } else {
-          if (pagadoRaw > 0) {
-            await txn.insert('pagos', {
-              'negocio_id': negocioId,
-              'creado_por_usuario_id': usuarioId,
-              'cliente_id': saleData['cliente_id'],
-              'venta_id': saleId,
-              'monto': pagadoRaw,
-              'metodo_pago': saleData['metodo_pago'] != 'credito'
-                  ? saleData['metodo_pago']
-                  : 'efectivo',
-              'nota': 'Pago Adelantado',
-              'fecha_pago': DateTime.now().toIso8601String(),
-            });
-          }
+        // El Abono Inicial o Pago Adelantado se registra como un único pago, 
+        // desvinculado de las cuotas.
+        if (pagadoRaw > 0) {
+          await txn.insert('pagos', {
+            'negocio_id': negocioId,
+            'creado_por_usuario_id': usuarioId,
+            'cliente_id': saleData['cliente_id'],
+            'venta_id': saleId,
+            'monto': pagadoRaw,
+            'metodo_pago': saleData['metodo_pago'] != 'credito'
+                ? saleData['metodo_pago']
+                : 'efectivo', // El abono inicial suele ser en efectivo por defecto
+            'nota': cuotas.isNotEmpty ? 'Abono Inicial' : 'Pago Adelantado',
+            'fecha_pago': DateTime.now().toIso8601String(),
+          });
         }
 
         if (saleData['cotizacion_id'] != null) {
@@ -309,6 +302,13 @@ class SalesService {
   Future<String> updateDeliveryStatus(int saleId, String newStatus) async {
     try {
       await _repository.updateSaleField(saleId, {'estado_entrega': newStatus});
+      
+      final saleRows = await _repository.getSaleByIdRaw(saleId);
+      if (saleRows.isNotEmpty && saleRows.first['cliente_id'] != null) {
+        final clientService = ClientService();
+        await clientService.recalculateClientDeliveries(saleRows.first['cliente_id'] as int);
+      }
+      
       return newStatus;
     } catch (e) {
       throw Exception("Error actualizando logística: $e");
@@ -360,6 +360,7 @@ class SalesService {
                 'specific_name': e['specific_name'],
                 'sales_unit': e['unidad_medida'],
                 'original_text': e['original_text'],
+                'image_url': e['image_url'],
                 'is_manual_price': e['is_manual_price'] == 1,
               },
             )
@@ -388,6 +389,26 @@ class SalesService {
       return saleMap;
     } catch (e) {
       throw Exception("Error al obtener detalle de venta local: $e");
+    }
+  }
+
+  Future<Map<String, dynamic>?> getCuotaConCliente(int cuotaId) async {
+    try {
+      final db = await dbHelper.database;
+      final rows = await db.rawQuery('''
+        SELECT c.*, v.cliente_id, cl.nombre_completo as cliente_nombre, cl.telefono as cliente_telefono 
+        FROM cuotas c
+        INNER JOIN ventas v ON c.venta_id = v.id
+        LEFT JOIN clientes cl ON v.cliente_id = cl.id
+        WHERE c.id = ?
+      ''', [cuotaId]);
+
+      if (rows.isNotEmpty) {
+        return Map<String, dynamic>.from(rows.first);
+      }
+      return null;
+    } catch (e) {
+      throw Exception("Error al obtener cuota local: $e");
     }
   }
 }

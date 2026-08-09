@@ -131,7 +131,7 @@ class _CatalogFilterDrawerState extends State<CatalogFilterDrawer> {
                       ),
                       Switch.adaptive(
                         value: _onlyOffers,
-                        activeColor: isDark ? Colors.red[400] : Colors.red,
+                        activeTrackColor: isDark ? Colors.red[400] : Colors.red,
                         onChanged: (v) => setState(() => _onlyOffers = v),
                       ),
                     ],
@@ -147,7 +147,7 @@ class _CatalogFilterDrawerState extends State<CatalogFilterDrawer> {
                       Switch.adaptive(
                         value: _filterByPrice,
                         onChanged: (v) => setState(() => _filterByPrice = v),
-                        activeColor: isDark ? Colors.blue[300] : theme.primaryColor,
+                        activeTrackColor: isDark ? Colors.blue[300] : theme.primaryColor,
                       )
                     ],
                   ),

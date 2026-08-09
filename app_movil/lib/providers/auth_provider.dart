@@ -153,6 +153,9 @@ class AuthProvider with ChangeNotifier {
 
   Future<bool> verifyPin(int userId, String enteredPin) async {
     final correctPin = await _secureStorage.read(key: 'pin_$userId');
+    if (correctPin == null || correctPin.isEmpty) {
+      return enteredPin.isEmpty;
+    }
     return correctPin == enteredPin;
   }
 
@@ -214,7 +217,14 @@ class AuthProvider with ChangeNotifier {
       bool isCorrect = await verifyPin(_activeUser!.id, currentPin);
       if (!isCorrect) throw Exception("El PIN actual es incorrecto.");
       
-      await _secureStorage.write(key: 'pin_${_activeUser!.id}', value: newPin);
+      if (newPin.isEmpty) {
+        await _secureStorage.delete(key: 'pin_${_activeUser!.id}');
+        _hasPinCache = false;
+      } else {
+        await _secureStorage.write(key: 'pin_${_activeUser!.id}', value: newPin);
+        _hasPinCache = true;
+      }
+      notifyListeners();
       return true;
     } catch (e) {
       _errorMessage = e.toString().replaceAll("Exception:", "").trim();

@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 
 import '../../providers/quick_sale_provider.dart';
 import '../../providers/sale_provider.dart';
+import '../../../../providers/inventory_provider.dart';
+import '../../../../providers/catalog_provider.dart';
+import '../../../../providers/notification_provider.dart';
 import '../../../../widgets/custom_snackbar.dart';
 
 class QuickCheckoutModal extends StatefulWidget {
@@ -68,8 +71,17 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
       final detalleVenta = quickProv.cartItems.map((item) {
         return {
           "presentation_id": item.presentationId,
+          "product_id": item.productId,
           "quantity": quickProv.getQuantity(item.presentationId),
-          "unit_price": quickProv.getEffectivePrice(item.presentationId)
+          "unit_price": quickProv.getEffectivePrice(item.presentationId),
+          "original_unit_price": item.price,
+          "nombre_producto": item.productName,
+          "product_name": item.productName,
+          "brand_name": item.brand,
+          "specific_name": item.specificName,
+          "unidad_medida": item.unit,
+          "image_url": item.imageUrl,
+          "is_manual_price": quickProv.getEffectivePrice(item.presentationId) != item.price ? 1 : 0,
         };
       }).toList();
 
@@ -99,6 +111,14 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
 
         await Future.delayed(const Duration(milliseconds: 1500));
         quickProv.clearCart();
+        
+        if (!mounted) return;
+        try {
+          Provider.of<InventoryProvider>(context, listen: false).refreshAfterSale();
+          Provider.of<CatalogProvider>(context, listen: false).initCatalog();
+          Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+        } catch (_) {}
+
         if (mounted) Navigator.pop(context, true); 
       } else {
         // Lanza el error capturado (ej. "Stock insuficiente para 'Cuaderno'")
@@ -226,25 +246,40 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
 
           Align(alignment: Alignment.centerLeft, child: Text("Método de Pago:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor))),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: availableMethods.map((m) {
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 2.8,
+            ),
+            itemCount: availableMethods.length,
+            itemBuilder: (ctx, index) {
+              final m = availableMethods[index];
               final isSelected = _paymentMethod.toLowerCase() == m.toLowerCase();
-              return ChoiceChip(
-                label: Text(m, style: const TextStyle(fontSize: 16)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                selected: isSelected,
-                onSelected: (val) => setState(() => _paymentMethod = m),
-                selectedColor: isDark ? Colors.pink.withValues(alpha: 0.2) : Colors.pink[50],
-                backgroundColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
-                labelStyle: TextStyle(color: isSelected ? (isDark ? Colors.pink[300] : Colors.pink[800]) : textColor, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14), 
-                  side: BorderSide(color: isSelected ? (isDark ? Colors.pink.withValues(alpha: 0.5) : Colors.pink.shade200) : (isDark ? Colors.white10 : Colors.transparent), width: 1.5)
+              return GestureDetector(
+                onTap: () => setState(() => _paymentMethod = m),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isSelected ? (isDark ? Colors.pink.withValues(alpha: 0.15) : Colors.pink[50]) : (isDark ? const Color(0xFF14141C) : Colors.grey[50]),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: isSelected ? (isDark ? Colors.pink.withValues(alpha: 0.5) : Colors.pink.shade300) : (isDark ? Colors.white10 : Colors.grey.shade200), width: 1.5),
+                  ),
+                  child: Text(
+                    m,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: isSelected ? (isDark ? Colors.pink[200] : Colors.pink[800]) : textColor,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    ),
+                  ),
                 ),
               );
-            }).toList(),
+            },
           ),
 
           const SizedBox(height: 35),

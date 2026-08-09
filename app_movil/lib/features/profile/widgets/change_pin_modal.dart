@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../providers/auth_provider.dart';
 import '../../../../widgets/custom_snackbar.dart';
+import '../../../../services/local_notification_service.dart';
 
 class ChangePasswordModal extends StatefulWidget {
   const ChangePasswordModal({super.key});
@@ -46,6 +47,61 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
     }
   }
 
+  void _showSuccessDialogAndNotify(String newPin, int userId, int negocioId) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Notificación segura (PIN enmascarado)
+    final String maskedPin = newPin.replaceRange(0, 2, "**");
+    LocalNotificationService().showAndSaveNotification(
+      userId: userId,
+      negocioId: negocioId,
+      title: "Seguridad Actualizada",
+      body: "Tu nuevo PIN de seguridad termina en $maskedPin. No lo compartas.",
+      type: "info",
+    );
+
+    // Diálogo temporal explícito
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 28),
+            SizedBox(width: 10),
+            Text("Cambio Exitoso", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Tu nuevo PIN de seguridad es:", style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 15),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withValues(alpha: 0.3))),
+              child: Text(newPin, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 10, color: Colors.blue)),
+            ),
+            const SizedBox(height: 15),
+            const Text("Memorízalo bien. Si lo olvidas, tendrás que reinstalar la app o contactar a soporte.", style: TextStyle(color: Colors.redAccent, fontSize: 13, fontStyle: FontStyle.italic), textAlign: TextAlign.center),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx); // Cierra diálogo
+              Navigator.pop(context); // Cierra modal principal
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            child: const Text("Entendido", style: TextStyle(fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
@@ -73,7 +129,7 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
             Text(_hasPinActive ? "Seguridad de Cuenta" : "Crear PIN de Seguridad", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
             const SizedBox(height: 10),
             Text(
-              _hasPinActive ? "Actualiza o desactiva tu PIN actual de 4 dígitos." : "Crea un PIN de 4 dígitos para proteger tu negocio.", 
+              _hasPinActive ? "Actualiza tu PIN actual o elimínalo por completo para dejar tu cuenta sin protección." : "Crea un PIN de 4 dígitos para proteger tu negocio.", 
               style: TextStyle(color: Colors.grey[500])
             ),
             const SizedBox(height: 25),
@@ -150,7 +206,7 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
                       child: TextButton(
                         onPressed: auth.isLoading ? null : () async {
                           if (_currentCtrl.text.isEmpty) {
-                            setState(() => _localError = "Ingresa tu PIN actual para desactivar la seguridad.");
+                            setState(() => _localError = "Ingresa tu PIN actual para eliminar la seguridad.");
                             return;
                           }
                           setState(() => _localError = ''); 
@@ -161,16 +217,16 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
                           }
                           // Si es válido, enviamos un PIN vacío o desencadenamos la eliminación
                           final success = await auth.changePassword(_currentCtrl.text, "");
-                          if (mounted && success) {
+                          if (context.mounted && success) {
+                            CustomSnackBar.show(context, message: "PIN de seguridad eliminado correctamente. Tu cuenta ya no tiene bloqueo.", isError: false);
                             Navigator.pop(context);
-                            CustomSnackBar.show(context, message: "Seguridad desactivada. Acceso directo habilitado.", isError: false);
                           }
                         },
                         style: TextButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.red.shade200)),
                           foregroundColor: Colors.red
                         ),
-                        child: const Text("Desactivar PIN", style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: const Text("Eliminar PIN", style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ),
@@ -198,15 +254,13 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
                           }
                           final success = await auth.changePassword(_currentCtrl.text, _newCtrl.text);
                           if (mounted && success) {
-                            Navigator.pop(context); 
-                            CustomSnackBar.show(context, message: "PIN de seguridad actualizado", isError: false);
+                            _showSuccessDialogAndNotify(_newCtrl.text, user.id, auth.activeBusinessId ?? 0);
                           }
                         } else {
                           // Lógica para Crear PIN por primera vez
                           final success = await auth.changePassword("", _newCtrl.text); // Asumimos string vacío como "sin pin"
                           if (mounted && success) {
-                            Navigator.pop(context); 
-                            CustomSnackBar.show(context, message: "Seguridad activada correctamente.", isError: false);
+                            _showSuccessDialogAndNotify(_newCtrl.text, user.id, auth.activeBusinessId ?? 0);
                           }
                         }
                       },

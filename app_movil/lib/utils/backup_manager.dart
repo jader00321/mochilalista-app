@@ -4,14 +4,11 @@ import 'package:sqflite/sqflite.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../database/local_db.dart'; 
 import '../utils/app_logger.dart';
-import 'google_auth_client.dart';
 
 class BackupManager {
   static const String _dbName = 'mochilalista.db'; 
@@ -31,6 +28,7 @@ class BackupManager {
       final dbFile = await _getDatabaseFile();
       if (!await dbFile.exists()) throw Exception("La base de datos aún no se ha creado.");
 
+      // ignore: deprecated_member_use
       await Share.shareXFiles(
         [XFile(dbFile.path)], 
         text: '📦 Backup Mochila Lista\nFecha: ${DateTime.now().toLocal().toString().split('.')[0]}\n\nGuarda este archivo (.db) en un lugar seguro para poder restaurarlo cuando lo necesites.'
@@ -78,37 +76,19 @@ class BackupManager {
     }
   }
 
-  static Future<bool> exportToGoogleDrive() async {
+  static Future<bool> exportToCloud() async {
     try {
       final dbFile = await _getDatabaseFile();
       if (!await dbFile.exists()) throw Exception("La base de datos no existe.");
 
-      final googleSignIn = GoogleSignIn(scopes: [drive.DriveApi.driveFileScope]);
-
-      if (await googleSignIn.isSignedIn()) {
-        await googleSignIn.disconnect();
-      }
-
-      final GoogleSignInAccount? account = await googleSignIn.signIn();
-      if (account == null) throw Exception("Inicio de sesión de Google cancelado.");
-
-      final authHeaders = await account.authHeaders;
-      final authenticateClient = GoogleAuthClient(authHeaders);
-      final driveApi = drive.DriveApi(authenticateClient);
-
-      final dateStr = DateTime.now().toLocal().toString().split('.')[0];
-      final driveFile = drive.File()
-        ..name = 'MochilaLista_Backup_$dateStr.db'
-        ..description = 'Respaldo automático/manual de la base de datos de Mochila Lista'
-        ..mimeType = 'application/octet-stream';
-
-      final media = drive.Media(dbFile.openRead(), dbFile.lengthSync());
-      await driveApi.files.create(driveFile, uploadMedia: media);
-
-      authenticateClient.close();
-      return true; 
+      // ignore: deprecated_member_use
+      await Share.shareXFiles(
+        [XFile(dbFile.path)], 
+        text: 'Backup Mochila Lista - ${DateTime.now().toLocal().toString().split('.')[0]}'
+      );
+      return true;
     } catch (e, stack) {
-      AppLogger.error('BackupManager.exportToGoogleDrive', e, stack);
+      AppLogger.error('BackupManager.exportToCloud', e, stack);
       throw Exception(e.toString().replaceAll("Exception:", "").trim());
     }
   }

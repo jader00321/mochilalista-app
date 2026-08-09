@@ -201,6 +201,13 @@ class CatalogProvider with ChangeNotifier {
       if (newItems != null) {
         if (newItems.length < _limit) _hasMoreData = false;
         _displayItems.addAll(newItems);
+        
+        // Re-ordenamiento local para ignorar símbolos y mayúsculas
+        _displayItems.sort((a, b) {
+          int cmp = _normalizeForSort(a.product.nombre).compareTo(_normalizeForSort(b.product.nombre));
+          return _isSortAscending ? cmp : -cmp;
+        });
+
         _page++; 
       }
     } catch (e) {
@@ -209,6 +216,11 @@ class CatalogProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  // Elimina símbolos al principio para un ordenamiento más natural (igual que InventoryProvider)
+  String _normalizeForSort(String text) {
+    return text.replaceAll(RegExp(r'^[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+'), '').toLowerCase();
   }
 
   void setSearchQuery(String query) {

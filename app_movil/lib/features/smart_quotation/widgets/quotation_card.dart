@@ -158,6 +158,46 @@ class QuotationCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                      
+                      if (quotation.institutionName != null && quotation.institutionName!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            children: [
+                              Icon(Icons.school, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  "${quotation.institutionName}${quotation.gradeLevel != null && quotation.gradeLevel!.isNotEmpty ? ' - ${quotation.gradeLevel}' : ''}",
+                                  style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                      if (validation != null && validation!.hasIssues)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            children: [
+                              if (validation!.stockWarnings.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _buildWarningTag("${validation!.stockWarnings.length} Stock", Colors.red),
+                                ),
+                              if (validation!.priceChanges.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _buildWarningTag("${validation!.priceChanges.length} Precio", Colors.orange),
+                                ),
+                              if (validation!.nameChanges.isNotEmpty)
+                                _buildWarningTag("${validation!.nameChanges.length} Nombre", Colors.indigo),
+                            ],
+                          ),
+                        ),
+                      
                       const SizedBox(height: 12),
                       Align(
                         alignment: Alignment.centerRight,
@@ -185,10 +225,15 @@ class QuotationCard extends StatelessWidget {
     IconData icon = Icons.check_circle;
     if (isCritical) {
       icon = Icons.error;
-    } else if (isWarning) icon = Icons.warning_amber;
-    else if (text == "Borrador") icon = Icons.edit_note;
-    else if (text.contains("Pendiente") || text.contains("Nuevo")) icon = Icons.access_time;
-    else if (text.contains("Plantilla")) icon = Icons.inventory_2;
+    } else if (isWarning) {
+      icon = Icons.warning_amber;
+    } else if (text == "Borrador") {
+      icon = Icons.edit_note;
+    } else if (text.contains("Pendiente") || text.contains("Nuevo")) {
+      icon = Icons.access_time;
+    } else if (text.contains("Plantilla")) {
+      icon = Icons.inventory_2;
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -213,6 +258,17 @@ class QuotationCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withValues(alpha: 0.5))),
       child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5)),
+    );
+  }
+
+  Widget _buildWarningTag(String text, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.warning, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+      ],
     );
   }
 }

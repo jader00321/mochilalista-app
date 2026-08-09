@@ -7,17 +7,16 @@ import '../providers/quick_sale_provider.dart';
 import '../../../../providers/inventory_provider.dart';
 import '../../smart_quotation/providers/workbench_provider.dart';
 
-import '../../../widgets/universal_image.dart';
 import '../../../widgets/full_screen_image_viewer.dart';
 
 import '../widgets/history/detail_widgets/detail_header_card.dart';
 import '../widgets/history/detail_widgets/detail_client_card.dart';
 import '../widgets/history/detail_widgets/detail_notes_card.dart';
 import '../widgets/history/detail_widgets/detail_status_card.dart';
+import '../widgets/history/detail_widgets/sale_items_list.dart';
+import '../widgets/history/detail_widgets/sale_action_footer.dart';
 
 import 'quick_sale_screen.dart';
-import 'pdf_preview_screen.dart';   
-import 'whatsapp_preview_screen.dart'; 
 import '../../smart_quotation/screens/quotation_detail_screen.dart'; 
 import '../../smart_quotation/screens/manual_quotation_screen.dart'; 
 
@@ -449,7 +448,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     final origenVenta = _saleData!['origen_venta'];
     final styles = _getOrigenStyles(origenVenta, isDark);
     
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
+
     final dateFormat = DateFormat('dd/MM/yyyy - hh:mm a');
     final String dateString = _saleData!['fecha_venta'] != null ? dateFormat.format(DateTime.parse(_saleData!['fecha_venta'])) : "";
 
@@ -563,153 +562,25 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                     ),
                   ),
 
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("PRODUCTOS ENTREGADOS (${items.length})", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey, letterSpacing: 1)),
-                      const SizedBox(height: 16),
-                      ListView.separated(
-                        physics: const NeverScrollableScrollPhysics(), shrinkWrap: true, itemCount: items.length, separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (ctx, i) {
-                          final item = items[i];
-                          final double unitPrice = (item['unit_price_applied'] ?? 0.0).toDouble();
-                          final double originalPrice = (item['original_unit_price'] ?? unitPrice).toDouble();
-                          final int qty = item['quantity'] ?? 1;
-                          final double subtotal = unitPrice * qty;
-                          final String imgUrl = item['image_url'] ?? "";
-                          final bool hadDiscount = originalPrice > unitPrice + 0.01;
-
-                          bool isStructured = item['product_name'] != null && item['product_name'].toString().isNotEmpty;
-
-                          return Container(
-                            padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200)),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 55, height: 55,
-                                  decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.grey[100], border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade300), borderRadius: BorderRadius.circular(12)), 
-                                  child: ClipRRect(borderRadius: BorderRadius.circular(12), child: imgUrl.isNotEmpty ? UniversalImage(path: imgUrl, fit: BoxFit.cover) : Icon(Icons.inventory_2, color: isDark ? Colors.grey[600] : Colors.grey, size: 30))
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start, 
-                                    children: [
-                                      if (isStructured) ...[
-                                        if (item['brand_name'] != null && item['brand_name'].toString().isNotEmpty)
-                                           Text(item['brand_name'].toString().toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: isDark ? Colors.indigo[300] : Colors.indigo[600], letterSpacing: 0.5)),
-                                        
-                                        Text(item['product_name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, height: 1.2, color: textColor), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                        
-                                        if (item['specific_name'] != null && item['specific_name'].toString().isNotEmpty)
-                                           Padding(
-                                             padding: const EdgeInsets.only(top: 2),
-                                             child: Text(item['specific_name'], style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: isDark ? Colors.teal[300] : Colors.teal[700]), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                           ),
-                                      ] else ...[
-                                        Text(item['product_name_snapshot'] ?? 'Producto', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, height: 1.2, color: textColor), maxLines: 2, overflow: TextOverflow.ellipsis), 
-                                      ],
-                                      
-                                      const SizedBox(height: 10), 
-                                      Wrap(
-                                        crossAxisAlignment: WrapCrossAlignment.center,
-                                        spacing: 10,
-                                        runSpacing: 8,
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.grey[200], borderRadius: BorderRadius.circular(6)),
-                                            child: Text("Cant: $qty", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: textColor))
-                                          ),
-                                          if (isStructured && item['sales_unit'] != null)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
-                                              child: Text(item['sales_unit'].toString().toUpperCase(), style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontSize: 10, fontWeight: FontWeight.bold)),
-                                            ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 10),
-                                      Wrap(
-                                        spacing: 8,
-                                        crossAxisAlignment: WrapCrossAlignment.center,
-                                        children: [
-                                          if (hadDiscount) Text(currency.format(originalPrice), style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, decoration: TextDecoration.lineThrough, fontSize: 12, fontWeight: FontWeight.bold)),
-                                          Text(currency.format(unitPrice), style: TextStyle(color: hadDiscount ? (isDark ? Colors.green[400] : Colors.green[700]) : (isDark ? Colors.grey[400] : Colors.grey[700]), fontSize: 13, fontWeight: hadDiscount ? FontWeight.bold : FontWeight.normal)),
-                                        ],
-                                      )
-                                    ]
-                                  )
-                                ),
-                                const SizedBox(width: 8),
-                                SizedBox(
-                                  width: 85,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        alignment: Alignment.centerRight,
-                                        child: Text(currency.format(subtotal), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: textColor)),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              ],
-                            ),
-                          );
-                        },
-                      )
-                    ],
-                  ),
+                SaleItemsList(
+                  items: items,
+                  isDark: isDark,
+                  cardColor: cardColor,
+                  textColor: textColor,
                 ),
                 const SizedBox(height: 100),
               ],
             ),
           ),
 
-          bottomNavigationBar: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            decoration: BoxDecoration(
-              color: cardColor,
-              boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -10))],
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28))
-            ),
-            child: SafeArea( 
-              child: Row(
-                children: [
-                  Expanded(child: _buildIconButton(Icons.picture_as_pdf, isDark ? Colors.red[400]! : Colors.red[700]!, "PDF", isDark, () => Navigator.push(context, MaterialPageRoute(builder: (_) => PdfPreviewScreen(quotationId: cotizacionId, saleId: widget.saleId))))),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildIconButton(Icons.chat, isDark ? Colors.green[400]! : Colors.green[600]!, "WhatsApp", isDark, () => Navigator.push(context, MaterialPageRoute(builder: (_) => WhatsAppPreviewScreen(quotationId: cotizacionId, saleId: widget.saleId))))),
-                  const SizedBox(width: 16),
-                  
-                  if (isQuickSale)
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _handleSellAgainQuickSale(isDark),
-                        icon: const Icon(Icons.refresh, size: 24),
-                        label: const Text("Volver a Vender", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18), backgroundColor: isDark ? Colors.pink[400] : Colors.pinkAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                      ),
-                    )
-                  else if (cotizacionId > 0)
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _showDuplicateOptionsModal(cotizacionId, isDark),
-                        icon: const Icon(Icons.content_copy, size: 24),
-                        label: const Text("Opciones", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18), backgroundColor: isDark ? Colors.blue[400] : Colors.blue[800], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                      ),
-                    )
-                ],
-              ),
-            ),
+          bottomNavigationBar: SaleActionFooter(
+            isDark: isDark,
+            cardColor: cardColor,
+            cotizacionId: cotizacionId,
+            saleId: widget.saleId,
+            isQuickSale: isQuickSale,
+            onSellAgainQuickSale: () => _handleSellAgainQuickSale(isDark),
+            onDuplicateOptions: () => _showDuplicateOptionsModal(cotizacionId, isDark),
           ),
         ),
 
@@ -728,21 +599,6 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
             ),
           )
       ],
-    );
-  }
-
-  Widget _buildIconButton(IconData icon, Color color, String label, bool isDark, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(16)),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [Icon(icon, color: color, size: 26)],
-        ),
-      ),
     );
   }
 }

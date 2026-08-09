@@ -33,16 +33,26 @@ class _DashboardHeaderState extends State<DashboardHeader> {
 
   Future<void> _loadData({bool forceRefresh = false}) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    
+    // Si es un refresh manual, await the auth state. Si no, let it run non-blocking.
     if (forceRefresh) {
-      // 🔥 CORRECCIÓN: checkInitialState
       await auth.checkInitialState();
     }
     
     if (auth.isAuthenticated && auth.hasActiveContext) {
-      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications(); 
-      Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
+      // Carga asíncrona sin bloquear la UI (staggered)
+      Future.microtask(() {
+        if (mounted) Provider.of<NotificationProvider>(context, listen: false).fetchNotifications(); 
+      });
+      
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
+      });
+      
       if (!auth.isCommunityClient) {
-        Provider.of<SaleProvider>(context, listen: false).loadSalesHistory();
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) Provider.of<SaleProvider>(context, listen: false).loadSalesHistory();
+        });
       }
     }
   }
@@ -60,10 +70,10 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     final bool isGuest = !auth.hasActiveContext;
 
     final pendingQuotes = (auth.isAuthenticated && !isGuest) ? workbench.inProcessList.length : 0;
-    final userName = auth.userName.split(' ')[0]; 
+    final userName = auth.userName; 
     
-    // 🔥 CORRECCIÓN: Como es offline, si no es invitado, siempre es el dueño
-    final String displayRole = isGuest ? "MODO INVITADO" : "DUEÑO DE NEGOCIO";
+    // 🔥 CORRECCIÓN: Mostrar solo etiqueta de invitado si aplica
+    final String displayRole = "MODO INVITADO";
 
     final todaySales = (auth.isAuthenticated && !isGuest) ? salesProv.todaySalesTotal : 0.0;
 
@@ -119,24 +129,26 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                         Flexible(
                           child: Text(
                             userName,
-                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5),
-                            maxLines: 1,
+                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5, height: 1.1),
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isGuest ? Colors.orange.withValues(alpha: 0.8) : Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.2))
-                          ),
-                          child: Text(
-                            displayRole, 
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)
-                          ),
-                        )
+                        if (isGuest) ...[
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.2))
+                            ),
+                            child: Text(
+                              displayRole, 
+                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)
+                            ),
+                          )
+                        ]
                       ],
                     ),
                     
@@ -193,7 +205,14 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       if (auth.isAuthenticated) {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()))
                           .then((_) {
-                            if (mounted) _loadData(forceRefresh: true);
+                            // Delay aumentado a 800ms para permitir que termine la animación
+                            Future.delayed(const Duration(milliseconds: 800), () {
+                              if (mounted) {
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  if (mounted) _loadData(forceRefresh: true);
+                                });
+                              }
+                            });
                           });
                       } else {
                         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()));

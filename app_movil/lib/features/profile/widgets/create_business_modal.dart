@@ -45,6 +45,7 @@ class _CreateBusinessModalState extends State<CreateBusinessModal> {
     if (!isGpsReady) return; // Si no hay GPS, se detiene aquí (el modal ya se mostró)
 
     // PASO 2: Si todo está bien, abre el mapa
+    if (!mounted) return;
     final LatLng? result = await Navigator.push(context, MaterialPageRoute(builder: (_) => MapPickerScreen(initialLat: _lat, initialLng: _lng)));
     if (result != null) {
       setState(() { _lat = result.latitude; _lng = result.longitude; });
@@ -77,7 +78,13 @@ class _CreateBusinessModalState extends State<CreateBusinessModal> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(child: Text("Registrar Nuevo Negocio", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text("Registrar Nuevo Negocio", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))
+                    )
+                  ),
                   if (!widget.isMandatory)
                     IconButton(icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.black87), onPressed: () => Navigator.pop(context))
                 ],
@@ -134,14 +141,14 @@ class _CreateBusinessModalState extends State<CreateBusinessModal> {
                       title: const Text("Mostrar mi RUC", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                       subtitle: const Text("Los clientes podrán ver tu número de RUC.", style: TextStyle(fontSize: 12)),
                       value: _showRuc,
-                      activeColor: Colors.blue,
+                      activeThumbColor: Colors.blue,
                       onChanged: (val) => setState(() => _showRuc = val),
                     ),
                     SwitchListTile(
                       title: const Text("Mostrar mi Dirección", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                       subtitle: const Text("Los clientes podrán ver tu mapa y referencia.", style: TextStyle(fontSize: 12)),
                       value: _showAddress,
-                      activeColor: Colors.blue,
+                      activeThumbColor: Colors.blue,
                       onChanged: (val) => setState(() => _showAddress = val),
                     ),
                   ],
@@ -167,7 +174,7 @@ class _CreateBusinessModalState extends State<CreateBusinessModal> {
                       _showRuc
                     );
                     
-                    if (mounted) {
+                    if (context.mounted) {
                         if(success) {
                             Navigator.pushAndRemoveUntil(
                               context, 
@@ -183,7 +190,10 @@ class _CreateBusinessModalState extends State<CreateBusinessModal> {
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   child: auth.isLoading 
                       ? const CircularProgressIndicator(color: Colors.white) 
-                      : const Text("CREAR NEGOCIO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
+                      : const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text("CREAR NEGOCIO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1))
+                        ),
                 ),
               )
             ],

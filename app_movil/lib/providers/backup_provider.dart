@@ -87,23 +87,27 @@ class BackupProvider with ChangeNotifier {
   }
 
   Future<bool> backupToDownloads() async {
+    _statusMessage = "Guardando en Descargas...";
     _setLoading(true);
     try {
       bool success = await BackupManager.exportToDownloads();
+      if (success) await Future.delayed(const Duration(seconds: 1)); // UX Delay
       return success;
     } catch (e) {
       _errorMessage = e.toString();
       return false;
     } finally {
       _setLoading(false);
+      _statusMessage = "";
     }
   }
 
-  Future<bool> backupToGoogleDrive() async {
-    _statusMessage = "Autenticando con Google Drive...";
+  Future<bool> backupToCloud() async {
+    _statusMessage = "Preparando archivo para la Nube...";
     _setLoading(true);
     try {
-      bool success = await BackupManager.exportToGoogleDrive();
+      bool success = await BackupManager.exportToCloud();
+      if (success) await Future.delayed(const Duration(milliseconds: 800)); // UX Delay
       return success;
     } catch (e) {
       _errorMessage = e.toString();
@@ -115,15 +119,22 @@ class BackupProvider with ChangeNotifier {
   }
 
   Future<bool> restoreDatabase() async {
+    _statusMessage = "Inyectando datos en la base de datos...";
     _setLoading(true);
     try {
       bool success = await BackupManager.restoreBackup();
+      if (success) {
+        _statusMessage = "¡Datos Restaurados con Éxito!";
+        notifyListeners();
+        await Future.delayed(const Duration(seconds: 2)); // UX Delay for animation to be seen
+      }
       return success;
     } catch (e) {
       _errorMessage = e.toString();
       return false;
     } finally {
       _setLoading(false);
+      _statusMessage = "";
     }
   }
 

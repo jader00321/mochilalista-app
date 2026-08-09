@@ -51,6 +51,7 @@ class ManualQuoteItemCard extends StatelessWidget {
     String originalName = item.fullName.trim(); 
     String currentBuiltName = item.displayNameClean.trim();
     bool isNameChanged = isEditing && 
+                          item.isOriginalItem &&
                           originalName.isNotEmpty && 
                           currentBuiltName.toLowerCase() != originalName.toLowerCase() &&
                           !originalName.toLowerCase().contains("nuevo ítem") &&

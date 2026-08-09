@@ -41,7 +41,34 @@ class NotificationProvider with ChangeNotifier {
         orderBy: 'fecha_creacion DESC'
       );
       
-      _notifications = rows.map((n) => NotificationModel.fromJson(n)).toList();
+      final pagadoRows = await db.query('cuotas', where: 'estado = ?', whereArgs: ['pagado'], columns: ['id']);
+      final paidCuotaIds = pagadoRows.map((r) => r['id'] as int).toSet();
+      
+      // Productos que ya tienen stock seguro: TODAS sus presentaciones activas
+      // deben tener stock_actual > stock_alerta para considerarse "resueltos"
+      final allPresRows = await db.rawQuery('''
+        SELECT producto_id, 
+               MIN(CASE WHEN stock_actual > COALESCE(stock_alerta, 5) THEN 1 ELSE 0 END) as all_healthy
+        FROM presentaciones_producto
+        WHERE activo = 1
+        GROUP BY producto_id
+        HAVING all_healthy = 1
+      ''');
+      final inStockProductIds = allPresRows.map((r) => r['producto_id'] as int).toSet();
+
+      _notifications = rows.map((n) {
+        final notif = NotificationModel.fromJson(n);
+        if (notif.objetoRelacionadoTipo == 'cuota' && notif.type == 'alerta') {
+          if (notif.objetoRelacionadoId != null && paidCuotaIds.contains(notif.objetoRelacionadoId)) {
+            notif.isResolved = true;
+          }
+        } else if (notif.objetoRelacionadoTipo == 'producto' && notif.type == 'alerta') {
+          if (notif.objetoRelacionadoId != null && inStockProductIds.contains(notif.objetoRelacionadoId)) {
+            notif.isResolved = true;
+          }
+        }
+        return notif;
+      }).toList();
     } catch (e) {
       debugPrint("Error fetching notifications offline: $e");
     } finally {
@@ -67,8 +94,14 @@ class NotificationProvider with ChangeNotifier {
 
       bool hasNew = false;
       for (var row in overdueRows) {
-        String title = "Cuota Vencida";
-        String content = "El cliente ${row['nombre_completo']} tiene la cuota #${row['numero_cuota']} vencida.";
+        final monto = (row['monto'] as num?)?.toDouble() ?? 0;
+        final montoPagado = (row['monto_pagado'] as num?)?.toDouble() ?? 0;
+        final pendiente = monto - montoPagado;
+        final fechaVenc = DateTime.tryParse(row['fecha_vencimiento']?.toString() ?? '');
+        final diasAtraso = fechaVenc != null ? DateTime.now().difference(fechaVenc).inDays : 0;
+        
+        String title = "💰 Cuota Vencida - ${row['nombre_completo']}";
+        String content = "La cuota #${row['numero_cuota']} tiene S/ ${pendiente.toStringAsFixed(2)} pendiente y lleva $diasAtraso día${diasAtraso != 1 ? 's' : ''} de atraso. Toca para ver detalles.";
         
         final existing = await db.query('notificaciones', 
           where: 'negocio_id = ? AND objeto_relacionado_tipo = ? AND objeto_relacionado_id = ? AND tipo = ?',
@@ -155,6 +188,28 @@ class NotificationProvider with ChangeNotifier {
         notifyListeners();
         debugPrint("Error borrando notificación: $e");
       }
+    }
+  }
+
+  Future<void> deleteMultiple(List<int> ids) async {
+    if (ids.isEmpty) return;
+    
+    // Actualización Optimista
+    final removed = _notifications.where((n) => ids.contains(n.id)).toList();
+    _notifications.removeWhere((n) => ids.contains(n.id));
+    notifyListeners();
+
+    try {
+      final db = await dbHelper.database;
+      final placeholders = List.filled(ids.length, '?').join(',');
+      await db.delete('notificaciones', where: 'id IN ($placeholders)', whereArgs: ids);
+    } catch (e) {
+      // Reversión si SQLite falla
+      _notifications.addAll(removed);
+      // Re-ordenar por fecha_creacion descendente para mantener la consistencia
+      _notifications.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      notifyListeners();
+      debugPrint("Error borrando múltiples notificaciones: $e");
     }
   }
 }

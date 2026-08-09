@@ -41,6 +41,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
   Future<void> _loadClientData() async {
     setState(() => _isLoading = true);
     await Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
+    if (!mounted) return;
     await Provider.of<SaleProvider>(context, listen: false).loadSalesHistory(); 
     if (mounted) setState(() => _isLoading = false);
   }
@@ -133,9 +134,10 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
     int step = 1;
     bool isCancelled = false;
 
-    if (order.status == 'PENDING_APPROVAL') step = 1;
-    else if (order.status == 'PENDING') step = 2;
-    else if (order.status == 'READY') step = 3;
+    if (order.status == 'PENDING_APPROVAL') {
+      step = 1;
+    } else if (order.status == 'PENDING') { step = 2; }
+    else if (order.status == 'READY') { step = 3; }
     else if (order.status == 'DRAFT' || order.status == 'ARCHIVED') {
         step = 4;
         isCancelled = true;

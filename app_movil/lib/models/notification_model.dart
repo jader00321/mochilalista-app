@@ -4,6 +4,7 @@ class NotificationModel {
   final String message;
   final String type;
   bool isRead;
+  bool isResolved;
   final DateTime createdAt;
   
   final String prioridad;
@@ -16,6 +17,7 @@ class NotificationModel {
     required this.message,
     required this.type,
     required this.isRead,
+    this.isResolved = false,
     required this.createdAt,
     required this.prioridad,
     this.objetoRelacionadoTipo,

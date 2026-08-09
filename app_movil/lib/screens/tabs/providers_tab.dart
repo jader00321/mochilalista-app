@@ -147,7 +147,7 @@ class _ProvidersTabState extends State<ProvidersTab> {
                 success = id != null;
               }
 
-              if (mounted) {
+              if (context.mounted) {
                 Navigator.pop(ctx);
                 if (success) {
                   CustomSnackBar.show(
@@ -199,7 +199,7 @@ class _ProvidersTabState extends State<ProvidersTab> {
     final provider = Provider.of<InventoryProvider>(context, listen: false);
     bool success = await provider.deleteProvider(id);
     
-    if (mounted) {
+    if (context.mounted) {
       if (success) {
         CustomSnackBar.show(context, message: "Proveedor eliminado correctamente", isError: false);
       } else {
@@ -322,7 +322,7 @@ class _ProvidersTabState extends State<ProvidersTab> {
                                       return;
                                     }
                                     await provider.updateProvider(p.id, p.nombreEmpresa, activo: val);
-                                    if(mounted) {
+                                    if(context.mounted) {
                                       CustomSnackBar.show(
                                         context, 
                                         message: val ? "Proveedor activado" : "Proveedor suspendido",

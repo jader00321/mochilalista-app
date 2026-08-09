@@ -59,6 +59,7 @@ class _EditBusinessModalState extends State<EditBusinessModal> {
     if (!isGpsReady) return; // Si no hay GPS, se detiene aquí
 
     // PASO 2: Si todo está bien, abre el mapa
+    if (!mounted) return;
     final LatLng? result = await Navigator.push(context, MaterialPageRoute(builder: (_) => MapPickerScreen(initialLat: _lat, initialLng: _lng)));
     if (result != null) {
       setState(() { _lat = result.latitude; _lng = result.longitude; });
@@ -148,14 +149,14 @@ class _EditBusinessModalState extends State<EditBusinessModal> {
                       title: const Text("Mostrar mi RUC", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                       subtitle: const Text("Los clientes podrán ver tu número de RUC.", style: TextStyle(fontSize: 12)),
                       value: _showRuc,
-                      activeColor: Colors.blue,
+                      activeThumbColor: Colors.blue,
                       onChanged: (val) => setState(() => _showRuc = val),
                     ),
                     SwitchListTile(
                       title: const Text("Mostrar mi Dirección", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                       subtitle: const Text("Los clientes podrán ver tu mapa y referencia.", style: TextStyle(fontSize: 12)),
                       value: _showAddress,
-                      activeColor: Colors.blue,
+                      activeThumbColor: Colors.blue,
                       onChanged: (val) => setState(() => _showAddress = val),
                     ),
                   ],
@@ -175,12 +176,13 @@ class _EditBusinessModalState extends State<EditBusinessModal> {
                       _lat, _lng, _showAddress, _showRuc
                     );
                     
-                    if (mounted) {
+                    if (context.mounted) {
                         if(success) {
                             if (widget.isMandatory) {
                                 // 🔥 CORRECCIÓN: Llamamos al método correcto del AuthProvider
                                 await auth.checkInitialState();
                             }
+                            if (!context.mounted) return;
                             Navigator.pop(context);
                             CustomSnackBar.show(context, message: "Negocio configurado con éxito", isError: false);
                         } else {

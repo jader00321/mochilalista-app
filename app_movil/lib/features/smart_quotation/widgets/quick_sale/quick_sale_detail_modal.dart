@@ -87,7 +87,10 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     double disc = double.tryParse(val) ?? 0.0;
     
     if (disc < 0) disc = 0;
-    if (disc > _systemPrice) disc = _systemPrice;
+    if (disc > _systemPrice) {
+      disc = _systemPrice;
+      _discountCtrl.text = _systemPrice.toStringAsFixed(2);
+    }
 
     double newPrice = _systemPrice - disc;
     _priceCtrl.text = newPrice.toStringAsFixed(2);
@@ -100,8 +103,15 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     _isSyncing = true;
     double price = double.tryParse(val) ?? _systemPrice;
     
-    if (price > _systemPrice) price = _systemPrice;
-
+    if (price < 0) {
+      price = 0;
+      _priceCtrl.text = "0.00";
+    }
+    if (price > _systemPrice) {
+      price = _systemPrice;
+      _priceCtrl.text = _systemPrice.toStringAsFixed(2);
+    }
+    
     double disc = _systemPrice - price;
     _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
     _isSyncing = false;
@@ -155,7 +165,19 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
   void _confirm() {
     int finalQty = int.tryParse(_qtyCtrl.text) ?? 1;
     double finalPrice = double.tryParse(_priceCtrl.text) ?? _systemPrice;
-    double? overridePrice = (finalPrice == _systemPrice) ? null : finalPrice;
+    
+    double? overridePrice;
+    if (!_isManualPrice) {
+      // FASE 3 FIX: Si el usuario apaga el toggle, forzamos el precio base original
+      // para sobrescribir cualquier precio de oferta (offerPrice) que tenga el producto.
+      overridePrice = _systemPrice;
+    } else {
+      // Si el toggle está encendido, usamos el precio modificado.
+      // Si por alguna razón es igual al _systemPrice, igual lo pasamos para ser consistentes,
+      // o podemos pasarlo como null si no hay diferencia, pero es más seguro pasar el valor.
+      overridePrice = finalPrice;
+    }
+    
     widget.onConfirm(_currentSelection, finalQty, overridePrice);
     Navigator.pop(context);
   }

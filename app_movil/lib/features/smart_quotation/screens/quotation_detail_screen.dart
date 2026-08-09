@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:io'; 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -20,11 +19,8 @@ import '../widgets/smart_update_modal.dart';
 import '../widgets/detalle/quote_detail_header.dart';        
 import '../widgets/detalle/quote_evidence_panel.dart';       
 import '../widgets/detalle/quote_item_list_row.dart';        
+import '../widgets/detalle/quotation_action_buttons.dart';
 
-import 'manual_quotation_screen.dart'; 
-import 'sales_checkout_screen.dart';   
-import 'pdf_preview_screen.dart';   
-import 'whatsapp_preview_screen.dart'; 
 
 class QuotationDetailScreen extends StatefulWidget {
   final int quotationId;
@@ -118,13 +114,15 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => SmartUpdateModal(
         validation: validation,
-        onUpdatePrices: () => _executeRefresh(prices: true, stock: false),
-        onFixStock: () => _executeRefresh(prices: false, stock: true),
-        onFixAll: () => _executeRefresh(prices: true, stock: true),
+        onUpdatePrices: () => _executeRefresh(prices: true, stock: false, names: false),
+        onFixStock: () => _executeRefresh(prices: false, stock: true, names: false),
+        onFixAll: () => _executeRefresh(prices: true, stock: true, names: true),
         
+        onUpdateNames: () => _executeRefresh(prices: false, stock: false, names: true),
         onFixSingleStock: (itemId, newQty) => _handleIndividualFix(itemId: itemId, newQty: newQty),
         onRemoveSingleItem: (itemId) => _handleIndividualFix(itemId: itemId, remove: true),
         onAcceptSinglePrice: (itemId, newPrice, newBase) => _handleIndividualFix(itemId: itemId, newAppliedPrice: newPrice, newOriginalPrice: newBase),
+        onAcceptSingleName: (itemId, newName) => _handleIndividualFix(itemId: itemId, newName: newName),
       ),
     );
   }
@@ -134,7 +132,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     bool remove = false, 
     int? newQty, 
     double? newAppliedPrice, 
-    double? newOriginalPrice
+    double? newOriginalPrice,
+    String? newName,
   }) async {
     setState(() => _isLoading = true);
     
@@ -152,7 +151,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           final originalPrice = newOriginalPrice ?? qItem.originalUnitPrice;
 
           newTotalAmount += appliedPrice * qty;
-          newTotalSavings += (originalPrice - appliedPrice) * qty;
+          double savings = (originalPrice - appliedPrice) * qty;
+          if (savings > 0) newTotalSavings += savings;
 
           itemsPayload.add({
             "product_id": qItem.productId, 
@@ -160,7 +160,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             "quantity": qty,
             "unit_price_applied": appliedPrice, 
             "original_unit_price": originalPrice, 
-            "product_name": qItem.productName,
+            "product_name": newName ?? qItem.productName,
             "brand_name": qItem.brandName,
             "specific_name": qItem.specificName,
             "sales_unit": qItem.salesUnit,
@@ -170,7 +170,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           });
         } else {
           newTotalAmount += qItem.unitPriceApplied * qItem.quantity;
-          newTotalSavings += (qItem.originalUnitPrice - qItem.unitPriceApplied) * qItem.quantity;
+          double savings = (qItem.originalUnitPrice - qItem.unitPriceApplied) * qItem.quantity;
+          if (savings > 0) newTotalSavings += savings;
 
           itemsPayload.add({
             "product_id": qItem.productId, 
@@ -182,7 +183,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             "brand_name": qItem.brandName,
             "specific_name": qItem.specificName,
             "sales_unit": qItem.salesUnit,
-            "is_manual_price": false, 
+            "is_manual_price": qItem.isManualPrice, 
             "image_url": qItem.imageUrl,
             "original_text": qItem.originalText
           });
@@ -213,9 +214,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     }
   }
 
-  Future<void> _executeRefresh({required bool prices, required bool stock}) async {
+  Future<void> _executeRefresh({required bool prices, required bool stock, required bool names}) async {
     final workbench = Provider.of<WorkbenchProvider>(context, listen: false);
-    bool success = await workbench.refreshQuotation(widget.quotationId, fixPrices: prices, fixStock: stock);
+    bool success = await workbench.refreshQuotation(widget.quotationId, fixPrices: prices, fixStock: stock, fixNames: names);
     
     if (success) {
       if (mounted) CustomSnackBar.show(context, message: "Cotización actualizada", isError: false);
@@ -397,131 +398,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     );
   }
   
-  // 🔥 NUEVO: Banner de confirmación visual para pedidos ya vendidos
-  Widget _buildSoldBanner(bool isDark, bool isClient) {
-    return Container(
-      width: double.infinity,
-      color: Colors.green[700],
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.verified, color: Colors.white, size: 28),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              isClient ? "¡COMPRA CONFIRMADA Y PROCESADA!" : "LISTA VENDIDA Y CERRADA",
-              style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 15, letterSpacing: 0.5),
-              textAlign: TextAlign.center,
-            ),
-          )
-        ],
-      ),
-    );
-  }
 
-  Widget _buildBottomActionBar(ValidationResult? validation, bool isDark) {
-    bool canSell = validation == null || validation.canSell; 
-    bool isSold = _fullQuotation?.status == 'SOLD';
-    
-    final disabledIconColor = isDark ? Colors.white24 : Colors.grey[300]!;
-    final disabledBgColor = isDark ? Colors.white10 : Colors.grey[200]!;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      decoration: BoxDecoration(color: isDark ? Theme.of(context).colorScheme.surface : Colors.white, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -10))], borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-      child: SafeArea(
-        child: Row(
-          children: [
-            _buildActionButton(
-              icon: Icons.edit, activeColor: isDark ? Colors.blueGrey[300]! : Colors.blueGrey, tooltip: "Editar", 
-              onTap: () async {
-                final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => ManualQuotationScreen(quotationId: widget.quotationId)));
-                if (result == true) _loadData();
-              }, 
-              disabledIconColor: disabledIconColor, disabledBgColor: disabledBgColor,
-              isDisabled: isSold // 🔒 Bloqueamos edición si está vendido
-            ),
-            _buildActionButton(icon: Icons.picture_as_pdf, activeColor: isDark ? Colors.red[400]! : Colors.red[700]!, tooltip: "PDF", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PdfPreviewScreen(quotationId: widget.quotationId))), disabledIconColor: disabledIconColor, disabledBgColor: disabledBgColor),
-            _buildActionButton(icon: Icons.chat, activeColor: isDark ? Colors.green[400]! : Colors.green[600]!, tooltip: "WhatsApp", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => WhatsAppPreviewScreen(quotationId: widget.quotationId))), disabledIconColor: disabledIconColor, disabledBgColor: disabledBgColor),
-            
-            const SizedBox(width: 12),
-            Expanded(
-              child: SizedBox(
-                height: 55,
-                child: isSold 
-                 ? ElevatedButton.icon( // 🔥 Si está vendido, cambia a botón de "Historial"
-                     onPressed: () { 
-                         // Aquí podrías redirigir a ver el comprobante/historial
-                         CustomSnackBar.show(context, message: "Esta lista ya fue cobrada y no se puede modificar.", icon: Icons.info);
-                     },
-                     style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200], foregroundColor: isDark ? Colors.white70 : Colors.grey[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
-                     icon: const Icon(Icons.lock, size: 24),
-                     label: const Text("CERRADA", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                   )
-                 : ElevatedButton.icon(
-                    onPressed: () { 
-                      if (canSell) {
-                         Navigator.push(context, MaterialPageRoute(builder: (_) => SalesCheckoutScreen(quotationId: widget.quotationId))); 
-                      } else {
-                        _handleUpdateAnalysis(validation);
-                      } 
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: canSell ? (isDark ? Colors.green[700] : const Color(0xFF2E7D32)) : (isDark ? Colors.red[700] : Colors.red[600]), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: isDark ? 0 : 4),
-                    icon: Icon(canSell ? Icons.point_of_sale : Icons.build_circle, color: Colors.white, size: 24),
-                    label: Text(canSell ? "VENDER" : "CORREGIR", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1)),
-                  ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClientBottomBar(bool isDark) {
-    bool isSold = _fullQuotation?.status == 'SOLD';
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      decoration: BoxDecoration(color: isDark ? Theme.of(context).colorScheme.surface : Colors.white, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -10))], borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-      child: SafeArea(
-        child: isSold 
-          ? Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle, color: Colors.green[600]),
-                const SizedBox(width: 10),
-                Text("Gracias por tu compra.", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.green[300] : Colors.green[800], fontSize: 16))
-              ],
-            )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.storefront, color: Colors.blue[600]),
-                const SizedBox(width: 10),
-                Text("El negocio te notificará sobre este pedido.", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.black87))
-              ],
-            ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton({required IconData icon, required Color activeColor, required String tooltip, required VoidCallback onTap, required Color disabledIconColor, required Color disabledBgColor, bool isDisabled = false}) {
-    return Container(
-      margin: const EdgeInsets.only(right: 10), 
-      child: IconButton(
-        onPressed: isDisabled ? null : onTap, 
-        icon: Icon(icon, color: isDisabled ? disabledIconColor : activeColor, size: 24), 
-        tooltip: tooltip, 
-        style: IconButton.styleFrom(
-          padding: const EdgeInsets.all(12),
-          backgroundColor: isDisabled ? disabledBgColor.withValues(alpha: 0.5) : activeColor.withValues(alpha: 0.15), 
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-        )
-      )
-    );
-  }
 
   // 🔥 LÓGICA DUAL DE ESTADOS Y COLORES
   Color _getStatusColor(String status, bool isDark, bool isClient) {
@@ -650,9 +527,26 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                 if (!isClient && validation != null && (validation.hasIssues || !validation.canSell) && _fullQuotation?.status != 'SOLD') 
                   _buildSmartAlertBanner(validation, isDark),
                 
-                // 🔥 Mostramos el banner verde de VENDIDO si corresponde
                 if (_fullQuotation?.status == 'SOLD')
-                  _buildSoldBanner(isDark, isClient),
+                  Container(
+                    width: double.infinity,
+                    color: Colors.green[700],
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.verified, color: Colors.white, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            isClient ? "¡COMPRA CONFIRMADA Y PROCESADA!" : "LISTA VENDIDA Y CERRADA",
+                            style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 15, letterSpacing: 0.5),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
                 
                 QuoteDetailHeader(quotation: _fullQuotation, fallbackClientName: widget.clientName, isDark: isDark),
                 
@@ -689,7 +583,15 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                 ),
               ],
             ),
-      bottomNavigationBar: isClient ? _buildClientBottomBar(isDark) : _buildBottomActionBar(validation, isDark),
+      bottomNavigationBar: QuotationActionButtons(
+        quotationId: widget.quotationId,
+        status: _fullQuotation?.status ?? 'DRAFT',
+        validation: validation,
+        isDark: isDark,
+        isClient: isClient,
+        onReloadData: _loadData,
+        onHandleUpdateAnalysis: _handleUpdateAnalysis,
+      ),
     );
   }
 }

@@ -11,6 +11,7 @@ import '../../../widgets/custom_text_field.dart';
 import '../../../widgets/safe_dropdown.dart';
 import '../../../widgets/product_optional_info.dart';
 import '../../../widgets/product_presentation_card.dart';
+import '../../../widgets/super_switch.dart';
 
 class ProductCreateScreen extends StatefulWidget {
   final String? initialBarcode; 
@@ -107,6 +108,7 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
       setState(() { for (var c in _controllers) { c['providerId'] = newId; } });
       return;
     }
+    if (!mounted) return;
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -255,16 +257,19 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
 
   Future<int?> _handleCreateBrand(bool isDark) async {
     String? newName = await _showSimpleDialog("Nueva Marca", "Nombre de la marca", isDark);
+    if (!mounted) return null;
     if (newName != null && newName.isNotEmpty) return await Provider.of<InventoryProvider>(context, listen: false).createBrand(newName);
     return null;
   }
   Future<int?> _handleCreateCategory(bool isDark) async {
     String? newName = await _showSimpleDialog("Nueva Categoría", "Nombre de la categoría", isDark);
+    if (!mounted) return null;
     if (newName != null && newName.isNotEmpty) return await Provider.of<InventoryProvider>(context, listen: false).createCategory(newName);
     return null;
   }
   Future<int?> _handleCreateProvider(bool isDark) async {
     String? newName = await _showSimpleDialog("Nuevo Proveedor", "Nombre de la empresa", isDark);
+    if (!mounted) return null;
     if (newName != null && newName.isNotEmpty) return await Provider.of<InventoryProvider>(context, listen: false).createProvider(newName);
     return null;
   }
@@ -287,8 +292,8 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedCategoryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ Debes seleccionar una categoría", style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.red));
+    if (_nameCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Completa la Información General (Nombre)"), backgroundColor: Colors.red));
       return;
     }
 
@@ -351,7 +356,7 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
     }
 
     final success = await Provider.of<InventoryProvider>(context, listen: false).createFullProduct(
-      nombre: _nameCtrl.text, marcaId: _selectedBrandId, categoriaId: _selectedCategoryId!,
+      nombre: _nameCtrl.text, marcaId: _selectedBrandId == 0 ? null : _selectedBrandId, categoriaId: _selectedCategoryId == 0 ? null : _selectedCategoryId,
       estado: _generalState == 2 ? 'publico' : 'privado', 
       descripcion: pDesc.isEmpty ? null : pDesc, imagenUrl: pImg.isEmpty ? null : pImg, codigoBarras: pCode.isEmpty ? null : pCode,
       presentaciones: presentations,
@@ -375,10 +380,18 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
     final surfaceColor = isDark ? const Color(0xFF1A1A24) : Colors.white;
 
     List<ProviderModel> providerListForDropdown = List.from(provider.providers);
+    providerListForDropdown.insert(0, ProviderModel(id: 0, nombreEmpresa: "Ninguno", idNegocio: 0, activo: true));
+    
     int? currentGenProv = _generalProviderId;
     if (currentGenProv == -2) {
       providerListForDropdown.insert(0, ProviderModel(id: -2, nombreEmpresa: "Múltiples Proveedores (Mixto)", idNegocio: 0, activo: true));
     }
+
+    List<Category> categoryListForDropdown = List.from(provider.categories);
+    categoryListForDropdown.insert(0, Category(id: 0, nombre: "Ninguno", activo: true));
+
+    List<Brand> brandListForDropdown = List.from(provider.brands);
+    brandListForDropdown.insert(0, Brand(id: 0, nombre: "Ninguno", activo: true));
 
     return Scaffold(
       backgroundColor: bgColor, 
@@ -425,13 +438,13 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
                           const SizedBox(height: 16),
                           Row(
                             children: [
-                              Expanded(child: SafeDropdown<Brand>(label: "Marca", icon: Icons.branding_watermark_outlined, value: _selectedBrandId, items: provider.brands, getId: (b) => b.id, getName: (b) => b.nombre, isActive: (b) => b.activo == true, onChanged: (v) { if (v == -1) {
+                              Expanded(child: SafeDropdown<Brand>(label: "Marca", icon: Icons.branding_watermark_outlined, value: _selectedBrandId, items: brandListForDropdown, getId: (b) => b.id, getName: (b) => b.nombre, isActive: (b) => b.activo == true, onChanged: (v) { if (v == -1) {
                                 _handleCreateBrand(isDark).then((id) { if (id != null) setState(() => _selectedBrandId = id); });
                               } else {
                                 setState(() => _selectedBrandId = v);
                               } })),
                               const SizedBox(width: 12),
-                              Expanded(child: SafeDropdown<Category>(label: "Categoría *", icon: Icons.category_outlined, value: _selectedCategoryId, items: provider.categories, getId: (c) => c.id, getName: (c) => c.nombre, isActive: (c) => c.activo == true, onChanged: (v) { if (v == -1) {
+                              Expanded(child: SafeDropdown<Category>(label: "Categoría", icon: Icons.category_outlined, value: _selectedCategoryId, items: categoryListForDropdown, getId: (c) => c.id, getName: (c) => c.nombre, isActive: (c) => c.activo == true, onChanged: (v) { if (v == -1) {
                                 _handleCreateCategory(isDark).then((id) { if (id != null) setState(() => _selectedCategoryId = id); });
                               } else {
                                 setState(() => _selectedCategoryId = v);
@@ -448,7 +461,11 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
                               children: [
                                 Row(children: [Icon(Icons.visibility, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]), const SizedBox(width: 8), Text("Visibilidad de Variantes", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor))]),
                                 const SizedBox(height: 12),
-                                _buildSuperSwitch(isDark),
+                                SuperSwitch(
+                                  current: _generalState,
+                                  onChanged: _setGeneralState,
+                                  isDark: isDark,
+                                ),
                               ],
                             ),
                           )
@@ -480,9 +497,9 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
                   },
                   
                   providerDropdown: SafeDropdown<ProviderModel>(
-                    label: "Proveedor de esta Variante", icon: null, value: _controllers[i]['providerId'], items: provider.providers,
+                    label: "Proveedor de esta Variante", icon: null, value: _controllers[i]['providerId'], items: providerListForDropdown,
                     getId: (p) => p.id, getName: (p) => p.nombreEmpresa, isActive: (p) => p.activo == true, allowNull: true,
-                    onChanged: (v) { if (v == -1) { _handleCreateProvider(isDark).then((id) { if (id != null) setState(() => _controllers[i]['providerId'] = id); }); } else { setState(() => _controllers[i]['providerId'] = v); } }
+                    onChanged: (v) { if (v == -1) { _handleCreateProvider(isDark).then((id) { if (id != null) setState(() => _controllers[i]['providerId'] = id); }); } else { setState(() => _controllers[i]['providerId'] = v == 0 ? null : v); } }
                   ),
                 );
               }),
@@ -505,50 +522,4 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
     );
   }
 
-  // 🔥 ANIMACIÓN Y DISEÑO DEL SÚPER SWITCH 🔥
-  Widget _buildSuperSwitch(bool isDark) {
-    int current = _generalState;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (current == 1)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Text("Estado actual: Variado (Seleccione uno para unificar)", style: TextStyle(fontSize: 12, color: isDark ? Colors.orange[300] : Colors.orange[800], fontStyle: FontStyle.italic)),
-          ),
-        Container(
-          height: 42,
-          decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.grey[200], borderRadius: BorderRadius.circular(12)),
-          child: Stack(
-            children: [
-              AnimatedAlign(
-                alignment: current == 0 ? Alignment.centerLeft : (current == 2 ? Alignment.centerRight : Alignment.center),
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
-                child: current == 1 
-                    ? const SizedBox.shrink() 
-                    : FractionallySizedBox(
-                        widthFactor: 0.5, 
-                        child: Container(
-                          margin: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            color: current == 0 ? (isDark ? Colors.orange[800] : Colors.white) : (isDark ? Colors.green[700] : Colors.white),
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: !isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4, offset: const Offset(0, 2))] : [],
-                          ),
-                        ),
-                      ),
-              ),
-              Row(
-                children: [
-                  Expanded(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => _setGeneralState(0), child: Center(child: Text("Ocultar Todos", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: current == 0 ? (isDark ? Colors.white : Colors.orange[800]) : Colors.grey))))),
-                  Expanded(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => _setGeneralState(2), child: Center(child: Text("Publicar Todos", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: current == 2 ? (isDark ? Colors.white : Colors.green[700]) : Colors.grey))))),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 }

@@ -19,6 +19,23 @@ class _ClientSearchModalState extends State<ClientSearchModal> {
   final ClientService _clientService = ClientService();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRecentClients();
+    });
+  }
+
+  void _loadRecentClients() {
+    final authProv = Provider.of<AuthProvider>(context, listen: false);
+    if (authProv.activeBusinessId != null) {
+      setState(() {
+        _searchFuture = _clientService.getRecentClients(authProv.activeBusinessId!);
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final authProv = Provider.of<AuthProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -55,9 +72,8 @@ class _ClientSearchModalState extends State<ClientSearchModal> {
                         filled: true, fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100]
                       ),
                       onChanged: (val) {
-                        if (val.isNotEmpty) {
+                        if (val.trim().isNotEmpty) {
                           setState(() {
-                            // 🔥 CORRECCIÓN 2: Enviamos activeBusinessId! en lugar del token.
                             if (authProv.activeBusinessId != null) {
                               _searchFuture = _clientService.searchClients(val, authProv.activeBusinessId!).then(
                                 (clients) => clients.where((c) => !c.fullName.startsWith("Caja Rápida -")).toList()
@@ -65,7 +81,7 @@ class _ClientSearchModalState extends State<ClientSearchModal> {
                             }
                           });
                         } else {
-                          setState(() { _searchFuture = null; });
+                          _loadRecentClients();
                         }
                       },
                     ),

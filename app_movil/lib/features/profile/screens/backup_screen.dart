@@ -43,7 +43,12 @@ class _PinDelayConfigWidgetState extends State<PinDelayConfigWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text("Seguridad", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+        const Text("Seguridad y Bloqueo", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+        const SizedBox(height: 8),
+        Text(
+          "Configura cuánto tiempo de inactividad debe pasar antes de que la aplicación te vuelva a pedir tu PIN de seguridad.", 
+          style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14)
+        ),
         const SizedBox(height: 16),
         Container(
           decoration: BoxDecoration(
@@ -135,6 +140,7 @@ class BackupScreen extends StatelessWidget {
                   final auth = Provider.of<AuthProvider>(context, listen: false);
                   await auth.logout();
                   await auth.checkInitialState();
+                  if (!context.mounted) return;
                   Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()), (route) => false);
                 } else if (backupProvider.errorMessage.isNotEmpty) {
                   CustomSnackBar.show(context, message: backupProvider.errorMessage, isError: true);
@@ -188,12 +194,15 @@ class BackupScreen extends StatelessWidget {
                     ),
                     _Divider(isDark: isDark),
                     _ActionButton(
-                      icon: Icons.cloud_upload_outlined, label: "Subir a Google Drive", color: Colors.blueAccent, isDark: isDark,
+                      icon: Icons.cloud_upload_outlined, label: "Compartir / Subir a la Nube", color: Colors.blueAccent, isDark: isDark,
                       onTap: () async {
-                        bool ok = await backupProvider.backupToGoogleDrive();
+                        bool ok = await backupProvider.backupToCloud();
                         if (context.mounted) {
-                          if (ok) CustomSnackBar.show(context, message: "¡Respaldo subido a Drive exitosamente!", isError: false);
-                          else CustomSnackBar.show(context, message: backupProvider.errorMessage, isError: true);
+                          if (ok) {
+                            CustomSnackBar.show(context, message: "¡Menú de nube abierto!", isError: false);
+                          } else {
+                            CustomSnackBar.show(context, message: backupProvider.errorMessage, isError: true);
+                          }
                         }
                       },
                     ),
@@ -203,8 +212,11 @@ class BackupScreen extends StatelessWidget {
                       onTap: () async {
                         bool ok = await backupProvider.backupToDownloads();
                         if (context.mounted) {
-                          if (ok) CustomSnackBar.show(context, message: "¡Guardado en la carpeta de Descargas!", isError: false);
-                          else CustomSnackBar.show(context, message: backupProvider.errorMessage, isError: true);
+                          if (ok) {
+                            CustomSnackBar.show(context, message: "¡Guardado en la carpeta de Descargas!", isError: false);
+                          } else {
+                            CustomSnackBar.show(context, message: backupProvider.errorMessage, isError: true);
+                          }
                         }
                       },
                     ),
@@ -227,7 +239,7 @@ class BackupScreen extends StatelessWidget {
                       title: const Text("Activar Backups Automáticos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       subtitle: const Text("Se ejecutarán en segundo plano.", style: TextStyle(fontSize: 13)),
                       value: backupProvider.isAutoBackupEnabled,
-                      activeColor: Colors.blue,
+                      activeThumbColor: Colors.blue,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       onChanged: (val) => backupProvider.toggleAutoBackup(val),
                     ),
@@ -281,7 +293,7 @@ class BackupScreen extends StatelessWidget {
                                         icon: const Icon(Icons.keyboard_arrow_down, size: 20),
                                         items: const [
                                           DropdownMenuItem(value: 'Local', child: Text("Descargas")),
-                                          DropdownMenuItem(value: 'Drive', child: Text("Google Drive")),
+                                          DropdownMenuItem(value: 'Drive', child: Text("Guardar en Nube")),
                                         ],
                                         onChanged: (val) {
                                           if (val != null) backupProvider.setAutoBackupLocation(val);
@@ -335,7 +347,7 @@ class BackupScreen extends StatelessWidget {
                     children: [
                       const CircularProgressIndicator(color: Colors.blue),
                       const SizedBox(height: 20),
-                      Text("Procesando...", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 16))
+                      Text(backupProvider.statusMessage.isNotEmpty ? backupProvider.statusMessage : "Procesando...", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 16), textAlign: TextAlign.center)
                     ],
                   ),
                 ),

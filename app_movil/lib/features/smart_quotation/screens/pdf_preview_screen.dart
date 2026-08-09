@@ -201,7 +201,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         builder: (context, setModalState) {
           void updateConfig(VoidCallback fn) {
             setModalState(fn);
-            this.setState(fn);
+            setState(fn);
           }
 
           final bool isQuickSale = _saleData != null && _saleData!['origen_venta'] == 'pos_rapido';
@@ -282,7 +282,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                             leading: Icon(Icons.list_alt, color: isDark ? Colors.green[400] : Colors.green[700]),
                             initiallyExpanded: true,
                             children: [
-                              SwitchListTile(title: Text("Mostrar Columna: Unidad", style: TextStyle(color: textColor)), subtitle: Text("Ej: Docena, Empaque", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])), value: _config.showProductUnit, activeColor: Colors.green, onChanged: (v) => updateConfig(() => _config.showProductUnit = v)),
+                              SwitchListTile(title: Text("Mostrar Columna: Unidad", style: TextStyle(color: textColor)), subtitle: Text("Ej: Docena, Empaque", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])), value: _config.showProductUnit, activeThumbColor: Colors.green, onChanged: (v) => updateConfig(() => _config.showProductUnit = v)),
                               
                               // Nivel principal: Precio Unitario
                               _buildMainSwitch(
@@ -309,7 +309,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                                 onChanged: (v) => updateConfig(() => _config.showProductSavings = v)
                               ),
 
-                              SwitchListTile(title: Text("Mostrar Columna: Subtotal", style: TextStyle(color: textColor)), subtitle: Text("Multiplica el precio por cantidad", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])), value: _config.showProductSubtotal, activeColor: Colors.green, onChanged: (v) => updateConfig(() => _config.showProductSubtotal = v)),
+                              SwitchListTile(title: Text("Mostrar Columna: Subtotal", style: TextStyle(color: textColor)), subtitle: Text("Multiplica el precio por cantidad", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])), value: _config.showProductSubtotal, activeThumbColor: Colors.green, onChanged: (v) => updateConfig(() => _config.showProductSubtotal = v)),
                               const SizedBox(height: 10),
                             ],
                           ),
@@ -327,7 +327,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                             leading: Icon(Icons.attach_money, color: isDark ? Colors.teal[400] : Colors.teal[700]),
                             children: [
                               if (_saleData != null)
-                                SwitchListTile(title: Text("Mostrar Info de Pago", style: TextStyle(color: textColor)), subtitle: Text("Método, Fecha y Deuda", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])), value: _config.showTransactionDetails, activeColor: Colors.teal, onChanged: (v) => updateConfig(() => _config.showTransactionDetails = v)),
+                                SwitchListTile(title: Text("Mostrar Info de Pago", style: TextStyle(color: textColor)), subtitle: Text("Método, Fecha y Deuda", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])), value: _config.showTransactionDetails, activeThumbColor: Colors.teal, onChanged: (v) => updateConfig(() => _config.showTransactionDetails = v)),
                               
                               // Nivel Principal: Total
                               _buildMainSwitch(
@@ -368,7 +368,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                             title: Text("Mi Negocio", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.blue[300] : Colors.blue[900])),
                             leading: Icon(Icons.store, color: isDark ? Colors.blue[400] : Colors.blue[700]),
                             children: [
-                              SwitchListTile(title: Text("Mostrar Cabecera", style: TextStyle(color: textColor)), value: _config.showBusinessInfo, activeColor: Colors.blue, onChanged: (v) => updateConfig(() => _config.showBusinessInfo = v)),
+                              SwitchListTile(title: Text("Mostrar Cabecera", style: TextStyle(color: textColor)), value: _config.showBusinessInfo, activeThumbColor: Colors.blue, onChanged: (v) => updateConfig(() => _config.showBusinessInfo = v)),
                               if (_config.showBusinessInfo) ...[
                                 CheckboxListTile(title: Text("Logo", style: TextStyle(color: textColor)), activeColor: Colors.blue, value: _config.includeLogo, onChanged: (v) => updateConfig(() => _config.includeLogo = v!)),
                                 CheckboxListTile(title: Text("Dirección", style: TextStyle(color: textColor)), activeColor: Colors.blue, value: _config.includeShopAddress, onChanged: (v) => updateConfig(() => _config.includeShopAddress = v!)),
@@ -393,14 +393,14 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                               SwitchListTile(
                                 title: Text("Nombre / Teléfono", style: TextStyle(color: textColor)), 
                                 value: _config.showClientName, 
-                                activeColor: Colors.orange,
+                                activeThumbColor: Colors.orange,
                                 onChanged: (v) => updateConfig(() => _config.showClientName = v),
                               ),
                               SwitchListTile(
                                 title: Text(isQuickSale ? "Mostrar Nota de Venta" : "Información Adicional", style: TextStyle(color: textColor)), 
                                 subtitle: Text(isQuickSale ? "Imprime la nota registrada" : "Colegio / Grado / Notas", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])),
                                 value: _config.showInstitutionInfo, 
-                                activeColor: Colors.orange,
+                                activeThumbColor: Colors.orange,
                                 onChanged: canToggleExtraInfo ? (v) => updateConfig(() => _config.showInstitutionInfo = v) : null,
                               ),
                               const SizedBox(height: 10),
@@ -417,7 +417,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                           title: Text("Incluir Imágenes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.purple[300] : Colors.purple[900])),
                           subtitle: Text("Estilo catálogo (Requiere internet)", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])),
                           value: _config.showImages,
-                          activeColor: Colors.purple,
+                          activeThumbColor: Colors.purple,
                           onChanged: (v) => updateConfig(() => _config.showImages = v),
                         ),
                       ),
@@ -452,7 +452,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       title: Text(title, style: TextStyle(color: textColor)),
       subtitle: Text(subtitle, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])),
       value: value,
-      activeColor: color,
+      activeThumbColor: color,
       onChanged: onChanged,
     );
   }
@@ -466,7 +466,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
           title: Text(title, style: TextStyle(color: textColor, fontSize: 14)),
           subtitle: Text(subtitle, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 12)),
           value: value,
-          activeColor: color,
+          activeThumbColor: color,
           onChanged: enabled ? onChanged : null,
         ),
       ),

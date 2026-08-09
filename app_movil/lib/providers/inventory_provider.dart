@@ -83,12 +83,17 @@ class InventoryProvider with ChangeNotifier {
   SortType get provSort => _provSort; 
   bool get provAsc => _provAsc;
 
+  // Elimina símbolos al principio para un ordenamiento más natural
+  String _normalizeForSort(String text) {
+    return text.replaceAll(RegExp(r'^[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+'), '').toLowerCase();
+  }
+
   List<InventoryWrapper> get items {
     final list = List<InventoryWrapper>.from(_inventoryItems);
     list.sort((a, b) {
       int cmp;
       switch (_prodSort) {
-        case SortType.alpha: cmp = a.product.nombre.toLowerCase().compareTo(b.product.nombre.toLowerCase()); break;
+        case SortType.alpha: cmp = _normalizeForSort(a.product.nombre).compareTo(_normalizeForSort(b.product.nombre)); break;
         case SortType.id: cmp = a.product.id.compareTo(b.product.id); break;
       }
       return _prodAsc ? cmp : -cmp;
@@ -101,7 +106,7 @@ class InventoryProvider with ChangeNotifier {
     list.sort((a, b) {
       int cmp;
       switch (_catSort) {
-        case SortType.alpha: cmp = a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()); break;
+        case SortType.alpha: cmp = _normalizeForSort(a.nombre).compareTo(_normalizeForSort(b.nombre)); break;
         case SortType.id: cmp = a.id.compareTo(b.id); break;
       }
       return _catAsc ? cmp : -cmp;
@@ -114,7 +119,7 @@ class InventoryProvider with ChangeNotifier {
     list.sort((a, b) {
       int cmp;
       switch (_brandSort) {
-        case SortType.alpha: cmp = a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()); break;
+        case SortType.alpha: cmp = _normalizeForSort(a.nombre).compareTo(_normalizeForSort(b.nombre)); break;
         case SortType.id: cmp = a.id.compareTo(b.id); break;
       }
       return _brandAsc ? cmp : -cmp;
@@ -127,7 +132,7 @@ class InventoryProvider with ChangeNotifier {
     list.sort((a, b) {
       int cmp;
       switch (_provSort) {
-        case SortType.alpha: cmp = a.nombreEmpresa.toLowerCase().compareTo(b.nombreEmpresa.toLowerCase()); break;
+        case SortType.alpha: cmp = _normalizeForSort(a.nombreEmpresa).compareTo(_normalizeForSort(b.nombreEmpresa)); break;
         case SortType.id: cmp = a.id.compareTo(b.id); break;
       }
       return _provAsc ? cmp : -cmp;
@@ -179,6 +184,55 @@ class InventoryProvider with ChangeNotifier {
   }
   
   Future<Product?> fetchProductById(int productId) async => await _productService.fetchProductById(productId);
+
+  /// 🔥 FASE 1 FIX: Construye un Product con TODAS sus presentaciones
+  /// recopiladas de la lista en memoria (_inventoryItems).
+  /// Si no se encuentran en memoria, hace un fetch directo a la DB.
+  Product getFullProduct(int productId) {
+    // Recopilar todas las presentaciones de este producto desde el inventario en memoria
+    final matchingWrappers = _inventoryItems.where((w) => w.product.id == productId).toList();
+    
+    if (matchingWrappers.isEmpty) {
+      // Fallback: devolver un producto vacío (no debería ocurrir)
+      return Product(id: productId, nombre: "Producto #$productId", categoriaId: 0);
+    }
+
+    // Tomar el primer wrapper como base del producto
+    final baseProduct = matchingWrappers.first.product;
+    
+    // Recopilar todas las presentaciones únicas (por ID) de los wrappers
+    final Map<int, ProductPresentation> uniquePresentations = {};
+    for (var wrapper in matchingWrappers) {
+      final presId = wrapper.presentation.id;
+      if (presId != null && !uniquePresentations.containsKey(presId)) {
+        uniquePresentations[presId] = wrapper.presentation;
+      }
+    }
+
+    // Crear un nuevo Product con la lista completa de presentaciones
+    return Product(
+      id: baseProduct.id,
+      nombre: baseProduct.nombre,
+      marcaId: baseProduct.marcaId,
+      descripcion: baseProduct.descripcion,
+      categoriaId: baseProduct.categoriaId,
+      imagenUrl: baseProduct.imagenUrl,
+      codigoBarras: baseProduct.codigoBarras,
+      estado: baseProduct.estado,
+      presentaciones: uniquePresentations.values.toList(),
+      stockTotalCalculado: baseProduct.stockTotalCalculado,
+    );
+  }
+
+  /// 🔥 FASE 1 FIX: Versión async que intenta memoria primero, y si falla, va a DB.
+  Future<Product?> getFullProductWithFallback(int productId) async {
+    final memoryProduct = getFullProduct(productId);
+    if (memoryProduct.presentaciones.isNotEmpty) {
+      return memoryProduct;
+    }
+    // Fallback a la base de datos
+    return await fetchProductById(productId);
+  }
 
   Future<void> loadMasterData({bool showAll = true}) async {
     try {
@@ -302,6 +356,26 @@ class InventoryProvider with ChangeNotifier {
     }
   }
 
+  /// Silently refreshes inventory data from DB after a sale,
+  /// keeping the same filters but forcing a re-read of stock values.
+  Future<void> refreshAfterSale() async {
+    if (_negocioId == null) return;
+    await loadInventory(
+      reset: true,
+      searchQuery: _lastQuery,
+      categoryIds: _lastCategoryIds,
+      brandIds: _lastBrandIds,
+      providerIds: _lastProviderIds,
+      filterState: _lastEstado,
+      minPrice: _lastMinPrice,
+      maxPrice: _lastMaxPrice,
+      minStock: _lastMinStock,
+      maxStock: _lastMaxStock,
+      hasOffer: _lastHasOffer,
+      onlyDefaults: _lastOnlyDefaults,
+    );
+  }
+
   Future<void> loadMore() async => await loadInventory(reset: false);
 
   Future<bool> deleteProduct(int id) async {
@@ -316,7 +390,7 @@ class InventoryProvider with ChangeNotifier {
   }
 
   Future<bool> createFullProduct({
-    required String nombre, int? marcaId, required int categoriaId, int? proveedorId, required String estado, 
+    required String nombre, int? marcaId, int? categoriaId, int? proveedorId, required String estado, 
     String? descripcion, String? imagenUrl, String? codigoBarras, required List<ProductPresentation> presentaciones
   }) async {
     _isLoading = true; notifyListeners();
@@ -333,7 +407,7 @@ class InventoryProvider with ChangeNotifier {
   }
 
   Future<bool> editFullProduct({
-    required int productId, required String nombre, int? marcaId, required int categoriaId, int? proveedorId, 
+    required int productId, required String nombre, int? marcaId, int? categoriaId, int? proveedorId, 
     required String estado, String? descripcion, String? imagenUrl, String? codigoBarras, 
     required List<ProductPresentation> presentaciones, required List<int> idsToDelete
   }) async {
@@ -371,7 +445,19 @@ class InventoryProvider with ChangeNotifier {
     if (factorGananciaVenta != null) body['factor_ganancia_venta'] = factorGananciaVenta;
     if (precioVentaFinal != null) body['precio_venta_final'] = precioVentaFinal;
     
-    if (oferta != null) { body['precio_oferta'] = oferta; if (oferta > 0) { body['tipo_descuento'] = tipoDesc; body['valor_descuento'] = valorDesc; } }
+    if (oferta != null) { 
+      if (oferta == -1) {
+        body['precio_oferta'] = null;
+        body['tipo_descuento'] = null;
+        body['valor_descuento'] = null;
+      } else {
+        body['precio_oferta'] = oferta;
+        if (oferta > 0) { 
+          body['tipo_descuento'] = tipoDesc; 
+          body['valor_descuento'] = valorDesc; 
+        }
+      }
+    }
     if (stock != null) body['stock_actual'] = stock;
     if (estado != null) body['estado'] = estado;
     

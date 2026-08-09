@@ -74,6 +74,7 @@ class ReceiptManager {
         ? '¡Gracias por su compra! Adjuntamos su comprobante.'
         : 'Adjuntamos la cotización solicitada. Quedamos a su disposición.';
         
+    // ignore: deprecated_member_use
     await Share.shareXFiles([XFile(file.path)], text: textMsg);
   }
 }

@@ -71,6 +71,7 @@ class _DbInspectorScreenState extends State<DbInspectorScreen> {
               if (currentValue is double) newValue = double.tryParse(controller.text) ?? currentValue;
 
               await LocalDatabase.instance.genericUpdate(_selectedTable!, column, newValue, id);
+              if (!context.mounted) return;
               Navigator.pop(context);
               _loadTableData(_selectedTable!);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Dato actualizado exitosamente")));
@@ -151,7 +152,7 @@ class _DbInspectorScreenState extends State<DbInspectorScreen> {
                           columnSpacing: 24,
                           headingRowHeight: 45,
                           dataRowMinHeight: 45,
-                          headingRowColor: MaterialStateProperty.all(isDark ? Colors.white10 : Colors.indigo.withValues(alpha: 0.05)),
+                          headingRowColor: WidgetStateProperty.all(isDark ? Colors.white10 : Colors.indigo.withValues(alpha: 0.05)),
                           columns: _columns.map((col) => DataColumn(
                             label: Text(col.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, color: Colors.indigoAccent))
                           )).toList(),

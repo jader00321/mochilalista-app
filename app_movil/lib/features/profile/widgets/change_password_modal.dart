@@ -114,10 +114,10 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
                   setState(() => _localError = ''); 
                   final success = await auth.changePassword(_currentCtrl.text, _newCtrl.text);
                   
-                  if (mounted) {
+                  if (context.mounted) {
                     if (success) {
-                      Navigator.pop(context); 
                       CustomSnackBar.show(context, message: "Contraseña actualizada exitosamente", isError: false);
+                      Navigator.pop(context); 
                     } else {
                       // El error viene del AuthProvider (que a su vez lo atrapó del Backend)
                       setState(() => _localError = auth.errorMessage);

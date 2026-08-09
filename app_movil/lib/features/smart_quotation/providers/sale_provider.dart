@@ -147,6 +147,8 @@ class SaleProvider with ChangeNotifier {
     required double total,
     required double paid,
     double discount = 0.0,
+    double abonoInicial = 0.0,
+    double porcentajeInteres = 0.0,
     List<InstallmentModel>? installments,
     String origenVenta = "smart_quotation",
     List<Map<String, dynamic>>? detalleVenta,
@@ -170,6 +172,8 @@ class SaleProvider with ChangeNotifier {
         "monto_total": total,
         "monto_pagado": paid,
         "descuento_aplicado": discount,
+        "abono_inicial": abonoInicial,
+        "porcentaje_interes": porcentajeInteres,
         "cuotas": installments?.map((e) => e.toJson()).toList() ?? [],
         "items": detalleVenta ?? []
       };

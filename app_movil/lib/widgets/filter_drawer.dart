@@ -174,7 +174,7 @@ class _FilterDrawerState extends State<FilterDrawer> {
                     title: Text("Solo Ofertas", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor)),
                     subtitle: Text("Productos con descuento", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey)),
                     value: _onlyOffers,
-                    activeColor: isDark ? Colors.red[400] : Colors.red,
+                    activeTrackColor: isDark ? Colors.red[400] : Colors.red,
                     contentPadding: EdgeInsets.zero,
                     onChanged: (v) => setState(() => _onlyOffers = v),
                   ),

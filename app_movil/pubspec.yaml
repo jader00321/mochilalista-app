@@ -1,7 +1,7 @@
 name: app_movil
 description: "MochilaLista Mobile Application"
 publish_to: 'none'
-version: 1.0.0+1
+version: 3.2.1+5
 
 environment:
   sdk: ^3.9.0
@@ -63,6 +63,8 @@ dependencies:
   googleapis: ^11.4.0
   googleapis_auth: ^1.4.1
   device_info_plus: ^12.4.0
+  fl_chart: ^1.2.0
+  csv: ^8.0.0
 
 dev_dependencies:
   flutter_test:

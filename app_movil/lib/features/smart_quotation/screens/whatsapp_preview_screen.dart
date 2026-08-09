@@ -18,6 +18,8 @@ import '../../../widgets/custom_snackbar.dart';
 import '../widgets/whatsapp/wa_client_section.dart';
 import '../widgets/whatsapp/wa_config_section.dart';
 import '../widgets/whatsapp/wa_business_section.dart';
+import '../widgets/whatsapp/wa_message_editor.dart';
+import '../widgets/whatsapp/wa_final_preview_modal.dart';
 
 class WhatsAppPreviewScreen extends StatefulWidget {
   final int? quotationId; 
@@ -255,7 +257,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
-    final textColor = isDark ? Colors.white : Colors.black87;
+
 
     if (_isLoading) return Scaffold(backgroundColor: bgColor, body: const Center(child: CircularProgressIndicator()));
     final bool isSale = _saleData != null;
@@ -333,40 +335,14 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                   ),
                   const SizedBox(height: 24),
                   
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12, left: 4),
-                    child: Text("VISTA PREVIA (EDITABLE)", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey, letterSpacing: 1)),
+                  WaMessageEditor(
+                    isDark: isDark,
+                    isManualEdit: _isManualEdit,
+                    messageCtrl: _messageCtrl,
+                    onChanged: (val) {
+                      if (!_isManualEdit) setState(() => _isManualEdit = true);
+                    },
                   ),
-                  
-                  Container(
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1A1A24) : Colors.white,
-                      border: Border.all(color: _isManualEdit ? Colors.orange.shade300 : (isDark ? Colors.white10 : Colors.grey.shade300), width: 1.5),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]
-                    ),
-                    padding: const EdgeInsets.all(16),
-                    child: TextField(
-                      controller: _messageCtrl,
-                      maxLines: null,
-                      style: TextStyle(fontSize: 16, height: 1.5, color: textColor), 
-                      decoration: const InputDecoration.collapsed(hintText: ""),
-                      onChanged: (val) {
-                        if (!_isManualEdit) setState(() => _isManualEdit = true);
-                      },
-                    ),
-                  ),
-                  if (_isManualEdit)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8, left: 4),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.edit_note, size: 18, color: Colors.orange),
-                          const SizedBox(width: 6),
-                          Text("Modo Manual Activado.", style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange[800], fontSize: 13, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
                   const SizedBox(height: 80),
                 ],
               ),
@@ -547,83 +523,17 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       return;
     }
 
-    bool allowFinalEdit = false;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              height: MediaQuery.of(context).size.height * 0.85,
-              decoration: BoxDecoration(color: isDark ? const Color(0xFF23232F) : Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("Revisión Final", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87)),
-                      IconButton(icon: Icon(Icons.close, size: 28, color: isDark ? Colors.white : Colors.black87), onPressed: () => Navigator.pop(context))
-                    ],
-                  ),
-                  Divider(height: 20, color: isDark ? Colors.white10 : Colors.grey[200]),
-                  
-                  SwitchListTile(
-                    title: Text("Habilitar edición final", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                    value: allowFinalEdit,
-                    activeThumbColor: const Color(0xFF00A884),
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (v) => setModalState(() => allowFinalEdit = v),
-                  ),
-                  const SizedBox(height: 10),
-                  
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF14141C) : Colors.grey[100], 
-                        borderRadius: BorderRadius.circular(16), 
-                        border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300)
-                      ),
-                      child: TextField(
-                        controller: _messageCtrl,
-                        enabled: allowFinalEdit,
-                        maxLines: null,
-                        style: TextStyle(fontSize: 16, height: 1.4, color: isDark ? Colors.white : Colors.black87),
-                        decoration: const InputDecoration.collapsed(hintText: ""),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  SafeArea(
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 60,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _executeSendProcess(); 
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF25D366),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: isDark ? 0 : 5
-                        ),
-                        icon: const Icon(Icons.send, size: 24),
-                        label: Text("Enviar al +51 ${_clientPhoneCtrl.text}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
+      builder: (ctx) => WaFinalPreviewModal(
+        isDark: isDark,
+        phone: _clientPhoneCtrl.text,
+        messageCtrl: _messageCtrl,
+        onSend: () {
+          Navigator.pop(ctx);
+          _executeSendProcess(); 
         },
       ),
     );

@@ -15,6 +15,7 @@ import '../../screens/scanner/invoice_review_screen.dart';
 import '../../screens/scanner/invoice_staging_screen.dart'; 
 import '../../features/smart_quotation/screens/quick_sale_screen.dart';
 import '../../features/smart_quotation/screens/sales_history_screen.dart';
+import '../../features/analytics/screens/analytics_dashboard_screen.dart';
 import '../../screens/db_inspector_screen.dart';
 
 class SmartActionGrid extends StatelessWidget {
@@ -164,7 +165,18 @@ class SmartActionGrid extends StatelessWidget {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const DbInspectorScreen()));
             },
           ),
-          //
+          _buildCard(
+            context,
+            title: "Estadísticas",
+            subtitle: "Finanzas y Top",
+            icon: Icons.pie_chart_rounded,
+            color: isDark ? Colors.amber[500]! : Colors.amber[700]!,
+            isDark: isDark,
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsDashboardScreen()));
+            },
+          ),
+          
         ]
       ],
     );

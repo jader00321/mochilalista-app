@@ -1,0 +1,32 @@
+# 📊 Presentación: Dashboard Analítico Inteligente
+
+La nueva plataforma de Inteligencia de Negocios (Business Intelligence) ya está instalada y funcionando. He logrado incorporar todo lo que pediste protegiendo el rendimiento del celular en cada milisegundo.
+
+## 1. ⚡ Análisis Asíncrono por Pasos (Motor Seguro)
+La ventana no calcula todo de golpe. He diseñado un sistema llamado `AnalyticsProvider` que usa un temporizador de "respiro". 
+- Cuando el usuario toca el botón **"Iniciar Análisis de Datos"**, el sistema bloquea el botón y empieza un progreso porcentual con una ruleta visual animada.
+- Mientras la animación gira, en segundo plano se van destripando las tablas de SQLite cruzando ventas con inventario, ventas con clientes, etc.
+- No hay saturación de memoria.
+
+## 2. 💰 Proyecciones y Ganancias
+- En el "Balance General" ahora se muestra la **Ganancia Neta Estimada**.
+- El sistema busca el `precio_costo` original con el que compraste el producto. Si algún producto no tiene costo configurado, el motor aplica inteligentemente una deducción del 30% como proyección estándar. Así, el balance siempre te mostrará números útiles.
+
+## 3. 📈 Visualización con Fl_Chart
+Agregué una de las mejores librerías de la industria (`fl_chart`) para renderizar paneles muy profesionales.
+- **Gráfico de Barras:** Para el historial de ventas por mes, ideal para proyectar "qué desean los clientes por temporada".
+- **Gráfico de Torta / Pastel:** Un anillo de colores vivos que enumera de mayor a menor los Top 5 productos más vendidos.
+
+## 4. 🛒 Predicciones y Clientes Top
+Junto a las gráficas, agregué dos listas estratégicas:
+- **Alertas de Stock:** Filtra instantáneamente todo el inventario de la tienda para descubrir qué productos están a punto de agotarse o ya quebraron stock. Esta es la recomendación automática de "Qué falta comprar".
+- **Mejores Clientes:** Un ranking de qué clientes te han dejado más dinero históricamente.
+
+## 5. 📑 Descarga a PDF y Excel (CSV)
+En la parte superior derecha hay un nuevo menú de descargas.
+- **PDF:** Genera un reporte impecable con cuadros de datos y totales.
+- **Excel (CSV):** Produce un archivo compatible con cualquier hoja de cálculo en el mundo.
+- **Marca de tiempo:** Ambos archivos se guardan autogenerando el nombre con la fecha y minuto exacto (ej. `Datos_2026_08_07_1430.csv`) para no sobreescribir otros reportes.
+
+---
+Puedes ingresar a este panel pulsando la nueva tarjeta **"Estadísticas"** (con ícono de gráfica y color ámbar) desde la pantalla principal de Inicio. ¡Prepárate para conocer tu negocio desde otro ángulo!

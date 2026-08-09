@@ -60,6 +60,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
   bool _updateClientData = true; 
   bool _isLoading = false;
   bool _isSaving = false;
+  int _outdatedItemsCount = 0;
   
   bool _isQuoteDataExpanded = false; 
   bool _isClientPanelExpanded = false;
@@ -244,48 +245,89 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
         }
 
         List<MatchedProduct> convertedItems = [];
+        int outdatedItemsCount = 0; // Para el banner
+
         for (var qItem in data.items) {
           int realStock = 0;
           String? realImageUrl = qItem.imageUrl;
           String currentUnit = qItem.salesUnit ?? "Unidad";
           int currentConversion = 1;
           
+          String realProductName = qItem.productName ?? "";
+          String realBrandName = qItem.brandName ?? "";
+          String realSpecificName = qItem.specificName ?? "";
+          double currentPrice = qItem.originalUnitPrice;
+          
           try {
             final realProduct = await invProv.fetchProductById(qItem.productId ?? 0);
             if (realProduct != null) {
-               final pres = realProduct.presentaciones.firstWhere((p) => p.id == qItem.presentationId);
-               realStock = pres.stockActual;
-               realImageUrl = pres.imagenUrl ?? realProduct.imagenUrl;
-               currentUnit = pres.unidadVenta ?? "Unidad";
-               currentConversion = pres.unidadesPorVenta;
+               final presIndex = realProduct.presentaciones.indexWhere((p) => p.id == qItem.presentationId);
+               if (presIndex != -1) {
+                 final pres = realProduct.presentaciones[presIndex];
+                 realStock = pres.stockActual;
+                 realImageUrl = pres.imagenUrl ?? realProduct.imagenUrl;
+                 currentUnit = pres.unidadVenta ?? "Unidad";
+                 currentConversion = pres.unidadesPorVenta;
+                 
+                 realProductName = realProduct.nombre;
+                 realBrandName = realProduct.marcaNombre ?? qItem.brandName ?? "";
+                 realSpecificName = pres.nombreEspecifico ?? "";
+                 
+                 currentPrice = (pres.precioOferta != null && pres.precioOferta! > 0) 
+                     ? pres.precioOferta! 
+                     : pres.precioVentaFinal;
+               }
+               // Si la presentación no se encontró, conservamos datos originales de la cotización
             }
-          } catch(e) { debugPrint("Producto no encontrado"); }
+            // Si el producto no se encontró, conservamos datos originales de la cotización (fallback defensivo)
+          } catch(e) { debugPrint("Producto no encontrado: $e"); }
+
+          // Check if data is outdated
+          bool isOutdated = false;
+          if (realProductName != (qItem.productName ?? "")) isOutdated = true;
+          if (!qItem.isManualPrice && (qItem.unitPriceApplied - currentPrice).abs() > 0.01) isOutdated = true;
+          if (isOutdated) outdatedItemsCount++;
 
           final matched = MatchedProduct(
             productId: qItem.productId ?? 0, 
             presentationId: qItem.presentationId ?? 0,
             fullName: qItem.displayName,
-            productName: qItem.productName ?? "", 
-            specificName: qItem.specificName,
-            brand: qItem.brandName,
+            productName: realProductName,
+            specificName: realSpecificName,
+            brand: realBrandName,
             price: qItem.originalUnitPrice, 
             stock: realStock, 
             imageUrl: realImageUrl, 
             unit: currentUnit,
-            conversionFactor: currentConversion
+            conversionFactor: currentConversion,
+            isOriginalItem: true,
           );
+
           
           _quantities[matched.presentationId] = qItem.quantity;
           if ((qItem.unitPriceApplied - qItem.originalUnitPrice).abs() > 0.01) {
              _overriddenPrices[matched.presentationId] = qItem.unitPriceApplied;
           }
           
+          // Si era custom, o si el nombre cambió, lo registramos como custom (para que lo muestre) o lo dejamos para la alerta.
+          // Wait, the logic said: Guardar el nombre original en _customNames si y solo si fue personalizado por el usuario.
+          // In bug description: "Guardar el nombre guardado en la cotización en _customNames[] solo si son diferentes (y no es 'nuevo ítem')" -> Actually wait.
+          // If we want the label to show "Cotizado como", the card uses `item.fullName` to compare against `item.displayNameClean`.
+          // So `fullName = qItem.displayName` is correct! (This holds the name from the DB when it was quoted).
+          // And `productName = realProductName` holds the new name!
+          // So if they are different, the card will show it, as long as it's not custom.
           if (qItem.productName == null || qItem.productName!.isEmpty) {
               _customNames[matched.presentationId] = qItem.displayName;
           }
 
           convertedItems.add(matched);
         }
+        
+        setState(() { 
+           _items = convertedItems; 
+           _hasUnsavedChanges = false; 
+           _outdatedItemsCount = outdatedItemsCount; // Need to declare this in the state
+        });
 
         setState(() { _items = convertedItems; _hasUnsavedChanges = false; });
       }
@@ -379,6 +421,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
         _clearClient(); _quoteTitleCtrl.clear(); _quoteNotesCtrl.clear(); _schoolCtrl.clear(); _gradeCtrl.clear();
         _hasUnsavedChanges = true;
       });
+      if (!mounted) return;
       Provider.of<SmartQuotationProvider>(context, listen: false).clearManualDraft();
       _generateDynamicName();
     }
@@ -511,6 +554,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       };
     }).toList();
 
+    if (!mounted) return;
     final wbProv = Provider.of<WorkbenchProvider>(context, listen: false);
     final qProv = Provider.of<SmartQuotationProvider>(context, listen: false);
     
@@ -661,7 +705,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
         final shouldPop = await _onWillPop();
-        if (shouldPop && mounted) Navigator.of(context).pop();
+        if (shouldPop && context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
         backgroundColor: bgColor,
@@ -706,6 +750,39 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                             "Estás explorando. Agrega productos al carrito para ver cómo funciona, pero no podrás guardar.",
                             style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
                           )
+                        )
+                      ]
+                    )
+                  ),
+                  
+                if (_outdatedItemsCount > 0 && !isClient)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.15)),
+                    child: Row(
+                      children: [
+                        Icon(Icons.sync_problem, color: Colors.blue[700]),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            "$_outdatedItemsCount productos tienen nombres o precios desactualizados en el inventario.",
+                            style: TextStyle(color: isDark ? Colors.blue[200] : Colors.blue[900], fontSize: 13, fontWeight: FontWeight.bold),
+                          )
+                        ),
+                        TextButton(
+                           onPressed: () {
+                              Provider.of<WorkbenchProvider>(context, listen: false).refreshQuotation(widget.quotationId!, fixPrices: true, fixStock: true, fixNames: true).then((_) {
+                                 if (!context.mounted) return;
+                                 CustomSnackBar.show(context, message: "Cotización actualizada correctamente.", isError: false);
+                                 _initData();
+                              }).catchError((e) {
+                                 if (!context.mounted) return;
+                                 CustomSnackBar.show(context, message: "Error al actualizar.", isError: true);
+                              });
+                           },
+                           child: Text("Sincronizar", style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold))
                         )
                       ]
                     )

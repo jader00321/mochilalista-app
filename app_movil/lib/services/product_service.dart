@@ -56,7 +56,7 @@ class ProductService {
   }
 
   Future<bool> createFullProduct({
-    required String nombre, int? marcaId, required int categoriaId, int? proveedorId, 
+    required String nombre, int? marcaId, int? categoriaId, int? proveedorId, 
     required String estado, String? descripcion, String? imagenUrl, String? codigoBarras, 
     required List<ProductPresentation> presentaciones
   }) async {
@@ -90,7 +90,7 @@ class ProductService {
   }
 
   Future<bool> editFullProduct({
-    required int productId, required String nombre, int? marcaId, required int categoriaId, 
+    required int productId, required String nombre, int? marcaId, int? categoriaId, 
     int? proveedorId, required String estado, String? descripcion, String? imagenUrl, String? codigoBarras, 
     required List<ProductPresentation> presentaciones, required List<int> idsToDelete
   }) async {

@@ -226,138 +226,146 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        title: const Text("Directorio de Clientes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add, size: 28), 
-            tooltip: "Nuevo Cliente", 
-            onPressed: _openCreateClientEditor
-          ),
-          const SizedBox(width: 8)
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(80),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Container(
-              height: 55,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF23232F) : Colors.white, 
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]
-              ),
-              child: TextField(
-                controller: _searchCtrl,
-                style: TextStyle(color: textColor, fontSize: 18),
-                onChanged: (val) => provider.setSearchQuery(val),
-                decoration: InputDecoration(
-                  hintText: "Buscar por nombre, teléfono o DNI...",
-                  hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400], fontSize: 16),
-                  prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey, size: 26),
-                  suffixIcon: _searchCtrl.text.isNotEmpty 
-                      ? IconButton(icon: Icon(Icons.clear, size: 24, color: textColor), onPressed: () { _searchCtrl.clear(); provider.setSearchQuery(""); }) 
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        color: Colors.blue[800],
+        child: CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            SliverAppBar(
+              title: const Text("Directorio de Clientes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+              elevation: 0,
+              floating: true,
+              snap: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.person_add, size: 28), 
+                  tooltip: "Nuevo Cliente", 
+                  onPressed: _openCreateClientEditor
                 ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      
-      body: Column(
-        children: [
-          if (!Provider.of<AuthProvider>(context).hasActiveContext)
-             Container(
-               width: double.infinity,
-               color: Colors.orange.withValues(alpha: 0.15),
-               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-               child: const Row(
-                 children: [
-                   Icon(Icons.info_outline, color: Colors.orange),
-                   SizedBox(width: 12),
-                   Expanded(
-                     child: Text(
-                       "Modo Exploración. Para agregar clientes a tu Directorio, debes registrar tu negocio.",
-                       style: TextStyle(fontSize: 13),
-                     )
-                   )
-                 ]
-               )
-             ),
-
-          const ClientFilterBar(),
-          
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: BoxDecoration(
-              color: surfaceColor,
-              border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  "${clients.length} clientes", 
-                  style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 15)
-                ),
-                PopupMenuButton<String>(
-                  color: surfaceColor,
-                  child: Row(
-                    children: [
-                      Icon(Icons.sort, size: 22, color: isDark ? Colors.blue[300] : Colors.blue), 
-                      const SizedBox(width: 8), 
-                      Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 16))
-                    ]
-                  ),
-                  onSelected: (val) => provider.setSort(val),
-                  itemBuilder: (ctx) => [
-                    const PopupMenuItem(value: 'name_asc', child: Text("Alfabético (A-Z)")),
-                    const PopupMenuItem(value: 'newest', child: Text("Más recientes")),
-                    const PopupMenuItem(value: 'oldest', child: Text("Más antiguos")),
-                  ],
-                )
+                const SizedBox(width: 8)
               ],
-            ),
-          ),
-
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _onRefresh, // 🔥 ARRASTRAR PARA ACTUALIZAR AÑADIDO
-              color: Colors.blue[800],
-              child: provider.isLoading && clients.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : clients.isEmpty
-                  ? ListView( // Necesita ser un scrollable para que Pull-to-refresh funcione
-                      children: [
-                        SizedBox(height: MediaQuery.of(context).size.height * 0.2),
-                        Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center, 
-                            children: [
-                              Icon(Icons.people_outline, size: 90, color: isDark ? Colors.white10 : Colors.grey[300]), 
-                              const SizedBox(height: 20), 
-                              Text("No se encontraron clientes", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 18, fontWeight: FontWeight.bold))
-                            ]
-                          )
-                        ),
-                      ],
-                    )
-                  : ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.only(top: 16, bottom: 120),
-                      itemCount: clients.length,
-                      itemBuilder: (ctx, i) => ClientCard(
-                        client: clients[i], 
-                        onRefresh: _onRefresh
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(80),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Container(
+                    height: 55,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF23232F) : Colors.white, 
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]
+                    ),
+                    child: TextField(
+                      controller: _searchCtrl,
+                      style: TextStyle(color: textColor, fontSize: 18),
+                      onChanged: (val) => provider.setSearchQuery(val),
+                      decoration: InputDecoration(
+                        hintText: "Buscar por nombre, teléfono o DNI...",
+                        hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400], fontSize: 16),
+                        prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey, size: 26),
+                        suffixIcon: _searchCtrl.text.isNotEmpty 
+                            ? IconButton(icon: Icon(Icons.clear, size: 24, color: textColor), onPressed: () { _searchCtrl.clear(); provider.setSearchQuery(""); }) 
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
+            
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  if (!Provider.of<AuthProvider>(context).hasActiveContext)
+                     Container(
+                       width: double.infinity,
+                       color: Colors.orange.withValues(alpha: 0.15),
+                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                       child: const Row(
+                         children: [
+                           Icon(Icons.info_outline, color: Colors.orange),
+                           SizedBox(width: 12),
+                           Expanded(
+                             child: Text(
+                               "Modo Exploración. Para agregar clientes a tu Directorio, debes registrar tu negocio.",
+                               style: TextStyle(fontSize: 13),
+                             )
+                           )
+                         ]
+                       )
+                     ),
+
+                  const ClientFilterBar(),
+                  
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: surfaceColor,
+                      border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "${clients.length} clientes", 
+                          style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 15)
+                        ),
+                        PopupMenuButton<String>(
+                          color: surfaceColor,
+                          child: Row(
+                            children: [
+                              Icon(Icons.sort, size: 22, color: isDark ? Colors.blue[300] : Colors.blue), 
+                              const SizedBox(width: 8), 
+                              Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 16))
+                            ]
+                          ),
+                          onSelected: (val) => provider.setSort(val),
+                          itemBuilder: (ctx) => [
+                            const PopupMenuItem(value: 'name_asc', child: Text("Alfabético (A-Z)")),
+                            const PopupMenuItem(value: 'newest', child: Text("Más recientes")),
+                            const PopupMenuItem(value: 'oldest', child: Text("Más antiguos")),
+                          ],
+                        )
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            if (provider.isLoading && clients.isEmpty)
+              const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
+            else if (clients.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center, 
+                    children: [
+                      Icon(Icons.people_outline, size: 90, color: isDark ? Colors.white10 : Colors.grey[300]), 
+                      const SizedBox(height: 20), 
+                      Text("No se encontraron clientes", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 18, fontWeight: FontWeight.bold))
+                    ]
+                  )
+                )
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.only(top: 16, bottom: 120),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (ctx, i) => ClientCard(
+                      client: clients[i], 
+                      onRefresh: _onRefresh
+                    ),
+                    childCount: clients.length,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
       
       floatingActionButton: _showScrollToTop 

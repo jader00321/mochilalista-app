@@ -44,6 +44,7 @@ class MatchingService {
           fullName: "${product.nombre} ${pres.nombreEspecifico ?? ''}".trim(),
           productName: product.nombre,
           specificName: pres.nombreEspecifico,
+          brand: product.marcaNombre,
           price: pres.precioVentaFinal,
           offerPrice: pres.precioOferta,
           stock: pres.stockActual,
@@ -109,6 +110,7 @@ class MatchingService {
             'specific_name': item['specific_name'],
             'sales_unit': item['sales_unit'],
             'original_text': item['original_text'],
+            'image_url': item['image_url'],
             'is_manual_price': item['is_manual_price'] == true || item['is_manual_price'] == 1 ? 1 : 0,
             'is_available': item['is_available'] == true || item['is_available'] == 1 ? 1 : 0,
           });

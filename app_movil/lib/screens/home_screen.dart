@@ -6,8 +6,6 @@ import '../providers/auth_provider.dart';
 import '../providers/notification_provider.dart';
 import '../features/smart_quotation/providers/workbench_provider.dart';
 import '../features/smart_quotation/providers/sale_provider.dart';
-import '../widgets/connectivity_banner.dart';
-
 import 'inventory_screen.dart';
 import 'catalog/catalog_screen.dart';
 import '../features/smart_quotation/screens/crm/client_tracking_screen.dart';
@@ -58,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     final delayMinutes = prefs.getInt('pin_delay_minutes') ?? 1;
 
+    if (!mounted) return;
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final difference = DateTime.now().difference(_pausedTime!);
     
@@ -126,11 +125,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor, 
-      body: ConnectivityBanner(
-        child: IndexedStack(
-          index: _currentIndex,
-          children: screens,
-        ),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: screens,
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
@@ -171,9 +168,11 @@ class _HomeDashboardView extends StatelessWidget {
         // 🔥 CORRECCIÓN 2: refreshActiveUser en lugar de checkInitialState completo
         await authProv.refreshActiveUser();
         if (authProv.hasActiveContext) {
+          if (!context.mounted) return;
           Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
           await Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
           if (!authProv.isCommunityClient) {
+            if (!context.mounted) return;
             await Provider.of<SaleProvider>(context, listen: false).loadSalesHistory();
           }
         }

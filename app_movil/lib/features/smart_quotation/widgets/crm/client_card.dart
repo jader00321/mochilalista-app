@@ -3,7 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/crm_models.dart';
 import '../../screens/crm/client_detail_screen.dart'; 
-import 'payment_entry_modal.dart'; 
+import 'payment_entry_modal.dart';
+import '../../../../widgets/confirm_action_modal.dart'; 
 
 class ClientCard extends StatelessWidget {
   final ClientModel client;
@@ -17,24 +18,43 @@ class ClientCard extends StatelessWidget {
       return;
     }
     
-    String msg = "Hola ${client.fullName}, te saludamos de la librería.";
-    if (client.totalDebt > 0) {
-      final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-      msg += " Te escribimos para recordarte que tienes un saldo pendiente de ${currency.format(client.totalDebt)}.";
-    }
+    ConfirmActionModal.show(
+      context,
+      title: "Enviar WhatsApp",
+      subtitle: "¿Deseas enviar un mensaje a ${client.fullName} al número ${_formatPhone(client.phone)}?",
+      icon: Icons.chat,
+      color: const Color(0xFF25D366),
+      onConfirm: () async {
+        String msg = "Hola ${client.fullName}, te saludamos de la librería.";
+        if (client.totalDebt > 0) {
+          final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
+          msg += " Te escribimos para recordarte que tienes un saldo pendiente de ${currency.format(client.totalDebt)}.";
+        }
 
-    final url = Uri.parse("https://wa.me/51${client.phone.replaceAll(' ', '')}?text=${Uri.encodeComponent(msg)}");
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo abrir WhatsApp")));
-    }
+        final url = Uri.parse("https://wa.me/51${client.phone.replaceAll(' ', '')}?text=${Uri.encodeComponent(msg)}");
+        if (await canLaunchUrl(url)) {
+          await launchUrl(url, mode: LaunchMode.externalApplication);
+        } else {
+          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo abrir WhatsApp")));
+        }
+      },
+    );
   }
 
   Future<void> _launchCall(BuildContext context) async {
     if (client.phone.isEmpty || client.phone == "000000000") return;
-    final url = Uri.parse("tel:${client.phone.replaceAll(' ', '')}");
-    if (await canLaunchUrl(url)) await launchUrl(url);
+
+    ConfirmActionModal.show(
+      context,
+      title: "Llamar al Cliente",
+      subtitle: "¿Deseas llamar a ${client.fullName} al número ${_formatPhone(client.phone)}?",
+      icon: Icons.call,
+      color: Theme.of(context).brightness == Brightness.dark ? Colors.blue[300]! : Colors.blue[600]!,
+      onConfirm: () async {
+        final url = Uri.parse("tel:${client.phone.replaceAll(' ', '')}");
+        if (await canLaunchUrl(url)) await launchUrl(url);
+      },
+    );
   }
 
   void _openPaymentModal(BuildContext context) {

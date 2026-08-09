@@ -3,7 +3,7 @@ import '../models/inventory_wrapper.dart';
 
 class ProductQueries {
   static const String selectInventoryCols = '''
-    SELECT p.*, pr.id AS pres_id, pr.nombre_especifico, pr.descripcion AS pres_desc, pr.imagen_url AS pres_img,
+    SELECT p.*, m.nombre AS marca_nombre, pr.id AS pres_id, pr.nombre_especifico, pr.descripcion AS pres_desc, pr.imagen_url AS pres_img,
     pr.codigo_barras AS pres_cb, pr.proveedor_id AS pres_prov, pr.ump_compra, pr.precio_ump_proveedor,
     pr.cantidad_ump_comprada, pr.total_pago_lote, pr.unidades_por_lote, pr.factura_carga_id,
     pr.unidad_venta, pr.unidades_por_venta, pr.costo_unitario_calculado, pr.factor_ganancia_venta,
@@ -11,6 +11,7 @@ class ProductQueries {
     pr.tipo_descuento, pr.valor_descuento, pr.estado AS pres_estado, pr.activo AS pres_activo
     FROM presentaciones_producto pr
     INNER JOIN productos p ON pr.producto_id = p.id
+    LEFT JOIN marcas m ON p.marca_id = m.id
   ''';
 
   static const String baseInventoryWhere = 'WHERE p.negocio_id = ? AND pr.activo = 1';

@@ -157,6 +157,7 @@ class Product {
   final int id;
   final String nombre;
   final int? marcaId; 
+  final String? marcaNombre; 
   final String? descripcion;
   final int categoriaId;
   final String? imagenUrl; 
@@ -169,6 +170,7 @@ class Product {
     required this.id,
     required this.nombre,
     this.marcaId, 
+    this.marcaNombre,
     this.descripcion,
     required this.categoriaId,
     this.imagenUrl,
@@ -186,6 +188,7 @@ class Product {
       id: json['id'],
       nombre: json['nombre'],
       marcaId: json['marca_id'], 
+      marcaNombre: json['marca_nombre'],
       descripcion: json['descripcion'],
       categoriaId: json['categoria_id'] ?? 0,
       imagenUrl: json['imagen_url'],

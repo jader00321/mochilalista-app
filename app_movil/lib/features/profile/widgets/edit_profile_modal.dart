@@ -79,10 +79,10 @@ class _EditProfileModalState extends State<EditProfileModal> {
                 onPressed: auth.isLoading ? null : () async {
                   if (!_formKey.currentState!.validate()) return;
                   final success = await auth.updateUserProfile(_nameCtrl.text.trim(), _phoneCtrl.text.trim());
-                  if (mounted) {
+                  if (context.mounted) {
                     if (success) {
-                      Navigator.pop(context);
                       CustomSnackBar.show(context, message: "Perfil actualizado con éxito", isError: false);
+                      Navigator.pop(context);
                     } else {
                       CustomSnackBar.show(context, message: auth.errorMessage, isError: true);
                     }
