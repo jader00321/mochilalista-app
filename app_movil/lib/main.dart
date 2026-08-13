@@ -5,35 +5,36 @@ import 'package:workmanager/workmanager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Utilidades y Seguridad
-import 'utils/backup_manager.dart';
+import 'package:app_movil/core/utils/backup_manager.dart';
 
 // Providers Principales
-import 'providers/auth_provider.dart';
-import 'providers/theme_provider.dart';
-import 'providers/notification_provider.dart'; 
-import 'providers/inventory_provider.dart'; 
-import 'providers/scanner_provider.dart';
-import 'providers/catalog_provider.dart';
-import 'providers/printer_provider.dart';
-import 'providers/invoice_provider.dart'; 
-import 'providers/team_provider.dart';
-import 'providers/backup_provider.dart'; 
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/providers/theme_provider.dart';
+import 'package:app_movil/core/providers/notification_provider.dart'; 
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart'; 
+import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
+import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
+import 'package:app_movil/core/providers/printer_provider.dart';
+import 'package:app_movil/features/scanner/providers/invoice_provider.dart'; 
+import 'package:app_movil/features/profile/providers/team_provider.dart';
+import 'package:app_movil/core/providers/backup_provider.dart'; 
 
 // Providers de Features
-import 'features/smart_quotation/providers/smart_quotation_provider.dart';
-import 'features/smart_quotation/providers/matching_provider.dart';
-import 'features/smart_quotation/providers/workbench_provider.dart';
-import 'features/smart_quotation/providers/sale_provider.dart';
-import 'features/smart_quotation/providers/tracking_provider.dart';
-import 'features/smart_quotation/providers/manual_quote_provider.dart'; 
-import 'features/smart_quotation/providers/quick_sale_provider.dart'; 
-import 'features/smart_quotation/providers/quick_search_provider.dart';
-import 'features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/manual_quote_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/providers/quick_search_provider.dart';
+import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
 
 // Screens Principales de Navegación y Seguridad
-import 'screens/home_screen.dart';
-import 'screens/onboarding/profile_selection_screen.dart';
-import 'screens/onboarding/lock_screen.dart';
+import 'package:app_movil/core/screens/home_screen.dart';
+import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
+import 'package:app_movil/features/auth/screens/onboarding/lock_screen.dart';
 
 // =========================================================================
 // 🔥 TAREA EN SEGUNDO PLANO (WORKMANAGER) PARA BACKUPS AUTOMÁTICOS
@@ -145,6 +146,16 @@ class MochilaListaApp extends StatelessWidget {
         ChangeNotifierProxyProvider<AuthProvider, ManualQuoteProvider>(
           create: (_) => ManualQuoteProvider(), 
           update: (_, auth, prov) => prov!..updateContext(auth.activeBusinessId)
+        ),
+
+        ChangeNotifierProxyProvider<AuthProvider, PromotionProvider>(
+          create: (_) => PromotionProvider(),
+          update: (context, auth, prov) {
+             final p = prov ?? PromotionProvider();
+             final inventory = Provider.of<InventoryProvider>(context, listen: false);
+             p.updateContext(auth.activeBusinessId ?? 0, inventory);
+             return p;
+          }
         ),
         ChangeNotifierProxyProvider<AuthProvider, QuickSearchProvider>(
           create: (_) => QuickSearchProvider(), 

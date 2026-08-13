@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../models/inventory_wrapper.dart';
-import '../../../../providers/inventory_provider.dart';
-import '../../../../widgets/universal_image.dart';
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
 
 class QuickSearchResultTile extends StatelessWidget {
   final InventoryWrapper item;
@@ -29,10 +29,12 @@ class QuickSearchResultTile extends StatelessWidget {
     final double originalPrice = item.presentation.precioVentaFinal; 
     final double currentPrice = item.effectivePrice;
 
-    String variantDisplay = item.presentation.umpCompra ?? "Unidad";
+    String variantDisplay = item.presentation.unidadVenta ?? "Unidad";
     if (item.presentation.nombreEspecifico != null && item.presentation.nombreEspecifico!.isNotEmpty) {
       variantDisplay += " - ${item.presentation.nombreEspecifico}";
     }
+    
+    bool showBrand = brandName.isNotEmpty && !item.product.nombre.toUpperCase().contains(brandName.toUpperCase());
 
     return Opacity(
       opacity: isOut ? 0.5 : 1.0,
@@ -68,11 +70,28 @@ class QuickSearchResultTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (brandName.isNotEmpty)
-                      Text(brandName.toUpperCase(), style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[800], fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                    Text(item.product.nombre, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Text(variantDisplay, style: TextStyle(fontSize: 14, color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    RichText(
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      text: TextSpan(
+                        style: TextStyle(fontSize: 16, color: textColor, height: 1.2),
+                        children: [
+                          if (showBrand)
+                            TextSpan(
+                              text: "${brandName.toUpperCase()} ",
+                              style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                            ),
+                          TextSpan(
+                            text: item.product.nombre,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          TextSpan(
+                            text: " $variantDisplay",
+                            style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontStyle: FontStyle.italic),
+                          ),
+                        ]
+                      ),
+                    ),
                   ],
                 ),
               ),

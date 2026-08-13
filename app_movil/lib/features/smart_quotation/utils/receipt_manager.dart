@@ -3,10 +3,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:open_filex/open_filex.dart';
 
-import '../models/smart_quotation_model.dart';
-import '../../../models/user_model.dart';
-import '../models/pdf_config_model.dart';
-import 'pdf_generator.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/core/models/user_model.dart';
+import 'package:app_movil/features/smart_quotation/models/pdf_config_model.dart';
+import 'package:app_movil/features/smart_quotation/utils/pdf_generator.dart';
 
 class ReceiptManager {
   
@@ -38,7 +38,7 @@ class ReceiptManager {
       showProductSubtotal: true,       // 🔥 Mostramos el total final del producto
       showProductSavings: false,       // 🔥 Oculto en ticket rápido
       
-      showTotalSavings: false, 
+      showTotalSavings: true,          // 🔥 Mostrar AHORRO TOTAL
       showTotalGlobal: true, 
     );
 

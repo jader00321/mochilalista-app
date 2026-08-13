@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../models/matching_model.dart';
-import '../../../../../widgets/universal_image.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
 
 class ManualQuoteItemCard extends StatelessWidget {
   final MatchedProduct item;
@@ -140,17 +140,13 @@ class ManualQuoteItemCard extends StatelessWidget {
                             if (brandName.isNotEmpty && brandName.toLowerCase() != "null") 
                               Text(brandName.toUpperCase(), style: textTheme.labelMedium?.copyWith(color: isDark ? Colors.indigo[300] : Colors.indigo[600], letterSpacing: 0.5)),
                             
-                            RichText(
-                               maxLines: 2,
-                               overflow: TextOverflow.ellipsis,
-                               text: TextSpan(
-                                 children: [
-                                   TextSpan(text: "${item.productName} ", style: textTheme.titleMedium?.copyWith(color: textColor)),
-                                   if (item.specificName != null && item.specificName!.isNotEmpty)
-                                     TextSpan(text: item.specificName!, style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w600)),
-                                 ],
-                               ),
-                             ),
+                            Text(item.productName, style: textTheme.titleMedium?.copyWith(color: textColor, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            
+                            if (item.specificName != null && item.specificName!.isNotEmpty && item.specificName != "Paquete")
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(item.specificName!, style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
                           ],
                           
                           const SizedBox(height: 8),

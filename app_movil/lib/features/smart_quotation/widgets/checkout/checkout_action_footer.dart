@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/sale_provider.dart';
-import '../../models/crm_models.dart';
-import '../../models/smart_quotation_model.dart';
-import '../../../../widgets/custom_snackbar.dart';
-import 'checkout_progress_dialog.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/widgets/checkout/checkout_progress_dialog.dart';
 
 class CheckoutActionFooter extends StatelessWidget {
   final bool isDark;
@@ -186,7 +186,7 @@ class CheckoutActionFooter extends StatelessWidget {
                         child: ElevatedButton(
                           onPressed: () {
                             Navigator.pop(ctx); 
-                            _submitSale(context, finalTotal, discount); 
+                            _submitSale(context, finalTotal + interestSurcharge, discount); 
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue[800], 
@@ -234,7 +234,7 @@ class CheckoutActionFooter extends StatelessWidget {
     );
   }
 
-  void _submitSale(BuildContext context, double finalTotal, double discountAmt) {
+  void _submitSale(BuildContext context, double trueTotal, double discountAmt) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -245,7 +245,7 @@ class CheckoutActionFooter extends StatelessWidget {
         paymentStatus: paymentStatus,
         deliveryStatus: deliveryStatus,
         deliveryDate: deliveryDate,
-        total: finalTotal,
+        total: trueTotal,
         paid: paidAmount,
         discount: discountAmt,
         interestRate: interestRate,

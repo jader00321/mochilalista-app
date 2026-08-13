@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../models/product_model.dart';
-import '../../models/matching_model.dart';
-import '../../../../providers/inventory_provider.dart';
-import '../../../../widgets/universal_image.dart';
+import 'package:app_movil/features/catalog/models/product_model.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
 
 class QuickSaleDetailModal extends StatefulWidget {
   final MatchedProduct product;
@@ -145,7 +145,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
         offerPrice: (pres.precioOferta != null && pres.precioOferta! > 0) ? pres.precioOferta : null,
         stock: pres.stockActual,
         imageUrl: pres.imagenUrl ?? _fullProduct!.imagenUrl,
-        unit: pres.umpCompra ?? "Unidad", 
+        unit: pres.unidadVenta ?? "Unidad", 
         conversionFactor: pres.unidadesPorLote, 
       );
       
@@ -208,6 +208,8 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     
     bool isStockEmpty = _currentSelection.stock <= 0;
     bool exceedsStock = currentQty > _currentSelection.stock && !_currentSelection.stock.isNegative;
+    
+    bool showBrand = brandName.isNotEmpty && !_currentSelection.productName.toUpperCase().contains(brandName.toUpperCase());
 
     return SafeArea(
       child: Container(
@@ -238,9 +240,27 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (brandName.isNotEmpty) Text(brandName.toUpperCase(), style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[800], fontWeight: FontWeight.w900, fontSize: 13)),
-                        Text(_currentSelection.productName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, height: 1.2, color: textColor)),
-                        if (_currentSelection.specificName != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(_currentSelection.specificName!, style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.bold, fontSize: 15))),
+                        RichText(
+                          text: TextSpan(
+                            style: TextStyle(fontSize: 20, height: 1.2, color: textColor),
+                            children: [
+                              if (showBrand)
+                                TextSpan(
+                                  text: "${brandName.toUpperCase()} ",
+                                  style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                ),
+                              TextSpan(
+                                text: _currentSelection.productName,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              if (_currentSelection.specificName != null)
+                                TextSpan(
+                                  text: " ${_currentSelection.specificName!}",
+                                  style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontStyle: FontStyle.italic),
+                                ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -269,7 +289,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                       return Padding(
                         padding: const EdgeInsets.only(right: 10),
                         child: ChoiceChip(
-                          label: Text(p.umpCompra ?? "Unidad", style: TextStyle(fontSize: 15, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)), 
+                          label: Text(p.unidadVenta ?? "Unidad", style: TextStyle(fontSize: 15, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)), 
                           selected: isSelected, 
                           onSelected: (v) => v ? _updateVariant(p) : null, 
                           selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100],

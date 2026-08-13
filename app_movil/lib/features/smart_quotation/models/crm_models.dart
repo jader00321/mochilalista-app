@@ -164,8 +164,28 @@ class SaleSummary {
   final String status;
   final String origenVenta; 
   final int itemsCount;     
+  final double abonoInicial;
+  final double porcentajeInteres;
+  final String estadoPago;
 
-  SaleSummary({required this.id, required this.total, this.montoPagado = 0.0, required this.date, required this.status, this.origenVenta = "smart_quotation", this.itemsCount = 0});
+  SaleSummary({
+    required this.id, 
+    required this.total, 
+    this.montoPagado = 0.0, 
+    required this.date, 
+    required this.status, 
+    this.origenVenta = "smart_quotation", 
+    this.itemsCount = 0,
+    this.abonoInicial = 0.0,
+    this.porcentajeInteres = 0.0,
+    this.estadoPago = "pagado"
+  });
+
+  double get trueTotal {
+    // El monto_total (total) ahora ya incluye el interés desde la base de datos
+    // por lo que no es necesario volver a sumarlo dinámicamente.
+    return total;
+  }
 
   factory SaleSummary.fromJson(Map<String, dynamic> json) {
     return SaleSummary(
@@ -176,6 +196,9 @@ class SaleSummary {
       status: json['estado_entrega'] ?? "entregado",
       origenVenta: json['origen_venta'] ?? "smart_quotation",
       itemsCount: json['items_count'] ?? 0,
+      abonoInicial: _parseDouble(json['abono_inicial']),
+      porcentajeInteres: _parseDouble(json['porcentaje_interes']),
+      estadoPago: json['estado_pago'] ?? "pagado",
     );
   }
 }
@@ -249,6 +272,11 @@ class SaleModel {
   final double porcentajeInteres;
   final String saleDate;
   final List<InstallmentModel> installments; 
+  
+  double get trueTotalAmount {
+    // El interés ya está sumado en el totalAmount guardado en la BD
+    return totalAmount;
+  }
 
   SaleModel({
     required this.id,

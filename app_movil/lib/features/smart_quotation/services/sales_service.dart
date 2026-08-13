@@ -1,7 +1,7 @@
-import '../models/crm_models.dart';
-import '../../../database/local_db.dart';
-import '../../../repositories/sale_repository.dart';
-import 'client_service.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/features/smart_quotation/repositories/sale_repository.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 
 class SalesService {
   final dbHelper = LocalDatabase.instance;
@@ -61,66 +61,109 @@ class SalesService {
                   'brand_name': e['brand_name'],
                   'specific_name': e['specific_name'],
                   'unidad_medida': e['sales_unit'],
-                  'original_text': e['original_text'],
                   'image_url': e['image_url'],
                   'is_manual_price': e['is_manual_price'],
+                  'bundle_id': e['bundle_id'],
                 },
               )
               .toList();
         }
 
         for (var item in items) {
-          if (item['presentation_id'] == null) continue;
-          int presId = item['presentation_id'];
           int quantity = item['quantity'] ?? 1;
 
-          final presCheck = await txn.query(
-            'presentaciones_producto',
-            columns: ['stock_actual', 'stock_alerta'],
-            where: 'id = ?',
-            whereArgs: [presId],
-          );
-          if (presCheck.isEmpty) {
-            throw Exception("Producto no encontrado en inventario.");
-          }
-          int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-          int stockAlerta = (presCheck.first['stock_alerta'] as int?) ?? 5;
-          
-          if (currentStock < quantity) {
-            throw Exception("Stock insuficiente para uno de los productos.");
-          }
-          
-          int newStock = currentStock - quantity;
+          // UN-KITTING LOGIC
+          if (item['bundle_id'] != null) {
+            int bundleId = item['bundle_id'];
+            final bundleItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bundleId]);
+            
+            for (var bItem in bundleItems) {
+              int presId = bItem['presentacion_id'] as int;
+              int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
+              int totalDeduct = qtyReq * quantity;
 
-          await txn.rawUpdate(
-            'UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?',
-            [newStock, presId],
-          );
-          
-          if (newStock <= stockAlerta && item['product_id'] != null) {
-             String prodName = item['nombre_producto'] ?? item['product_name'] ?? 'Producto';
-             final existNotif = await txn.query('notificaciones', where: 'negocio_id = ? AND objeto_relacionado_tipo = ? AND objeto_relacionado_id = ?', whereArgs: [negocioId, 'producto', item['product_id']]);
-             if (existNotif.isNotEmpty) {
-                 await txn.update('notificaciones', {
-                     'titulo': '⚠️ Stock Bajo: $prodName',
-                     'mensaje': 'Una venta reciente provocó que el stock cayera por debajo del nivel de alerta configurado. Toca para ver el estado actual y reabastecer.',
-                     'leida': 0,
-                     'fecha_creacion': DateTime.now().toIso8601String()
-                 }, where: 'id = ?', whereArgs: [existNotif.first['id']]);
-             } else {
-                 await txn.insert('notificaciones', {
-                     'user_id': usuarioId,
-                     'negocio_id': negocioId,
-                     'titulo': '⚠️ Stock Bajo: $prodName',
-                     'mensaje': 'Una venta reciente provocó que el stock cayera por debajo del nivel de alerta configurado. Toca para ver el estado actual y reabastecer.',
-                     'tipo': 'alerta',
-                     'prioridad': 'Alta',
-                     'leida': 0,
-                     'objeto_relacionado_tipo': 'producto',
-                     'objeto_relacionado_id': item['product_id'],
-                     'fecha_creacion': DateTime.now().toIso8601String()
-                 });
-             }
+              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final'], where: 'id = ?', whereArgs: [presId]);
+              if (presCheck.isNotEmpty) {
+                int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
+                if (currentStock < totalDeduct) throw Exception("Stock insuficiente para un componente del paquete.");
+                await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - totalDeduct, presId]);
+                
+                // Registro en Trazabilidad Histórica (Audit Log)
+                await txn.insert('stock_ledger', {
+                  'presentation_id': presId,
+                  'negocio_id': negocioId,
+                  'tipo_transaccion': 'VENTA',
+                  'cantidad': -totalDeduct,
+                  'costo_unitario': presCheck.first['costo_unitario_calculado'],
+                  'precio_venta': presCheck.first['precio_venta_final'],
+                  'origen_id': saleId,
+                  'fecha_registro': DateTime.now().toIso8601String(),
+                });
+              }
+            }
+          } else if (item['presentation_id'] != null) {
+            int presId = item['presentation_id'];
+
+            final presCheck = await txn.query(
+              'presentaciones_producto',
+              columns: ['stock_actual', 'stock_alerta', 'costo_unitario_calculado', 'precio_venta_final'],
+              where: 'id = ?',
+              whereArgs: [presId],
+            );
+            if (presCheck.isEmpty) {
+              throw Exception("Producto no encontrado en inventario.");
+            }
+            int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
+            int stockAlerta = (presCheck.first['stock_alerta'] as int?) ?? 5;
+            
+            if (currentStock < quantity) {
+              throw Exception("Stock insuficiente para uno de los productos.");
+            }
+            
+            int newStock = currentStock - quantity;
+
+            await txn.rawUpdate(
+              'UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?',
+              [newStock, presId],
+            );
+            
+            // Registro en Trazabilidad Histórica (Audit Log)
+            await txn.insert('stock_ledger', {
+              'presentation_id': presId,
+              'negocio_id': negocioId,
+              'tipo_transaccion': 'VENTA',
+              'cantidad': -quantity,
+              'costo_unitario': presCheck.first['costo_unitario_calculado'],
+              'precio_venta': item['unit_price'] ?? item['precio_unitario'] ?? presCheck.first['precio_venta_final'],
+              'origen_id': saleId,
+              'fecha_registro': DateTime.now().toIso8601String(),
+            });
+            
+            if (newStock <= stockAlerta && item['product_id'] != null) {
+               String prodName = item['nombre_producto'] ?? item['product_name'] ?? 'Producto';
+               final existNotif = await txn.query('notificaciones', where: 'negocio_id = ? AND objeto_relacionado_tipo = ? AND objeto_relacionado_id = ?', whereArgs: [negocioId, 'producto', item['product_id']]);
+               if (existNotif.isNotEmpty) {
+                   await txn.update('notificaciones', {
+                       'titulo': '⚠️ Stock Bajo: $prodName',
+                       'mensaje': 'Una venta reciente provocó que el stock cayera por debajo del nivel de alerta configurado. Toca para ver el estado actual y reabastecer.',
+                       'leida': 0,
+                       'fecha_creacion': DateTime.now().toIso8601String()
+                   }, where: 'id = ?', whereArgs: [existNotif.first['id']]);
+               } else {
+                   await txn.insert('notificaciones', {
+                       'user_id': usuarioId,
+                       'negocio_id': negocioId,
+                       'titulo': '⚠️ Stock Bajo: $prodName',
+                       'mensaje': 'Una venta reciente provocó que el stock cayera por debajo del nivel de alerta configurado. Toca para ver el estado actual y reabastecer.',
+                       'tipo': 'alerta',
+                       'prioridad': 'Alta',
+                       'leida': 0,
+                       'objeto_relacionado_tipo': 'producto',
+                       'objeto_relacionado_id': item['product_id'],
+                       'fecha_creacion': DateTime.now().toIso8601String()
+                   });
+               }
+            }
           }
 
           double unitPrice =
@@ -128,7 +171,8 @@ class SalesService {
 
           await txn.insert('venta_items', {
             'venta_id': saleId,
-            'presentation_id': presId,
+            'presentation_id': item['presentation_id'],
+            'bundle_id': item['bundle_id'],
             'product_id': item['product_id'],
             'cantidad': quantity,
             'precio_unitario': unitPrice,
@@ -299,9 +343,13 @@ class SalesService {
     }
   }
 
-  Future<String> updateDeliveryStatus(int saleId, String newStatus) async {
+  Future<String> updateDeliveryStatus(int saleId, String newStatus, {String? fotoPath}) async {
     try {
-      await _repository.updateSaleField(saleId, {'estado_entrega': newStatus});
+      final Map<String, dynamic> updateData = {'estado_entrega': newStatus};
+      if (fotoPath != null) {
+        updateData['foto_entrega'] = fotoPath;
+      }
+      await _repository.updateSaleField(saleId, updateData);
       
       final saleRows = await _repository.getSaleByIdRaw(saleId);
       if (saleRows.isNotEmpty && saleRows.first['cliente_id'] != null) {

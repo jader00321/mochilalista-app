@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/client_service.dart';
-import '../models/crm_models.dart';
-import '../models/smart_quotation_model.dart'; 
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart'; 
 
 class TrackingProvider with ChangeNotifier {
   int? _negocioId;
@@ -19,7 +19,7 @@ class TrackingProvider with ChangeNotifier {
   bool _filterHasDebt = false;
   bool _filterPendingDelivery = false;
   String _filterConfidenceLevel = "todos"; 
-  String _currentSort = "name_asc";
+  String _currentSort = "newest";
   bool _filterIsAppClient = false; 
 
   // --- ESTADO DEL DETALLE DEL CLIENTE ---
@@ -63,7 +63,7 @@ class TrackingProvider with ChangeNotifier {
       _filterHasDebt = false;
       _filterPendingDelivery = false;
       _filterConfidenceLevel = "todos"; 
-      _currentSort = "name_asc";
+      _currentSort = "newest";
       _filterIsAppClient = false; 
     }
   }

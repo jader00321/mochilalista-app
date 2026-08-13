@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../models/product_model.dart';
-import '../../models/matching_model.dart';
-import '../../../../providers/inventory_provider.dart';
-import '../../../../providers/auth_provider.dart'; 
-import '../../../../widgets/universal_image.dart';
-import '../../../../widgets/full_screen_image_viewer.dart';
-import '../../../../widgets/custom_snackbar.dart'; 
-import 'manual_price_modifier.dart';
+import 'package:app_movil/features/catalog/models/product_model.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart'; 
+import 'package:app_movil/core/widgets/universal_image.dart';
+import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_price_modifier.dart';
 
 class ManualQuoteDetailModal extends StatefulWidget {
   final MatchedProduct product;
@@ -49,6 +49,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
 
   bool _isManualPrice = false;
   bool _isSyncing = false;
+  String? _currentCustomName;
 
   @override
   void initState() {
@@ -71,6 +72,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
       _discountCtrl.text = "";
     }
     
+    _currentCustomName = widget.initialCustomName;
     _loadVariants();
   }
 
@@ -163,7 +165,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
         fullName: fullNameBuilder,
         productName: _fullProduct!.nombre,
         specificName: pres.nombreEspecifico,
-        brand: _currentSelection.brand,
+        brand: _fullProduct!.marcaNombre ?? _currentSelection.brand,
         price: pres.precioVentaFinal, 
         offerPrice: (pres.precioOferta != null && pres.precioOferta! > 0) ? pres.precioOferta : null,
         stock: pres.stockActual,
@@ -176,6 +178,8 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
       _isManualPrice = false;
       _priceCtrl.text = _systemPrice.toStringAsFixed(2);
       _discountCtrl.text = "";
+      
+      _currentCustomName = null; // Reseteamos el custom name al cambiar de variante
       
       int currentQty = int.tryParse(_qtyCtrl.text) ?? 1;
       
@@ -197,7 +201,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
       overridePrice = finalPrice;
     }
     
-    String finalName = widget.initialCustomName ?? ""; 
+    String finalName = _currentCustomName ?? ""; 
     widget.onConfirm(_currentSelection, finalQty, overridePrice, finalName.isNotEmpty ? finalName : null);
     
     String message = "";
@@ -254,23 +258,16 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                           !originalName.toLowerCase().contains("nuevo ítem") &&
                           !hasCustomName;
 
-    final double initialSize = isClient ? 0.60 : 0.85;
-    final double maxSize = isClient ? 0.75 : 0.95;
-    final double minSize = isClient ? 0.50 : 0.60;
-
-    return DraggableScrollableSheet(
-      initialChildSize: initialSize, 
-      minChildSize: minSize,
-      maxChildSize: maxSize, 
-      builder: (_, controller) {
-        return Container(
-          decoration: BoxDecoration(color: surfaceColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
-          child: ListView(
-            controller: controller,
-            padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+    return SafeArea(
+      child: Container(
+        padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+        decoration: BoxDecoration(color: surfaceColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
-              const SizedBox(height: 24),
+              Center(child: Container(width: 50, height: 5, margin: const EdgeInsets.only(bottom: 24), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
 
               if (isNameChanged)
                 Container(
@@ -494,8 +491,8 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
               ),
             ],
           ),
-        );
-      }
+        ),
+      ),
     );
   }
 }

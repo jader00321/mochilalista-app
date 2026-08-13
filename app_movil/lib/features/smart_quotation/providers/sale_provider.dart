@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; 
-import '../services/sales_service.dart';
-import '../services/quotation_service.dart';
-import '../services/client_service.dart';
-import '../models/smart_quotation_model.dart';
-import '../models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/services/sales_service.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_service.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 class SaleProvider with ChangeNotifier {
   int? _negocioId;
@@ -319,13 +319,13 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> updateDeliveryStatus(int saleId, String newStatus) async {
+  Future<bool> updateDeliveryStatus(int saleId, String newStatus, {String? fotoPath}) async {
     if (_negocioId == null) return false;
     _isLoading = true;
     notifyListeners();
 
     try {
-      await _salesService.updateDeliveryStatus(saleId, newStatus);
+      await _salesService.updateDeliveryStatus(saleId, newStatus, fotoPath: fotoPath);
       return true; 
     } catch (e) {
       _handleException(e);
@@ -372,12 +372,17 @@ class SaleProvider with ChangeNotifier {
         startStr = DateTime(now.year, now.month, 1).toIso8601String();
         endStr = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
         break;
+      case 'seis_meses':
+        startStr = DateTime(now.year, now.month - 6, now.day).toIso8601String();
+        endStr = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+        break;
       case 'personalizado':
         if (customStart != null && customEnd != null) {
           startStr = customStart.toIso8601String();
           endStr = DateTime(customEnd.year, customEnd.month, customEnd.day, 23, 59, 59).toIso8601String();
         }
         break;
+      case 'todo':
       case 'todas':
       default:
         startStr = null;
@@ -421,15 +426,51 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
-  String generateCsvData(String currencyName) {
-    if (_salesHistory.isEmpty) return "";
-    String curr = currencyName.split(' ').first; 
-    String csv = "ID Venta,Fecha,Metodo Pago,Estado Pago,Estado Entrega,Total($curr),Pagado($curr),Descuento($curr)\n";
-    for (var sale in _salesHistory) {
-      final dateFormatted = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(sale.saleDate));
-      csv += "${sale.id},$dateFormatted,${sale.paymentMethod},${sale.paymentStatus},${sale.deliveryStatus},${sale.totalAmount},${sale.paidAmount},${sale.discount}\n";
+  Future<String> exportFilteredHistoryCsv(String currencyName) async {
+    if (_negocioId == null) return "";
+    try {
+      bool isArchivedTab = _currentTab == "archivadas";
+      String? origen = (_currentTab == "todas" || _currentTab == "archivadas") ? null : _currentTab;
+
+      final allSales = await _salesService.getHistory(
+        _negocioId!,
+        skip: 0,
+        limit: -1, 
+        startDate: _currentStartDate,
+        endDate: _currentEndDate,
+        searchQuery: _searchQuery,
+        isArchived: isArchivedTab,
+        origenVenta: origen,
+        sortBy: _currentSortBy,
+        order: _currentOrder,
+      );
+
+      if (allSales.isEmpty) return "";
+      
+      String curr = currencyName.split(' ').first; 
+      String csv = "ID Venta,Fecha,Cliente,Origen Venta,Metodo Pago,Estado Pago,Estado Entrega,Total($curr),Pagado($curr),Descuento($curr),Deuda($curr)\n";
+      
+      for (var sale in allSales) {
+        final dateFormatted = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(sale.saleDate));
+        
+        String clientName = sale.clientName ?? "Cliente General";
+        clientName = clientName.replaceAll(',', ' '); // Avoid CSV break
+        
+        String originName = sale.origenVenta == 'smart_quotation' ? 'Listas Escolares' 
+                          : sale.origenVenta == 'pos_rapido' ? 'Caja Rapida' 
+                          : sale.origenVenta;
+
+        double debt = (sale.trueTotalAmount > sale.paidAmount && sale.paymentStatus != 'pagado') 
+            ? (sale.trueTotalAmount - sale.paidAmount) 
+            : 0.0;
+
+        csv += "${sale.id},$dateFormatted,$clientName,$originName,${sale.paymentMethod},${sale.paymentStatus},${sale.deliveryStatus},${sale.trueTotalAmount},${sale.paidAmount},${sale.discount},$debt\n";
+      }
+      return csv;
+    } catch (e) {
+      _handleException(e);
+      return "";
     }
-    return csv;
   }
 
   Future<Map<String, dynamic>?> getSaleDetailSilently(int saleId) async {

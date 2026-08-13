@@ -6,20 +6,20 @@ import 'package:provider/provider.dart';
 import 'package:gal/gal.dart'; 
 import 'package:permission_handler/permission_handler.dart';
 
-import '../providers/workbench_provider.dart';
-import '../providers/smart_quotation_provider.dart';
-import '../../../providers/auth_provider.dart'; 
-import '../models/smart_quotation_model.dart';
-import '../models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
-import '../../../widgets/custom_snackbar.dart';
-import '../../../widgets/full_screen_image_viewer.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
 
-import '../widgets/smart_update_modal.dart';
-import '../widgets/detalle/quote_detail_header.dart';        
-import '../widgets/detalle/quote_evidence_panel.dart';       
-import '../widgets/detalle/quote_item_list_row.dart';        
-import '../widgets/detalle/quotation_action_buttons.dart';
+import 'package:app_movil/features/smart_quotation/widgets/smart_update_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_detail_header.dart';        
+import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_evidence_panel.dart';       
+import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_item_list_row.dart';        
+import 'package:app_movil/features/smart_quotation/widgets/detalle/quotation_action_buttons.dart';
 
 
 class QuotationDetailScreen extends StatefulWidget {

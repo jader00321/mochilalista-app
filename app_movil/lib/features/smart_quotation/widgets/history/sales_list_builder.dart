@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../providers/sale_provider.dart';
-import 'sale_action_bottom_sheet.dart';
-import '../../../../widgets/empty_state_widget.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/sale_action_bottom_sheet.dart';
+import 'package:app_movil/core/widgets/empty_state_widget.dart';
 
 class SalesListBuilder extends StatefulWidget {
   const SalesListBuilder({super.key});
@@ -152,7 +152,7 @@ class _SalesListBuilderState extends State<SalesListBuilder> {
                           Padding(
                             padding: const EdgeInsets.only(left: 12),
                             child: Text(
-                              currency.format(sale.totalAmount),
+                              currency.format(sale.trueTotalAmount),
                               style: TextStyle(
                                 fontSize: 20, fontWeight: FontWeight.w900, 
                                 color: sale.isArchived ? Colors.grey : (isDark ? Colors.blue[300] : Colors.blue[900]),

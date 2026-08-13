@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../providers/matching_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
 
 class MatchingSmartBottomBar extends StatelessWidget {
   final MatchingProvider provider;

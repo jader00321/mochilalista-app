@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
-import '../../providers/sale_provider.dart';
-import '../sale_history_detail_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_screen.dart'; 
 
 class SaleFinancialDetailScreen extends StatefulWidget {
   final int saleId;
@@ -78,9 +82,58 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
             onPressed: () async {
               Navigator.pop(ctx);
-              setState(() => _isLoading = true);
               final provider = Provider.of<SaleProvider>(context, listen: false);
-              final success = await provider.updateDeliveryStatus(widget.saleId, selectedStatus);
+              
+              String? fotoPath;
+              if (selectedStatus == 'entregado' && currentStatus != 'entregado') {
+                 // Preguntar si desea tomar foto
+                 bool? takePhoto = await showDialog<bool>(
+                   context: context,
+                   builder: (ctx2) => AlertDialog(
+                     backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                     title: Row(
+                       children: [
+                         Icon(Icons.camera_alt, color: Colors.blue[600], size: 28),
+                         const SizedBox(width: 10),
+                         Expanded(child: Text("Evidencia de Entrega", style: TextStyle(color: isDark ? Colors.white : Colors.black87))),
+                       ],
+                     ),
+                     content: Text("Recomendamos tomar una foto de los productos o de la guía firmada. ¿Deseas capturarla ahora?", style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16)),
+                     actions: [
+                       TextButton(
+                         onPressed: () => Navigator.pop(ctx2, false), 
+                         child: Text("No, solo marcar", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]))
+                       ),
+                       ElevatedButton(
+                         style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white),
+                         onPressed: () => Navigator.pop(ctx2, true),
+                         child: const Text("Sí, tomar foto")
+                       )
+                     ],
+                   )
+                 );
+
+                 if (takePhoto == true) {
+                   final ImagePicker picker = ImagePicker();
+                   final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+                   if (image != null) {
+                     try {
+                       // Guardar permanentemente
+                       final Directory appDocDir = await getApplicationDocumentsDirectory();
+                       final String newPath = p.join(appDocDir.path, 'entrega_${widget.saleId}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+                       final File savedImage = await File(image.path).copy(newPath);
+                       fotoPath = savedImage.path;
+                     } catch (e) {
+                       debugPrint("Error guardando foto: $e");
+                     }
+                   }
+                 }
+              }
+
+              if (!mounted) return;
+              setState(() => _isLoading = true);
+              final success = await provider.updateDeliveryStatus(widget.saleId, selectedStatus, fotoPath: fotoPath);
               
               if (success) {
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Logística actualizada"), backgroundColor: Colors.green));
@@ -148,10 +201,9 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
     // 🔥 Parseo double seguro desde SQLite
     final double baseTotal = (num.tryParse(_saleData!['monto_total'].toString()) ?? 0.0).toDouble();
     final double pagado = (num.tryParse(_saleData!['monto_pagado'].toString()) ?? 0.0).toDouble();
-    final double abonoInicial = (num.tryParse(_saleData!['abono_inicial']?.toString() ?? '0') ?? 0.0).toDouble();
     final double interes = (num.tryParse(_saleData!['porcentaje_interes']?.toString() ?? '0') ?? 0.0).toDouble();
-    
-    final double total = (baseTotal - abonoInicial) * (1 + (interes / 100)) + abonoInicial;
+    // La variable abonoInicial ya no es necesaria aquí, ya que monto_total incluye todo el cálculo y monto_pagado contabiliza el abono.
+    final double total = baseTotal;
 
     double saldo = total - pagado;
     if (saldo <= 0.02) saldo = 0.0;
@@ -492,30 +544,56 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
       color = isDark ? Colors.purple[300]! : Colors.purple;
     }
 
+    final String? fotoEntrega = _saleData!['foto_entrega'];
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5)),
-      child: Row(
+      child: Column(
         children: [
-          CircleAvatar(radius: 24, backgroundColor: color.withValues(alpha: 0.2), child: Icon(icon, color: color, size: 24)),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Logística: $title", style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 16)),
-                const SizedBox(height: 4),
-                Text(subtitle, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 13)),
-              ],
-            ),
+          Row(
+            children: [
+              CircleAvatar(radius: 24, backgroundColor: color.withValues(alpha: 0.2), child: Icon(icon, color: color, size: 24)),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Logística: $title", style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text(subtitle, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 13)),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit, size: 24),
+                color: color,
+                tooltip: "Modificar Estado",
+                onPressed: () => _showChangeStatusDialog(deliveryStatus, isDark), 
+              )
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.edit, size: 24),
-            color: color,
-            tooltip: "Modificar Estado",
-            onPressed: () => _showChangeStatusDialog(deliveryStatus, isDark), 
-          )
+          if (fotoEntrega != null && fotoEntrega.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.black12, borderRadius: BorderRadius.circular(12)),
+              child: TextButton.icon(
+                icon: Icon(Icons.photo_camera, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                label: Text("Ver Foto de Entrega", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold)),
+                onPressed: () {
+                   showDialog(context: context, builder: (_) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.file(File(fotoEntrega))
+                      )
+                   ));
+                },
+              ),
+            )
+          ]
         ],
       ),
     );

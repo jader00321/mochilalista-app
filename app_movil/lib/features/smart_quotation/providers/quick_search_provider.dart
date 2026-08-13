@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../models/inventory_wrapper.dart';
-import '../../../services/product_service.dart';
-import '../../../database/local_db.dart';
-import '../../../database/product_queries.dart';
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/catalog/services/product_service.dart';
+import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/database/product_queries.dart';
 
 class QuickSearchProvider with ChangeNotifier {
   int? _negocioId;

@@ -3,22 +3,25 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../providers/analytics_provider.dart';
-import '../services/analytics_export_service.dart';
-import '../../../providers/auth_provider.dart';
-import '../../../widgets/custom_snackbar.dart';
-import '../widgets/charts/monthly_sales_chart.dart';
-import '../widgets/charts/origin_pie_chart.dart';
-import '../widgets/charts/sales_by_day_chart.dart';
-import '../widgets/charts/top_products_chart.dart';
-import '../widgets/insights_carousel.dart';
-import '../widgets/dashboard/financial_summary_card.dart';
-import '../widgets/dashboard/kpi_summary_row.dart';
-import '../widgets/dashboard/top_clients_card.dart';
-import '../widgets/dashboard/extra_metrics_card.dart';
-import '../widgets/dashboard/restock_alerts_card.dart';
-import '../widgets/dashboard/dead_stock_card.dart';
-import '../widgets/dashboard/top_categories_card.dart';
+import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/features/analytics/services/analytics_export_service.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/analytics/widgets/charts/monthly_sales_chart.dart';
+import 'package:app_movil/features/analytics/widgets/charts/payment_method_chart.dart';
+import 'package:app_movil/features/analytics/widgets/charts/origin_pie_chart.dart';
+import 'package:app_movil/features/analytics/widgets/charts/sales_by_day_chart.dart';
+import 'package:app_movil/features/analytics/widgets/charts/top_products_chart.dart';
+import 'package:app_movil/features/analytics/widgets/insights_carousel.dart';
+import 'package:app_movil/features/analytics/widgets/dashboard/financial_summary_card.dart';
+import 'package:app_movil/features/analytics/widgets/dashboard/kpi_summary_row.dart';
+import 'package:app_movil/features/analytics/widgets/dashboard/top_clients_card.dart';
+import 'package:app_movil/features/analytics/widgets/dashboard/extra_metrics_card.dart';
+import 'package:app_movil/features/analytics/widgets/dashboard/restock_alerts_card.dart';
+import 'package:app_movil/features/analytics/widgets/dashboard/dead_stock_card.dart';
+import 'package:app_movil/features/analytics/widgets/dashboard/top_categories_card.dart';
+import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
+import 'package:app_movil/features/analytics/screens/predictive_analytics_screen.dart';
 
 class AnalyticsDashboardScreen extends StatefulWidget {
   const AnalyticsDashboardScreen({super.key});
@@ -79,7 +82,10 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text("Inteligencia de Negocio"),
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text("Inteligencia de Negocio"),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: prov.currentStep == AnalyticsStep.done ? [
@@ -111,6 +117,14 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
         ] : null,
       ),
       body: _buildBody(prov, isDark),
+      floatingActionButton: prov.currentStep == AnalyticsStep.done ? FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const SmartRestockScreen()));
+        },
+        backgroundColor: Colors.blue,
+        icon: const Icon(Icons.add_alert, color: Colors.white),
+        label: const Text('Alertas de Reabastecimiento', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ) : null,
     );
   }
 
@@ -170,7 +184,7 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
               const SizedBox(height: 40),
               _buildLoadingStep("Analizando ventas...", prov.currentStep.index > AnalyticsStep.sales.index, prov.currentStep == AnalyticsStep.sales, isDark),
               _buildLoadingStep("Evaluando clientes...", prov.currentStep.index > AnalyticsStep.clients.index, prov.currentStep == AnalyticsStep.clients, isDark),
-              _buildLoadingStep("Procesando inventario...", prov.currentStep.index > AnalyticsStep.predictions.index, prov.currentStep == AnalyticsStep.predictions, isDark),
+              _buildLoadingStep("Procesando inventario...", prov.currentStep.index > AnalyticsStep.insights.index, prov.currentStep == AnalyticsStep.insights, isDark),
             ],
           ),
         ),
@@ -208,11 +222,17 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
           const SizedBox(height: 16),
           KpiSummaryRow(data: data, isDark: isDark, formatCurrency: _formatCurrency),
           const SizedBox(height: 24),
+          _buildPredictiveButton(context, isDark),
+          const SizedBox(height: 24),
+          _buildPeriodSelector(prov, isDark),
+          const SizedBox(height: 24),
           InsightsCarousel(data: data, isDark: isDark),
           const SizedBox(height: 24),
           MonthlySalesChart(data: data, isDark: isDark, formatCurrency: _formatCurrency),
           const SizedBox(height: 24),
-          OriginPieChart(data: data, isDark: isDark),
+          OriginPieChart(data: data, isDark: isDark, formatCurrency: _formatCurrency),
+          const SizedBox(height: 24),
+          PaymentMethodChart(data: data, isDark: isDark, formatCurrency: _formatCurrency),
           const SizedBox(height: 24),
           SalesByDayChart(data: data, isDark: isDark, formatCurrency: _formatCurrency),
           const SizedBox(height: 24),
@@ -220,13 +240,27 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
           const SizedBox(height: 24),
           TopCategoriesCard(data: data, isDark: isDark),
           const SizedBox(height: 24),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: TopClientsCard(data: data, isDark: isDark, formatCurrency: _formatCurrency)),
-              const SizedBox(width: 16),
-              Expanded(child: ExtraMetricsCard(data: data, isDark: isDark, formatCurrency: _formatCurrency)),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 600) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TopClientsCard(data: data, isDark: isDark, formatCurrency: _formatCurrency),
+                    const SizedBox(height: 24),
+                    ExtraMetricsCard(data: data, isDark: isDark, formatCurrency: _formatCurrency),
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: TopClientsCard(data: data, isDark: isDark, formatCurrency: _formatCurrency)),
+                  const SizedBox(width: 16),
+                  Expanded(child: ExtraMetricsCard(data: data, isDark: isDark, formatCurrency: _formatCurrency)),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 24),
           RestockAlertsCard(data: data, isDark: isDark),
@@ -238,18 +272,124 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
     );
   }
 
-  Widget _buildLoadingStep(String text, bool isCompleted, bool isCurrent, bool isDark) {
-    Color iconColor = isCompleted ? Colors.green : (isCurrent ? Colors.blue : Colors.grey);
-    IconData icon = isCompleted ? Icons.check_circle : (isCurrent ? Icons.circle_outlined : Icons.circle_outlined);
-    
+  Widget _buildLoadingStep(String text, bool isDone, bool isActive, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 24),
       child: Row(
         children: [
-          Icon(icon, color: iconColor),
+          Icon(
+            isDone ? Icons.check_circle : (isActive ? Icons.hourglass_bottom : Icons.radio_button_unchecked),
+            color: isDone ? Colors.greenAccent : (isActive ? Colors.blue[400] : (isDark ? Colors.white30 : Colors.black26)),
+            size: 24,
+          ),
           const SizedBox(width: 16),
-          Text(text, style: TextStyle(fontSize: 16, color: isCompleted || isCurrent ? (isDark ? Colors.white : Colors.black) : Colors.grey, fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal)),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                color: isDone ? (isDark ? Colors.white : Colors.black87) : (isActive ? Colors.blue[400] : (isDark ? Colors.white54 : Colors.black54)),
+              ),
+            ),
+          )
         ],
+      ),
+    );
+  }
+
+  Widget _buildPeriodSelector(AnalyticsProvider prov, bool isDark) {
+    final periods = [
+      {'val': AnalyticsPeriod.today, 'label': 'Hoy'},
+      {'val': AnalyticsPeriod.week, 'label': '7 Días'},
+      {'val': AnalyticsPeriod.month, 'label': '30 Días'},
+      {'val': AnalyticsPeriod.sixMonths, 'label': '6 Meses'},
+      {'val': AnalyticsPeriod.year, 'label': '1 Año'},
+      {'val': AnalyticsPeriod.allTime, 'label': 'Todo'},
+    ];
+
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: periods.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final p = periods[index];
+          final val = p['val'] as AnalyticsPeriod;
+          final isSelected = prov.selectedPeriod == val;
+
+          return ChoiceChip(
+            label: Text(p['label'] as String, style: TextStyle(
+              color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            )),
+            selected: isSelected,
+            onSelected: (selected) {
+              if (selected) prov.changePeriod(val);
+            },
+            selectedColor: Colors.blueAccent,
+            backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.grey[200],
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: isSelected ? Colors.blueAccent : (isDark ? Colors.white10 : Colors.grey[300]!),
+              ),
+            ),
+            showCheckmark: false,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPredictiveButton(BuildContext context, bool isDark) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const PredictiveAnalyticsScreen()));
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6D28D9).withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.rocket_launch, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Motor Predictivo de Crecimiento", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 4),
+                  Text("Descubre proyecciones y tendencias.", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+          ],
+        ),
       ),
     );
   }

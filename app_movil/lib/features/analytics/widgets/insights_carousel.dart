@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../providers/analytics_provider.dart';
+import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 
-class InsightsCarousel extends StatelessWidget {
+class InsightsCarousel extends StatefulWidget {
   final AnalyticsData data;
   final bool isDark;
 
@@ -12,8 +12,108 @@ class InsightsCarousel extends StatelessWidget {
   });
 
   @override
+  State<InsightsCarousel> createState() => _InsightsCarouselState();
+}
+
+class _InsightsCarouselState extends State<InsightsCarousel> {
+  void _showInsightDetail(BuildContext context, BusinessInsight insight, Color bgColor, Color iconColor) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.5,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (_, controller) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: BoxDecoration(
+                color: widget.isDark ? const Color(0xFF1E293B) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: ListView(
+                controller: controller,
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 24),
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: widget.isDark ? Colors.white24 : Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
+                        child: Icon(insight.icon, color: iconColor, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(insight.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: widget.isDark ? Colors.white : Colors.black87)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    insight.description,
+                    style: TextStyle(fontSize: 15, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], height: 1.5),
+                  ),
+                  if (insight.suggestedAction != null) ...[
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: widget.isDark ? Colors.black12 : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.lightbulb_outline, color: Colors.amber[700], size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "¿Qué hacer?\n${insight.suggestedAction}",
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: iconColor,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: const Text("Entendido", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        );
+      },
+    );
+  }
+  @override
   Widget build(BuildContext context) {
-    if (data.insights.isEmpty) return const SizedBox.shrink();
+    if (widget.data.insights.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -29,77 +129,79 @@ class InsightsCarousel extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 160,
+          height: 180,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: data.insights.length,
+            itemCount: widget.data.insights.length,
             itemBuilder: (context, index) {
-              final insight = data.insights[index];
+              final insight = widget.data.insights[index];
               Color bgColor = Colors.blue.withValues(alpha: 0.15);
-              Color iconColor = isDark ? Colors.lightBlueAccent : Colors.blue[700]!;
+              Color iconColor = widget.isDark ? Colors.lightBlueAccent : Colors.blue[700]!;
               
               switch (insight.type) {
                 case InsightType.success:
                   bgColor = Colors.green.withValues(alpha: 0.15);
-                  iconColor = isDark ? Colors.greenAccent : Colors.green[700]!;
+                  iconColor = widget.isDark ? Colors.greenAccent : Colors.green[700]!;
                   break;
                 case InsightType.warning:
                   bgColor = Colors.redAccent.withValues(alpha: 0.15);
-                  iconColor = isDark ? Colors.redAccent : Colors.red[700]!;
+                  iconColor = widget.isDark ? Colors.redAccent : Colors.red[700]!;
                   break;
                 case InsightType.info:
                   bgColor = Colors.blue.withValues(alpha: 0.15);
-                  iconColor = isDark ? Colors.lightBlueAccent : Colors.blue[700]!;
+                  iconColor = widget.isDark ? Colors.lightBlueAccent : Colors.blue[700]!;
                   break;
                 case InsightType.tip:
                   bgColor = Colors.amber.withValues(alpha: 0.15);
-                  iconColor = isDark ? Colors.amberAccent : Colors.amber[800]!;
+                  iconColor = widget.isDark ? Colors.amberAccent : Colors.amber[800]!;
                   break;
               }
 
-              return Container(
-                width: 280,
-                margin: const EdgeInsets.only(right: 16, bottom: 8),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark 
-                      ? [const Color(0xFF1E293B), const Color(0xFF0F172A)] 
-                      : [Colors.white, const Color(0xFFF8FAFC)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: isDark ? Colors.white10 : Colors.blueGrey.withValues(alpha: 0.1), width: 1),
-                  boxShadow: [
-                    BoxShadow(color: iconColor.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 5)),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-                          child: Icon(insight.icon, color: iconColor, size: 22),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(child: Text(insight.title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: isDark ? Colors.white : Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                      ],
+              return GestureDetector(
+                onTap: () => _showInsightDetail(context, insight, bgColor, iconColor),
+                child: Container(
+                  width: 300,
+                  margin: const EdgeInsets.only(right: 16, bottom: 8),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: widget.isDark 
+                        ? [const Color(0xFF1E293B), const Color(0xFF0F172A)] 
+                        : [Colors.white, const Color(0xFFF8FAFC)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: Text(
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: widget.isDark ? Colors.white10 : Colors.blueGrey.withValues(alpha: 0.1), width: 1),
+                    boxShadow: [
+                      BoxShadow(color: iconColor.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 5)),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
+                            child: Icon(insight.icon, color: iconColor, size: 22),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(child: Text(insight.title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: widget.isDark ? Colors.white : Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
                         insight.description,
-                        style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.blueGrey[700], height: 1.5),
+                        style: TextStyle(fontSize: 13, color: widget.isDark ? Colors.grey[400] : Colors.blueGrey[700], height: 1.5),
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             },

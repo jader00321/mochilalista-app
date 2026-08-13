@@ -2,24 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../../providers/notification_provider.dart';
-import '../../../providers/inventory_provider.dart';
-import '../../../providers/auth_provider.dart'; 
-import '../../../models/notification_model.dart';
-import '../../../models/product_model.dart';
-import '../../../database/local_db.dart';
+import 'package:app_movil/core/providers/notification_provider.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart'; 
+import 'package:app_movil/core/models/notification_model.dart';
+import 'package:app_movil/features/catalog/models/product_model.dart';
+import 'package:app_movil/core/database/local_db.dart';
 
-import '../../smart_quotation/screens/quotation_detail_screen.dart';
-import '../../../screens/scanner/invoice_detail_screen.dart';
-import '../../../screens/product_edit_screen.dart';
-import '../../smart_quotation/screens/crm/client_detail_screen.dart';
-import '../../smart_quotation/services/sales_service.dart';
-import '../../smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart';
+import 'package:app_movil/features/scanner/screens/invoice_detail_screen.dart';
+import 'package:app_movil/features/catalog/screens/product_edit_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/crm/client_detail_screen.dart';
+import 'package:app_movil/features/smart_quotation/services/sales_service.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../widgets/notifications/notification_filter_bar.dart';
-import '../widgets/notifications/notification_item_card.dart';
-import '../widgets/notifications/notification_empty_state.dart';
+import 'package:app_movil/features/profile/widgets/notifications/notification_filter_bar.dart';
+import 'package:app_movil/features/profile/widgets/notifications/notification_item_card.dart';
+import 'package:app_movil/features/profile/widgets/notifications/notification_empty_state.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});

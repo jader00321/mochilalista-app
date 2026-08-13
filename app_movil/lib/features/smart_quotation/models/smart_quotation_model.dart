@@ -140,6 +140,7 @@ class QuotationItem {
   final int id;
   final int? productId;
   final int? presentationId; 
+  final int? bundleId;
   
   final String? productName;
   final String? brandName;
@@ -158,6 +159,7 @@ class QuotationItem {
     required this.id,
     this.productId,
     this.presentationId,
+    this.bundleId,
     
     this.productName,
     this.brandName,
@@ -178,6 +180,7 @@ class QuotationItem {
       id: json['id'],
       productId: json['product_id'],
       presentationId: json['presentation_id'],
+      bundleId: json['bundle_id'],
       
       productName: json['product_name'],
       brandName: json['brand_name'],
@@ -200,6 +203,7 @@ class QuotationItem {
       'quotation_id': quotationId,
       'product_id': productId,
       'presentation_id': presentationId,
+      'bundle_id': bundleId,
       'quantity': quantity,
       'unit_price_applied': unitPriceApplied,
       'original_unit_price': originalUnitPrice,

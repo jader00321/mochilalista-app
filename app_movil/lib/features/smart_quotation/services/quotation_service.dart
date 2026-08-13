@@ -1,6 +1,6 @@
-import '../models/smart_quotation_model.dart';
-import '../models/crm_models.dart';
-import '../../../database/local_db.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/core/database/local_db.dart';
 
 class QuotationService {
   final dbHelper = LocalDatabase.instance;
@@ -58,6 +58,46 @@ class QuotationService {
       List<NameChange> nameChanges = [];
 
       for (var item in iRows) {
+        if (item['bundle_id'] != null) {
+          int bId = item['bundle_id'] as int;
+          int qty = item['quantity'] as int;
+          String? itemName = item['product_name'] as String?;
+          
+          final bItems = await db.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bId]);
+          for (var bItem in bItems) {
+            int pId = bItem['presentacion_id'] as int;
+            int reqQty = (bItem['cantidad_requerida'] as int?) ?? 1;
+            int totalDeduct = reqQty * qty;
+            
+            final prRows = await db.query('presentaciones_producto', where: 'id = ?', whereArgs: [pId]);
+            if (prRows.isNotEmpty) {
+              int currentStock = prRows.first['stock_actual'] as int;
+              if (currentStock < totalDeduct) {
+                hasIssues = true;
+                canSell = false;
+                warnings.add(StockWarning(
+                  itemId: item['id'] as int,
+                  productName: itemName ?? "Paquete",
+                  requested: totalDeduct,
+                  available: currentStock,
+                  message: "Un componente del paquete no tiene stock suficiente.",
+                ));
+              }
+            } else {
+              hasIssues = true;
+              canSell = false;
+              warnings.add(StockWarning(
+                itemId: item['id'] as int,
+                productName: itemName ?? "Paquete",
+                requested: totalDeduct,
+                available: 0,
+                message: "Un componente del paquete ya no existe.",
+              ));
+            }
+          }
+          continue; 
+        }
+
         if (item['presentation_id'] == null) continue;
         int pId = item['presentation_id'] as int;
         
@@ -177,6 +217,7 @@ class QuotationService {
             'quotation_id': targetId,
             'product_id': item['product_id'],
             'presentation_id': item['presentation_id'],
+            'bundle_id': item['bundle_id'],
             'quantity': item['quantity'],
             'unit_price_applied': item['unit_price_applied'],
             'original_unit_price': item['original_unit_price'],

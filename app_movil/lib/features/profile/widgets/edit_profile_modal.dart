@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../../../providers/auth_provider.dart';
-import '../../../../providers/theme_provider.dart';
-import '../../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/providers/theme_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class EditProfileModal extends StatefulWidget {
   const EditProfileModal({super.key});

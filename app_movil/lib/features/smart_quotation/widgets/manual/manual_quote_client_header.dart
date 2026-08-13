@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 class ManualQuoteClientHeader extends StatelessWidget {
   final ClientModel? selectedClient;

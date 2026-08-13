@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../../../widgets/universal_image.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
 
 class SaleItemsList extends StatelessWidget {
   final List<dynamic> items;

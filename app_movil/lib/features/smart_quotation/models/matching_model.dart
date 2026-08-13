@@ -1,4 +1,4 @@
-import 'extracted_list_model.dart';
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
 
 enum MatchStatus {
   auto,       
@@ -22,6 +22,7 @@ class MatchedProduct {
   final int conversionFactor;
   final bool isAvailable;
   final bool isOriginalItem;
+  final int? bundleId;
 
   MatchedProduct({
     required this.productId,
@@ -38,6 +39,7 @@ class MatchedProduct {
     this.conversionFactor = 1,
     this.isAvailable = true,
     this.isOriginalItem = false,
+    this.bundleId,
   });
 
   factory MatchedProduct.fromJson(Map<String, dynamic> json) {
@@ -59,6 +61,8 @@ class MatchedProduct {
       unit: json['unit'] ?? "Unidad",
       conversionFactor: json['conversion_factor'] ?? 1,
       isAvailable: json['is_available'] == 1 || json['is_available'] == true || json['is_available'] == null,
+      isOriginalItem: json['is_original_item'] ?? false,
+      bundleId: json['bundle_id'],
     );
   }
 
@@ -80,6 +84,7 @@ class MatchedProduct {
       price: price, offerPrice: offerPrice, stock: stock, imageUrl: imageUrl,
       unit: unit, conversionFactor: conversionFactor, isAvailable: isAvailable,
       isOriginalItem: isOriginalItem,
+      bundleId: bundleId,
     );
   }
 }
@@ -116,11 +121,13 @@ class MatchPair {
   MatchStatus status;
   int selectedQuantity; 
   double? overridePrice; 
+  int? bundleId; 
 
   MatchPair({
     required this.sourceItem,
     this.selectedProduct,
     this.status = MatchStatus.none,
+    this.bundleId,
   }) : selectedQuantity = sourceItem.quantity;
 
   double get effectiveUnitPrice {
@@ -154,6 +161,7 @@ class MatchPair {
       sourceItem: sourceItem.clone(),
       selectedProduct: selectedProduct?.clone(),
       status: status,
+      bundleId: bundleId,
     );
     copy.selectedQuantity = selectedQuantity;
     copy.overridePrice = overridePrice;
@@ -166,6 +174,7 @@ class MatchPair {
     return {
       "product_id": selectedProduct!.productId,
       "presentation_id": selectedProduct!.presentationId,
+      "bundle_id": bundleId,
       "quantity": selectedQuantity,
       "unit_price_applied": effectiveUnitPrice, 
       "original_unit_price": originalUnitPrice, 

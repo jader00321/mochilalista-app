@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../providers/analytics_provider.dart';
-import 'glass_card.dart';
+import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/features/analytics/widgets/dashboard/glass_card.dart';
 
 class ExtraMetricsCard extends StatelessWidget {
   final AnalyticsData data;

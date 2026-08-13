@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../models/matching_model.dart';
-import '../../../../providers/inventory_provider.dart';
-import '../../../../widgets/universal_image.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
 
 class QuickSaleCartItem extends StatelessWidget {
   final MatchedProduct product;
@@ -13,6 +13,7 @@ class QuickSaleCartItem extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onIncrease;
   final VoidCallback onDecrease;
+  final VoidCallback onDelete;
 
   const QuickSaleCartItem({
     super.key,
@@ -22,6 +23,7 @@ class QuickSaleCartItem extends StatelessWidget {
     required this.onTap,
     required this.onIncrease,
     required this.onDecrease,
+    required this.onDelete,
   });
 
   @override
@@ -52,10 +54,23 @@ class QuickSaleCartItem extends StatelessWidget {
 
     // Evaluamos si, tras un refresco de backend, el producto se quedó sin stock
     final bool isOut = product.stock <= 0;
+    
+    bool showBrand = brandName.isNotEmpty && !displayFullName.toUpperCase().contains(brandName.toUpperCase());
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: isDark ? 0 : 2,
+    return Dismissible(
+      key: ValueKey("quick_item_${product.presentationId}"),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(color: isDark ? Colors.red[900] : Colors.red[100], borderRadius: BorderRadius.circular(16)),
+        child: Icon(Icons.delete, color: isDark ? Colors.white : Colors.red, size: 32),
+      ),
+      onDismissed: (_) => onDelete(),
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        elevation: isDark ? 0 : 2,
       color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16), 
@@ -96,11 +111,24 @@ class QuickSaleCartItem extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (brandName.isNotEmpty)
-                          Text(brandName.toUpperCase(), style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[800], fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5)),
-                        const SizedBox(height: 4),
-                        
-                        Text(displayFullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, height: 1.2, color: textColor), maxLines: 3, overflow: TextOverflow.ellipsis),
+                        RichText(
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          text: TextSpan(
+                            style: TextStyle(fontSize: 16, height: 1.2, color: textColor),
+                            children: [
+                              if (showBrand)
+                                TextSpan(
+                                  text: "${brandName.toUpperCase()} ", 
+                                  style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, letterSpacing: 0.5)
+                                ),
+                              TextSpan(
+                                text: displayFullName,
+                                style: const TextStyle(fontWeight: FontWeight.bold)
+                              ),
+                            ]
+                          )
+                        ),
                         
                         // Muestra Empaque y Factor
                         if (product.unit.isNotEmpty)
@@ -175,15 +203,16 @@ class QuickSaleCartItem extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(currency.format(subtotal), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue[800])),
                     ],
-                  )
+                  ),
                 ],
-              )
+              ),
             ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) {
     return InkWell(

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; 
-import '../models/smart_quotation_model.dart';
-import '../models/crm_models.dart';
-import '../services/quotation_service.dart';
-import '../../../database/local_db.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_service.dart';
+import 'package:app_movil/core/database/local_db.dart';
 
 enum WorkbenchSort { time, alpha }
 

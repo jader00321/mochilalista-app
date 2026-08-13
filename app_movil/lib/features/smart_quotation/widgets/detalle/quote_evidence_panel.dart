@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../widgets/universal_image.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
 
 class QuoteEvidencePanel extends StatelessWidget {
   final bool hasImage;

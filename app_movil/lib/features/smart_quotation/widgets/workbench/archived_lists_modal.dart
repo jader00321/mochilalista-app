@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../providers/workbench_provider.dart';
-import '../quotation_card.dart';
-import '../../screens/quotation_detail_screen.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/widgets/quotation_card.dart';
+import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart';
 
 class ArchivedListsModal {
   static void show(BuildContext context, WorkbenchProvider provider, bool isDark) {

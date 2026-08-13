@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../models/inventory_wrapper.dart';
-import '../models/matching_model.dart';
-import '../models/smart_quotation_model.dart'; 
-import '../../../../providers/inventory_provider.dart';
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/features/promotions/models/bundle_model.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart'; 
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
 class QuickSaleProvider with ChangeNotifier {
   int? _negocioId;
@@ -115,6 +116,37 @@ class QuickSaleProvider with ChangeNotifier {
     return null; 
   }
 
+  String? addBundleToCart(BundleModel bundle, int maxStock) {
+    if (maxStock <= 0) {
+      return "El paquete '${bundle.nombrePaquete}' no tiene stock suficiente (uno o más componentes agotados).";
+    }
+
+    final fakePresId = -(bundle.id); // Negative ID to avoid collision with real presentations
+
+    if (_cart.any((p) => p.presentationId == fakePresId)) {
+      return updateQuantity(fakePresId, (_quantities[fakePresId] ?? 1) + 1, maxStock);
+    }
+
+    final matched = MatchedProduct(
+      productId: 0,
+      presentationId: fakePresId,
+      fullName: bundle.nombrePaquete,
+      productName: bundle.nombrePaquete,
+      specificName: bundle.descripcion != null && bundle.descripcion!.isNotEmpty ? bundle.descripcion : "Paquete",
+      brand: "OFERTA",
+      price: bundle.precioVentaTotal,
+      stock: maxStock,
+      imageUrl: bundle.imagenUrl,
+      unit: "Paquete",
+      bundleId: bundle.id,
+    );
+
+    _cart.add(matched);
+    _quantities[fakePresId] = 1;
+    notifyListeners();
+    return null;
+  }
+
   String? updateItemFromModal(MatchedProduct product, int newQty, double? newOverridePrice) {
     final index = _cart.indexWhere((p) => p.presentationId == product.presentationId);
     if (index != -1) {
@@ -180,9 +212,10 @@ class QuickSaleProvider with ChangeNotifier {
       final effPrice = _overridePrices[p.presentationId] ?? p.offerPrice ?? p.price;
       
       return QuotationItem(
-        id: p.presentationId, 
+        id: p.bundleId != null ? 0 : p.presentationId, 
         productId: p.productId,
-        presentationId: p.presentationId,
+        presentationId: p.bundleId != null ? null : p.presentationId,
+        bundleId: p.bundleId,
         productName: p.productName,
         brandName: p.brand,
         specificName: p.specificName,

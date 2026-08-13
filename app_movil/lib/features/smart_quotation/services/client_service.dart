@@ -1,9 +1,9 @@
 import 'dart:convert';
-import '../models/crm_models.dart';
-import '../models/smart_quotation_model.dart';
-import '../../../database/local_db.dart';
-import '../../../utils/app_logger.dart';
-import '../../../repositories/client_repository.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/utils/app_logger.dart';
+import 'package:app_movil/features/smart_quotation/repositories/client_repository.dart';
 
 class ClientService {
   final _repository = ClientRepository();
@@ -79,6 +79,10 @@ class ClientService {
       return (await getClientById(id))!;
     } catch (e) { throw Exception("Error actualizando cliente localmente: $e"); }
   }
+
+  Future<bool> deleteClient(int id) async {
+    return await _repository.deleteClient(id);
+  }
   
   Future<List<ClientModel>> getTrackingClients(int negocioId, {bool debtorsOnly = false}) async {
     try {
@@ -111,8 +115,7 @@ class ClientService {
       List<LedgerItem> ledger = [];
 
       final sales = await db.rawQuery('''
-        SELECT id, fecha_venta, 
-        ((monto_total - IFNULL(abono_inicial, 0)) * (1 + (IFNULL(porcentaje_interes, 0) / 100.0))) + IFNULL(abono_inicial, 0) as monto_total
+        SELECT id, fecha_venta, monto_total
         FROM ventas 
         WHERE cliente_id = ? AND is_archived = 0
       ''', [clientId]);
@@ -200,9 +203,7 @@ class ClientService {
     try {
       final db = await dbHelper.database;
       final debtsRows = await db.rawQuery('''
-        SELECT SUM(
-          ((monto_total - IFNULL(abono_inicial, 0)) * (1 + (IFNULL(porcentaje_interes, 0) / 100.0))) + IFNULL(abono_inicial, 0) - monto_pagado
-        ) as debt 
+        SELECT SUM(monto_total - monto_pagado) as debt 
         FROM ventas 
         WHERE cliente_id = ? AND estado_pago != ? AND is_archived = 0
       ''', [clientId, 'pagado']);
@@ -346,11 +347,9 @@ class ClientService {
            if (remainingCents <= 0) break;
            int vId = vRow['id'] as int;
            double vMontoTotal = (vRow['monto_total'] as num).toDouble();
-           double abonoInicial = ((vRow['abono_inicial'] as num?) ?? 0.0).toDouble();
-           double interes = ((vRow['porcentaje_interes'] as num?) ?? 0.0).toDouble();
-           double vMontoConInteres = (vMontoTotal - abonoInicial) * (1 + (interes / 100)) + abonoInicial;
            
-           int vMontoCents = (vMontoConInteres * 100).round();
+           // El monto_total ya incluye el interés desde la base de datos
+           int vMontoCents = (vMontoTotal * 100).round();
            int vPagadoCents = ((vRow['monto_pagado'] as num).toDouble() * 100).round();
            int vDeudaCents = vMontoCents - vPagadoCents;
            
@@ -360,7 +359,12 @@ class ClientService {
               int newPagadoCents = vPagadoCents + abonoCents;
               String vStatus = (vMontoCents - newPagadoCents) <= 10 ? 'pagado' : 'parcial';
               
-              await txn.update('ventas', {'monto_pagado': newPagadoCents / 100.0, 'estado_pago': vStatus}, where: 'id = ?', whereArgs: [vId]);
+              String vEntrega = vRow['estado_entrega'] as String? ?? 'entregado';
+              if (vStatus == 'pagado' && vEntrega == 'retenido_por_pago') {
+                 vEntrega = 'pendiente_recojo';
+              }
+              
+              await txn.update('ventas', {'monto_pagado': newPagadoCents / 100.0, 'estado_pago': vStatus, 'estado_entrega': vEntrega}, where: 'id = ?', whereArgs: [vId]);
               await txn.insert('pagos', {'negocio_id': negocioId, 'creado_por_usuario_id': usuarioId, 'cliente_id': clientId, 'venta_id': vId, 'monto': abonoCents / 100.0, 'metodo_pago': method, 'fecha_pago': DateTime.now().toIso8601String()});
            }
         }
@@ -372,14 +376,19 @@ class ClientService {
            if (vCuotas.isNotEmpty) {
               double vMontoTotal = (vRow['monto_total'] as num).toDouble();
               double abonoInicial = ((vRow['abono_inicial'] as num?) ?? 0.0).toDouble();
-              double interes = ((vRow['porcentaje_interes'] as num?) ?? 0.0).toDouble();
-              double vMontoConInteres = (vMontoTotal - abonoInicial) * (1 + (interes / 100)) + abonoInicial;
               
-              int vTotalCents = (vMontoConInteres * 100).round();
+              // El monto_total ya incluye el interés desde la base de datos
+              int vTotalCents = (vMontoTotal * 100).round();
               int vNewPagadoCents = (abonoInicial * 100).round();
               for (var c in vCuotas) { vNewPagadoCents += ((c['monto_pagado'] as num).toDouble() * 100).round(); }
               String vStatus = (vTotalCents - vNewPagadoCents) <= 10 ? 'pagado' : 'parcial';
-              await txn.update('ventas', {'monto_pagado': vNewPagadoCents / 100.0, 'estado_pago': vStatus}, where: 'id = ?', whereArgs: [vId]);
+              
+              String vEntrega = vRow['estado_entrega'] as String? ?? 'entregado';
+              if (vStatus == 'pagado' && vEntrega == 'retenido_por_pago') {
+                 vEntrega = 'pendiente_recojo';
+              }
+
+              await txn.update('ventas', {'monto_pagado': vNewPagadoCents / 100.0, 'estado_pago': vStatus, 'estado_entrega': vEntrega}, where: 'id = ?', whereArgs: [vId]);
            }
         }
 

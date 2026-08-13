@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../providers/tracking_provider.dart';
-import '../../screens/quotation_detail_screen.dart';
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
+import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart';
 
 class ClientQuotationsTab extends StatelessWidget {
   final bool isDark;

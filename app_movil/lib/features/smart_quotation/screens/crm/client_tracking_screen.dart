@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 
-import '../../providers/tracking_provider.dart';
-import '../../../../providers/auth_provider.dart'; 
-import '../../models/crm_models.dart';
-import '../../widgets/crm/client_filter_bar.dart';
-import '../../widgets/crm/client_card.dart';
-import '../../widgets/crm/client_profile_editor.dart';
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_filter_bar.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_profile_editor.dart';
 
 class ClientTrackingScreen extends StatefulWidget {
   const ClientTrackingScreen({super.key});
@@ -212,6 +212,62 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
       }
     );
   }
+  void _showSortOptions(BuildContext context, TrackingProvider provider, bool isDark, Color surfaceColor, Color textColor) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        Widget buildSortTile(String title, IconData icon, String targetSortBy) {
+          final bool isActive = provider.currentSort == targetSortBy;
+          final Color primaryColor = isDark ? Colors.blue[300]! : Colors.blue[800]!;
+          
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            decoration: BoxDecoration(
+              color: isActive ? (isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.withValues(alpha: 0.08)) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isActive ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade300) : Colors.transparent),
+            ),
+            child: ListTile(
+              leading: Icon(icon, color: isActive ? primaryColor : (isDark ? Colors.grey[400] : Colors.grey[600])),
+              title: Text(
+                title, 
+                style: TextStyle(
+                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal, 
+                  color: isActive ? primaryColor : textColor
+                )
+              ),
+              trailing: isActive ? Icon(Icons.check_circle, color: primaryColor) : null,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onTap: () {
+                provider.setSort(targetSortBy);
+                Navigator.pop(context); 
+              },
+            ),
+          );
+        }
+
+        return Container(
+          decoration: BoxDecoration(color: surfaceColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 5, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+              Text("Ordenar resultados por:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+              const SizedBox(height: 16),
+              
+              buildSortTile("Más recientes", Icons.calendar_today, "newest"),
+              buildSortTile("Más antiguos", Icons.history, "oldest"),
+              buildSortTile("Alfabético (A-Z)", Icons.sort_by_alpha, "name_asc"),
+              
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      }
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -313,8 +369,8 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                           "${clients.length} clientes", 
                           style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 15)
                         ),
-                        PopupMenuButton<String>(
-                          color: surfaceColor,
+                        GestureDetector(
+                          onTap: () => _showSortOptions(context, provider, isDark, surfaceColor, textColor),
                           child: Row(
                             children: [
                               Icon(Icons.sort, size: 22, color: isDark ? Colors.blue[300] : Colors.blue), 
@@ -322,12 +378,6 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                               Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 16))
                             ]
                           ),
-                          onSelected: (val) => provider.setSort(val),
-                          itemBuilder: (ctx) => [
-                            const PopupMenuItem(value: 'name_asc', child: Text("Alfabético (A-Z)")),
-                            const PopupMenuItem(value: 'newest', child: Text("Más recientes")),
-                            const PopupMenuItem(value: 'oldest', child: Text("Más antiguos")),
-                          ],
                         )
                       ],
                     ),

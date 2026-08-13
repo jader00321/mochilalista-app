@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart'; 
 import 'package:latlong2/latlong.dart';        
 import 'package:url_launcher/url_launcher.dart';
-import '../../../models/user_model.dart';
-import '../../../../utils/hardware_validator.dart'; // 🔥 IMPORT DE SEGURIDAD
+import 'package:app_movil/core/models/user_model.dart';
+import 'package:app_movil/core/utils/hardware_validator.dart'; // 🔥 IMPORT DE SEGURIDAD
 
 class BusinessInfoCard extends StatelessWidget {
   final BusinessModel? business;

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 class ClientSelectionCard extends StatelessWidget {
   final ClientModel? selectedClient;

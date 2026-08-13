@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/workbench_provider.dart';
-import '../models/smart_quotation_model.dart';
-import '../widgets/quotation_card.dart';
-import '../widgets/quick_actions_bottom_sheet.dart'; 
-import 'quotation_detail_screen.dart'; 
-import 'manual_quotation_screen.dart';
-import 'sale_history_detail_screen.dart'; 
-import '../../../screens/home_screen.dart';
-import '../widgets/workbench/archived_lists_modal.dart';
-import '../widgets/workbench/dashboard_header.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/widgets/quotation_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/quick_actions_bottom_sheet.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_screen.dart'; 
+import 'package:app_movil/core/screens/home_screen.dart';
+import 'package:app_movil/features/smart_quotation/widgets/workbench/archived_lists_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/workbench/dashboard_header.dart';
 
 class WorkbenchScreen extends StatefulWidget {
   const WorkbenchScreen({super.key});

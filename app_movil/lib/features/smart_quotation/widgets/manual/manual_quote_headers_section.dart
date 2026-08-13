@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../models/crm_models.dart';
-import 'manual_quote_institution_header.dart';
-import 'manual_quote_client_header.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_institution_header.dart';
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_client_header.dart';
 
 class ManualQuoteHeadersSection extends StatelessWidget {
   final bool isDark;

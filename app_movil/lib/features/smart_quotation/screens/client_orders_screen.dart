@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../providers/theme_provider.dart';
-import '../providers/workbench_provider.dart';
-import '../providers/sale_provider.dart'; 
-import '../models/smart_quotation_model.dart';
-import '../models/crm_models.dart';
-import 'quotation_detail_screen.dart';
+import 'package:app_movil/core/providers/theme_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart';
 
 // 🔥 IMPORTAMOS LA NUEVA PANTALLA DE SOLO LECTURA
-import 'sale_client_detail_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/sale_client_detail_screen.dart'; 
 
 class ClientOrdersScreen extends StatefulWidget {
   const ClientOrdersScreen({super.key});
@@ -332,7 +332,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
         deliveryIcon = Icons.storefront;
         break;
       case 'retenido_por_pago':
-        double debt = sale.totalAmount - sale.paidAmount;
+        double debt = sale.trueTotalAmount - sale.paidAmount;
         if (debt <= 0) {
           deliveryText = "LISTO PARA ENTREGA";
           deliveryColor = Colors.blue;
@@ -345,7 +345,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
         break;
     }
 
-    double deuda = sale.totalAmount - sale.paidAmount;
+    double deuda = sale.trueTotalAmount - sale.paidAmount;
 
     return Card(
       color: isDark ? const Color(0xFF23232F) : Colors.white,
@@ -409,7 +409,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
                   children: [
                     Text("Total Compra", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
                     const SizedBox(height: 4),
-                    Text(currency.format(sale.totalAmount), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: isDark ? Colors.green[400] : Colors.green[700])),
+                    Text(currency.format(sale.trueTotalAmount), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: isDark ? Colors.green[400] : Colors.green[700])),
                   ],
                 ),
                 Column(

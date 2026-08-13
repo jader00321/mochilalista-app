@@ -3,20 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../providers/quick_sale_provider.dart';
-import '../providers/quick_search_provider.dart'; 
-import '../../../providers/auth_provider.dart'; 
-import '../../../models/inventory_wrapper.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_search_provider.dart'; 
+import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart'; 
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 
-import '../../../widgets/custom_snackbar.dart';
-import '/screens/scanner/barcode_scanner_screen.dart';
-import '../../../screens/catalog/catalog_screen.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/scanner/screens/barcode_scanner_screen.dart';
+import 'package:app_movil/features/catalog/screens/catalog/catalog_screen.dart';
 
-import '../widgets/quick_sale/quick_sale_header.dart';
-import '../widgets/quick_sale/quick_sale_cart_item.dart';
-import '../widgets/quick_sale/quick_sale_detail_modal.dart';
-import '../widgets/quick_sale/quick_checkout_modal.dart';
-import '../widgets/quick_sale/quick_search_result_tile.dart';
+import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_sale_header.dart';
+import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_sale_cart_item.dart';
+import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_sale_detail_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_checkout_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_search_result_tile.dart';
 
 class QuickSaleScreen extends StatefulWidget {
   const QuickSaleScreen({super.key});
@@ -29,6 +30,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _debounce;
   bool _saleCompleted = false; 
+  bool _isOffersExpanded = false;
 
   @override
   void initState() {
@@ -238,6 +240,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   Widget build(BuildContext context) {
     final quickProv = Provider.of<QuickSaleProvider>(context);
     final searchProv = Provider.of<QuickSearchProvider>(context);
+    final promoProv = Provider.of<PromotionProvider>(context);
     final auth = Provider.of<AuthProvider>(context);
     final isGuest = !auth.hasActiveContext;
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
@@ -322,6 +325,123 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   onChanged: _onSearchChanged,
                 ),
               ),
+
+              if (promoProv.bundles.isNotEmpty && searchProv.searchResults.isEmpty)
+                Builder(builder: (ctx) {
+                  final now = DateTime.now();
+                  final validBundles = promoProv.bundles.where((b) {
+                    if (!b.activo) return false;
+                    if (b.fechaInicio != null && b.fechaInicio!.isAfter(now)) return false;
+                    if (b.fechaFin != null && b.fechaFin!.isBefore(now)) return false;
+                    final maxStock = promoProv.calculateBundleMaxStock(b.id);
+                    return maxStock > 0;
+                  }).toList();
+
+                  if (validBundles.isEmpty) return const SizedBox();
+
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    color: appBarColor,
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        InkWell(
+                          onTap: () => setState(() => _isOffersExpanded = !_isOffersExpanded),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            child: Row(
+                              children: [
+                                Text("🔥 Ofertas Disponibles (${validBundles.length})", style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1)),
+                                const Spacer(),
+                                Icon(_isOffersExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.white, size: 20),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_isOffersExpanded)
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: validBundles.length,
+                            itemBuilder: (ctx, i) {
+                              final bundle = validBundles[i];
+                              final maxStock = promoProv.calculateBundleMaxStock(bundle.id);
+                              
+                              IconData iconData = Icons.inventory_2;
+                              Color iconColor = Colors.amberAccent;
+                              String prefix = "Paquete";
+                              if (bundle.tipoPromocion == 'flash') {
+                                iconData = Icons.bolt; iconColor = Colors.yellowAccent; prefix = "Flash";
+                              } else if (bundle.tipoPromocion == 'liquidez_costo') {
+                                iconData = Icons.water_drop; iconColor = Colors.lightBlueAccent; prefix = "Liquidez";
+                              } else if (bundle.tipoPromocion == '2x1') {
+                                iconData = Icons.exposure_plus_2; iconColor = Colors.greenAccent; prefix = "2x1";
+                              } else if (bundle.tipoPromocion == 'volumen') {
+                                iconData = Icons.shopping_cart; iconColor = Colors.deepPurpleAccent; prefix = "Mayoreo";
+                              } else if (bundle.tipoPromocion == 'escolar') {
+                                iconData = Icons.school; iconColor = Colors.tealAccent; prefix = "Escolar";
+                              }
+                              
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.2), shape: BoxShape.circle),
+                                      child: Icon(iconData, color: iconColor, size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(bundle.nombrePaquete, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
+                                                child: Text(prefix, style: TextStyle(color: iconColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(currency.format(bundle.precioVentaTotal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                              const SizedBox(width: 8),
+                                              Text("Stock: $maxStock", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11)),
+                                            ],
+                                          )
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.add_shopping_cart, color: Colors.white),
+                                      onPressed: () {
+                                        final error = quickProv.addBundleToCart(bundle, maxStock);
+                                        if (error != null) {
+                                          CustomSnackBar.show(context, message: error, isError: true);
+                                        } else {
+                                          CustomSnackBar.show(context, message: "Paquete agregado al carrito.", isError: false);
+                                        }
+                                      },
+                                    )
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  );
+                }),
 
               Expanded(
                 child: searchProv.searchResults.isNotEmpty
@@ -444,32 +564,73 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       );
     }
 
-    return ReorderableListView.builder(
-      padding: const EdgeInsets.only(top: 16, bottom: 30),
-      itemCount: quickProv.cartItems.length,
-      onReorder: (oldIndex, newIndex) => quickProv.reorderCart(oldIndex, newIndex),
-      itemBuilder: (ctx, i) {
-        final item = quickProv.cartItems[i];
-        final qty = quickProv.getQuantity(item.presentationId);
-        final price = quickProv.getEffectivePrice(item.presentationId);
+    final promoProv = Provider.of<PromotionProvider>(context);
+    String? upsellMessage;
+    // Check if any cart item is part of a bundle
+    for (var item in quickProv.cartItems) {
+       for (var bundle in promoProv.bundles) {
+          if (bundle.activo) {
+             final bItems = promoProv.getItemsForBundle(bundle.id);
+             if (bItems.any((b) => b.presentacionId == item.presentationId)) {
+                upsellMessage = "¡Upsell! Cambia ${item.productName} por el paquete '${bundle.nombrePaquete}' y aumenta el ticket promedio.";
+                break;
+             }
+          }
+       }
+       if (upsellMessage != null) break;
+    }
 
-        return QuickSaleCartItem(
-          key: ValueKey(item.presentationId),
-          product: item,
-          quantity: qty,
-          effectivePrice: price,
-          onTap: () => _openDetailModal(quickProv, item.presentationId),
-          onIncrease: () {
-            // 🔥 Atrapamos y mostramos el error si el stock llegó al límite
-            final error = quickProv.updateQuantity(item.presentationId, qty + 1, item.stock);
-            if (error != null) CustomSnackBar.show(context, message: error, isError: true);
-          },
-          onDecrease: () {
-            final error = quickProv.updateQuantity(item.presentationId, qty - 1, item.stock);
-            if (error != null) CustomSnackBar.show(context, message: error, isError: true);
-          },
-        );
-      },
+    return Column(
+      children: [
+        if (upsellMessage != null)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.2),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+              borderRadius: BorderRadius.circular(12)
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.stars, color: Colors.orange),
+                const SizedBox(width: 8),
+                Expanded(child: Text(upsellMessage, style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontWeight: FontWeight.bold))),
+              ],
+            )
+          ),
+        Expanded(
+          child: ReorderableListView.builder(
+            padding: const EdgeInsets.only(top: 16, bottom: 30),
+            itemCount: quickProv.cartItems.length,
+            onReorder: (oldIndex, newIndex) => quickProv.reorderCart(oldIndex, newIndex),
+            itemBuilder: (ctx, i) {
+              final item = quickProv.cartItems[i];
+              final qty = quickProv.getQuantity(item.presentationId);
+              final price = quickProv.getEffectivePrice(item.presentationId);
+
+              return QuickSaleCartItem(
+                key: ValueKey(item.presentationId),
+                product: item,
+                quantity: qty,
+                effectivePrice: price,
+                onTap: () => _openDetailModal(quickProv, item.presentationId),
+                onIncrease: () {
+                  // 🔥 Atrapamos y mostramos el error si el stock llegó al límite
+                  final error = quickProv.updateQuantity(item.presentationId, qty + 1, item.stock);
+                  if (error != null) CustomSnackBar.show(context, message: error, isError: true);
+                },
+                onDecrease: () {
+                  final error = quickProv.updateQuantity(item.presentationId, qty - 1, item.stock);
+                  if (error != null) CustomSnackBar.show(context, message: error, isError: true);
+                },
+                onDelete: () => quickProv.removeItem(item.presentationId),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

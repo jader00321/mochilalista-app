@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/smart_quotation_model.dart';
-import '../models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 class QuotationCard extends StatelessWidget {
   final SmartQuotationModel quotation;

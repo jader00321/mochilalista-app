@@ -3,17 +3,19 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../models/crm_models.dart';
-import '../../providers/tracking_provider.dart';
-import '../../providers/quick_sale_provider.dart'; 
-import '../../widgets/crm/payment_entry_modal.dart';
-import '../../widgets/crm/ledger_timeline_tab.dart';
-import '../../widgets/crm/client_profile_editor.dart'; 
-import '../../widgets/crm/client_stats_header.dart';
-import '../../widgets/crm/client_sales_history_tab.dart';
-import '../../widgets/crm/client_quotations_tab.dart'; 
-import '../quick_sale_screen.dart'; 
-import '../../../../widgets/confirm_action_modal.dart'; 
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/ledger_timeline_tab.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_profile_editor.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_stats_header.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_sales_history_tab.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_quotations_tab.dart'; 
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_delete_modal.dart';
+import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart'; 
+import 'package:app_movil/core/widgets/confirm_action_modal.dart'; 
 
 class ClientDetailScreen extends StatefulWidget {
   final ClientModel client;
@@ -172,6 +174,23 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
     );
   }
 
+  Future<void> _handleDelete() async {
+    final clientService = ClientService();
+    try {
+      bool success = await clientService.deleteClient(_currentClient.id);
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Cliente eliminado correctamente"), backgroundColor: Colors.green));
+          Navigator.pop(context); // Volver al directorio
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceAll("Exception: ", "")), backgroundColor: Colors.red));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -192,7 +211,20 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
               pinned: true, 
               floating: false,
               actions: [
-                IconButton(icon: const Icon(Icons.edit_note, size: 28), tooltip: "Editar Perfil", onPressed: () => _openEditor(context))
+                IconButton(icon: const Icon(Icons.edit_note, size: 28), tooltip: "Editar Perfil", onPressed: () => _openEditor(context)),
+                IconButton(
+                  icon: const Icon(Icons.delete_forever, size: 28), 
+                  tooltip: "Eliminar Cliente", 
+                  color: Colors.red[300],
+                  onPressed: () {
+                    ClientDeleteModal.show(
+                      context: context, 
+                      clientName: _currentClient.fullName, 
+                      isDark: isDark, 
+                      onConfirm: _handleDelete
+                    );
+                  }
+                )
               ],
             ),
             

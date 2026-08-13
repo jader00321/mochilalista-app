@@ -3,10 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart'; 
 
-import '../models/smart_quotation_model.dart';
-import '../providers/workbench_provider.dart';
-import '../screens/manual_quotation_screen.dart'; 
-import '../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart'; 
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class QuickActionsBottomSheet extends StatelessWidget {
   final SmartQuotationModel quotation;
@@ -94,15 +94,23 @@ class QuickActionsBottomSheet extends StatelessWidget {
               }
             ),
 
-            _buildListTile(
-              icon: Icons.sync, 
-              color: isDark ? Colors.cyan[400]! : Colors.cyan, 
-              title: "Sincronizar", 
-              subtitle: "Actualizar precios, stock y nombres", 
-              isDark: isDark, 
-              onTap: () {
-                Navigator.pop(context);
-                _handleSync();
+            Builder(
+              builder: (ctx) {
+                final validation = Provider.of<WorkbenchProvider>(parentContext, listen: false).getValidationFor(quotation.id);
+                bool hasPriceDiscrepancy = validation != null && validation.priceChanges.isNotEmpty;
+                
+                if (!hasPriceDiscrepancy) return const SizedBox.shrink();
+
+                return _buildListTile(
+                  icon: Icons.sync, 
+                  color: isDark ? Colors.cyan[400]! : Colors.cyan, 
+                  title: "Sincronizar", 
+                  subtitle: "Actualizar precios desactualizados", 
+                  isDark: isDark, 
+                  onTap: () {
+                    _handleSync(ctx);
+                  }
+                );
               }
             ),
 
@@ -165,14 +173,47 @@ class QuickActionsBottomSheet extends StatelessWidget {
     }
   }
 
-  Future<void> _handleSync() async {
-    showDialog(context: parentContext, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+  Future<void> _handleSync(BuildContext sheetContext) async {
+    showDialog(
+      context: parentContext, 
+      barrierDismissible: false, 
+      builder: (_) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 60, height: 60,
+                    child: CircularProgressIndicator(strokeWidth: 4, valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan[400]!)),
+                  ),
+                  Icon(Icons.sync, color: Colors.cyan[400], size: 28),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Text("Sincronizando...", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text("Actualizando precios...", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14)),
+            ],
+          ),
+        ),
+      )
+    );
     
     final prov = Provider.of<WorkbenchProvider>(parentContext, listen: false);
     bool success = await prov.refreshQuotation(quotation.id, fixPrices: true, fixStock: true, fixNames: true);
     
     if (parentContext.mounted) {
-      Navigator.pop(parentContext);
+      Navigator.of(parentContext, rootNavigator: true).pop(); // Cierra el diálogo de manera segura
+      if (sheetContext.mounted) {
+        Navigator.pop(sheetContext); // Cierra el BottomSheet
+      }
+      
       if (success) {
         CustomSnackBar.show(parentContext, message: "Cotización sincronizada correctamente", isError: false);
       } else {

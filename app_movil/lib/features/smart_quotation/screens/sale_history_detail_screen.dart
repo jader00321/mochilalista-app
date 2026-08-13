@@ -2,23 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../providers/sale_provider.dart';
-import '../providers/quick_sale_provider.dart';
-import '../../../../providers/inventory_provider.dart';
-import '../../smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 
-import '../../../widgets/full_screen_image_viewer.dart';
+import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
 
-import '../widgets/history/detail_widgets/detail_header_card.dart';
-import '../widgets/history/detail_widgets/detail_client_card.dart';
-import '../widgets/history/detail_widgets/detail_notes_card.dart';
-import '../widgets/history/detail_widgets/detail_status_card.dart';
-import '../widgets/history/detail_widgets/sale_items_list.dart';
-import '../widgets/history/detail_widgets/sale_action_footer.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/detail_header_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/detail_client_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/detail_notes_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/detail_status_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/sale_items_list.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/sale_action_footer.dart';
 
-import 'quick_sale_screen.dart';
-import '../../smart_quotation/screens/quotation_detail_screen.dart'; 
-import '../../smart_quotation/screens/manual_quotation_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart'; 
 
 class SaleHistoryDetailScreen extends StatefulWidget {
   final int? saleId;
@@ -465,8 +465,9 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     final String clientNote = _saleData!['cliente_notas'] ?? ""; 
     final String saleNote = cotizacion?['notas'] ?? ""; 
 
-    final double totalAmount = (_saleData!['monto_total'] ?? 0).toDouble();
+    double totalAmount = (_saleData!['monto_total'] ?? 0).toDouble();
     final double paidAmount = (_saleData!['monto_pagado'] ?? 0).toDouble();
+    
     double pendingDebt = totalAmount - paidAmount;
     if (pendingDebt < 0) pendingDebt = 0;
     

@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../models/extracted_list_model.dart'; 
-import '../models/smart_quotation_model.dart'; 
-import '../models/matching_model.dart';
-import '../models/crm_models.dart';
-import '../services/ai_extraction_service.dart';
-import 'matching_provider.dart';
-import '../services/client_service.dart';
-import '../../../database/local_db.dart';
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart'; 
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart'; 
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/services/ai_extraction_service.dart';
+import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/core/database/local_db.dart';
 
 class SmartQuotationProvider with ChangeNotifier {
   String? _aiToken; // Usado referencialmente

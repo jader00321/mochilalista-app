@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
 
-import '../providers/sale_provider.dart';
-import '../providers/smart_quotation_provider.dart';
-import '../models/smart_quotation_model.dart';
-import '../models/crm_models.dart';
-import '../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
-import '../widgets/checkout/client_selection_card.dart';
-import '../widgets/checkout/client_bottom_sheet.dart';
-import '../widgets/checkout/payment_config_card.dart';
-import '../widgets/checkout/delivery_and_summary_cards.dart';
-import '../widgets/checkout/checkout_summary_card.dart';
-import '../widgets/checkout/checkout_action_footer.dart';
+import 'package:app_movil/features/smart_quotation/widgets/checkout/client_selection_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/checkout/client_bottom_sheet.dart';
+import 'package:app_movil/features/smart_quotation/widgets/checkout/payment_config_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/checkout/delivery_and_summary_cards.dart';
+import 'package:app_movil/features/smart_quotation/widgets/checkout/checkout_summary_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/checkout/checkout_action_footer.dart';
 class _PhoneNumberFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {

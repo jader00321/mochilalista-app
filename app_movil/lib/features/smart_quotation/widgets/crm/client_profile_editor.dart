@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../models/crm_models.dart';
-import '../../providers/tracking_provider.dart';
-import '../../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class _PhoneNumberFormatter extends TextInputFormatter {
   @override
@@ -130,6 +130,121 @@ class _ClientProfileEditorState extends State<ClientProfileEditor> {
     }
   }
 
+  String? _getValidationWarning(String level) {
+    if (widget.isNew) return null; 
+    
+    final debts = Provider.of<TrackingProvider>(context, listen: false).currentClientDebts;
+    int maxDaysOverdue = 0;
+    DateTime today = DateTime.now();
+    today = DateTime(today.year, today.month, today.day);
+
+    for (var sale in debts) {
+      for (var cuota in sale.installments) {
+        if (cuota.status != 'pagado') {
+          DateTime dueDate = DateTime.tryParse(cuota.dueDate) ?? DateTime.now();
+          dueDate = DateTime(dueDate.year, dueDate.month, dueDate.day);
+          if (dueDate.isBefore(today)) {
+            int days = today.difference(dueDate).inDays;
+            if (days > maxDaysOverdue) maxDaysOverdue = days;
+          }
+        }
+      }
+    }
+
+    if (level == "excelente" && maxDaysOverdue > 0) {
+      return "⚠️ Este cliente tiene cuotas vencidas hace $maxDaysOverdue días. 'Excelente' podría no ser adecuado.";
+    }
+    if (level == "excelente" && widget.client.totalDebt > 500) {
+      return "⚠️ Este cliente tiene una deuda alta de S/ ${widget.client.totalDebt.toStringAsFixed(2)}.";
+    }
+    if (level == "bueno" && maxDaysOverdue > 15) {
+      return "⚠️ Este cliente tiene cuotas vencidas hace $maxDaysOverdue días. Sugerimos nivel 'Regular'.";
+    }
+    if ((level == "excelente" || level == "bueno") && maxDaysOverdue > 30) {
+      return "⚠️ El cliente tiene deudas de más de 30 días. Su nivel debería ser 'Moroso'.";
+    }
+    
+    return null;
+  }
+
+  Widget _buildConfidenceSelector(bool isDark) {
+    final options = [
+      {"val": "excelente", "title": "Excelente", "desc": "Pago Puntual, VIP", "color": Colors.green},
+      {"val": "bueno", "title": "Bueno", "desc": "Confiable, historial normal", "color": Colors.blue},
+      {"val": "regular", "title": "Regular", "desc": "Observado, atrasos ocasionales", "color": Colors.orange},
+      {"val": "moroso", "title": "Moroso", "desc": "Crítico, solo pago contado", "color": Colors.red},
+    ];
+
+    String? warning = _getValidationWarning(_currentConfidence);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: options.map((opt) {
+            bool isSelected = _currentConfidence == opt["val"];
+            Color baseColor = isDark ? (opt["color"] as MaterialColor)[400]! : (opt["color"] as MaterialColor)[600]!;
+            
+            return GestureDetector(
+              onTap: () => setState(() => _currentConfidence = opt["val"] as String),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: (MediaQuery.of(context).size.width - 60) / 2, 
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  color: isSelected ? baseColor.withValues(alpha: 0.15) : (isDark ? const Color(0xFF14141C) : Colors.grey[100]),
+                  border: Border.all(
+                    color: isSelected ? baseColor : (isDark ? Colors.white10 : Colors.grey.shade300),
+                    width: isSelected ? 2 : 1
+                  ),
+                  borderRadius: BorderRadius.circular(14)
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                          color: isSelected ? baseColor : (isDark ? Colors.grey[600] : Colors.grey[400]),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(opt["title"] as String, style: TextStyle(color: isSelected ? baseColor : (isDark ? Colors.white : Colors.black87), fontWeight: FontWeight.bold, fontSize: 15))),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(opt["desc"] as String, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12, height: 1.2)),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        
+        if (warning != null)
+          Container(
+            margin: const EdgeInsets.only(top: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.redAccent.withValues(alpha: 0.1),
+              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+              borderRadius: BorderRadius.circular(10)
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, color: Colors.redAccent, size: 20),
+                const SizedBox(width: 10),
+                Expanded(child: Text(warning, style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold))),
+              ],
+            ),
+          )
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -186,22 +301,7 @@ class _ClientProfileEditorState extends State<ClientProfileEditor> {
                   const SizedBox(height: 30),
                   Text("Nivel de Confianza", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey)),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: _currentConfidence,
-                    dropdownColor: surfaceColor,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                      filled: true, fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100], isDense: true,
-                    ),
-                    items: [
-                      DropdownMenuItem(value: "excelente", child: Text("Excelente (Paga a tiempo)", style: TextStyle(color: isDark ? Colors.green[400] : Colors.green, fontWeight: FontWeight.bold))),
-                      DropdownMenuItem(value: "bueno", child: Text("Bueno (Normal)", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold))),
-                      DropdownMenuItem(value: "regular", child: Text("Regular (Atrasos leves)", style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange, fontWeight: FontWeight.bold))),
-                      DropdownMenuItem(value: "moroso", child: Text("Moroso (Alto Riesgo)", style: TextStyle(color: isDark ? Colors.red[400] : Colors.red, fontWeight: FontWeight.bold))),
-                    ],
-                    onChanged: (val) => setState(() => _currentConfidence = val!),
-                  ),
+                  _buildConfidenceSelector(isDark),
                 ],
 
                 const SizedBox(height: 30),

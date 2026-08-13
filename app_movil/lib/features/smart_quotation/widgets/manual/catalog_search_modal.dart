@@ -3,14 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 // Providers
-import '../../providers/manual_quote_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/providers/manual_quote_provider.dart'; 
 
 // Modelos y Widgets
-import '../../../../../models/inventory_wrapper.dart';
-import '../../models/matching_model.dart';
-import '../../../../../widgets/universal_image.dart';
-import '../../../../../widgets/custom_snackbar.dart';
-import 'manual_quote_detail_modal.dart';
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_detail_modal.dart';
+import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
 
 class CatalogSearchModal extends StatefulWidget {
   final Function(MatchedProduct, int, double?, String?) onAddProduct;
@@ -115,7 +116,7 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
       builder: (ctx) => ManualQuoteDetailModal(
         product: matched,
         initialQty: 1,
-        initialCustomName: fullNameBuilder,
+        initialCustomName: null,
         categoryName: categoryName,
         isNewAddition: true, 
         onConfirm: (finalProd, qty, price, name) {
@@ -128,6 +129,7 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<ManualQuoteProvider>(context);
+    final promoProv = Provider.of<PromotionProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
@@ -222,6 +224,94 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                     ),
                   );
                 },
+              ),
+            ),
+          
+          if (promoProv.bundles.isNotEmpty && provider.searchResults.isEmpty)
+            Container(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Text("🔥 Paquetes Disponibles", style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1)),
+                  ),
+                  SizedBox(
+                    height: 50,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: promoProv.bundles.length,
+                      itemBuilder: (ctx, i) {
+                        final bundle = promoProv.bundles[i];
+                        if (!bundle.activo) return const SizedBox();
+                        
+                        final now = DateTime.now();
+                        if (bundle.fechaInicio != null && bundle.fechaInicio!.isAfter(now)) return const SizedBox();
+                        if (bundle.fechaFin != null && bundle.fechaFin!.isBefore(now)) return const SizedBox();
+                        
+                        final maxStock = promoProv.calculateBundleMaxStock(bundle.id);
+                        
+                        IconData iconData = Icons.inventory_2;
+                        Color iconColor = isDark ? Colors.amberAccent : Colors.orange;
+                        String prefix = "";
+                        if (bundle.tipoPromocion == 'flash') {
+                          iconData = Icons.bolt; iconColor = isDark ? Colors.yellowAccent : Colors.amber; prefix = "⚡ ";
+                        } else if (bundle.tipoPromocion == 'liquidez_costo') {
+                          iconData = Icons.water_drop; iconColor = Colors.lightBlueAccent; prefix = "💧 ";
+                        } else if (bundle.tipoPromocion == '2x1') {
+                          iconData = Icons.exposure_plus_2; iconColor = Colors.greenAccent; prefix = "🎟️ ";
+                        }
+                        
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ActionChip(
+                            backgroundColor: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.1),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isDark ? Colors.white24 : Colors.blue.withValues(alpha: 0.3))),
+                            avatar: Icon(iconData, color: iconColor, size: 18),
+                            label: Text("$prefix${bundle.nombrePaquete} - S/ ${bundle.precioVentaTotal.toStringAsFixed(2)}", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                            onPressed: () {
+                              if (maxStock <= 0) {
+                                CustomSnackBar.show(context, message: "Paquete sin stock disponible.", isError: true);
+                                return;
+                              }
+                              final matched = MatchedProduct(
+                                productId: 0,
+                                presentationId: -(bundle.id),
+                                fullName: bundle.nombrePaquete,
+                                productName: bundle.nombrePaquete,
+                                specificName: "Paquete",
+                                brand: "OFERTA",
+                                price: bundle.precioVentaTotal,
+                                stock: maxStock,
+                                imageUrl: bundle.imagenUrl,
+                                unit: "Paquete",
+                                bundleId: bundle.id,
+                              );
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (ctx) => ManualQuoteDetailModal(
+                                  product: matched,
+                                  initialQty: 1,
+                                  initialCustomName: bundle.nombrePaquete,
+                                  categoryName: "Paquetes y Ofertas",
+                                  isNewAddition: true, 
+                                  onConfirm: (finalProd, qty, price, name) {
+                                    widget.onAddProduct(finalProd, qty, price, name);
+                                    Navigator.pop(context); // Close the search modal
+                                  },
+                                )
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           

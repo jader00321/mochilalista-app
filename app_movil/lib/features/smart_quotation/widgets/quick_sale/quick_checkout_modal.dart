@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../providers/quick_sale_provider.dart';
-import '../../providers/sale_provider.dart';
-import '../../../../providers/inventory_provider.dart';
-import '../../../../providers/catalog_provider.dart';
-import '../../../../providers/notification_provider.dart';
-import '../../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
+import 'package:app_movil/core/providers/notification_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class QuickCheckoutModal extends StatefulWidget {
   const QuickCheckoutModal({super.key});
@@ -70,7 +70,9 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
 
       final detalleVenta = quickProv.cartItems.map((item) {
         return {
-          "presentation_id": item.presentationId,
+          // Si es un bundle, el presentationId era un ID falso negativo, lo ponemos en null
+          "presentation_id": item.bundleId != null ? null : item.presentationId,
+          "bundle_id": item.bundleId,
           "product_id": item.productId,
           "quantity": quickProv.getQuantity(item.presentationId),
           "unit_price": quickProv.getEffectivePrice(item.presentationId),

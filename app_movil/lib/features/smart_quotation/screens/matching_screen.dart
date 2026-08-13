@@ -2,33 +2,33 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../providers/inventory_provider.dart';
-import '../../../models/inventory_wrapper.dart';
-import '../../../models/product_model.dart';
-import '../models/crm_models.dart'; 
-import '../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/catalog/models/product_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart'; 
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
-import '../models/extracted_list_model.dart';
-import '../models/matching_model.dart';
-import '../providers/matching_provider.dart';
-import '../providers/smart_quotation_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart'; 
 
-import '../widgets/matching/product_quote_detail_modal.dart';
-import '../widgets/matching/matching_item_row.dart'; 
-import '../widgets/matching/matching_product_search_modal.dart'; 
-import '../widgets/matching/matching_smart_bottom_bar.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/matching/product_quote_detail_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/matching/matching_item_row.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/matching/matching_product_search_modal.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/matching/matching_smart_bottom_bar.dart'; 
 
-import '../widgets/manual/manual_quote_client_header.dart'; 
-import '../widgets/manual/manual_quote_institution_header.dart'; 
-import '../services/client_service.dart';
-import '../../../providers/auth_provider.dart';
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_client_header.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_institution_header.dart'; 
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
 
-import 'workbench_screen.dart';
-import 'pdf_preview_screen.dart';   
-import 'whatsapp_preview_screen.dart'; 
-import 'quotation_detail_screen.dart';
-import 'client_orders_screen.dart'; 
-import '../../../screens/home_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/workbench_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';   
+import 'package:app_movil/features/smart_quotation/screens/whatsapp_preview_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/client_orders_screen.dart'; 
+import 'package:app_movil/core/screens/home_screen.dart'; 
 
 class MatchingScreen extends StatefulWidget {
   final List<ExtractedItem> extractedItems;
@@ -440,7 +440,7 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
         presentaciones: [
           ProductPresentation(
             id: pair.selectedProduct!.presentationId, 
-            umpCompra: pair.selectedProduct!.unit, 
+            unidadVenta: pair.selectedProduct!.unit, 
             nombreEspecifico: pair.selectedProduct!.specificName, 
             precioVentaFinal: pair.selectedProduct!.price, 
             stockActual: pair.selectedProduct!.stock, 
@@ -574,17 +574,105 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                           sliver: SliverList(
                             delegate: SliverChildBuilderDelegate(
                               (ctx, i) {
-                                bool isRepeated = matchingProvider.isProductRepeated(matchingProvider.pairs[i].selectedProduct?.presentationId);
+                                // Agrupamiento Visual de Paquetes
+                                // En lugar de renderizar uno por uno, vamos a agrupar los que tienen bundleId igual.
+                                // Para no complicar la lista indexada, si es el PRIMER item de un bundle, dibujamos todo el contenedor del bundle.
+                                // Si es un item de un bundle que ya no es el primero, retornamos SizedBox vacío (ya se dibujó).
+                                final pair = matchingProvider.pairs[i];
+                                
+                                if (pair.bundleId != null) {
+                                  // ¿Es el primero de su grupo en la lista?
+                                  final isFirstInBundle = matchingProvider.pairs.indexWhere((p) => p.bundleId == pair.bundleId) == i;
+                                  if (!isFirstInBundle) return const SizedBox.shrink();
+                                  
+                                  // Dibujar grupo completo
+                                  final bundlePairs = matchingProvider.pairs.where((p) => p.bundleId == pair.bundleId).toList();
+                                  final bundleModel = matchingProvider.activeBundles.firstWhere((b) => b.id == pair.bundleId);
+                                  
+                                  double totalSavings = bundlePairs.fold(0.0, (sum, p) => sum + (p.originalUnitPrice * p.selectedQuantity)) - bundleModel.precioVentaTotal;
+                                  
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.amber.shade300, width: 2),
+                                      borderRadius: BorderRadius.circular(16),
+                                      color: Colors.amber.withValues(alpha: 0.05),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.withValues(alpha: 0.2),
+                                            borderRadius: const BorderRadius.vertical(top: Radius.circular(14))
+                                          ),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  const Icon(Icons.stars, color: Colors.amber, size: 20),
+                                                  const SizedBox(width: 8),
+                                                  Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text("✨ Agrupados en ${bundleModel.nombrePaquete}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
+                                                      if (bundleModel.descripcion != null && bundleModel.descripcion!.isNotEmpty)
+                                                        Text(bundleModel.descripcion!, style: TextStyle(color: Colors.amber.shade800, fontSize: 12)),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                              TextButton(
+                                                onPressed: () => matchingProvider.toggleBundleGrouping(bundleModel.id, false),
+                                                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+                                                child: const Text("Desarmar", style: TextStyle(color: Colors.red, fontSize: 13)),
+                                              )
+                                            ],
+                                          ),
+                                        ),
+                                        if (totalSavings > 0)
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 16, top: 8),
+                                            child: Text("¡Ahorro total de S/ ${totalSavings.toStringAsFixed(2)}!", style: TextStyle(color: Colors.green[600], fontWeight: FontWeight.bold, fontSize: 13)),
+                                          ),
+                                        ...bundlePairs.map((bp) {
+                                          int originalIndex = matchingProvider.pairs.indexOf(bp);
+                                          bool isRepeated = matchingProvider.isProductRepeated(bp.selectedProduct?.presentationId);
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 0),
+                                            child: MatchingItemRow(
+                                              pair: bp,
+                                              index: originalIndex,
+                                              isRepeated: isRepeated, 
+                                              isClient: isClient, 
+                                              onTapProduct: () => _openDetailsModal(context, bp),
+                                              onChangeRequest: () => _openSearchModal(context, bp, isDark),
+                                              onDelete: () => matchingProvider.deletePair(bp.sourceItem.id),
+                                              onUnlink: () => matchingProvider.unmatchItem(bp.sourceItem.id),
+                                            ),
+                                          );
+                                        }),
+                                      ],
+                                    ),
+                                  );
+                                }
 
-                                return MatchingItemRow(
-                                  pair: matchingProvider.pairs[i],
-                                  index: i,
-                                  isRepeated: isRepeated, 
-                                  isClient: isClient, 
-                                  onTapProduct: () => _openDetailsModal(context, matchingProvider.pairs[i]),
-                                  onChangeRequest: () => _openSearchModal(context, matchingProvider.pairs[i], isDark),
-                                  onDelete: () => matchingProvider.deletePair(matchingProvider.pairs[i].sourceItem.id),
-                                  onUnlink: () => matchingProvider.unmatchItem(matchingProvider.pairs[i].sourceItem.id),
+                                // Render normal
+                                bool isRepeated = matchingProvider.isProductRepeated(pair.selectedProduct?.presentationId);
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: MatchingItemRow(
+                                    pair: pair,
+                                    index: i,
+                                    isRepeated: isRepeated, 
+                                    isClient: isClient, 
+                                    onTapProduct: () => _openDetailsModal(context, pair),
+                                    onChangeRequest: () => _openSearchModal(context, pair, isDark),
+                                    onDelete: () => matchingProvider.deletePair(pair.sourceItem.id),
+                                    onUnlink: () => matchingProvider.unmatchItem(pair.sourceItem.id),
+                                  ),
                                 );
                               },
                               childCount: matchingProvider.pairs.length,
@@ -706,6 +794,30 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                   } : _clearClient,
                 ),
                 const SizedBox(height: 10),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+          
+          // Sugerencias de Paquetes
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: isDark ? Colors.amber.withValues(alpha: 0.05) : Colors.amber.withValues(alpha: 0.1),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.auto_awesome, color: Colors.amber, size: 18),
+                    const SizedBox(width: 8),
+                    Text("IA: Promociones analizadas", style: theme.bodyMedium?.copyWith(color: isDark ? Colors.amber[200] : Colors.amber[800], fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () => provider.toggleBundleGrouping(-1, true),
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), minimumSize: const Size(0, 0), backgroundColor: Colors.amber.withValues(alpha: 0.2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  child: const Text("Re-Agrupar", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
+                )
               ],
             ),
           ),

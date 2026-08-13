@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart'; 
 import 'package:provider/provider.dart';
 
-import '../providers/smart_quotation_provider.dart';
-import '../providers/sale_provider.dart'; 
-import '../../../providers/auth_provider.dart'; 
-import '../models/smart_quotation_model.dart';
-import '../models/pdf_config_model.dart'; 
-import '../utils/pdf_generator.dart'; 
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart'; 
+import 'package:app_movil/core/providers/auth_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/pdf_config_model.dart'; 
+import 'package:app_movil/features/smart_quotation/utils/pdf_generator.dart'; 
 
 class PdfPreviewScreen extends StatefulWidget {
   final int? quotationId; 
@@ -326,8 +326,10 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                             title: Text("Totales y Pago", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.teal[300] : Colors.teal[900])),
                             leading: Icon(Icons.attach_money, color: isDark ? Colors.teal[400] : Colors.teal[700]),
                             children: [
-                              if (_saleData != null)
+                              if (_saleData != null) ...[
                                 SwitchListTile(title: Text("Mostrar Info de Pago", style: TextStyle(color: textColor)), subtitle: Text("Método, Fecha y Deuda", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])), value: _config.showTransactionDetails, activeThumbColor: Colors.teal, onChanged: (v) => updateConfig(() => _config.showTransactionDetails = v)),
+                                SwitchListTile(title: Text("Mostrar Cuotas", style: TextStyle(color: textColor)), subtitle: Text("Cronograma de pagos", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])), value: _config.showInstallments, activeThumbColor: Colors.teal, onChanged: (v) => updateConfig(() => _config.showInstallments = v)),
+                              ],
                               
                               // Nivel Principal: Total
                               _buildMainSwitch(

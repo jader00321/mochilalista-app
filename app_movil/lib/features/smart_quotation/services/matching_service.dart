@@ -1,9 +1,9 @@
-import '../models/extracted_list_model.dart';
-import '../models/matching_model.dart';
-import '../../../database/local_db.dart';
-import '../../../database/product_queries.dart';
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/database/product_queries.dart';
 import 'dart:io';
-import '../../../services/image_service.dart';
+import 'package:app_movil/core/services/image_service.dart';
 
 class MatchingService {
   final dbHelper = LocalDatabase.instance;

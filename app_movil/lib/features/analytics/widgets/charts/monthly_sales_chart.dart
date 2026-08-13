@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../providers/analytics_provider.dart';
+import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 
-class MonthlySalesChart extends StatelessWidget {
+class MonthlySalesChart extends StatefulWidget {
   final AnalyticsData data;
   final bool isDark;
   final String Function(double) formatCurrency;
@@ -15,14 +15,25 @@ class MonthlySalesChart extends StatelessWidget {
   });
 
   @override
+  State<MonthlySalesChart> createState() => _MonthlySalesChartState();
+}
+
+class _MonthlySalesChartState extends State<MonthlySalesChart> {
+  Map<String, dynamic>? _selectedPoint;
+
+  @override
   Widget build(BuildContext context) {
-    if (data.monthlySales.isEmpty) return const SizedBox.shrink();
+    bool useDaily = widget.data.dailySalesData.length <= 45 && widget.data.dailySalesData.isNotEmpty;
+    List<Map<String, dynamic>> chartData = useDaily ? widget.data.dailySalesData : widget.data.monthlySales;
+    String dateKey = useDaily ? 'date' : 'month';
+
+    if (chartData.isEmpty) return const SizedBox.shrink();
 
     List<FlSpot> spots = [];
     double maxY = 0;
     
-    for (int i = 0; i < data.monthlySales.length; i++) {
-      double amount = data.monthlySales[i]['amount'];
+    for (int i = 0; i < chartData.length; i++) {
+      double amount = (chartData[i]['amount'] as num).toDouble();
       spots.add(FlSpot(i.toDouble(), amount));
       if (amount > maxY) maxY = amount;
     }
@@ -33,9 +44,9 @@ class MonthlySalesChart extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
+        color: widget.isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!),
+        border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey[200]!),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -47,7 +58,7 @@ class MonthlySalesChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Tendencia de Ventas (6 Meses)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text("Evolución de Ventas", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 24),
           SizedBox(
             height: 200,
@@ -58,21 +69,30 @@ class MonthlySalesChart extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      interval: 1,
+                      interval: (chartData.length / 5).clamp(1.0, double.infinity).toDouble(),
                       getTitlesWidget: (double value, TitleMeta meta) {
                         int index = value.toInt();
-                        if (index >= 0 && index < data.monthlySales.length && value == index) {
-                          String monthStr = data.monthlySales[index]['month'].toString();
-                          List<String> parts = monthStr.split('/');
-                          String shortMonth = monthStr;
-                          if (parts.length == 2) {
-                            int m = int.tryParse(parts[0]) ?? 1;
-                            const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-                            if (m >= 1 && m <= 12) shortMonth = months[m - 1];
+                        if (index >= 0 && index < chartData.length && value == index) {
+                          String str = chartData[index][dateKey].toString();
+                          String label = str;
+                          
+                          if (useDaily) {
+                            List<String> parts = str.split('-'); // yyyy-MM-dd
+                            if (parts.length == 3) {
+                              label = "${parts[2]}/${parts[1]}";
+                            }
+                          } else {
+                            List<String> parts = str.split('/'); // MM/yyyy
+                            if (parts.length == 2) {
+                              int m = int.tryParse(parts[0]) ?? 1;
+                              const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                              if (m >= 1 && m <= 12) label = months[m - 1];
+                            }
                           }
+                          
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(shortMonth, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12)),
+                            child: Text(label, style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12)),
                           );
                         }
                         return const SizedBox.shrink();
@@ -86,7 +106,7 @@ class MonthlySalesChart extends StatelessWidget {
                 ),
                 borderData: FlBorderData(show: false),
                 minX: 0,
-                maxX: (data.monthlySales.length - 1).toDouble(),
+                maxX: (chartData.length - 1).toDouble(),
                 minY: 0,
                 maxY: maxY,
                 lineBarsData: [
@@ -96,7 +116,10 @@ class MonthlySalesChart extends StatelessWidget {
                     color: Colors.blueAccent,
                     barWidth: 3,
                     isStrokeCapRound: true,
-                    dotData: const FlDotData(show: true),
+                    dotData: FlDotData(
+                      show: true,
+                      checkToShowDot: (spot, barData) => chartData.length <= 15, // show dots if not too many points
+                    ),
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
@@ -109,21 +132,102 @@ class MonthlySalesChart extends StatelessWidget {
                 ],
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
+                    tooltipMargin: 10,
                     getTooltipItems: (touchedSpots) {
                       return touchedSpots.map((spot) {
+                        int index = spot.x.toInt();
+                        double prevAmount = 0.0;
+                        if (index > 0 && index < chartData.length) {
+                          prevAmount = (chartData[index - 1]['amount'] as num).toDouble();
+                        }
+                        String growthText = "";
+                        if (index > 0 && prevAmount > 0) {
+                           double growth = ((spot.y - prevAmount) / prevAmount) * 100;
+                           String sign = growth >= 0 ? '+' : '';
+                           growthText = "\n$sign${growth.toStringAsFixed(1)}%";
+                        }
                         return LineTooltipItem(
-                          formatCurrency(spot.y),
+                          "${widget.formatCurrency(spot.y)}$growthText",
                           const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                         );
                       }).toList();
                     },
                   ),
+                  touchCallback: (FlTouchEvent event, LineTouchResponse? response) {
+                    if (!event.isInterestedForInteractions || response == null || response.lineBarSpots == null || response.lineBarSpots!.isEmpty) {
+                      return;
+                    }
+                    int index = response.lineBarSpots!.first.x.toInt();
+                    if (index >= 0 && index < chartData.length) {
+                      setState(() {
+                        _selectedPoint = chartData[index];
+                        _selectedPoint!['isDaily'] = useDaily;
+                      });
+                    }
+                  },
                 ),
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          _buildDetailPanel(),
         ],
       ),
     );
   }
+
+  Widget _buildDetailPanel() {
+    if (_selectedPoint == null) return const SizedBox.shrink();
+
+    bool isDaily = _selectedPoint!['isDaily'] ?? false;
+    String rawDate = isDaily ? _selectedPoint!['date'] : _selectedPoint!['month'];
+    double amount = (_selectedPoint!['amount'] as num).toDouble();
+
+    String displayDate = rawDate;
+    if (isDaily) {
+      List<String> parts = rawDate.split('-');
+      if (parts.length == 3) displayDate = "${parts[2]}/${parts[1]}/${parts[0]}";
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: Container(
+        key: ValueKey(rawDate),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: widget.isDark ? Colors.black12 : Colors.grey[50],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey[200]!),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.blueAccent.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.show_chart, color: Colors.blueAccent, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(displayDate, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text("Ventas totales: ${widget.formatCurrency(amount)}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                ],
+              ),
+            ),
+            Text(
+              widget.formatCurrency(amount),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+

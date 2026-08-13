@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/tracking_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 
 class ClientFilterBar extends StatelessWidget {
   const ClientFilterBar({super.key});

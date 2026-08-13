@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'sale_payment_timeline.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/sale_payment_timeline.dart';
 
 class DetailStatusCard extends StatelessWidget {
   final Map<String, dynamic> saleData;
@@ -92,6 +92,23 @@ class DetailStatusCard extends StatelessWidget {
               _buildSummaryRow("Estado", saleData['estado_pago'].toString().toUpperCase(), textColor, isDark),
               if (saleData['descuento_aplicado'] > 0)
                 _buildSummaryRow("Descuento", "- ${currency.format(saleData['descuento_aplicado'])}", isDark ? Colors.green[400]! : Colors.green, isDark),
+              
+              if (saleData['estado_pago'] == 'pendiente' && (saleData['porcentaje_interes'] ?? 0) > 0)
+                ...(() {
+                  double interesRate = (saleData['porcentaje_interes'] ?? 0).toDouble();
+                  double totalWithInterest = (saleData['monto_total'] ?? 0).toDouble();
+                  double abonoInicial = (saleData['abono_inicial'] ?? 0).toDouble();
+                  double debtWithInterest = totalWithInterest - abonoInicial;
+                  if (debtWithInterest < 0) debtWithInterest = 0;
+                  
+                  // Se calcula a la inversa porque monto_total ya incluye el interés
+                  double debtBase = debtWithInterest / (1 + (interesRate / 100));
+                  double interestAmount = debtWithInterest - debtBase;
+                  
+                  return [
+                    _buildSummaryRow("Financiamiento (${interesRate.toStringAsFixed(1)}%)", "+ ${currency.format(interestAmount)}", Colors.orange, isDark)
+                  ];
+                })(),
               
               Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1, thickness: 1.5, color: isDark ? Colors.white24 : Colors.grey[400])),
               

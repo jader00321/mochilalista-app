@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../models/inventory_wrapper.dart';
-import '../../../models/category_model.dart';
-import '../../../models/brand_model.dart';
-import '../../../services/master_data_service.dart';
-import '../../../services/product_service.dart';
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/catalog/models/category_model.dart';
+import 'package:app_movil/features/catalog/models/brand_model.dart';
+import 'package:app_movil/core/services/master_data_service.dart';
+import 'package:app_movil/features/catalog/services/product_service.dart';
 
 class ManualQuoteProvider with ChangeNotifier {
   int? _negocioId;

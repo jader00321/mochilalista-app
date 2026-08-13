@@ -27,6 +27,8 @@ class PdfConfig {
   bool includeShopAddress;
   bool includeShopRuc;
   bool includeLogo;
+  
+  bool showInstallments; // NUEVO CAMPO
 
   PdfConfig({
     this.showTotalGlobal = true,
@@ -48,6 +50,7 @@ class PdfConfig {
     this.includeShopAddress = true,
     this.includeShopRuc = true,
     this.includeLogo = true,
+    this.showInstallments = true, // VALOR POR DEFECTO
   });
 
   factory PdfConfig.fromJson(Map<String, dynamic> json) {
@@ -72,6 +75,7 @@ class PdfConfig {
       includeShopAddress: json['includeShopAddress'] ?? true,
       includeShopRuc: json['includeShopRuc'] ?? true,
       includeLogo: json['includeLogo'] ?? true,
+      showInstallments: json['showInstallments'] ?? true, // LECTURA JSON
     );
   }
 
@@ -94,6 +98,7 @@ class PdfConfig {
       'includeShopAddress': includeShopAddress,
       'includeShopRuc': includeShopRuc,
       'includeLogo': includeLogo,
+      'showInstallments': showInstallments, // ESCRITURA JSON
     };
   }
 }

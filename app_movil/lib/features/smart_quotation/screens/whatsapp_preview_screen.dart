@@ -5,21 +5,21 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart'; 
 
-import '../providers/smart_quotation_provider.dart';
-import '../providers/sale_provider.dart'; 
-import '../../../providers/auth_provider.dart';
-import '../services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart'; 
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 
-import '../models/smart_quotation_model.dart';
-import '../models/crm_models.dart';
-import '../models/whatsapp_config_model.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/whatsapp_config_model.dart';
 
-import '../../../widgets/custom_snackbar.dart';
-import '../widgets/whatsapp/wa_client_section.dart';
-import '../widgets/whatsapp/wa_config_section.dart';
-import '../widgets/whatsapp/wa_business_section.dart';
-import '../widgets/whatsapp/wa_message_editor.dart';
-import '../widgets/whatsapp/wa_final_preview_modal.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_client_section.dart';
+import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_config_section.dart';
+import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_business_section.dart';
+import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_message_editor.dart';
+import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_final_preview_modal.dart';
 
 class WhatsAppPreviewScreen extends StatefulWidget {
   final int? quotationId; 
@@ -182,6 +182,10 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
         line += " -> *${currency.format(lineTotal)}*";
       }
 
+      if (item.specificName != null && item.specificName!.isNotEmpty && item.specificName != "Paquete") {
+        line += "\n   └ _${item.specificName}_";
+      }
+
       if (_config.showSavingsSection && _config.showDiscountDetail && hasDiscount) {
         final savings = item.originalUnitPrice - item.unitPriceApplied;
         line += "\n   └ _Ahorras: ${currency.format(savings)} c/u_";
@@ -191,7 +195,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
     sb.writeln("");
 
     if (_config.showTotalGlobal) {
-      final double finalTotal = isSale ? (_saleData!['monto_total'] ?? 0).toDouble() : _quotation!.totalAmount;
+      double finalTotal = isSale ? (_saleData!['monto_total'] ?? 0).toDouble() : _quotation!.totalAmount;
       final double finalSavings = isSale ? (_saleData!['descuento_aplicado'] ?? 0).toDouble() : _quotation!.totalSavings;
 
       sb.writeln("══════════════════");
@@ -199,8 +203,35 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       if (_config.showSavingsSection && finalSavings > 0.01) {
         sb.writeln("🎉 *AHORRO TOTAL: ${currency.format(finalSavings)}*");
       }
+
+      if (isSale) {
+        double paid = (_saleData!['monto_pagado'] ?? 0.0).toDouble();
+        double debt = finalTotal - paid;
+        if (debt < 0) debt = 0;
+        
+        if (debt > 0.01) {
+          sb.writeln("💳 *PAGADO: ${currency.format(paid)}*");
+          if (_config.showDebtInfo) {
+            sb.writeln("⚠️ *SALDO PENDIENTE: ${currency.format(debt)}*");
+          }
+        }
+      }
       sb.writeln("══════════════════");
       sb.writeln("");
+    }
+
+    if (isSale && _config.showInstallmentDetails) {
+       final List<dynamic>? cuotasRaw = _saleData!['cuotas'];
+       if (cuotasRaw != null && cuotasRaw.isNotEmpty) {
+          sb.writeln("📅 *CRONOGRAMA DE PAGOS (${cuotasRaw.length} Cuotas):*");
+          for (var c in cuotasRaw) {
+             final bool pagado = c['estado'] == 'pagado';
+             final String icon = pagado ? "✅ PAGADO" : "⏳ PENDIENTE";
+             final String date = DateFormat('dd/MM/yyyy').format(DateTime.parse(c['fecha_vencimiento']));
+             sb.writeln("▪ Cuota ${c['numero_cuota']}: ${currency.format(c['monto'])} (Vence: $date) - $icon");
+          }
+          sb.writeln("");
+       }
     }
 
     if (_config.showPaymentInfo) {
@@ -212,7 +243,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
           sb.writeln("💳 *MÉTODOS DE PAGO (Para cancelar saldo):*");
           sb.writeln(_bizPaymentCtrl.text.trim());
           sb.writeln("");
-        } else {
+        } else if ((total - paid) <= 0.01) {
           sb.writeln("💳 *PAGADO MEDIANTE:* ${_saleData!['metodo_pago'].toString().toUpperCase()}");
           sb.writeln("");
         }

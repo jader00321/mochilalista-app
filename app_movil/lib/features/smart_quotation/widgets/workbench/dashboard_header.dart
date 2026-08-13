@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 
 class DashboardHeader extends StatelessWidget {
   final WorkbenchProvider provider;

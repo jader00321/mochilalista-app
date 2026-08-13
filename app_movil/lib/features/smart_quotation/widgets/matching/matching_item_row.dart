@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../providers/matching_provider.dart';
-import '../../models/matching_model.dart';
-import '../../../../widgets/universal_image.dart';
-import '../../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class MatchingItemRow extends StatelessWidget {
   final MatchPair pair;

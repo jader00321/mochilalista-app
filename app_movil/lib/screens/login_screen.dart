@@ -1,1 +1,0 @@
-// Archivo obsoleto tras migración offline. La app es 100% local y no requiere login/registro con backend.

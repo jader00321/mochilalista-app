@@ -3,10 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../../providers/auth_provider.dart';
-import '../../../../providers/theme_provider.dart';
-import '../../../../providers/team_provider.dart';
-import '../../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/providers/theme_provider.dart';
+import 'package:app_movil/features/profile/providers/team_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class AccessCodesTab extends StatelessWidget {
   const AccessCodesTab({super.key});

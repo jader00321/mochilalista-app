@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../models/crm_models.dart';
-import '../../providers/tracking_provider.dart';
-import '../../../../widgets/custom_snackbar.dart';
-import 'general_preview_tab.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/general_preview_tab.dart';
 
 class PaymentEntryModal extends StatefulWidget {
   final ClientModel client;
@@ -63,7 +63,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
       if (_selectedTargetType == 'venta') {
         try {
           final sale = provider.currentClientDebts.firstWhere((s) => s.id == _selectedTargetId);
-          targetDebt = sale.totalAmount - sale.paidAmount;
+          targetDebt = sale.trueTotalAmount - sale.paidAmount;
         } catch (_) {}
       } else if (_selectedTargetType == 'cuota') {
         for (var sale in provider.currentClientDebts) {
@@ -322,7 +322,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
             itemCount: debts.length,
             itemBuilder: (ctx, i) {
               final sale = debts[i];
-              final double faltaVenta = sale.totalAmount - sale.paidAmount;
+              final double faltaVenta = sale.trueTotalAmount - sale.paidAmount;
               
               return Card(
                 elevation: 0,

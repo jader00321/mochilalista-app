@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 
 class HistoryFilterBar extends StatefulWidget {
   const HistoryFilterBar({super.key});
@@ -157,7 +157,9 @@ class _HistoryFilterBarState extends State<HistoryFilterBar> {
                 const SizedBox(width: 8),
                 _buildChip("Este Mes", 'este_mes', provider, isDark),
                 const SizedBox(width: 8),
-                _buildChip("Todas", 'todas', provider, isDark),
+                _buildChip("6 Meses", 'seis_meses', provider, isDark),
+                const SizedBox(width: 8),
+                _buildChip("Todo el Tiempo", 'todo', provider, isDark),
                 const SizedBox(width: 8),
                 
                 ActionChip(

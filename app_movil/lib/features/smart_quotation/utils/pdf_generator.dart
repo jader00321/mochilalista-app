@@ -5,9 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http; 
 import 'package:image/image.dart' as img; // Añadido para conversión de imagen B/N
 
-import '../models/smart_quotation_model.dart';
-import '../../../models/user_model.dart'; 
-import '../models/pdf_config_model.dart'; 
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/core/models/user_model.dart'; 
+import 'package:app_movil/features/smart_quotation/models/pdf_config_model.dart'; 
 
 class PdfGenerator {
   
@@ -300,7 +300,27 @@ class PdfGenerator {
           bool isStructured = item.productName != null && item.productName!.isNotEmpty;
           pw.Widget descWidget;
           
-          if (isStructured) {
+          if (item.bundleId != null) {
+            // Es un paquete promocional
+            descWidget = pw.Column(
+               crossAxisAlignment: pw.CrossAxisAlignment.start,
+               mainAxisAlignment: pw.MainAxisAlignment.center,
+               children: [
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    margin: const pw.EdgeInsets.only(bottom: 2),
+                    decoration: pw.BoxDecoration(color: config.theme == PdfTheme.classic ? PdfColors.black : PdfColors.orange, borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4))),
+                    child: pw.Text("PAQUETE", style: pw.TextStyle(fontSize: 7, color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
+                  ),
+                  pw.Text(item.displayName, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  if (item.specificName != null && item.specificName!.isNotEmpty && item.specificName != "Paquete")
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.only(top: 2),
+                      child: pw.Text(item.specificName!, style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                    ),
+               ]
+            );
+          } else if (isStructured) {
              final String combinedName = "${item.productName!} ${item.specificName ?? ''}".trim();
              descWidget = pw.Column(
                crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -354,7 +374,26 @@ class PdfGenerator {
     if (!config.showTotalGlobal && !config.showTransactionDetails) return pw.Container();
 
     final bool isSale = saleData != null;
-    final double finalTotal = isSale ? (saleData['monto_total'] ?? 0.0).toDouble() : q.totalAmount;
+    double finalTotal = isSale ? (saleData['monto_total'] ?? 0.0).toDouble() : q.totalAmount;
+    double interestVal = 0.0;
+    double interestPct = 0.0;
+    
+    if (isSale) {
+       finalTotal = (saleData['monto_total'] ?? 0.0).toDouble();
+       if (saleData['estado_pago'] == 'pendiente' && (saleData['porcentaje_interes'] ?? 0) > 0) {
+          interestPct = (saleData['porcentaje_interes']).toDouble();
+          double abono = (saleData['abono_inicial'] ?? 0.0).toDouble();
+          double debtWithInterest = finalTotal - abono;
+          if (debtWithInterest < 0) debtWithInterest = 0;
+          
+          double debtBase = debtWithInterest / (1 + (interestPct / 100));
+          interestVal = debtWithInterest - debtBase;
+       }
+    }
+    
+    // 🔥 CORRECCIÓN: Restar el interés al subtotal base
+    double baseTotalBeforeInterest = finalTotal - interestVal;
+
     final double finalSavings = isSale ? (saleData['descuento_aplicado'] ?? 0.0).toDouble() : q.totalSavings;
     
     final double paidAmount = isSale ? (saleData['monto_pagado'] ?? 0.0).toDouble() : 0.0;
@@ -374,7 +413,7 @@ class PdfGenerator {
        }
     }
 
-    return pw.Row(
+    final totalsRow = pw.Row(
       mainAxisAlignment: showTransDetails ? pw.MainAxisAlignment.spaceBetween : pw.MainAxisAlignment.end,
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -418,19 +457,83 @@ class PdfGenerator {
                     pw.Text("Descuento Aplicado:", style: const pw.TextStyle(fontSize: 11)),
                     pw.Text("- ${currency.format(finalSavings)}", style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: colors['savings'])),
                   ]),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(top: 4),
+                    child: pw.Text("¡Gracias por ahorrar con nosotros!", style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: colors['savings']))
+                  ),
                   if (config.showTotalGlobal)
                     pw.Padding(padding: const pw.EdgeInsets.symmetric(vertical: 6), child: pw.Divider(color: PdfColors.grey400)),
                 ],
-                if (config.showTotalGlobal)
+                if (config.showTotalGlobal) ...[
+                  if (interestVal > 0) ...[
+                     pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+                        pw.Text("Subtotal:", style: pw.TextStyle(fontSize: 11)),
+                        pw.Text(currency.format(baseTotalBeforeInterest), style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                     ]),
+                     pw.SizedBox(height: 4),
+                     // 🔥 CORRECCIÓN TEXTO LARGO
+                     pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+                        pw.Text("Interés por financiamiento (${interestPct.toStringAsFixed(1)}%):", style: pw.TextStyle(fontSize: 11)),
+                        pw.Text("+ ${currency.format(interestVal)}", style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.orange700)),
+                     ]),
+                     pw.Padding(padding: const pw.EdgeInsets.symmetric(vertical: 4), child: pw.Divider(color: PdfColors.grey400)),
+                  ],
                   pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
                     pw.Text("IMPORTE TOTAL:", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
                     pw.Text(currency.format(finalTotal), style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: colors['primary'])),
                   ])
+                ]
               ]
             )
           )
       ]
     );
+
+    // 🔥 NUEVA FUNCIÓN: Mostrar cuotas si existen y si la configuración está activa
+    final List<dynamic>? cuotasRaw = isSale ? saleData['cuotas'] : null;
+    if (config.showInstallments && cuotasRaw != null && cuotasRaw.isNotEmpty) {
+      final cuotasWidget = pw.Container(
+        margin: const pw.EdgeInsets.only(top: 15),
+        padding: const pw.EdgeInsets.all(12),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey300), 
+          borderRadius: pw.BorderRadius.circular(6)
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text("PLAN DE PAGOS (${cuotasRaw.length} Cuotas)", style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
+            pw.SizedBox(height: 6),
+            pw.Divider(color: PdfColors.grey300),
+            pw.SizedBox(height: 6),
+            ...cuotasRaw.map((c) {
+              final bool pagado = c['estado'] == 'pagado';
+              final String date = DateFormat('dd/MM/yyyy').format(DateTime.parse(c['fecha_vencimiento']));
+              return pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 4),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text("Cuota ${c['numero_cuota']}: ${currency.format(c['monto'])}", style: pw.TextStyle(fontSize: 10)),
+                    pw.Text("Vence: $date", style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                    pw.Text(pagado ? "PAGADO" : "PENDIENTE", style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: pagado ? PdfColors.green700 : PdfColors.orange700)),
+                  ]
+                )
+              );
+            })
+          ]
+        )
+      );
+
+      return pw.Column(
+        children: [
+          totalsRow,
+          cuotasWidget
+        ]
+      );
+    }
+
+    return totalsRow;
   }
 
   static pw.Widget _buildPaymentRow(String label, String value, {bool isBold = false, PdfColor? valueColor}) {

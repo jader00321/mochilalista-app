@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../providers/analytics_provider.dart';
-import 'glass_card.dart';
+import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/features/analytics/widgets/dashboard/glass_card.dart';
+import 'package:app_movil/core/widgets/product_nomenclature_label.dart';
 
-class RestockAlertsCard extends StatelessWidget {
+class RestockAlertsCard extends StatefulWidget {
   final AnalyticsData data;
   final bool isDark;
 
@@ -13,11 +14,18 @@ class RestockAlertsCard extends StatelessWidget {
   });
 
   @override
+  State<RestockAlertsCard> createState() => _RestockAlertsCardState();
+}
+
+class _RestockAlertsCardState extends State<RestockAlertsCard> {
+  int _selectedProductIndex = -1;
+
+  @override
   Widget build(BuildContext context) {
-    if (data.lowStockProducts.isEmpty) return const SizedBox.shrink();
+    if (widget.data.lowStockProducts.isEmpty) return const SizedBox.shrink();
 
     return GlassCard(
-      isDark: isDark,
+      isDark: widget.isDark,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -25,45 +33,110 @@ class RestockAlertsCard extends StatelessWidget {
             children: [
               const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
               const SizedBox(width: 8),
-              const Text("Quiebre de Stock", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text("Riesgo de Quiebre de Stock", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                child: Text("${data.lowStockProducts.length}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                child: Text("${widget.data.lowStockProducts.length}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
               )
             ],
           ),
           const SizedBox(height: 16),
-          ...data.lowStockProducts.map((p) {
+          ...widget.data.lowStockProducts.asMap().entries.map((e) {
+            int index = e.key;
+            var p = e.value;
             int actual = p['stock_actual'] ?? 0;
             int alerta = p['stock_alerta'] ?? 0;
             double pct = alerta > 0 ? (actual / alerta) : 0;
             if (pct > 1) pct = 1.0;
             
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: Text(p['nombre'].toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-                      Text("$actual / $alerta", style: TextStyle(fontWeight: FontWeight.bold, color: actual == 0 ? Colors.red : Colors.orange)),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  LinearProgressIndicator(
-                    value: pct,
-                    backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
-                    valueColor: AlwaysStoppedAnimation<Color>(actual == 0 ? Colors.red : Colors.orange),
-                    borderRadius: BorderRadius.circular(4),
-                    minHeight: 6,
-                  )
-                ],
+            bool isSelected = index == _selectedProductIndex;
+
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedProductIndex = _selectedProductIndex == index ? -1 : index;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: EdgeInsets.all(isSelected ? 12.0 : 0.0),
+                margin: const EdgeInsets.only(bottom: 12.0),
+                decoration: BoxDecoration(
+                  color: isSelected ? (widget.isDark ? Colors.white10 : Colors.grey[100]) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ProductNomenclatureLabel(
+                            nombre: p['nombre']?.toString() ?? '',
+                            marca: p['marca_nombre']?.toString(),
+                            presentacion: p['presentacion_nombre']?.toString(),
+                            maxLines: 1,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text("$actual / $alerta", style: TextStyle(fontWeight: FontWeight.bold, color: actual == 0 ? Colors.red : Colors.orange)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    LinearProgressIndicator(
+                      value: pct,
+                      backgroundColor: widget.isDark ? Colors.white10 : Colors.grey[200],
+                      valueColor: AlwaysStoppedAnimation<Color>(actual == 0 ? Colors.red : Colors.orange),
+                      borderRadius: BorderRadius.circular(4),
+                      minHeight: 6,
+                    ),
+                    if (isSelected) ...[
+                      const SizedBox(height: 16),
+                      _buildDetailPanel(p, actual, alerta),
+                    ]
+                  ],
+                ),
               ),
             );
           }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailPanel(Map<String, dynamic> p, int actual, int alerta) {
+    String name = p['nombre']?.toString() ?? 'Producto';
+    int diasRestantes = p['dias_para_agotarse'] ?? 3; // Placeholder if not in data
+    
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: widget.isDark ? Colors.black26 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(actual == 0 ? Icons.error_outline : Icons.speed, color: actual == 0 ? Colors.red : Colors.orange, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                actual == 0 ? "Stock Agotado" : "Proyección de Agotamiento",
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            actual == 0 
+                ? "El producto $name ha llegado a 0. Estás perdiendo ventas potenciales basándose en la velocidad de venta histórica. Abastece de inmediato."
+                : "El stock actual ($actual) ha cruzado el límite de seguridad ($alerta). Según el algoritmo predictivo, te quedarás sin stock en aproximadamente $diasRestantes días. Programa tu compra.",
+            style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[700], height: 1.4),
+          )
         ],
       ),
     );

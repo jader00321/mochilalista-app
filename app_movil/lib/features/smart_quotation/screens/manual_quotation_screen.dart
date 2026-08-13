@@ -3,33 +3,33 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 // Providers y Servicios
-import '../providers/workbench_provider.dart';
-import '../providers/smart_quotation_provider.dart';
-import '../../../providers/inventory_provider.dart'; 
-import '../../../providers/auth_provider.dart';
-import '../services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart'; 
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
 
-// Modelos
-import '../models/smart_quotation_model.dart';
-import '../models/matching_model.dart';
-import '../models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 // Widgets Modulares
-import '../../../../widgets/custom_snackbar.dart';
-import '../widgets/manual/catalog_search_modal.dart';
-import '../widgets/manual/manual_quote_detail_modal.dart';
-import '../widgets/manual/manual_quote_item_card.dart';        
-import '../widgets/manual/manual_quote_footer.dart';             
-import '../widgets/manual/manual_quote_save_modal.dart';         
-import '../widgets/manual/manual_quote_empty_state.dart';        
-import '../widgets/manual/manual_quote_headers_section.dart'; 
-import '../widgets/manual/client_search_modal.dart'; 
-import '../widgets/manual/manual_quote_dialog_helper.dart'; 
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/widgets/manual/catalog_search_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_detail_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_item_card.dart';        
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_footer.dart';             
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_save_modal.dart';         
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_empty_state.dart';        
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_headers_section.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/manual/client_search_modal.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_dialog_helper.dart'; 
 
 // Pantallas Destino
-import 'sales_checkout_screen.dart';
-import 'quotation_detail_screen.dart';
-import 'client_orders_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/sales_checkout_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/client_orders_screen.dart';
 
 class ManualQuotationScreen extends StatefulWidget {
   final int? quotationId; 
@@ -65,7 +65,9 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
   bool _isQuoteDataExpanded = false; 
   bool _isClientPanelExpanded = false;
   bool _hasUnsavedChanges = false;
-  
+  bool _isOffersExpanded = false;
+
+  late final NumberFormat _currency;
   final _quoteTitleCtrl = TextEditingController();
   final _quoteNotesCtrl = TextEditingController();
 
@@ -85,6 +87,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
   @override
   void initState() {
     super.initState();
+    _currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     _currentQuotationId = widget.quotationId;
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -230,7 +233,6 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
         
         if (data.clientId != null && !authProv.isCommunityClient) {
           try {
-            // 🔥 CORRECCIÓN 1: Se quitó authProv.token!
             final client = await clientService.getClientById(data.clientId!);
             if (client != null) {
               _selectedClient = client;
@@ -245,7 +247,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
         }
 
         List<MatchedProduct> convertedItems = [];
-        int outdatedItemsCount = 0; // Para el banner
+        int outdatedItemsCount = 0; 
 
         for (var qItem in data.items) {
           int realStock = 0;
@@ -277,12 +279,9 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                      ? pres.precioOferta! 
                      : pres.precioVentaFinal;
                }
-               // Si la presentación no se encontró, conservamos datos originales de la cotización
             }
-            // Si el producto no se encontró, conservamos datos originales de la cotización (fallback defensivo)
           } catch(e) { debugPrint("Producto no encontrado: $e"); }
 
-          // Check if data is outdated
           bool isOutdated = false;
           if (realProductName != (qItem.productName ?? "")) isOutdated = true;
           if (!qItem.isManualPrice && (qItem.unitPriceApplied - currentPrice).abs() > 0.01) isOutdated = true;
@@ -309,13 +308,6 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
              _overriddenPrices[matched.presentationId] = qItem.unitPriceApplied;
           }
           
-          // Si era custom, o si el nombre cambió, lo registramos como custom (para que lo muestre) o lo dejamos para la alerta.
-          // Wait, the logic said: Guardar el nombre original en _customNames si y solo si fue personalizado por el usuario.
-          // In bug description: "Guardar el nombre guardado en la cotización en _customNames[] solo si son diferentes (y no es 'nuevo ítem')" -> Actually wait.
-          // If we want the label to show "Cotizado como", the card uses `item.fullName` to compare against `item.displayNameClean`.
-          // So `fullName = qItem.displayName` is correct! (This holds the name from the DB when it was quoted).
-          // And `productName = realProductName` holds the new name!
-          // So if they are different, the card will show it, as long as it's not custom.
           if (qItem.productName == null || qItem.productName!.isEmpty) {
               _customNames[matched.presentationId] = qItem.displayName;
           }
@@ -326,10 +318,8 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
         setState(() { 
            _items = convertedItems; 
            _hasUnsavedChanges = false; 
-           _outdatedItemsCount = outdatedItemsCount; // Need to declare this in the state
+           _outdatedItemsCount = outdatedItemsCount;
         });
-
-        setState(() { _items = convertedItems; _hasUnsavedChanges = false; });
       }
       if (mounted) setState(() => _isLoading = false);
       return;
@@ -525,10 +515,8 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       };
       try {
         if (_selectedClient != null) {
-          // 🔥 CORRECCIÓN 2: Se quitó authProv.token!
           await clientService.updateClient(_selectedClient!.id, clientData);
         } else {
-          // 🔥 CORRECCIÓN 3: Se quitó authProv.token! y se inyectaron los IDs activos
           final newClient = await clientService.createClient(clientData, authProv.activeBusinessId!, authProv.activeUserId!);
           finalClientId = newClient.id;
         }
@@ -540,8 +528,9 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       final manualPrice = _overriddenPrices[item.presentationId];
       
       return {
-        "product_id": item.productId, 
-        "presentation_id": item.presentationId, 
+        "product_id": item.bundleId != null ? null : item.productId, 
+        "presentation_id": item.bundleId != null ? null : item.presentationId, 
+        "bundle_id": item.bundleId,
         "quantity": qty,
         "unit_price_applied": manualPrice ?? (item.offerPrice ?? item.price), 
         "original_unit_price": item.price, 
@@ -673,7 +662,11 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
               _items.removeAt(index); _quantities.remove(item.presentationId); _overriddenPrices.remove(item.presentationId); _customNames.remove(item.presentationId);
               _items.insert(index, newProd); _quantities[newProd.presentationId] = newQty;
               if (!auth.isCommunityClient && newPrice != null) _overriddenPrices[newProd.presentationId] = newPrice;
-              if (newName != null) _customNames[newProd.presentationId] = newName;
+              if (newName != null) {
+                 _customNames[newProd.presentationId] = newName;
+              } else {
+                 _customNames.remove(newProd.presentationId);
+              }
             } else {
               _quantities[item.presentationId] = newQty;
               if (!auth.isCommunityClient && newPrice != null) {
@@ -681,11 +674,157 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
               } else {
                 _overriddenPrices.remove(item.presentationId);
               }
-              if (newName != null) _customNames[item.presentationId] = newName;
+              if (newName != null) {
+                 _customNames[item.presentationId] = newName;
+              } else {
+                 _customNames.remove(item.presentationId);
+              }
             }
             _hasUnsavedChanges = true;
           });
         },
+      ),
+    );
+  }
+
+  Widget _buildOffersPanel(bool isDark) {
+    final promoProv = Provider.of<PromotionProvider>(context);
+    final now = DateTime.now();
+    final validBundles = promoProv.bundles.where((b) {
+      if (!b.activo) return false;
+      if (b.fechaInicio != null && b.fechaInicio!.isAfter(now)) return false;
+      if (b.fechaFin != null && b.fechaFin!.isBefore(now)) return false;
+      return promoProv.calculateBundleMaxStock(b.id) > 0;
+    }).toList();
+
+    if (validBundles.isEmpty) return const SizedBox();
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      color: isDark ? const Color(0xFF1A1A24) : Colors.pink[50],
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _isOffersExpanded = !_isOffersExpanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Row(
+                children: [
+                  Text("🔥 Paquetes Especiales (${validBundles.length})", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
+                  const Spacer(),
+                  Icon(_isOffersExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: isDark ? Colors.white : Colors.black87, size: 22),
+                ],
+              ),
+            ),
+          ),
+          if (_isOffersExpanded)
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: validBundles.length,
+              itemBuilder: (ctx, i) {
+                final bundle = validBundles[i];
+                final maxStock = promoProv.calculateBundleMaxStock(bundle.id);
+                
+                IconData iconData = Icons.inventory_2;
+                Color iconColor = Colors.amberAccent;
+                String prefix = "Paquete";
+                if (bundle.tipoPromocion == 'flash') {
+                  iconData = Icons.bolt; iconColor = Colors.orangeAccent; prefix = "Flash";
+                } else if (bundle.tipoPromocion == 'liquidez_costo') {
+                  iconData = Icons.water_drop; iconColor = Colors.lightBlue; prefix = "Liquidez";
+                } else if (bundle.tipoPromocion == '2x1') {
+                  iconData = Icons.exposure_plus_2; iconColor = Colors.green; prefix = "2x1";
+                } else if (bundle.tipoPromocion == 'volumen') {
+                  iconData = Icons.shopping_cart; iconColor = Colors.deepPurple; prefix = "Mayoreo";
+                } else if (bundle.tipoPromocion == 'escolar') {
+                  iconData = Icons.school; iconColor = Colors.teal; prefix = "Escolar";
+                }
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white10 : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))]
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.15), shape: BoxShape.circle),
+                        child: Icon(iconData, color: iconColor, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(bundle.nombrePaquete, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14)),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
+                                  child: Text(prefix, style: TextStyle(color: iconColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(_currency.format(bundle.precioVentaTotal), style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 13)),
+                                const SizedBox(width: 8),
+                                Text("Stock: $maxStock", style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 11)),
+                              ],
+                            )
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.add_shopping_cart, color: isDark ? Colors.white : Colors.black87),
+                        onPressed: () {
+                          final fakePresId = -(bundle.id);
+                          setState(() {
+                            final index = _items.indexWhere((p) => p.presentationId == fakePresId);
+                            if (index != -1) {
+                               int newQty = (_quantities[fakePresId] ?? 0) + 1;
+                               if (newQty <= maxStock) {
+                                  _quantities[fakePresId] = newQty;
+                                  CustomSnackBar.show(context, message: "Cantidad actualizada", isError: false);
+                               } else {
+                                  CustomSnackBar.show(context, message: "No hay más stock", isError: true);
+                               }
+                            } else { 
+                              final matched = MatchedProduct(
+                                productId: 0,
+                                presentationId: fakePresId,
+                                fullName: bundle.nombrePaquete,
+                                productName: bundle.nombrePaquete,
+                                specificName: "Paquete",
+                                brand: "OFERTA",
+                                price: bundle.precioVentaTotal,
+                                stock: maxStock,
+                                imageUrl: bundle.imagenUrl,
+                                unit: "Paquete",
+                                bundleId: bundle.id,
+                              );
+                              _items.add(matched);
+                              _quantities[fakePresId] = 1; 
+                              CustomSnackBar.show(context, message: "Paquete agregado", isError: false);
+                            }
+                            _hasUnsavedChanges = true;
+                          });
+                        },
+                      )
+                    ],
+                  ),
+                );
+              },
+            ),
+        ],
       ),
     );
   }
@@ -817,6 +956,10 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                                 } : _clearClient,
                               ),
                             ),
+                          if (!isClient)
+                            SliverToBoxAdapter(
+                              child: _buildOffersPanel(isDark),
+                            ),
                           SliverFillRemaining(
                             hasScrollBody: false, 
                             child: ManualQuoteEmptyState(isDark: isDark, onAddPressed: () => _showCatalogModal(isDark)),
@@ -824,27 +967,32 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                         ],
                       )
                     : ReorderableListView.builder(
-                        header: isClient ? const SizedBox(height: 10) : ManualQuoteHeadersSection(
-                          isDark: isDark, surfaceColor: surfaceColor, textColor: textColor, isGuest: isGuest,
-                          isQuoteDataExpanded: _isQuoteDataExpanded, isClientPanelExpanded: _isClientPanelExpanded,
-                          onQuoteDataExpansionChanged: (val) => setState(() => _isQuoteDataExpanded = val),
-                          onClientPanelExpansionChanged: (val) => setState(() => _isClientPanelExpanded = val),
-                          quoteTitleCtrl: _quoteTitleCtrl, quoteNotesCtrl: _quoteNotesCtrl, schoolCtrl: _schoolCtrl, gradeCtrl: _gradeCtrl,
-                          selectedClient: _selectedClient, clientNameCtrl: _clientNameCtrl, clientPhoneCtrl: _clientPhoneCtrl, clientDniCtrl: _clientDniCtrl,
-                          clientAddressCtrl: _clientAddressCtrl, clientEmailCtrl: _clientEmailCtrl, clientNotesCtrl: _clientNotesCtrl,
-                          isNewClientMode: _updateClientData, onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; _hasUnsavedChanges = true; }); },
-                          
-                          onSearchClientTap: (isGuest || _isAppOrder) ? () {
-                             if (_isAppOrder) {
-                                CustomSnackBar.show(context, message: "Este pedido pertenece a un cliente de la App. Clónalo si deseas asignarlo a otra persona.", isError: true);
-                             } else {
-                                _showExplorationModal(context, isDark);
-                             }
-                          } : _showClientSearch, 
-                          
-                          onClearClient: _isAppOrder ? () {
-                             CustomSnackBar.show(context, message: "No puedes desvincular a un usuario de la App.", isError: true);
-                          } : _clearClient,
+                        header: Column(
+                          children: [
+                            ManualQuoteHeadersSection(
+                              isDark: isDark, surfaceColor: surfaceColor, textColor: textColor, isGuest: isGuest,
+                              isQuoteDataExpanded: _isQuoteDataExpanded, isClientPanelExpanded: _isClientPanelExpanded,
+                              onQuoteDataExpansionChanged: (val) => setState(() => _isQuoteDataExpanded = val),
+                              onClientPanelExpansionChanged: (val) => setState(() => _isClientPanelExpanded = val),
+                              quoteTitleCtrl: _quoteTitleCtrl, quoteNotesCtrl: _quoteNotesCtrl, schoolCtrl: _schoolCtrl, gradeCtrl: _gradeCtrl,
+                              selectedClient: _selectedClient, clientNameCtrl: _clientNameCtrl, clientPhoneCtrl: _clientPhoneCtrl, clientDniCtrl: _clientDniCtrl,
+                              clientAddressCtrl: _clientAddressCtrl, clientEmailCtrl: _clientEmailCtrl, clientNotesCtrl: _clientNotesCtrl,
+                              isNewClientMode: _updateClientData, onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; _hasUnsavedChanges = true; }); },
+                              
+                              onSearchClientTap: (isGuest || _isAppOrder) ? () {
+                                 if (_isAppOrder) {
+                                    CustomSnackBar.show(context, message: "Este pedido pertenece a un cliente de la App. Clónalo si deseas asignarlo a otra persona.", isError: true);
+                                 } else {
+                                    _showExplorationModal(context, isDark);
+                                 }
+                              } : _showClientSearch, 
+                              
+                              onClearClient: _isAppOrder ? () {
+                                 CustomSnackBar.show(context, message: "No puedes desvincular a un usuario de la App.", isError: true);
+                              } : _clearClient,
+                            ),
+                            if (!isClient) _buildOffersPanel(isDark),
+                          ],
                         ),
                         padding: const EdgeInsets.only(bottom: 120), 
                         itemCount: _items.length,

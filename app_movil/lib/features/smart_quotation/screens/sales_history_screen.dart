@@ -4,11 +4,11 @@ import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../providers/sale_provider.dart';
-import '../../../providers/auth_provider.dart'; 
-import '../widgets/history/history_dashboard_cards.dart';
-import '../widgets/history/history_filter_bar.dart';
-import '../widgets/history/sales_list_builder.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/history/history_dashboard_cards.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/history_filter_bar.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/sales_list_builder.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -81,12 +81,19 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
       return;
     }
 
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Generando reporte completo... esto puede tardar unos segundos."), duration: Duration(seconds: 2))
+    );
+
     final provider = Provider.of<SaleProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final csvData = provider.generateCsvData(authProvider.currentCurrency);
     
+    final csvData = await provider.exportFilteredHistoryCsv(authProvider.currentCurrency);
+    
+    if (!mounted) return;
+
     if (csvData.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No hay datos para exportar")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No hay datos para exportar en este periodo")));
       return;
     }
 
@@ -95,8 +102,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
       final file = File('${dir.path}/Reporte_Ventas.csv');
       await file.writeAsString(csvData);
       
+      if (!mounted) return;
       // ignore: deprecated_member_use
-      await Share.shareXFiles([XFile(file.path)], text: 'Adjunto el reporte de ventas (Formato Excel/CSV).');
+      await Share.shareXFiles([XFile(file.path)], text: 'Adjunto el reporte de ventas (Formato CSV compatible con Excel).');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al exportar: $e")));
     }

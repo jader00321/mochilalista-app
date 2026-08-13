@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../../../providers/auth_provider.dart';
-import '../../../../widgets/custom_snackbar.dart';
-import '../../../../services/local_notification_service.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/services/local_notification_service.dart';
 
 class ChangePasswordModal extends StatefulWidget {
   const ChangePasswordModal({super.key});

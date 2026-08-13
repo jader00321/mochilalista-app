@@ -5,10 +5,10 @@ import 'package:multi_split_view/multi_split_view.dart';
 
 import 'package:app_movil/features/smart_quotation/screens/matching_screen.dart';
 import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart'; 
-import 'package:app_movil/providers/auth_provider.dart';
-import '../providers/smart_quotation_provider.dart';
-import '../models/extracted_list_model.dart';
-import '../../../widgets/universal_image.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
 
 class ExtractionResultScreen extends StatefulWidget {
   const ExtractionResultScreen({super.key});

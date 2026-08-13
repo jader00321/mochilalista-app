@@ -7,6 +7,7 @@ class WhatsAppConfig {
 
   bool showDebtInfo;     
   bool showDeliveryInfo; 
+  bool showInstallmentDetails; // NUEVO CAMPO
   
   bool showBusinessInfo; 
   bool includeOwnerPhone;
@@ -25,6 +26,7 @@ class WhatsAppConfig {
     this.showDiscountDetail = false, 
     this.showDebtInfo = true,    
     this.showDeliveryInfo = true, 
+    this.showInstallmentDetails = true, // VALOR POR DEFECTO
     this.showBusinessInfo = true,
     this.includeOwnerPhone = true,
     this.includeShopAddress = true,
@@ -42,6 +44,7 @@ class WhatsAppConfig {
       showDiscountDetail: json['showDiscountDetail'] ?? false,
       showDebtInfo: json['showDebtInfo'] ?? true,
       showDeliveryInfo: json['showDeliveryInfo'] ?? true,
+      showInstallmentDetails: json['showInstallmentDetails'] ?? true, // LECTURA JSON
       showBusinessInfo: json['showBusinessInfo'] ?? true,
       includeOwnerPhone: json['includeOwnerPhone'] ?? true,
       includeShopAddress: json['includeShopAddress'] ?? true,
@@ -60,6 +63,7 @@ class WhatsAppConfig {
       'showDiscountDetail': showDiscountDetail,
       'showDebtInfo': showDebtInfo,
       'showDeliveryInfo': showDeliveryInfo,
+      'showInstallmentDetails': showInstallmentDetails, // ESCRITURA JSON
       'showBusinessInfo': showBusinessInfo,
       'includeOwnerPhone': includeOwnerPhone,
       'includeShopAddress': includeShopAddress,

@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../providers/inventory_provider.dart';
-import '../../../../providers/auth_provider.dart'; // 🔥 Importado para el Rol
-import '../../models/matching_model.dart';
-import '../../../../models/inventory_wrapper.dart';
-import '../../../../widgets/universal_image.dart';
-import '../../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart'; // 🔥 Importado para el Rol
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class MatchingProductSearchModal extends StatefulWidget {
   final String initialQuery;

@@ -4,21 +4,21 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_view/photo_view.dart';
 
-import '../../../../providers/auth_provider.dart';
-import '../../../../providers/theme_provider.dart';
-import '../../../../providers/catalog_provider.dart';
-import '../../smart_quotation/providers/quick_sale_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/providers/theme_provider.dart';
+import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 
-import '../widgets/business_info_card.dart';
-import '../widgets/profile_menu_item.dart';
-import '../widgets/edit_profile_modal.dart';
-import '../widgets/edit_business_modal.dart';
-import '../widgets/change_pin_modal.dart'; 
-import '../../../../widgets/custom_snackbar.dart';
-import '../../../../screens/onboarding/profile_selection_screen.dart'; 
-import 'printer_config_screen.dart';
-import 'notifications_screen.dart';
-import 'backup_screen.dart'; 
+import 'package:app_movil/features/profile/widgets/business_info_card.dart';
+import 'package:app_movil/features/profile/widgets/profile_menu_item.dart';
+import 'package:app_movil/features/profile/widgets/edit_profile_modal.dart';
+import 'package:app_movil/features/profile/widgets/edit_business_modal.dart';
+import 'package:app_movil/features/profile/widgets/change_pin_modal.dart'; 
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart'; 
+import 'package:app_movil/features/profile/screens/printer_config_screen.dart';
+import 'package:app_movil/features/profile/screens/notifications_screen.dart';
+import 'package:app_movil/features/profile/screens/backup_screen.dart'; 
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});

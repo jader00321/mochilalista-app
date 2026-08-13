@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:latlong2/latlong.dart'; 
-import '../../../../providers/auth_provider.dart';
-import '../../../../widgets/custom_snackbar.dart';
-import '../screens/map_picker_screen.dart'; 
-import '../../../../utils/hardware_validator.dart'; // 🔥 IMPORT DEL VALIDADOR PREMIUM
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/profile/screens/map_picker_screen.dart'; 
+import 'package:app_movil/core/utils/hardware_validator.dart'; // 🔥 IMPORT DEL VALIDADOR PREMIUM
 
 class EditBusinessModal extends StatefulWidget {
   final bool isMandatory; 

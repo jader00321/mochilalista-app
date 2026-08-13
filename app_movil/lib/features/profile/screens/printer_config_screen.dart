@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../providers/printer_provider.dart';
-import '../../../../providers/theme_provider.dart';
-import '../../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/core/providers/printer_provider.dart';
+import 'package:app_movil/core/providers/theme_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class PrinterConfigScreen extends StatelessWidget {
   const PrinterConfigScreen({super.key});

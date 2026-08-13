@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../../../models/inventory_wrapper.dart';
-import '../../../../models/product_model.dart';
-import '../../../../widgets/universal_image.dart';
-import '../../../../providers/inventory_provider.dart'; 
-import '../../../../providers/auth_provider.dart'; 
-import '../../../../widgets/full_screen_image_viewer.dart';
-import '../../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/catalog/models/product_model.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart'; 
+import 'package:app_movil/core/providers/auth_provider.dart'; 
+import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class ProductQuoteDetailModal extends StatefulWidget {
   final InventoryWrapper wrapper; 

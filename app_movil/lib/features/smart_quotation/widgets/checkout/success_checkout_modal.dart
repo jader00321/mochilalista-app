@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/smart_quotation_model.dart';
-import '../../../../models/user_model.dart';
-import '../../utils/receipt_manager.dart';
-import '../../../../providers/inventory_provider.dart';
-import '../../../../providers/catalog_provider.dart';
-import '../../../../providers/notification_provider.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/core/models/user_model.dart';
+import 'package:app_movil/features/smart_quotation/utils/receipt_manager.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
+import 'package:app_movil/core/providers/notification_provider.dart';
 
 class SuccessCheckoutModal extends StatefulWidget {
   final SmartQuotationModel quotation;
@@ -79,13 +79,28 @@ class _SuccessCheckoutModalState extends State<SuccessCheckoutModal> {
     
     return PopScope(
       canPop: false,
-      child: Dialog(
-        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          padding: const EdgeInsets.all(30),
-          child: _showViewB ? _buildViewB(isDark) : _buildViewA(isDark),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.elasticOut,
+        builder: (context, value, child) {
+          return Transform.scale(
+            scale: value,
+            child: Opacity(
+              opacity: value.clamp(0.0, 1.0),
+              child: child,
+            ),
+          );
+        },
+        child: Dialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E28) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          elevation: 20,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            padding: const EdgeInsets.all(24),
+            child: _showViewB ? _buildViewB(isDark) : _buildViewA(isDark),
+          ),
         ),
       ),
     );
@@ -95,43 +110,110 @@ class _SuccessCheckoutModalState extends State<SuccessCheckoutModal> {
     final textColor = isDark ? Colors.white : Colors.black87;
     
     double totalAmount = widget.saleData['monto_total'] ?? 0.0;
+    double interest = widget.saleData['porcentaje_interes'] ?? 0.0;
     double debt = totalAmount - widget.totalPaid;
     if (debt < 0) debt = 0;
+    
+    // El monto_total ahora ya incluye el interés desde la base de datos
+    // por lo que no es necesario volver a sumarlo.
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        CircleAvatar(
-          radius: 45,
-          backgroundColor: isDark ? Colors.green[800] : Colors.green,
-          child: const Icon(Icons.check, color: Colors.white, size: 50),
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.elasticOut,
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: value,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.green[800]?.withValues(alpha: 0.2) : Colors.green[50],
+                  shape: BoxShape.circle,
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.green[600] : Colors.green,
+                    shape: BoxShape.circle,
+                    boxShadow: [BoxShadow(color: Colors.green.withValues(alpha: 0.4), blurRadius: 15, spreadRadius: 2)],
+                  ),
+                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 48),
+                ),
+              ),
+            );
+          },
         ),
-        const SizedBox(height: 20),
-        Text("¡Venta Registrada!", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor)),
-        const SizedBox(height: 10),
+        const SizedBox(height: 24),
+        Text("¡Venta Exitosa!", style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: textColor, letterSpacing: 0.5)),
+        const SizedBox(height: 8),
+        Text(widget.saleData['cliente_nombre'] ?? "Cliente", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 16)),
+        
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Row(
+            children: List.generate(
+              30,
+              (index) => Expanded(child: Container(height: 2, color: index.isEven ? Colors.transparent : (isDark ? Colors.white24 : Colors.black12))),
+            ),
+          ),
+        ),
         
         Text(
-          "Total: S/ ${totalAmount.toStringAsFixed(2)}", 
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue[900])
+          "S/ ${totalAmount.toStringAsFixed(2)}", 
+          style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: isDark ? Colors.blue[400] : Colors.blue[800], letterSpacing: -1)
         ),
-        const SizedBox(height: 6),
+        Text("Monto Total", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 14)),
         
-        if (debt > 0) ...[
+        const SizedBox(height: 16),
+        
+        if (debt > 0)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red[50], borderRadius: BorderRadius.circular(10)),
-            child: Column(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            margin: const EdgeInsets.only(top: 8),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.orange[900]?.withValues(alpha: 0.2) : Colors.orange[50], 
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200)
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Deuda Pendiente: S/ ${debt.toStringAsFixed(2)}", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red[800], fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 4),
-                Text("Abonó Hoy: S/ ${widget.totalPaid.toStringAsFixed(2)}", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 14)),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Deuda Pendiente", style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange[800], fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 4),
+                    if (interest > 0)
+                      Text("Incluye ${interest.toStringAsFixed(1)}% de interés", style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[700], fontSize: 11)),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text("S/ ${debt.toStringAsFixed(2)}", style: TextStyle(color: isDark ? Colors.orange[400] : Colors.orange[900], fontWeight: FontWeight.w900, fontSize: 18)),
+                    const SizedBox(height: 2),
+                    Text("Abonó: S/ ${widget.totalPaid.toStringAsFixed(2)}", style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[700], fontSize: 11)),
+                  ],
+                )
               ],
             ),
           )
-        ] else ...[
-          Text("Pagado en su totalidad", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 16)),
-        ],
+        else
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green[50], borderRadius: BorderRadius.circular(20)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.task_alt, color: isDark ? Colors.green[400] : Colors.green[700], size: 18),
+                const SizedBox(width: 8),
+                Text("Pagado en su totalidad", style: TextStyle(color: isDark ? Colors.green[400] : Colors.green[700], fontWeight: FontWeight.bold, fontSize: 14)),
+              ],
+            ),
+          ),
         
         const SizedBox(height: 30),
 

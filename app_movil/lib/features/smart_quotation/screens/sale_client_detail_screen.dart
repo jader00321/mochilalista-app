@@ -3,15 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 // Providers
-import '../providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 
 // Widgets & Utilidades
-import '../../../widgets/universal_image.dart';
-import '../../../widgets/full_screen_image_viewer.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
+import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
 
 // Widgets Modulares de Detalle (Reutilizamos los de solo lectura)
-import '../widgets/history/detail_widgets/detail_header_card.dart';
-import '../widgets/history/detail_widgets/detail_status_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/detail_header_card.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/detail_status_card.dart';
 
 class SaleClientDetailScreen extends StatefulWidget {
   final int saleId;

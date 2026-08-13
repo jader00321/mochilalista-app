@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../providers/auth_provider.dart';
-import '../../services/client_service.dart';
-import '../../models/crm_models.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 class ClientSearchModal extends StatefulWidget {
   final Function(ClientModel) onClientSelected;

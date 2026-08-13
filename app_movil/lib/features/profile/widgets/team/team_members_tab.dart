@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../providers/auth_provider.dart';
-import '../../../../providers/theme_provider.dart';
-import '../../../../providers/team_provider.dart';
-import '../../../../widgets/custom_snackbar.dart';
-import '../../../../models/team_management_models.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/providers/theme_provider.dart';
+import 'package:app_movil/features/profile/providers/team_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/profile/models/team_management_models.dart';
 
 class TeamMembersTab extends StatelessWidget {
   const TeamMembersTab({super.key});

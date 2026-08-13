@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 
 class HistoryDashboardCards extends StatelessWidget {
   const HistoryDashboardCards({super.key});

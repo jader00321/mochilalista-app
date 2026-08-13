@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../providers/quick_sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 import 'dart:async';
-import '../../providers/sale_provider.dart';
-import '../../../../providers/auth_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
 
 class QuickSaleHeader extends StatelessWidget {
   final bool isGuest;

@@ -2,11 +2,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../models/extracted_list_model.dart';
-import '../models/matching_model.dart';
-import '../models/crm_models.dart'; 
-import '../services/matching_service.dart';
-import '../services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
+import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart'; 
+import 'package:app_movil/features/smart_quotation/services/matching_service.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/promotions/models/bundle_model.dart';
+import 'package:app_movil/features/promotions/models/bundle_item_model.dart';
+import 'package:app_movil/features/promotions/repositories/promotion_repository.dart';
 
 class MatchingProvider with ChangeNotifier {
   int? _negocioId;
@@ -14,6 +17,10 @@ class MatchingProvider with ChangeNotifier {
 
   final MatchingService _service = MatchingService();
   final ClientService _clientService = ClientService();
+  final PromotionRepository _promoRepo = PromotionRepository();
+
+  List<BundleModel> _activeBundles = [];
+  final Map<int, List<BundleItemModel>> _bundleItemsCache = {};
 
   bool _isLoading = false;
   bool _isSaving = false;
@@ -37,6 +44,7 @@ class MatchingProvider with ChangeNotifier {
   ExtractedMetadata? get metadata => _metadata;
   ClientModel? get selectedClient => _selectedClient;
   bool get hasModifications => _hasModifications;
+  List<BundleModel> get activeBundles => _activeBundles;
 
   double get totalNetAmount {
     final total = _pairs.fold(0.0, (sum, pair) => sum + pair.subtotal);
@@ -130,6 +138,9 @@ class MatchingProvider with ChangeNotifier {
         }
       }
       
+      await _loadActiveBundles();
+      _detectAndApplyBundles();
+      
       _originalPairs = _pairs.map((p) => p.clone()).toList();
       _originalMetadata = _metadata?.clone();
       _hasModifications = false;
@@ -147,6 +158,86 @@ class MatchingProvider with ChangeNotifier {
     if (institution != null) _metadata!.institutionName = institution;
     if (student != null) _metadata!.studentName = student;
     if (grade != null) _metadata!.gradeLevel = grade;
+    _hasModifications = true;
+    notifyListeners();
+  }
+
+  Future<void> _loadActiveBundles() async {
+    if (_negocioId == null) return;
+    try {
+      final bunRows = await _promoRepo.getBundles(_negocioId!);
+      _activeBundles = bunRows.map((e) => BundleModel.fromJson(e)).where((b) {
+        if (!b.activo) return false;
+        final now = DateTime.now();
+        if (b.fechaInicio != null && b.fechaInicio!.isAfter(now)) return false;
+        if (b.fechaFin != null && b.fechaFin!.isBefore(now)) return false;
+        return true;
+      }).toList();
+
+      _bundleItemsCache.clear();
+      for (var bundle in _activeBundles) {
+        final itemsRows = await _promoRepo.getBundleItems(bundle.id);
+        _bundleItemsCache[bundle.id] = itemsRows.map((e) => BundleItemModel.fromJson(e)).toList();
+      }
+    } catch(e) {
+      // Ignorar error al cargar bundles
+    }
+  }
+
+  void _detectAndApplyBundles() {
+    // 1. Reset all bundleIds
+    for (var pair in _pairs) {
+      pair.bundleId = null;
+      pair.overridePrice = null; // Reiniciar
+    }
+    
+    // 2. Revisar cada paquete activo
+    for (var bundle in _activeBundles) {
+      final requiredItems = _bundleItemsCache[bundle.id] ?? [];
+      if (requiredItems.isEmpty) continue;
+      
+      // Buscar si tenemos todos los productos requeridos con la cantidad requerida (simplificado: al menos 1 unidad requerida encontrada)
+      List<MatchPair> matchedPairsForBundle = [];
+      bool canFormBundle = true;
+      
+      for (var req in requiredItems) {
+        final found = _pairs.where((p) => p.selectedProduct?.productId == req.productoId).toList();
+        if (found.isEmpty) {
+          canFormBundle = false;
+          break;
+        } else {
+          matchedPairsForBundle.addAll(found);
+        }
+      }
+      
+      if (canFormBundle && matchedPairsForBundle.length == requiredItems.length) { // Validación estricta 1 a 1 para simplificar
+        // Agruparlos
+        double totalOriginal = matchedPairsForBundle.fold(0.0, (sum, p) => sum + (p.originalUnitPrice * p.selectedQuantity));
+        if (totalOriginal > 0 && bundle.precioVentaTotal < totalOriginal) {
+          double discountFactor = bundle.precioVentaTotal / totalOriginal;
+          for (var p in matchedPairsForBundle) {
+            p.bundleId = bundle.id;
+            p.overridePrice = p.originalUnitPrice * discountFactor;
+          }
+        }
+      }
+    }
+  }
+
+  void toggleBundleGrouping(int bundleId, bool group) {
+    for (var pair in _pairs) {
+      if (group) {
+        // En un caso real, reejecutaríamos _detectAndApplyBundles para ese bundle. 
+        // Para simplificar, relanzamos la detección global:
+        _detectAndApplyBundles();
+        break;
+      } else {
+        if (pair.bundleId == bundleId) {
+          pair.bundleId = null;
+          pair.overridePrice = null;
+        }
+      }
+    }
     _hasModifications = true;
     notifyListeners();
   }

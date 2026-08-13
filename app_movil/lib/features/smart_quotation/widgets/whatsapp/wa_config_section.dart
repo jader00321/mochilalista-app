@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../models/whatsapp_config_model.dart';
+import 'package:app_movil/features/smart_quotation/models/whatsapp_config_model.dart';
 
 class WaConfigSection extends StatelessWidget {
   final WhatsAppConfig config;
@@ -42,6 +42,7 @@ class WaConfigSection extends StatelessWidget {
             if (isSale) ...[
               Divider(indent: 20, endIndent: 20, color: isDark ? Colors.white10 : Colors.grey[200]),
               _buildSwitchTile("Información de Saldo Pendiente", config.showDebtInfo, isDark, (v) { config.showDebtInfo = v; onChanged(); }),
+              _buildSwitchTile("Detalle de Cuotas", config.showInstallmentDetails, isDark, (v) { config.showInstallmentDetails = v; onChanged(); }),
               _buildSwitchTile("Estado de Entrega / Fecha", config.showDeliveryInfo, isDark, (v) { config.showDeliveryInfo = v; onChanged(); }),
             ],
 

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../models/crm_models.dart';
-import '../../screens/crm/client_detail_screen.dart'; 
-import 'payment_entry_modal.dart';
-import '../../../../widgets/confirm_action_modal.dart'; 
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/screens/crm/client_detail_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
+import 'package:app_movil/core/widgets/confirm_action_modal.dart'; 
 
 class ClientCard extends StatelessWidget {
   final ClientModel client;

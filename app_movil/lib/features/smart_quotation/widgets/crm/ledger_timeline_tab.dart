@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../providers/tracking_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 
 class LedgerTimelineTab extends StatelessWidget {
   const LedgerTimelineTab({super.key});

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../models/crm_models.dart';
-import '../../screens/manual_quotation_screen.dart';
-import '../../screens/sales_checkout_screen.dart';
-import '../../screens/pdf_preview_screen.dart';
-import '../../screens/whatsapp_preview_screen.dart';
-import '../../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/sales_checkout_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/whatsapp_preview_screen.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class QuotationActionButtons extends StatelessWidget {
   final int quotationId;

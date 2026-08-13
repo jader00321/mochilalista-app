@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 class GeneralPreviewTab extends StatelessWidget {
   final List<SaleModel> debts;
@@ -57,7 +57,7 @@ class GeneralPreviewTab extends StatelessWidget {
           }
         }
       } else {
-        double falta = sale.totalAmount - sale.paidAmount;
+        double falta = sale.trueTotalAmount - sale.paidAmount;
         double aplicado = remaining >= falta ? falta : remaining;
         remaining -= aplicado;
         bool saldado = (falta - aplicado) <= 0.01;

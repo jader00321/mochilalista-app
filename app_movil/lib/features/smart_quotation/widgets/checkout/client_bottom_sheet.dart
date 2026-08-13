@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
-import '../../providers/sale_provider.dart';
-import '../../models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 class _PhoneNumberFormatter extends TextInputFormatter {
   @override

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../models/crm_models.dart';
-import '../../providers/tracking_provider.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 
 class ClientStatsHeader extends StatelessWidget {
   final ClientModel client;
@@ -61,23 +61,32 @@ class ClientStatsHeader extends StatelessWidget {
                         Text(client.phone, style: const TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.w500)),
                       ],
                     ),
-                    if (client.etiquetas.isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: client.etiquetas.map((tag) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
-                          child: Text(tag, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                        )).toList(),
-                      )
-                    ]
                   ],
                 ),
               ),
             ],
           ),
+          
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _buildTrustBadge(),
+          ),
+          
+          if (client.etiquetas.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: client.etiquetas.map((tag) => Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+                  child: Text(tag, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                )).toList(),
+              ),
+            )
+          ],
           
           const SizedBox(height: 24),
           Row(
@@ -123,6 +132,36 @@ class ClientStatsHeader extends StatelessWidget {
           ),
           
           _buildDelinquencyBanner(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrustBadge() {
+    Color color;
+    IconData icon;
+    String label = client.nivelConfianza.toUpperCase();
+    switch (client.nivelConfianza.toLowerCase()) {
+      case 'excelente': color = Colors.greenAccent; icon = Icons.star; break;
+      case 'regular': color = Colors.orangeAccent; icon = Icons.warning; break;
+      case 'moroso': color = Colors.redAccent; icon = Icons.block; break;
+      case 'bueno':
+      default: color = Colors.blueAccent; icon = Icons.thumb_up; break;
+    }
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(20)
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5)),
         ],
       ),
     );
@@ -198,11 +237,30 @@ class ClientStatsHeader extends StatelessWidget {
     double totalComprado = client.lastSales.fold(0.0, (sum, sale) => sum + sale.total);
     double totalPagado = client.lastSales.fold(0.0, (sum, sale) => sum + sale.montoPagado);
     int numCompras = client.lastSales.length;
+    
+    double ticketPromedio = numCompras > 0 ? (totalComprado / numCompras) : 0;
+    
+    String ultimaCompra = "N/A";
+    if (client.lastSales.isNotEmpty) {
+      DateTime? dt = DateTime.tryParse(client.lastSales.first.date);
+      if (dt != null) {
+        int diff = DateTime.now().difference(dt).inDays;
+        if (diff == 0) {
+          ultimaCompra = "Hoy";
+        } else if (diff == 1) {
+          ultimaCompra = "Ayer";
+        } else {
+          ultimaCompra = "Hace $diff días";
+        }
+      }
+    }
 
     final stats = [
       {"title": "Deuda Actual", "value": currency.format(client.totalDebt), "color": client.totalDebt > 0 ? (isDark ? Colors.red[400] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), "icon": Icons.account_balance_wallet},
       {"title": "Por Entregar", "value": "${client.pendingDeliveryCount}", "color": isDark ? Colors.orange[400] : Colors.orange[800], "icon": Icons.local_shipping},
       {"title": "Saldo a Favor", "value": currency.format(client.saldoAFavor), "color": isDark ? Colors.amber[400] : Colors.amber[800], "icon": Icons.savings},
+      {"title": "Ticket Promedio", "value": currency.format(ticketPromedio), "color": isDark ? Colors.teal[300] : Colors.teal[800], "icon": Icons.analytics},
+      {"title": "Última Compra", "value": ultimaCompra, "color": isDark ? Colors.indigo[300] : Colors.indigo[800], "icon": Icons.event_available},
       {"title": "N° de Compras", "value": "$numCompras", "color": isDark ? Colors.purple[300] : Colors.purple, "icon": Icons.receipt_long}, 
       {"title": "Total Pagado", "value": currency.format(totalPagado), "color": isDark ? Colors.green[400] : Colors.green[700], "icon": Icons.check_circle},
       {"title": "Total Comprado", "value": currency.format(totalComprado), "color": isDark ? Colors.blue[300] : Colors.blue[800], "icon": Icons.shopping_bag},

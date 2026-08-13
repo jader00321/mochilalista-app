@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import '../providers/analytics_provider.dart';
+import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 
 class AnalyticsExportService {
   static final currencyFmt = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');

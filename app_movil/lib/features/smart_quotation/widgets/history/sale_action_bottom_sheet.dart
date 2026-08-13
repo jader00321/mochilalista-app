@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/crm_models.dart';
-import '../../models/smart_quotation_model.dart'; 
-import '../../providers/sale_provider.dart';
-import '../../../../providers/auth_provider.dart';
-import '../../utils/receipt_manager.dart';
-import '../../../../widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart'; 
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/features/smart_quotation/utils/receipt_manager.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
-import '../../screens/sale_history_detail_screen.dart';
-import '../../screens/pdf_preview_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';
 
 class SaleActionBottomSheet extends StatefulWidget {
   final SaleModel sale;

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../screens/pdf_preview_screen.dart';   
-import '../../../screens/whatsapp_preview_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';   
+import 'package:app_movil/features/smart_quotation/screens/whatsapp_preview_screen.dart'; 
 
 class SaleActionFooter extends StatelessWidget {
   final bool isDark;

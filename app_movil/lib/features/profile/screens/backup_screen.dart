@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../providers/backup_provider.dart';
-import '../../../../providers/auth_provider.dart';
-import '../../../../widgets/custom_snackbar.dart';
-import '../../../../screens/onboarding/profile_selection_screen.dart';
+import 'package:app_movil/core/providers/backup_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PinDelayConfigWidget extends StatefulWidget {
