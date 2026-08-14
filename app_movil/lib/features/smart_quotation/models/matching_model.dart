@@ -14,6 +14,7 @@ class MatchedProduct {
   final String productName;
   final String? specificName;
   final String? brand;
+  final String? description;
   final double price; 
   final double? offerPrice; 
   final int stock;
@@ -31,6 +32,7 @@ class MatchedProduct {
     this.productName = "",
     this.specificName,
     this.brand,
+    this.description,
     required this.price,
     this.offerPrice,
     required this.stock,
@@ -54,6 +56,7 @@ class MatchedProduct {
       productName: pName,
       specificName: sName,
       brand: json['brand'],
+      description: json['description'],
       price: (json['price'] ?? 0.0).toDouble(),
       offerPrice: json['offer_price'] != null ? (json['offer_price'] as num).toDouble() : null,
       stock: json['stock'] ?? 0,
@@ -81,6 +84,7 @@ class MatchedProduct {
     return MatchedProduct(
       productId: productId, presentationId: presentationId, fullName: fullName,
       productName: productName, specificName: specificName, brand: brand,
+      description: description,
       price: price, offerPrice: offerPrice, stock: stock, imageUrl: imageUrl,
       unit: unit, conversionFactor: conversionFactor, isAvailable: isAvailable,
       isOriginalItem: isOriginalItem,

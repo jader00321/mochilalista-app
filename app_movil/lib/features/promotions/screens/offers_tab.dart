@@ -145,12 +145,25 @@ class _OffersTabState extends State<OffersTab> {
             final margin = bundle.precioVentaTotal > 0 ? (bundle.precioVentaTotal - cost) / bundle.precioVentaTotal : 0;
             final color = margin < 0.1 ? Colors.red : (margin < 0.25 ? Colors.orange : Colors.green);
 
-            return Card(
-              elevation: 2,
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.white10 : Colors.grey[200]!)),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+                boxShadow: [
+                  if (!isDark)
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 15,
+                      offset: const Offset(0, 4),
+                    )
+                ]
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => BundleBuilderScreen(bundleToEdit: bundle)));
                 },
@@ -163,10 +176,10 @@ class _OffersTabState extends State<OffersTab> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Text(bundle.nombrePaquete, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            child: Text(bundle.nombrePaquete, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: -0.2), maxLines: 2, overflow: TextOverflow.ellipsis),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: bundle.activo ? color.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
@@ -175,8 +188,8 @@ class _OffersTabState extends State<OffersTab> {
                             child: Row(
                               children: [
                                 Icon(Icons.circle, color: bundle.activo ? color : Colors.grey, size: 8),
-                                const SizedBox(width: 4),
-                                Text(bundle.activo ? "Activo" : "Inactivo", style: TextStyle(color: bundle.activo ? color : Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 6),
+                                Text(bundle.activo ? "ACTIVO" : "INACTIVO", style: TextStyle(color: bundle.activo ? color : Colors.grey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                               ],
                             ),
                           )
@@ -189,19 +202,29 @@ class _OffersTabState extends State<OffersTab> {
                       const SizedBox(height: 12),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text("Precio Venta", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                              Text(currency.format(bundle.precioVentaTotal), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                              const Text("Precio de Venta", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 2),
+                              Text(currency.format(bundle.precioVentaTotal), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: isDark ? Colors.white : Colors.black87)),
                             ],
                           ),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              const Text("Disponibles", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                              Text("$maxStock uds", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              const Text("Disponibles", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: maxStock > 0 ? (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50) : (isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red.shade50),
+                                  borderRadius: BorderRadius.circular(8)
+                                ),
+                                child: Text("$maxStock uds", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: maxStock > 0 ? (isDark ? Colors.blue[300] : Colors.blue[700]) : (isDark ? Colors.red[300] : Colors.red[700]))),
+                              ),
                             ],
                           ),
                         ],
@@ -220,9 +243,9 @@ class _OffersTabState extends State<OffersTab> {
                            Row(
                              children: [
                                IconButton(
-                                 icon: const Icon(Icons.share, color: Colors.blue, size: 20),
+                                 icon: Icon(Icons.share, color: isDark ? Colors.blue[400] : Colors.blue, size: 24),
                                  constraints: const BoxConstraints(),
-                                 padding: EdgeInsets.zero,
+                                 padding: const EdgeInsets.all(8),
                                  tooltip: "Compartir en WhatsApp",
                                  onPressed: () {
                                    final text = "🔥 *¡OFERTA EXCLUSIVA!* 🔥\n\n✨ *${bundle.nombrePaquete}*\n${bundle.descripcion ?? ''}\n\n💰 Llévalo por solo: *${currency.format(bundle.precioVentaTotal)}*\n\n¡Stock muy limitado! 🏃‍♂️💨\nEscríbenos para separar el tuyo antes que se agoten.";
@@ -230,11 +253,11 @@ class _OffersTabState extends State<OffersTab> {
                                    CustomSnackBar.show(context, message: "Copywriting de ventas copiado al portapapeles", isError: false);
                                  },
                                ),
-                               const SizedBox(width: 16),
+                               const SizedBox(width: 8),
                                IconButton(
-                                 icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                 icon: Icon(Icons.delete_outline, color: isDark ? Colors.red[400] : Colors.red, size: 24),
                                  constraints: const BoxConstraints(),
-                                 padding: EdgeInsets.zero,
+                                 padding: const EdgeInsets.all(8),
                                  onPressed: () async {
                                    final confirm = await showDialog<bool>(
                                      context: context,
@@ -265,6 +288,7 @@ class _OffersTabState extends State<OffersTab> {
                   ),
                 ),
               ),
+             ),
             );
           }),
           const SizedBox(height: 60),
@@ -351,7 +375,7 @@ class _OffersTabState extends State<OffersTab> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () {
-                       Navigator.push(context, MaterialPageRoute(builder: (_) => BundleBuilderScreen(initialTipoPromocion: 'paquete_fusion', initialMultipleItems: [p1, p2])));
+                       Navigator.push(context, MaterialPageRoute(builder: (_) => BundleBuilderScreen(initialTipoPromocion: 'paquete', initialMultipleItems: [p1, p2])));
                     },
                   ),
                 )
@@ -380,7 +404,7 @@ class _OffersTabState extends State<OffersTab> {
         promoLabel = 'Crear Oferta 2x1';
         promoIcon = Icons.exposure_plus_2;
       } else if (stock >= 5 && stock <= 10 && days > 20) {
-        promoType = 'precio_mayoreo';
+        promoType = 'volumen';
         promoLabel = 'Descuento por Volumen';
         promoIcon = Icons.inventory_2;
       }
@@ -428,7 +452,7 @@ class _OffersTabState extends State<OffersTab> {
                             Expanded(child: Text(fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
                             InkWell(
                               onTap: () {
-                                CustomSnackBar.show(context, message: "El inventario estancado inmoviliza tu capital de trabajo.", isError: false);
+                                _showSuggestionInsightModal(context, fullName, days, stock, cost, promoType, promoLabel, currency);
                               },
                               child: Icon(Icons.info_outline, size: 20, color: hasActiveOffer ? Colors.blue : Colors.orange),
                             )
@@ -478,5 +502,108 @@ class _OffersTabState extends State<OffersTab> {
     }).toList());
 
     return Column(children: insightWidgets);
+  }
+
+  void _showSuggestionInsightModal(BuildContext context, String fullName, int days, int stock, double cost, String promoType, String promoLabel, NumberFormat currency) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    String strategyText = "";
+    if (promoType == '2x1') {
+      strategyText = "Tienes un volumen considerable de stock inmovilizado. Una oferta 2x1 es agresiva y perfecta para liberar espacio en estantes rápidamente y recuperar liquidez.";
+    } else if (promoType == 'volumen') {
+      strategyText = "Tienes algunas unidades que llevan tiempo sin moverse. Un descuento por volumen incentiva a los clientes a llevarse más de lo usual y acelera tu rotación de stock.";
+    } else {
+      strategyText = "Una promoción te ayudará a darle visibilidad a este producto y recuperar el capital invertido.";
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(width: 50, height: 5, margin: const EdgeInsets.only(bottom: 24), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.15), shape: BoxShape.circle),
+                    child: const Icon(Icons.lightbulb_outline, color: Colors.orange, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text("Insight Estratégico", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text("¿Por qué sugerimos esto?", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 12),
+              RichText(
+                text: TextSpan(
+                  style: TextStyle(color: isDark ? Colors.grey[300] : Colors.black87, fontSize: 14, height: 1.5),
+                  children: [
+                    const TextSpan(text: "El producto "),
+                    TextSpan(text: fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const TextSpan(text: " lleva "),
+                    TextSpan(text: "$days días", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                    const TextSpan(text: " sin registrar movimiento. Tienes "),
+                    TextSpan(text: "$stock unidades", style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const TextSpan(text: " en stock, lo que equivale a "),
+                    TextSpan(text: currency.format(cost), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                    const TextSpan(text: " de capital inmovilizado que no está generando rentabilidad."),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle_outline, color: Colors.blue, size: 20),
+                        const SizedBox(width: 8),
+                        Text("Estrategia: $promoLabel", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blue)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(strategyText, style: TextStyle(color: isDark ? Colors.blue[100] : Colors.blue[900], fontSize: 13, height: 1.4)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Entendido", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ),
+              SizedBox(height: MediaQuery.of(context).padding.bottom),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

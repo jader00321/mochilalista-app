@@ -85,13 +85,21 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
                   PieChartData(
                     pieTouchData: PieTouchData(
                       touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                        setState(() {
-                          if (!event.isInterestedForInteractions || pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
-                            _selectedSegmentIndex = -1;
-                            return;
-                          }
-                          _selectedSegmentIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
-                        });
+                        if (!event.isInterestedForInteractions || event is FlPanEndEvent || event is FlLongPressEnd) return;
+                        if (event is FlTapUpEvent) {
+                          setState(() {
+                            if (pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
+                              _selectedSegmentIndex = -1;
+                            } else {
+                              int index = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                              if (_selectedSegmentIndex == index) {
+                                _selectedSegmentIndex = -1;
+                              } else {
+                                _selectedSegmentIndex = index;
+                              }
+                            }
+                          });
+                        }
                       },
                     ),
                     sections: sections,

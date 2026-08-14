@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_full_stats_modal.dart';
 
 class ClientStatsHeader extends StatelessWidget {
   final ClientModel client;
@@ -25,7 +25,7 @@ class ClientStatsHeader extends StatelessWidget {
     return Column(
       children: [
         _buildProfileHeader(context),
-        _buildStatsCarousel(context),
+        _buildFullStatsButton(context),
       ],
     );
   }
@@ -33,7 +33,7 @@ class ClientStatsHeader extends StatelessWidget {
   Widget _buildProfileHeader(BuildContext context) {
     return Container(
       color: isDark ? const Color(0xFF1A1A24) : const Color(0xFF1565C0),
-      padding: const EdgeInsets.fromLTRB(24, 10, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 10, 24, 16),
       child: Column(
         children: [
           Row(
@@ -137,6 +137,58 @@ class ClientStatsHeader extends StatelessWidget {
     );
   }
 
+  Widget _buildFullStatsButton(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: isDark ? const Color(0xFF14141C) : Theme.of(context).scaffoldBackgroundColor,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+      child: InkWell(
+        onTap: () {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (ctx) => ClientFullStatsModal(client: client, isDark: isDark),
+          );
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark 
+                ? [const Color(0xFF23232F), const Color(0xFF2A2A38)]
+                : [Colors.blue.shade50, Colors.blue.shade100],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isDark ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.4), width: 1.5),
+            boxShadow: [
+              if (!isDark) BoxShadow(color: Colors.blue.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.analytics_rounded, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 24),
+              const SizedBox(width: 10),
+              Text(
+                "Ver Analítica Completa", 
+                style: TextStyle(
+                  fontWeight: FontWeight.bold, 
+                  fontSize: 16, 
+                  color: isDark ? Colors.blue[300] : Colors.blue[900],
+                  letterSpacing: 0.5
+                )
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.arrow_forward_ios_rounded, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 14),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTrustBadge() {
     Color color;
     IconData icon;
@@ -232,83 +284,4 @@ class ClientStatsHeader extends StatelessWidget {
     return const SizedBox.shrink();
   }
 
-  Widget _buildStatsCarousel(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-    double totalComprado = client.lastSales.fold(0.0, (sum, sale) => sum + sale.total);
-    double totalPagado = client.lastSales.fold(0.0, (sum, sale) => sum + sale.montoPagado);
-    int numCompras = client.lastSales.length;
-    
-    double ticketPromedio = numCompras > 0 ? (totalComprado / numCompras) : 0;
-    
-    String ultimaCompra = "N/A";
-    if (client.lastSales.isNotEmpty) {
-      DateTime? dt = DateTime.tryParse(client.lastSales.first.date);
-      if (dt != null) {
-        int diff = DateTime.now().difference(dt).inDays;
-        if (diff == 0) {
-          ultimaCompra = "Hoy";
-        } else if (diff == 1) {
-          ultimaCompra = "Ayer";
-        } else {
-          ultimaCompra = "Hace $diff días";
-        }
-      }
-    }
-
-    final stats = [
-      {"title": "Deuda Actual", "value": currency.format(client.totalDebt), "color": client.totalDebt > 0 ? (isDark ? Colors.red[400] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), "icon": Icons.account_balance_wallet},
-      {"title": "Por Entregar", "value": "${client.pendingDeliveryCount}", "color": isDark ? Colors.orange[400] : Colors.orange[800], "icon": Icons.local_shipping},
-      {"title": "Saldo a Favor", "value": currency.format(client.saldoAFavor), "color": isDark ? Colors.amber[400] : Colors.amber[800], "icon": Icons.savings},
-      {"title": "Ticket Promedio", "value": currency.format(ticketPromedio), "color": isDark ? Colors.teal[300] : Colors.teal[800], "icon": Icons.analytics},
-      {"title": "Última Compra", "value": ultimaCompra, "color": isDark ? Colors.indigo[300] : Colors.indigo[800], "icon": Icons.event_available},
-      {"title": "N° de Compras", "value": "$numCompras", "color": isDark ? Colors.purple[300] : Colors.purple, "icon": Icons.receipt_long}, 
-      {"title": "Total Pagado", "value": currency.format(totalPagado), "color": isDark ? Colors.green[400] : Colors.green[700], "icon": Icons.check_circle},
-      {"title": "Total Comprado", "value": currency.format(totalComprado), "color": isDark ? Colors.blue[300] : Colors.blue[800], "icon": Icons.shopping_bag},
-    ];
-
-    return Container(
-      height: 135, 
-      color: isDark ? const Color(0xFF14141C) : Theme.of(context).scaffoldBackgroundColor,
-      padding: const EdgeInsets.only(top: 20),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: stats.length,
-        itemBuilder: (ctx, i) {
-          final stat = stats[i];
-          final color = stat["color"] as Color;
-          return Container(
-            width: 175, 
-            margin: const EdgeInsets.only(right: 14),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF23232F) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withValues(alpha: isDark ? 0.2 : 0.3)),
-              boxShadow: [if (!isDark) BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4))]
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    Icon(stat["icon"] as IconData, size: 20, color: color),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(stat["title"] as String, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(stat["value"] as String, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: color)),
-                )
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
 }

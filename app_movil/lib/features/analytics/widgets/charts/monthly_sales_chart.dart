@@ -130,7 +130,15 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
                     ),
                   ),
                 ],
+                showingTooltipIndicators: _selectedPoint != null && chartData.contains(_selectedPoint!)
+                    ? [ShowingTooltipIndicators([LineBarSpot(
+                        LineChartBarData(spots: spots),
+                        0,
+                        spots[chartData.indexOf(_selectedPoint!)]
+                      )])]
+                    : [],
                 lineTouchData: LineTouchData(
+                  handleBuiltInTouches: false,
                   touchTooltipData: LineTouchTooltipData(
                     tooltipMargin: 10,
                     getTooltipItems: (touchedSpots) {
@@ -154,14 +162,22 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
                     },
                   ),
                   touchCallback: (FlTouchEvent event, LineTouchResponse? response) {
-                    if (!event.isInterestedForInteractions || response == null || response.lineBarSpots == null || response.lineBarSpots!.isEmpty) {
-                      return;
-                    }
-                    int index = response.lineBarSpots!.first.x.toInt();
-                    if (index >= 0 && index < chartData.length) {
+                    if (!event.isInterestedForInteractions || event is FlPanEndEvent || event is FlLongPressEnd) return;
+                    if (event is FlTapUpEvent) {
                       setState(() {
-                        _selectedPoint = chartData[index];
-                        _selectedPoint!['isDaily'] = useDaily;
+                        if (response == null || response.lineBarSpots == null || response.lineBarSpots!.isEmpty) {
+                          _selectedPoint = null;
+                        } else {
+                          int index = response.lineBarSpots!.first.x.toInt();
+                          if (index >= 0 && index < chartData.length) {
+                            if (_selectedPoint == chartData[index]) {
+                              _selectedPoint = null;
+                            } else {
+                              _selectedPoint = chartData[index];
+                              _selectedPoint!['isDaily'] = useDaily;
+                            }
+                          }
+                        }
                       });
                     }
                   },

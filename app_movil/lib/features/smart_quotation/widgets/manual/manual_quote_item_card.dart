@@ -60,6 +60,9 @@ class ManualQuoteItemCard extends StatelessWidget {
     // 🔥 Manejo seguro del string brand
     final String brandName = item.brand ?? "";
 
+    // Identificar si es paquete
+    final bool isBundle = item.presentationId < 0;
+
     return Dismissible(
       key: ValueKey("item_${item.presentationId}_$index"), 
       direction: DismissDirection.endToStart,
@@ -136,8 +139,7 @@ class ManualQuoteItemCard extends StatelessWidget {
                           if (hasCustomName) ...[
                             Text(customName, style: textTheme.titleMedium?.copyWith(color: textColor), maxLines: 3, overflow: TextOverflow.ellipsis),
                           ] else ...[
-                            // 🔥 DISEÑO PROFESIONAL DE MARCA Y NOMBRE APLICADO AQUÍ TAMBIÉN
-                            if (brandName.isNotEmpty && brandName.toLowerCase() != "null") 
+                            if (brandName.isNotEmpty && brandName.toLowerCase() != "null" && !isBundle) 
                               Text(brandName.toUpperCase(), style: textTheme.labelMedium?.copyWith(color: isDark ? Colors.indigo[300] : Colors.indigo[600], letterSpacing: 0.5)),
                             
                             Text(item.productName, style: textTheme.titleMedium?.copyWith(color: textColor, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -145,16 +147,38 @@ class ManualQuoteItemCard extends StatelessWidget {
                             if (item.specificName != null && item.specificName!.isNotEmpty && item.specificName != "Paquete")
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),
-                                child: Text(item.specificName!, style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                child: Text(item.specificName!, style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                              ),
+                              
+                            if (item.description != null && item.description!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(item.description!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 2, overflow: TextOverflow.ellipsis),
                               ),
                           ],
                           
                           const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
-                            child: Text("${item.unit} (x${item.conversionFactor})", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[700])),
-                          ),
+                          
+                          if (isBundle)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: isDark ? Colors.purple.withValues(alpha: 0.3) : Colors.purple[50], borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? Colors.purple.withValues(alpha: 0.5) : Colors.purple.withValues(alpha: 0.2))),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.local_offer, size: 10, color: isDark ? Colors.purple[300] : Colors.purple[700]),
+                                  const SizedBox(width: 4),
+                                  Text("OFERTA", style: TextStyle(color: isDark ? Colors.purple[300] : Colors.purple[700], fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                ],
+                              ),
+                            )
+                          else if (item.unit.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                              child: Text("${item.unit} (x${item.conversionFactor})", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[700])),
+                            ),
                           
                           if (isOutOfStock)
                              Container(margin: const EdgeInsets.only(top: 8), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.red[800] : Colors.red, borderRadius: BorderRadius.circular(6)), child: Text("AGOTADO", style: textTheme.labelSmall?.copyWith(color: Colors.white))),

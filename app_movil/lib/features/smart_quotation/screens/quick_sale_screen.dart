@@ -361,9 +361,13 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                           ),
                         ),
                         if (_isOffersExpanded)
-                          ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: MediaQuery.of(context).size.height * 0.4,
+                            ),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              physics: const BouncingScrollPhysics(),
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             itemCount: validBundles.length,
                             itemBuilder: (ctx, i) {
@@ -405,6 +409,11 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(bundle.nombrePaquete, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                                          if (bundle.descripcion != null && bundle.descripcion!.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 2, bottom: 2),
+                                              child: Text(bundle.descripcion!, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                            ),
                                           const SizedBox(height: 4),
                                           Row(
                                             children: [
@@ -438,6 +447,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                               );
                             },
                           ),
+                        ),
                       ],
                     ),
                   );

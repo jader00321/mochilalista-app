@@ -18,6 +18,7 @@ class ManualQuoteDetailModal extends StatefulWidget {
   final String? initialCustomName; 
   final String? categoryName; 
   final bool isNewAddition; 
+  final bool isEditingSavedQuote;
   
   final Function(MatchedProduct product, int qty, double? overridePrice, String? customName) onConfirm;
 
@@ -29,6 +30,7 @@ class ManualQuoteDetailModal extends StatefulWidget {
     this.initialCustomName,
     this.categoryName,
     this.isNewAddition = false, 
+    this.isEditingSavedQuote = false,
     required this.onConfirm,
   });
 
@@ -252,11 +254,17 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
     String originalName = widget.product.fullName.trim(); 
     String currentBuiltName = _currentSelection.displayNameClean.trim();
     bool hasCustomName = widget.initialCustomName != null && widget.initialCustomName!.isNotEmpty;
-    bool isNameChanged = !widget.isNewAddition && 
-                          originalName.isNotEmpty && 
-                          currentBuiltName.toLowerCase() != originalName.toLowerCase() &&
-                          !originalName.toLowerCase().contains("nuevo ítem") &&
-                          !hasCustomName;
+    
+    // Nueva lógica refinada
+    bool isSameVariant = _currentSelection.presentationId == widget.product.presentationId;
+    
+    bool isNameChanged = widget.isEditingSavedQuote && 
+                         isSameVariant &&
+                         !widget.isNewAddition && 
+                         originalName.isNotEmpty && 
+                         currentBuiltName.toLowerCase() != originalName.toLowerCase() &&
+                         !originalName.toLowerCase().contains("nuevo ítem") &&
+                         !hasCustomName;
 
     return SafeArea(
       child: Container(
@@ -329,6 +337,12 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                              ],
                            ),
                          ),
+                        
+                        if (_currentSelection.description != null && _currentSelection.description!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(_currentSelection.description!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 2, overflow: TextOverflow.ellipsis),
+                          ),
                         
                         const SizedBox(height: 10),
                         

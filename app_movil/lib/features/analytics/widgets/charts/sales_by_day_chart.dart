@@ -66,14 +66,23 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
                 alignment: BarChartAlignment.spaceAround,
                 maxY: maxVal * 1.2,
                 barTouchData: BarTouchData(
+                  handleBuiltInTouches: false,
                   touchCallback: (FlTouchEvent event, barTouchResponse) {
-                    setState(() {
-                      if (!event.isInterestedForInteractions || barTouchResponse == null || barTouchResponse.spot == null) {
-                        _selectedBarIndex = -1;
-                        return;
-                      }
-                      _selectedBarIndex = barTouchResponse.spot!.touchedBarGroupIndex;
-                    });
+                    if (!event.isInterestedForInteractions || event is FlPanEndEvent || event is FlLongPressEnd) return;
+                    if (event is FlTapUpEvent) {
+                      setState(() {
+                        if (barTouchResponse == null || barTouchResponse.spot == null) {
+                          _selectedBarIndex = -1;
+                        } else {
+                          int index = barTouchResponse.spot!.touchedBarGroupIndex;
+                          if (_selectedBarIndex == index) {
+                            _selectedBarIndex = -1;
+                          } else {
+                            _selectedBarIndex = index;
+                          }
+                        }
+                      });
+                    }
                   },
                   touchTooltipData: BarTouchTooltipData(
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
@@ -119,6 +128,7 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
                   
                   return BarChartGroupData(
                     x: e.key,
+                    showingTooltipIndicators: isTouched ? [0] : [],
                     barRods: [
                       BarChartRodData(
                         toY: e.value['amount'],

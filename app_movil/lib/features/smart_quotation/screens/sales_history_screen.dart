@@ -1,14 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:intl/intl.dart';
 
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/history/history_dashboard_cards.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/history_filter_bar.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/sales_list_builder.dart';
+import 'package:app_movil/features/smart_quotation/services/history_export_service.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -72,7 +73,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     );
   }
 
-  Future<void> _exportToCsv() async {
+  Future<void> _exportReport(bool isPdf) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -82,29 +83,54 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Generando reporte completo... esto puede tardar unos segundos."), duration: Duration(seconds: 2))
+      SnackBar(content: Text("Generando reporte ${isPdf ? 'PDF' : 'CSV'}... esto puede tardar unos segundos."), duration: const Duration(seconds: 2))
     );
 
     final provider = Provider.of<SaleProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     
-    final csvData = await provider.exportFilteredHistoryCsv(authProvider.currentCurrency);
-    
-    if (!mounted) return;
-
-    if (csvData.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No hay datos para exportar en este periodo")));
+    if (provider.salesHistory.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No hay datos para exportar en este periodo")));
       return;
     }
 
     try {
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/Reporte_Ventas.csv');
-      await file.writeAsString(csvData);
+      final businessName = authProvider.currentBusiness?.commercialName ?? authProvider.user?.fullName ?? 'Mi Negocio';
+      
+      String periodText = "Últimos datos";
+      if (provider.currentStartDate != null && provider.currentEndDate != null) {
+        final start = DateTime.tryParse(provider.currentStartDate!);
+        final end = DateTime.tryParse(provider.currentEndDate!);
+        if (start != null && end != null) {
+          final df = DateFormat('dd/MM/yyyy');
+          if (start.year == end.year && start.month == end.month && start.day == end.day) {
+            periodText = df.format(start);
+          } else {
+            periodText = "Del ${df.format(start)} al ${df.format(end)}";
+          }
+        }
+      }
+
+      File file;
+      if (isPdf) {
+        file = await HistoryExportService.exportToPdf(
+          sales: provider.salesHistory,
+          stats: provider.currentStats,
+          businessName: businessName,
+          dateRangeText: periodText,
+        );
+      } else {
+        file = await HistoryExportService.exportToCsv(
+          sales: provider.salesHistory,
+          stats: provider.currentStats,
+          businessName: businessName,
+          dateRangeText: periodText,
+        );
+      }
       
       if (!mounted) return;
       // ignore: deprecated_member_use
-      await Share.shareXFiles([XFile(file.path)], text: 'Adjunto el reporte de ventas (Formato CSV compatible con Excel).');
+      await Share.shareXFiles([XFile(file.path)], text: 'Adjunto el reporte global de ventas.');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al exportar: $e")));
     }
@@ -125,10 +151,35 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.file_download, size: 26),
-            tooltip: "Exportar a Excel (CSV)",
-            onPressed: _exportToCsv,
+            tooltip: "Exportar Reporte",
+            onSelected: (value) {
+              if (value == 'pdf') _exportReport(true);
+              if (value == 'csv') _exportReport(false);
+            },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: 'pdf',
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Descargar PDF Profesional'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'csv',
+                child: Row(
+                  children: [
+                    Icon(Icons.table_chart, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Descargar Excel (CSV)'),
+                  ],
+                ),
+              ),
+            ],
           )
         ],
         bottom: TabBar(

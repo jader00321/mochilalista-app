@@ -134,7 +134,8 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
 
     final String clientName = _clientNameCtrl.text.trim().isEmpty ? 'Cliente' : _clientNameCtrl.text.trim();
 
-    sb.writeln("Hola *$clientName* 👋,");
+    sb.writeln("¡Hola *$clientName*! 👋");
+    sb.writeln("");
     
     if (isSale) {
       final double total = (_saleData!['monto_total'] ?? 0).toDouble();
@@ -143,52 +144,49 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       final bool isQuickSale = _saleData!['origen_venta'] == 'pos_rapido';
       
       if (debt > 0.01) {
-        sb.writeln("¡Gracias por tu preferencia! Aquí tienes el detalle de tu compra.");
+        sb.writeln("Muchas gracias por tu preferencia. A continuación, te comparto el resumen de tu compra:");
         if (_config.showDebtInfo) {
-          sb.writeln("⚠️ *Recordatorio:* Tienes un saldo pendiente de *${currency.format(debt)}*.");
+          sb.writeln("");
+          sb.writeln("📌 *Recordatorio:* Tienes un saldo pendiente de *${currency.format(debt).trim()}*.");
         }
       } else {
         if (isQuickSale) {
           sb.writeln("¡Muchas gracias por tu compra! Te adjunto el detalle de los productos que llevaste:");
         } else {
-          sb.writeln("¡Gracias por confirmar tu pedido! Aquí tienes el comprobante de tu lista:");
+          sb.writeln("¡Gracias por confirmar tu pedido! Aquí tienes el comprobante de tu compra:");
         }
       }
 
       final String deliveryStatus = _saleData!['estado_entrega'] ?? 'entregado';
       if (_config.showDeliveryInfo && deliveryStatus != 'entregado') {
         sb.writeln("");
-        sb.writeln("📦 *ESTADO DEL PEDIDO:*");
-        sb.writeln("▪ Estado: ${deliveryStatus.toUpperCase().replaceAll('_', ' ')}");
+        sb.writeln("📦 *ESTADO DEL PEDIDO*");
+        sb.writeln("▪ Estado: *${deliveryStatus.toUpperCase().replaceAll('_', ' ')}*");
         if (_saleData!['fecha_entrega'] != null) {
           final dateFormatted = DateFormat('dd/MM/yyyy').format(DateTime.parse(_saleData!['fecha_entrega']));
-          sb.writeln("▪ Fecha programada: $dateFormatted");
+          sb.writeln("▪ Entrega programada: $dateFormatted");
         }
       }
 
     } else {
-      sb.writeln("Es un gusto saludarte. Aquí te envío la cotización de los productos solicitados:");
+      sb.writeln("Es un gusto saludarte. Aquí te envío la cotización detallada de los productos solicitados:");
     }
     sb.writeln("");
 
-    sb.writeln("📚 *DETALLE DE PRODUCTOS:*");
+    sb.writeln("🛍️ *DETALLE DE PRODUCTOS*");
     for (var item in _quotation!.items) {
       final lineTotal = item.quantity * item.unitPriceApplied;
       final hasDiscount = (item.originalUnitPrice - item.unitPriceApplied) > 0.01;
 
-      String line = "▪ ${item.displayName} (x${item.quantity})";
+      String line = "▪ ${item.quantity}x ${item.displayName}";
       
       if (_config.showSubtotals) {
-        line += " -> *${currency.format(lineTotal)}*";
-      }
-
-      if (item.specificName != null && item.specificName!.isNotEmpty && item.specificName != "Paquete") {
-        line += "\n   └ _${item.specificName}_";
+        line += " -> *${currency.format(lineTotal).trim()}*";
       }
 
       if (_config.showSavingsSection && _config.showDiscountDetail && hasDiscount) {
         final savings = item.originalUnitPrice - item.unitPriceApplied;
-        line += "\n   └ _Ahorras: ${currency.format(savings)} c/u_";
+        line += "\n   └ _Ahorras: ${currency.format(savings).trim()} c/u_";
       }
       sb.writeln(line);
     }
@@ -198,10 +196,10 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       double finalTotal = isSale ? (_saleData!['monto_total'] ?? 0).toDouble() : _quotation!.totalAmount;
       final double finalSavings = isSale ? (_saleData!['descuento_aplicado'] ?? 0).toDouble() : _quotation!.totalSavings;
 
-      sb.writeln("══════════════════");
-      sb.writeln("💰 *IMPORTE TOTAL: ${currency.format(finalTotal)}*");
+      sb.writeln("📊 *RESUMEN TOTAL*");
+      sb.writeln("▪ Importe Total: *${currency.format(finalTotal).trim()}*");
       if (_config.showSavingsSection && finalSavings > 0.01) {
-        sb.writeln("🎉 *AHORRO TOTAL: ${currency.format(finalSavings)}*");
+        sb.writeln("▪ Ahorro Total: *${currency.format(finalSavings).trim()}* 🎉");
       }
 
       if (isSale) {
@@ -210,25 +208,24 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
         if (debt < 0) debt = 0;
         
         if (debt > 0.01) {
-          sb.writeln("💳 *PAGADO: ${currency.format(paid)}*");
+          sb.writeln("▪ Pagado: *${currency.format(paid).trim()}*");
           if (_config.showDebtInfo) {
-            sb.writeln("⚠️ *SALDO PENDIENTE: ${currency.format(debt)}*");
+            sb.writeln("▪ Saldo Pendiente: *${currency.format(debt).trim()}* ⚠️");
           }
         }
       }
-      sb.writeln("══════════════════");
       sb.writeln("");
     }
 
     if (isSale && _config.showInstallmentDetails) {
        final List<dynamic>? cuotasRaw = _saleData!['cuotas'];
        if (cuotasRaw != null && cuotasRaw.isNotEmpty) {
-          sb.writeln("📅 *CRONOGRAMA DE PAGOS (${cuotasRaw.length} Cuotas):*");
+          sb.writeln("📅 *CRONOGRAMA DE PAGOS* (${cuotasRaw.length} Cuotas)");
           for (var c in cuotasRaw) {
              final bool pagado = c['estado'] == 'pagado';
-             final String icon = pagado ? "✅ PAGADO" : "⏳ PENDIENTE";
+             final String icon = pagado ? "✅ Pagado" : "⏳ Pendiente";
              final String date = DateFormat('dd/MM/yyyy').format(DateTime.parse(c['fecha_vencimiento']));
-             sb.writeln("▪ Cuota ${c['numero_cuota']}: ${currency.format(c['monto'])} (Vence: $date) - $icon");
+             sb.writeln("▪ Cuota ${c['numero_cuota']}: *${currency.format(c['monto']).trim()}* (Vence: $date) - $icon");
           }
           sb.writeln("");
        }
@@ -240,7 +237,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
         final double paid = (_saleData!['monto_pagado'] ?? 0).toDouble();
         
         if ((total - paid) > 0.01 && _bizPaymentCtrl.text.isNotEmpty) {
-          sb.writeln("💳 *MÉTODOS DE PAGO (Para cancelar saldo):*");
+          sb.writeln("💳 *MÉTODOS DE PAGO* (Para cancelar saldo)");
           sb.writeln(_bizPaymentCtrl.text.trim());
           sb.writeln("");
         } else if ((total - paid) <= 0.01) {
@@ -248,7 +245,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
           sb.writeln("");
         }
       } else if (_bizPaymentCtrl.text.isNotEmpty) {
-        sb.writeln("💳 *MEDIOS DE PAGO:*");
+        sb.writeln("💳 *MEDIOS DE PAGO*");
         sb.writeln(_bizPaymentCtrl.text.trim());
         sb.writeln("");
       }
@@ -258,15 +255,15 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       final authProv = Provider.of<AuthProvider>(context, listen: false);
       final bizName = authProv.businessName;
       
-      sb.writeln("📍 *Visítanos en $bizName*");
+      sb.writeln("🏢 *Visítanos en $bizName*");
       
       if (_config.includeShopAddress && _bizAddressCtrl.text.isNotEmpty) {
-         sb.writeln("🏠 Referencia: ${_bizAddressCtrl.text}");
+         sb.writeln("📍 Dirección: ${_bizAddressCtrl.text}");
       }
       
       if (_config.includeShopAddress && _bizLat != null && _bizLng != null) {
           final String mapLink = "https://www.google.com/maps/search/?api=1&query=$_bizLat,$_bizLng";
-          sb.writeln("🗺️ Abrir en Mapa: $mapLink");
+          sb.writeln("🗺️ Ver en Mapa: $mapLink");
       }
 
       if (_config.includeShopRuc && _bizRucCtrl.text.isNotEmpty) {

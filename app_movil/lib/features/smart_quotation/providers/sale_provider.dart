@@ -44,6 +44,8 @@ class SaleProvider with ChangeNotifier {
   String get currentSortBy => _currentSortBy;
   String get currentOrder => _currentOrder;
   String get searchQuery => _searchQuery; 
+  String? get currentStartDate => _currentStartDate;
+  String? get currentEndDate => _currentEndDate;
 
   double get todaySalesTotal {
     if (_salesHistory.isEmpty) return 0.0;

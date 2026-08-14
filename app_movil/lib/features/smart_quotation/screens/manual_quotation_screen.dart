@@ -656,6 +656,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
         product: item, initialQty: _quantities[item.presentationId] ?? 1,
         initialOverridePrice: _overriddenPrices[item.presentationId], initialCustomName: _customNames[item.presentationId],
         isNewAddition: false,
+        isEditingSavedQuote: _currentQuotationId != null,
         onConfirm: (newProd, newQty, newPrice, newName) {
           setState(() {
             if (newProd.presentationId != item.presentationId) {
@@ -721,9 +722,13 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
             ),
           ),
           if (_isOffersExpanded)
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.4,
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: validBundles.length,
               itemBuilder: (ctx, i) {
@@ -766,6 +771,11 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(bundle.nombrePaquete, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14)),
+                            if (bundle.descripcion != null && bundle.descripcion!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2, bottom: 2),
+                                child: Text(bundle.descripcion!, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
+                              ),
                             const SizedBox(height: 4),
                             Row(
                               children: [
@@ -805,6 +815,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                                 productName: bundle.nombrePaquete,
                                 specificName: "Paquete",
                                 brand: "OFERTA",
+                                description: bundle.descripcion,
                                 price: bundle.precioVentaTotal,
                                 stock: maxStock,
                                 imageUrl: bundle.imagenUrl,
@@ -824,6 +835,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                 );
               },
             ),
+          ),
         ],
       ),
     );

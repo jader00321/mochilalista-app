@@ -49,13 +49,15 @@ class QuickSaleCartItem extends StatelessWidget {
     final cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    // 🔥 Usamos la lógica limpia del modelo, sin rastros de snapshots
-    String displayFullName = product.displayNameClean;
+    // 🔥 Nueva lógica: Identificar si es paquete (su presentationId es negativo)
+    final bool isBundle = product.presentationId < 0;
+
+    String displayFullName = isBundle ? product.productName : product.displayNameClean;
 
     // Evaluamos si, tras un refresco de backend, el producto se quedó sin stock
     final bool isOut = product.stock <= 0;
     
-    bool showBrand = brandName.isNotEmpty && !displayFullName.toUpperCase().contains(brandName.toUpperCase());
+    bool showBrand = brandName.isNotEmpty && !displayFullName.toUpperCase().contains(brandName.toUpperCase()) && !isBundle;
 
     return Dismissible(
       key: ValueKey("quick_item_${product.presentationId}"),
@@ -130,11 +132,38 @@ class QuickSaleCartItem extends StatelessWidget {
                           )
                         ),
                         
-                        // Muestra Empaque y Factor
-                        if (product.unit.isNotEmpty)
+                        // 🔥 Descripción del paquete
+                        if (isBundle && product.specificName != null && product.specificName!.isNotEmpty && product.specificName != "Paquete")
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              product.specificName!, 
+                              style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontSize: 13, fontWeight: FontWeight.w600), 
+                              maxLines: 2, 
+                              overflow: TextOverflow.ellipsis
+                            ),
+                          ),
+                        
+                        // Muestra Empaque y Factor (omitimos para paquetes para que se vea más limpio)
+                        if (product.unit.isNotEmpty && !isBundle)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text("${product.unit} (x${product.conversionFactor})", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 13, fontStyle: FontStyle.italic)),
+                          ),
+
+                        if (isBundle)
+                          Container(
+                            margin: const EdgeInsets.only(top: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: isDark ? Colors.purple.withValues(alpha: 0.3) : Colors.purple[50], borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? Colors.purple.withValues(alpha: 0.5) : Colors.purple.withValues(alpha: 0.2))),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.local_offer, size: 10, color: isDark ? Colors.purple[300] : Colors.purple[700]),
+                                const SizedBox(width: 4),
+                                Text("OFERTA", style: TextStyle(color: isDark ? Colors.purple[300] : Colors.purple[700], fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                              ],
+                            ),
                           ),
                       ],
                     ),

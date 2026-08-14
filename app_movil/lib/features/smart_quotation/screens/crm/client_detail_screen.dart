@@ -229,17 +229,12 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
             ),
             
             SliverToBoxAdapter(
-              child: Column(
-                children: [
-                  ClientStatsHeader(
-                    client: _currentClient,
-                    isDark: isDark,
-                    onWhatsAppTap: () => _launchWhatsApp(context),
-                    onCallTap: () => _launchCall(context),
-                    onGoToQuickSale: _goToQuickSale,
-                  ),
-                  const SizedBox(height: 15),
-                ],
+              child: ClientStatsHeader(
+                client: _currentClient,
+                isDark: isDark,
+                onWhatsAppTap: () => _launchWhatsApp(context),
+                onCallTap: () => _launchCall(context),
+                onGoToQuickSale: _goToQuickSale,
               ),
             ),
             

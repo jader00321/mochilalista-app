@@ -78,8 +78,14 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
         ));
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        _applyPromoRules();
         _autoSuggestNameAndPrice();
         setState(() {});
+        
+        if (widget.initialTipoPromocion != null) {
+          final currentPromo = _promoTypes.firstWhere((t) => t['id'] == _tipoPromocion, orElse: () => _promoTypes.first);
+          CustomSnackBar.show(context, message: "Sugerencia aplicada: ${currentPromo['label']}", isError: false);
+        }
       });
     } else if (widget.initialItem != null) {
       if (widget.initialTipoPromocion != null) {
@@ -94,8 +100,14 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
         precioOriginalUnitario: widget.initialItem!.effectivePrice,
       ));
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        _applyPromoRules();
         _autoSuggestNameAndPrice();
         setState(() {});
+        
+        if (widget.initialTipoPromocion != null) {
+          final currentPromo = _promoTypes.firstWhere((t) => t['id'] == _tipoPromocion, orElse: () => _promoTypes.first);
+          CustomSnackBar.show(context, message: "Sugerencia aplicada: ${currentPromo['label']}", isError: false);
+        }
       });
     }
   }

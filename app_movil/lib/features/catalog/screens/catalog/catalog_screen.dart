@@ -502,10 +502,10 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                                           ],
                                         ),
                                       ),
-                                      PopupMenuButton<String>(
-                                        icon: Icon(Icons.add_circle_outline, color: isDark ? Colors.white : Colors.black87),
-                                        tooltip: "Agregar a...",
-                                        onSelected: (value) {
+                                      IconButton(
+                                        icon: Icon(Icons.add_circle, color: isDark ? Colors.blue[400] : Colors.blue[600], size: 32),
+                                        tooltip: "Agregar paquete...",
+                                        onPressed: () {
                                           final mockProduct = Product(
                                             id: 0,
                                             nombre: bundle.nombrePaquete,
@@ -525,37 +525,8 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                                             presentation: mockPresentation,
                                           );
                                           
-                                          if (value == 'cart') {
-                                            provider.addToCart(mockWrapper, 1);
-                                            CustomSnackBar.show(context, message: "Agregado a caja rápida", isError: false);
-                                          } else {
-                                            provider.addToUtilityList(mockWrapper, 1);
-                                            CustomSnackBar.show(context, message: "Agregado a lista cotizada", isError: false);
-                                          }
-                                          setState(() => _isBottomMenuExpanded = true);
+                                          _showAddBundleActionSheet(context, mockWrapper, provider, isDark);
                                         },
-                                        itemBuilder: (context) => [
-                                          const PopupMenuItem(
-                                            value: 'cart',
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.shopping_cart, color: Colors.green, size: 20),
-                                                SizedBox(width: 8),
-                                                Text("Caja Rápida"),
-                                              ],
-                                            ),
-                                          ),
-                                          const PopupMenuItem(
-                                            value: 'quote',
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.assignment, color: Colors.orange, size: 20),
-                                                SizedBox(width: 8),
-                                                Text("Lista Cotizada"),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
                                       )
                                     ],
                                   ),
@@ -696,6 +667,120 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+  void _showAddBundleActionSheet(BuildContext context, InventoryWrapper mockWrapper, CatalogProvider provider, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+            borderRadius: const BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+              const SizedBox(height: 20),
+              Text("¿Dónde deseas guardar esta oferta?", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: isDark ? Colors.white : Colors.black87), textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              Text(mockWrapper.product.nombre, style: TextStyle(fontSize: 14, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              
+              _ActionSheetButton(
+                icon: Icons.shopping_cart,
+                title: "Caja Rápida",
+                subtitle: "Venta inmediata al contado",
+                color: Colors.green,
+                isDark: isDark,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  provider.addToCart(mockWrapper, 1);
+                  CustomSnackBar.show(context, message: "Agregado a caja rápida", isError: false);
+                  setState(() => _isBottomMenuExpanded = true);
+                },
+              ),
+              const SizedBox(height: 12),
+              _ActionSheetButton(
+                icon: Icons.assignment,
+                title: "Lista Cotizada",
+                subtitle: "Guardar para proforma o pedido",
+                color: Colors.orange,
+                isDark: isDark,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  provider.addToUtilityList(mockWrapper, 1);
+                  CustomSnackBar.show(context, message: "Agregado a lista cotizada", isError: false);
+                  setState(() => _isBottomMenuExpanded = true);
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ActionSheetButton extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final MaterialColor color;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _ActionSheetButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isDark ? color.withValues(alpha: 0.1) : color[50],
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isDark ? color.withValues(alpha: 0.3) : color.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: isDark ? color.withValues(alpha: 0.2) : Colors.white, shape: BoxShape.circle),
+                child: Icon(icon, color: isDark ? color[300] : color[700], size: 28),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? color[200] : color[900])),
+                    const SizedBox(height: 4),
+                    Text(subtitle, style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: isDark ? Colors.grey[600] : Colors.grey[400]),
+            ],
+          ),
         ),
       ),
     );
