@@ -55,6 +55,7 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
   final _discountCtrl = TextEditingController(text: "0");
   
   String? _saleNote;
+  bool _isScheduleDirty = true;
 
   @override
   void initState() {
@@ -382,8 +383,8 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
 
       double sumInstallments = _installments.fold(0.0, (sum, item) => sum + item.amount);
       
-      if (_installments.isEmpty) {
-        isMathValid = false; // Faltan generar las cuotas
+      if (_installments.isEmpty || _isScheduleDirty) {
+        isMathValid = false; // Faltan generar las cuotas o el cronograma está sucio
       } else {
         // Tolerancia estricta de 5 centavos para fallos de redondeo (Ej. 33.33 + 33.33 + 33.34)
         if ((sumInstallments - exactDebtWithInterest).abs() > 0.05) {
@@ -425,13 +426,14 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
 
             PaymentConfigCard(
               totalAmount: totalToPay,
-              onChanged: (method, status, paid, interest, installments) {
+              onChanged: (method, status, paid, interest, installments, isDirty) {
                 setState(() {
                   _paymentMethod = method;
                   _paymentStatus = status;
                   _paidAmount = paid;
                   _interestRate = interest;
                   _installments = installments;
+                  _isScheduleDirty = isDirty;
                 });
               },
             ),
@@ -470,6 +472,7 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
         deliveryStatus: _deliveryStatus,
         deliveryDate: _deliveryDate,
         installments: _installments,
+        isScheduleDirty: _isScheduleDirty,
         paidAmount: _paidAmount,
         interestRate: _interestRate,
         quotation: _quotation!,

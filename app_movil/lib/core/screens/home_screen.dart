@@ -140,6 +140,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           if (index == 0 && auth.hasActiveContext) {
              // Solo refrescamos el usuario de forma ligera para no bloquear
              auth.refreshActiveUser();
+             // Refrescar notificaciones silenciosamente (Smart Sync)
+             Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
              // El DashboardHeader se encarga de recargar el resto si es necesario
           }
         },

@@ -16,6 +16,7 @@ class HistoryExportService {
     required SalesStatsModel? stats,
     required String businessName,
     required String dateRangeText,
+    String reportTitle = "REPORTE GLOBAL DE VENTAS",
   }) async {
     final pdf = pw.Document();
     
@@ -70,7 +71,7 @@ class HistoryExportService {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text("REPORTE GLOBAL DE VENTAS", style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                    pw.Text(reportTitle, style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
                     pw.SizedBox(height: 6),
                     pw.Text(businessName.toUpperCase(), style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
                     pw.SizedBox(height: 4),
@@ -105,7 +106,7 @@ class HistoryExportService {
         build: (pw.Context context) {
           double totalIncome = sales.fold(0.0, (sum, s) => sum + s.totalAmount);
           double avgTicket = sales.isNotEmpty ? totalIncome / sales.length : 0.0;
-          int totalItems = sales.fold(0, (sum, s) => sum + s.installments.length); // Assuming we use installments for now, or you can change to a property you have
+          int totalItems = stats?.totalProductosVendidos ?? 0;
           
           return [
             buildSectionTitle("Resumen de Desempeño", PdfColors.blue800),
@@ -122,10 +123,10 @@ class HistoryExportService {
             if (stats != null) ...[
               pw.Row(
                 children: [
-                  buildMetricCard("VENTAS EFECTIVO", currencyFmt.format(stats.totalIngresos), PdfColors.green50, PdfColors.green900),
-                  buildMetricCard("VENTAS TRANSF.", currencyFmt.format(0.0), PdfColors.indigo50, PdfColors.indigo900),
+                  buildMetricCard("VENTAS EFECTIVO", currencyFmt.format(stats.totalEfectivo), PdfColors.green50, PdfColors.green900),
+                  buildMetricCard("VENTAS TRANSF.", currencyFmt.format(stats.totalTransferencia), PdfColors.indigo50, PdfColors.indigo900),
                   buildMetricCard("POR COBRAR", currencyFmt.format(stats.totalDeuda), PdfColors.red50, PdfColors.red900),
-                  buildMetricCard("BILLETERA DIGITAL", currencyFmt.format(0.0), PdfColors.pink50, PdfColors.pink900),
+                  buildMetricCard("BILLETERA DIGITAL", currencyFmt.format(stats.totalDigital), PdfColors.pink50, PdfColors.pink900),
                 ]
               )
             ],
@@ -175,6 +176,7 @@ class HistoryExportService {
     required SalesStatsModel? stats,
     required String businessName,
     required String dateRangeText,
+    String reportTitle = "REPORTE GLOBAL DE VENTAS",
   }) async {
     final output = await getTemporaryDirectory();
     final String path = '${output.path}/Historial_Ventas_${DateTime.now().millisecondsSinceEpoch}.csv';
@@ -182,7 +184,7 @@ class HistoryExportService {
     
     final buffer = StringBuffer();
     
-    buffer.writeln("=== REPORTE DE HISTORIAL DE VENTAS - $businessName ===");
+    buffer.writeln("=== $reportTitle - $businessName ===");
     buffer.writeln("Generado el: ${dateFmt.format(DateTime.now())}");
     buffer.writeln("Período: $dateRangeText");
     buffer.writeln("");
@@ -190,11 +192,9 @@ class HistoryExportService {
     if (stats != null) {
       buffer.writeln("--- RESUMEN DE MÉTODOS DE PAGO Y DEUDA ---");
       buffer.writeln("Métrica,Total");
-      buffer.writeln("Efectivo,${stats.totalIngresos}");
-      buffer.writeln("Transferencia,${0.0}");
-      buffer.writeln("Yape/Plin,${0.0}");
-      buffer.writeln("Tarjeta,${0.0}");
-      buffer.writeln("Crédito,${0.0}");
+      buffer.writeln("Efectivo,${stats.totalEfectivo}");
+      buffer.writeln("Transferencia,${stats.totalTransferencia}");
+      buffer.writeln("Yape/Plin,${stats.totalDigital}");
       buffer.writeln("Por Cobrar (Deuda Pendiente),${stats.totalDeuda}");
       buffer.writeln("");
     }

@@ -100,7 +100,7 @@ class NotificationItemCard extends StatelessWidget {
                         child: Text(
                           notif.title, 
                           style: TextStyle(fontWeight: notif.isRead ? FontWeight.w600 : FontWeight.w800, fontSize: 16, color: isDark ? Colors.white : Colors.black87),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -114,16 +114,24 @@ class NotificationItemCard extends StatelessWidget {
                   Text(
                     notif.message, 
                     style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 14, height: 1.4),
-                    maxLines: 2,
+                    maxLines: 4,
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (notif.objetoRelacionadoTipo != null && !isSelectionMode) ...[
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        Icon(Icons.touch_app_rounded, size: 16, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                        Icon(notif.isResolved ? Icons.check_circle_rounded : Icons.touch_app_rounded, size: 16, color: notif.isResolved ? Colors.green : (isDark ? Colors.blue[300] : Colors.blue[700])),
                         const SizedBox(width: 6),
-                        Text("Toca para ver detalles", style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold)),
+                        Expanded(
+                          child: Text(
+                            notif.isResolved 
+                              ? "Resuelta automáticamente" 
+                              : _getActionText(notif.objetoRelacionadoTipo), 
+                            style: TextStyle(fontSize: 13, color: notif.isResolved ? Colors.green : (isDark ? Colors.blue[300] : Colors.blue[700]), fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     )
                   ]
@@ -142,5 +150,22 @@ class NotificationItemCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _getActionText(String? type) {
+    if (type == null) return "Toca para ver detalles";
+    switch (type.toLowerCase()) {
+      case 'producto':
+        return "📦 Toca para ver análisis de stock";
+      case 'cuota':
+        return "💰 Toca para ver detalles de la deuda";
+      case 'venta':
+      case 'cotizacion':
+      case 'venta_admin':
+      case 'venta_cliente':
+        return "🧾 Toca para ver la venta";
+      default:
+        return "🔍 Toca para más información";
+    }
   }
 }

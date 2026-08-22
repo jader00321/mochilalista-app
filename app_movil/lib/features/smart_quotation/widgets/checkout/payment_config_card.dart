@@ -6,7 +6,7 @@ import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 class PaymentConfigCard extends StatefulWidget {
   final double totalAmount;
-  final Function(String method, String status, double paid, double interest, List<InstallmentModel> installments) onChanged;
+  final Function(String method, String status, double paid, double interest, List<InstallmentModel> installments, bool isScheduleDirty) onChanged;
 
   const PaymentConfigCard({super.key, required this.totalAmount, required this.onChanged});
 
@@ -25,6 +25,7 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
   String _frecuencia = "mensual"; 
   final List<InstallmentModel> _installments = [];
   final List<TextEditingController> _cuotaCtrls = []; 
+  bool _isScheduleDirty = true; 
   
   Timer? _debounce;
 
@@ -36,12 +37,40 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
       if (_paymentStatus == "pendiente" && _installments.isNotEmpty) {
         if (_debounce?.isActive ?? false) _debounce!.cancel();
         _debounce = Timer(const Duration(milliseconds: 500), () {
-          _generateInstallments();
+          setState(() {
+            _isScheduleDirty = true;
+            _installments.clear();
+            _disposeCuotaCtrls();
+          });
+          _notifyParent();
         });
       }
     });
+    _numCuotasCtrl.addListener(() {
+      if (_installments.isNotEmpty) {
+        setState(() {
+          _isScheduleDirty = true;
+          _installments.clear();
+          _disposeCuotaCtrls();
+        });
+        _notifyParent();
+      } else if (!_isScheduleDirty) {
+        setState(() => _isScheduleDirty = true);
+        _notifyParent();
+      }
+    });
     _interestCtrl.addListener(() {
-      if (_installments.isNotEmpty) _generateInstallments(); 
+      if (_installments.isNotEmpty) {
+        setState(() {
+          _isScheduleDirty = true;
+          _installments.clear();
+          _disposeCuotaCtrls();
+        });
+        _notifyParent();
+      } else if (!_isScheduleDirty) {
+        setState(() => _isScheduleDirty = true);
+        _notifyParent();
+      }
     });
   }
 
@@ -51,7 +80,14 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
     if (oldWidget.totalAmount != widget.totalAmount) {
       if (_paymentStatus == "pendiente" && _installments.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _generateInstallments();
+          if (mounted) {
+            setState(() {
+              _isScheduleDirty = true;
+              _installments.clear();
+              _disposeCuotaCtrls();
+            });
+            _notifyParent();
+          }
         });
       } else {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -80,9 +116,23 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
     double paid = _paymentStatus == "pagado" ? widget.totalAmount : (double.tryParse(_amountPaidCtrl.text) ?? 0.0);
     if (widget.totalAmount - paid <= 0) {
       _installments.clear();
+      _disposeCuotaCtrls();
     }
     double interestRate = double.tryParse(_interestCtrl.text) ?? 0.0;
-    widget.onChanged(_paymentMethod, _paymentStatus, paid, interestRate, _installments);
+    widget.onChanged(_paymentMethod, _paymentStatus, paid, interestRate, _installments, _isScheduleDirty);
+  }
+
+  DateTime _addFrequency(DateTime date) {
+    if (_frecuencia == "diario") {
+      return date.add(const Duration(days: 1));
+    } else if (_frecuencia == "semanal") {
+      return date.add(const Duration(days: 7));
+    } else if (_frecuencia == "quincenal") {
+      return date.add(const Duration(days: 15));
+    } else if (_frecuencia == "mensual") {
+      return DateTime(date.year, date.month + 1, date.day);
+    }
+    return date;
   }
 
   void _generateInstallments() {
@@ -105,15 +155,7 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
     double accumulated = 0;
 
     for (int i = 1; i <= numCuotas; i++) {
-      if (_frecuencia == "diario") {
-        currentDate = currentDate.add(const Duration(days: 1));
-      } else if (_frecuencia == "semanal") {
-        currentDate = currentDate.add(const Duration(days: 7));
-      } else if (_frecuencia == "quincenal") {
-        currentDate = currentDate.add(const Duration(days: 15));
-      } else if (_frecuencia == "mensual") {
-        currentDate = DateTime(currentDate.year, currentDate.month + 1, currentDate.day);
-      }
+      currentDate = _addFrequency(currentDate);
 
       double amount = (i == numCuotas) ? (finalDebt - accumulated) : double.parse(basePerQuota.toStringAsFixed(2));
       accumulated += amount;
@@ -126,6 +168,7 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
       _cuotaCtrls.add(ctrl);
     }
     
+    _isScheduleDirty = false;
     setState(() {});
     _notifyParent();
   }
@@ -166,8 +209,22 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
 
   Future<void> _editInstallmentDate(int index) async {
     DateTime initDate = DateTime.parse(_installments[index].dueDate);
+    
+    DateTime firstDate;
+    if (index == 0) {
+       final now = DateTime.now();
+       firstDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    } else {
+       DateTime prevDate = DateTime.parse(_installments[index - 1].dueDate);
+       firstDate = DateTime(prevDate.year, prevDate.month, prevDate.day).add(const Duration(days: 1));
+    }
+    
+    if (initDate.isBefore(firstDate)) {
+      initDate = firstDate;
+    }
+
     final picked = await showDatePicker(
-      context: context, initialDate: initDate, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 1000)),
+      context: context, initialDate: initDate, firstDate: firstDate, lastDate: DateTime.now().add(const Duration(days: 1000)),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -179,12 +236,31 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
       },
     );
     if (picked != null) {
+      if (picked.isBefore(firstDate)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fecha inválida: Debe ser posterior a la cuota anterior."), backgroundColor: Colors.red));
+        }
+        return;
+      }
+
       setState(() {
         _installments[index] = InstallmentModel(
           installmentNumber: _installments[index].installmentNumber, amount: _installments[index].amount, dueDate: DateFormat('yyyy-MM-dd').format(picked), status: _installments[index].status
         );
+        
+        DateTime currentDate = picked;
+        for (int i = index + 1; i < _installments.length; i++) {
+           currentDate = _addFrequency(currentDate);
+           _installments[i] = InstallmentModel(
+              installmentNumber: _installments[i].installmentNumber, amount: _installments[i].amount, dueDate: DateFormat('yyyy-MM-dd').format(currentDate), status: _installments[i].status
+           );
+        }
       });
       _notifyParent();
+
+      if (mounted && index < _installments.length - 1) {
+         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Las fechas de las cuotas siguientes se recalcularon automáticamente."), backgroundColor: Colors.green));
+      }
     }
   }
 
@@ -281,7 +357,7 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
             _buildSelectionCard(
               title: "Dar a Crédito", subtitle: "Generar cronograma de cuotas.", icon: Icons.calendar_month, 
               isSelected: _paymentStatus == "pendiente", activeColor: isDark ? Colors.orange[400]! : Colors.orange, isDark: isDark,
-              onTap: () { setState(() => _paymentStatus = "pendiente"); _notifyParent(); }
+              onTap: () { setState(() { _paymentStatus = "pendiente"; _isScheduleDirty = true; }); _notifyParent(); }
             ),
           ],
         ),
@@ -370,7 +446,15 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
                           DropdownMenuItem(value: "quincenal", child: Text("Quincenal")),
                           DropdownMenuItem(value: "mensual", child: Text("Mensual")),
                         ],
-                        onChanged: (v) => setState(() => _frecuencia = v!),
+                        onChanged: (v) {
+                          setState(() {
+                            _frecuencia = v!;
+                            _isScheduleDirty = true;
+                            _installments.clear();
+                            _disposeCuotaCtrls();
+                          });
+                          _notifyParent();
+                        },
                       ),
                     ),
                   ],
@@ -380,9 +464,9 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
                   width: double.infinity, height: 50,
                   child: ElevatedButton.icon(
                     onPressed: () { FocusScope.of(context).unfocus(); _generateInstallments(); },
-                    icon: const Icon(Icons.auto_awesome, size: 20),
-                    label: const Text("Generar Cronograma", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.orange[800] : Colors.orange[800], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                    icon: Icon(_isScheduleDirty && _paymentStatus == "pendiente" && widget.totalAmount > (double.tryParse(_amountPaidCtrl.text) ?? 0.0) ? Icons.warning_amber_rounded : Icons.auto_awesome, size: 20),
+                    label: Text(_isScheduleDirty && _paymentStatus == "pendiente" && widget.totalAmount > (double.tryParse(_amountPaidCtrl.text) ?? 0.0) ? "Regenerar Cronograma" : "Generar Cronograma", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    style: ElevatedButton.styleFrom(backgroundColor: _isScheduleDirty && _paymentStatus == "pendiente" && widget.totalAmount > (double.tryParse(_amountPaidCtrl.text) ?? 0.0) ? (isDark ? Colors.red[800] : Colors.red[700]) : (isDark ? Colors.orange[800] : Colors.orange[800]), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
                   ),
                 ),
 

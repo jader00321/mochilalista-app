@@ -516,16 +516,31 @@ class SaleProvider with ChangeNotifier {
     loadFilteredHistory(reset: true);
   }
 
-  Future<void> toggleArchiveSale(int saleId) async {
+  Future<void> voidSale(int saleId) async {
     if (_negocioId == null) return;
     try {
-      await _salesService.toggleArchive(saleId);
+      await _salesService.voidSale(saleId, _negocioId!);
       _salesHistory.removeWhere((element) => element.id == saleId);
       notifyListeners();
       _loadDynamicStats();
     } catch (e) {
       _handleException(e);
       notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> restoreSale(int saleId) async {
+    if (_negocioId == null) return;
+    try {
+      await _salesService.restoreSale(saleId, _negocioId!);
+      _salesHistory.removeWhere((element) => element.id == saleId);
+      notifyListeners();
+      _loadDynamicStats();
+    } catch (e) {
+      _handleException(e);
+      notifyListeners();
+      rethrow;
     }
   }
 

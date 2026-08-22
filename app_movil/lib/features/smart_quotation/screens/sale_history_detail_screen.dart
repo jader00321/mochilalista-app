@@ -120,15 +120,30 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
               setState(() => _isProcessingAction = true);
               final saleProv = Provider.of<SaleProvider>(context, listen: false);
               
-              if (widget.saleId != null) {
-                 await saleProv.toggleArchiveSale(widget.saleId!);
-              } else if (_saleData!['id'] != null) {
-                 await saleProv.toggleArchiveSale(_saleData!['id']);
-              }
-              
-              if (mounted) {
-                _showSnack(_saleData!['is_archived'] == 1 ? "Venta restaurada exitosamente." : "Venta anulada.");
-                Navigator.pop(context); 
+              try {
+                if (widget.saleId != null) {
+                   if (_saleData!['is_archived'] == 1) {
+                      await saleProv.restoreSale(widget.saleId!);
+                   } else {
+                      await saleProv.voidSale(widget.saleId!);
+                   }
+                } else if (_saleData!['id'] != null) {
+                   if (_saleData!['is_archived'] == 1) {
+                      await saleProv.restoreSale(_saleData!['id']);
+                   } else {
+                      await saleProv.voidSale(_saleData!['id']);
+                   }
+                }
+                
+                if (mounted) {
+                  _showSnack(_saleData!['is_archived'] == 1 ? "Venta restaurada exitosamente." : "Venta anulada y stock devuelto.");
+                  Navigator.pop(context); 
+                }
+              } catch (e) {
+                if (mounted) {
+                  setState(() => _isProcessingAction = false);
+                  _showSnack(e.toString().replaceAll("Exception: ", ""), isError: true);
+                }
               }
             },
             child: Text(_saleData!['is_archived'] == 1 ? "Restaurar" : "Anular", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),

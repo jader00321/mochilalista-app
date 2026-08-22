@@ -1,6 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+
+class Debouncer {
+  final int milliseconds;
+  Timer? _timer;
+  Debouncer({required this.milliseconds});
+  void run(VoidCallback action) {
+    _timer?.cancel();
+    _timer = Timer(Duration(milliseconds: milliseconds), action);
+  }
+}
 
 class HistoryFilterBar extends StatefulWidget {
   const HistoryFilterBar({super.key});
@@ -11,6 +22,7 @@ class HistoryFilterBar extends StatefulWidget {
 
 class _HistoryFilterBarState extends State<HistoryFilterBar> {
   final _searchCtrl = TextEditingController();
+  final _debouncer = Debouncer(milliseconds: 300);
 
   @override
   void initState() {
@@ -122,7 +134,7 @@ class _HistoryFilterBarState extends State<HistoryFilterBar> {
               controller: _searchCtrl,
               style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16),
               decoration: InputDecoration(
-                hintText: "Buscar recibo o cliente...",
+                hintText: "Buscar por cliente, #recibo, DNI o método...",
                 hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey),
                 prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey),
                 suffixIcon: provider.searchQuery.isNotEmpty 
@@ -140,7 +152,16 @@ class _HistoryFilterBarState extends State<HistoryFilterBar> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               ),
-              onSubmitted: (val) => provider.setSearchQuery(val),
+              onChanged: (val) {
+                _debouncer.run(() {
+                  provider.setSearchQuery(val);
+                });
+              },
+              onSubmitted: (val) {
+                _debouncer.run(() {
+                  provider.setSearchQuery(val);
+                });
+              },
             ),
           ),
           const SizedBox(height: 12),

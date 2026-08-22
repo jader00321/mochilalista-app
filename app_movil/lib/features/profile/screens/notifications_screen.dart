@@ -34,6 +34,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
   String _readFilter = 'Todas'; // Todas, Leídas, No Leídas
   String _timeFilter = 'Todo'; // Todo, Hoy, 7 Días, Mes, Específico
   DateTime? _specificDate;
+  
+  late InventoryProvider _inventoryProvider;
 
   bool _isSelectionMode = false;
   final Set<int> _selectedIds = {};
@@ -53,11 +55,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      _inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
+      _inventoryProvider.addListener(_onInventoryChanged);
     });
+  }
+
+  void _onInventoryChanged() {
+    // Cuando el inventario cambia, re-verificamos las notificaciones (para stock bajo resuelto)
+    if (mounted) {
+      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+    }
   }
 
   @override
   void dispose() {
+    _inventoryProvider.removeListener(_onInventoryChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -138,6 +150,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       }
     } catch (e) {
        _showNotificationDetails(notif);
+    }
+    
+    // Recargar notificaciones al volver por si se resolvió automáticamente
+    if (mounted) {
+      prov.fetchNotifications();
     }
   }
 
@@ -300,15 +317,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       }).toList();
     }
 
-    // Split by tabs
-    final pendientes = filteredNotifs.where((n) => !n.isResolved).toList();
-    final resueltas = filteredNotifs.where((n) => n.isResolved).toList();
+    // Split by tabs (Fase 1: Categorización Semántica)
+    final pendientes = filteredNotifs.where((n) => n.isActionable && !n.isResolved).toList();
+    final resueltas = filteredNotifs.where((n) => n.isActionable && n.isResolved).toList();
     final historial = filteredNotifs; // Historial shows all
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text("Notificaciones", style: TextStyle(fontWeight: FontWeight.w900, color: textColor, fontSize: 24, letterSpacing: -0.5)),
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text("Notificaciones", style: TextStyle(fontWeight: FontWeight.w900, color: textColor, fontSize: 24, letterSpacing: -0.5)),
+        ),
         backgroundColor: bgColor,
         iconTheme: IconThemeData(color: textColor),
         elevation: 0,
@@ -707,7 +727,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       if (!context.mounted) return;
                       Navigator.pop(context); // Cerrar indicador
                       if (clientData != null) {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => ClientDetailScreen(client: clientData)));
+                        await Navigator.push(context, MaterialPageRoute(builder: (_) => ClientDetailScreen(client: clientData)));
+                        if (context.mounted) {
+                           Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+                        }
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo cargar el cliente")));
                       }

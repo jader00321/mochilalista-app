@@ -39,8 +39,9 @@ class SaleRepository {
         args.add(origenVenta);
       }
       if (searchQuery != null && searchQuery.isNotEmpty) {
-        query += " AND c.nombre_completo LIKE ?";
-        args.add('%$searchQuery%');
+        query += " AND (c.nombre_completo LIKE ? OR CAST(v.id AS TEXT) LIKE ? OR c.documento LIKE ? OR v.metodo_pago LIKE ?)";
+        final fuzzyTerm = '%$searchQuery%';
+        args.addAll([fuzzyTerm, fuzzyTerm, fuzzyTerm, fuzzyTerm]);
       }
 
       final validSortColumns = [
@@ -77,6 +78,9 @@ class SaleRepository {
         SELECT 
           SUM(monto_pagado) AS total_ingresos, 
           SUM(CASE WHEN estado_pago != 'pagado' AND monto_total > monto_pagado THEN monto_total - monto_pagado ELSE 0 END) AS total_deuda, 
+          SUM(CASE WHEN metodo_pago = 'efectivo' THEN monto_pagado ELSE 0 END) AS total_efectivo,
+          SUM(CASE WHEN metodo_pago = 'transferencia' THEN monto_pagado ELSE 0 END) AS total_transferencia,
+          SUM(CASE WHEN metodo_pago IN ('yape', 'plin') THEN monto_pagado ELSE 0 END) AS total_digital,
           COUNT(id) AS cantidad_ventas
         FROM ventas 
         WHERE negocio_id = ? AND is_archived = ?
@@ -101,6 +105,46 @@ class SaleRepository {
     } catch (e, stack) {
       AppLogger.error('SaleRepository.getStatsRaw', e, stack);
       return null;
+    }
+  }
+
+  Future<int> getProductsSoldCount(
+    int negocioId, {
+    String? startDate,
+    String? endDate,
+    bool isArchived = false,
+    String? origenVenta,
+  }) async {
+    try {
+      final db = await _dbHelper.database;
+      String query = '''
+        SELECT SUM(vi.cantidad) as total
+        FROM venta_items vi
+        JOIN ventas v ON vi.venta_id = v.id
+        WHERE v.negocio_id = ? AND v.is_archived = ?
+      ''';
+      List<dynamic> args = [negocioId, isArchived ? 1 : 0];
+
+      if (startDate != null) {
+        query += " AND v.fecha_venta >= ?";
+        args.add(startDate);
+      }
+      if (endDate != null) {
+        query += " AND v.fecha_venta <= ?";
+        args.add(endDate);
+      }
+      if (origenVenta != null && origenVenta != "todas") {
+        query += " AND v.origen_venta = ?";
+        args.add(origenVenta);
+      }
+
+      final result = await db.rawQuery(query, args);
+      if (result.isNotEmpty && result.first['total'] != null) {
+        return (result.first['total'] as num).toInt();
+      }
+      return 0;
+    } catch (e) {
+      return 0;
     }
   }
 

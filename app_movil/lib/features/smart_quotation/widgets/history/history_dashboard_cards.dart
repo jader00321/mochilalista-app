@@ -10,10 +10,19 @@ class HistoryDashboardCards extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = Provider.of<SaleProvider>(context);
     final stats = provider.currentStats;
+    final isArchivadas = provider.currentTab == 'archivadas';
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     final bgColor = isDark ? const Color(0xFF1A1A24) : Colors.white;
+
+    final title1 = isArchivadas ? "Tickets Anulados" : "Ventas Realizadas";
+    final title2 = isArchivadas ? "Monto Anulado (S/)" : "Ingresos (S/)";
+    final title3 = isArchivadas ? "Deuda Anulada (S/)" : "Por Cobrar (S/)";
+
+    final color1 = isArchivadas ? (isDark ? Colors.grey[400]! : Colors.grey) : (isDark ? Colors.blue[300]! : Colors.blue);
+    final color2 = isArchivadas ? (isDark ? Colors.red[300]! : Colors.red) : (isDark ? Colors.green[400]! : Colors.green);
+    final color3 = isArchivadas ? (isDark ? Colors.deepOrange[300]! : Colors.deepOrange) : (isDark ? Colors.orange[300]! : Colors.orange);
 
     return Container(
       color: bgColor,
@@ -26,11 +35,11 @@ class HistoryDashboardCards extends StatelessWidget {
             SizedBox(
               width: 150, 
               child: _AnimatedStatCard(
-                title: "Ventas Realizadas",
+                title: title1,
                 value: (stats?.cantidadVentas ?? 0).toDouble(),
                 isInteger: true,
-                color: isDark ? Colors.blue[300]! : Colors.blue,
-                icon: Icons.receipt_long,
+                color: color1,
+                icon: isArchivadas ? Icons.auto_delete : Icons.receipt_long,
                 isDark: isDark,
               ),
             ),
@@ -38,11 +47,11 @@ class HistoryDashboardCards extends StatelessWidget {
             SizedBox(
               width: 170,
               child: _AnimatedStatCard(
-                title: "Ingresos (S/)",
+                title: title2,
                 value: stats?.totalIngresos ?? 0.0,
                 format: currency,
-                color: isDark ? Colors.green[400]! : Colors.green,
-                icon: Icons.trending_up,
+                color: color2,
+                icon: isArchivadas ? Icons.money_off : Icons.trending_up,
                 isDark: isDark,
               ),
             ),
@@ -50,11 +59,11 @@ class HistoryDashboardCards extends StatelessWidget {
             SizedBox(
               width: 170,
               child: _AnimatedStatCard(
-                title: "Por Cobrar (S/)",
+                title: title3,
                 value: stats?.totalDeuda ?? 0.0,
                 format: currency,
-                color: isDark ? Colors.orange[300]! : Colors.orange,
-                icon: Icons.account_balance_wallet,
+                color: color3,
+                icon: isArchivadas ? Icons.account_balance_wallet_outlined : Icons.account_balance_wallet,
                 isDark: isDark,
               ),
             ),

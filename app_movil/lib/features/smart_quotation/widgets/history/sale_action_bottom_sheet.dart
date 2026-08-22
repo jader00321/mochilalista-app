@@ -55,17 +55,42 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
   }
 
   Future<void> _toggleArchive() async {
+    final provider = Provider.of<SaleProvider>(context, listen: false);
+    if (!widget.sale.isArchived) {
+      // Pedir confirmación antes de anular
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(children: [Icon(Icons.warning, color: Colors.red), SizedBox(width: 8), Text("¿Anular Venta?")]),
+          content: const Text("Esta acción descontará los ingresos y devolverá el stock al inventario. ¿Estás seguro?"),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar", style: TextStyle(color: Colors.grey))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Sí, Anular", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+          ],
+        )
+      );
+      if (confirm != true) return;
+    }
+
     setState(() => _isLoading = true);
     try {
-      final provider = Provider.of<SaleProvider>(context, listen: false);
-      await provider.toggleArchiveSale(widget.sale.id);
+      if (widget.sale.isArchived) {
+         await provider.restoreSale(widget.sale.id);
+      } else {
+         await provider.voidSale(widget.sale.id);
+      }
       
       if (mounted) {
         CustomSnackBar.show(
           context, 
-          message: widget.sale.isArchived ? "Venta Restaurada." : "Venta Archivada.",
+          message: widget.sale.isArchived ? "Venta Restaurada exitosamente." : "Venta Anulada y stock devuelto.",
           isError: false
         );
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackBar.show(context, message: e.toString().replaceAll("Exception: ", ""), isError: true);
       }
     } finally {
       if (mounted) {

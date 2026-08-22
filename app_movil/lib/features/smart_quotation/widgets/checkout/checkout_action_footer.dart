@@ -15,6 +15,7 @@ class CheckoutActionFooter extends StatelessWidget {
   final String deliveryStatus;
   final DateTime? deliveryDate;
   final List<InstallmentModel> installments;
+  final bool isScheduleDirty;
   final double paidAmount;
   final double interestRate;
   final SmartQuotationModel quotation;
@@ -33,6 +34,7 @@ class CheckoutActionFooter extends StatelessWidget {
     required this.deliveryStatus,
     required this.deliveryDate,
     required this.installments,
+    required this.isScheduleDirty,
     required this.paidAmount,
     required this.interestRate,
     required this.quotation,
@@ -75,9 +77,43 @@ class CheckoutActionFooter extends StatelessWidget {
       return;
     }
 
-    if (paymentStatus == 'pendiente' && installments.isEmpty) {
-      CustomSnackBar.show(context, message: "Debes generar un plan de cuotas para el pago a crédito.", isError: true);
+    if (paymentStatus == 'pendiente' && isScheduleDirty) {
+      CustomSnackBar.show(context, message: "El cronograma de cuotas está desactualizado. Presiona 'Regenerar Cronograma' antes de continuar.", isError: true);
       return;
+    }
+
+    if (paymentStatus == 'pendiente') {
+      if (installments.isEmpty) {
+        CustomSnackBar.show(context, message: "Debes generar un plan de cuotas para el pago a crédito.", isError: true);
+        return;
+      }
+      
+      // Phase 4: Integrity Guard (Date chronological validation)
+      DateTime? previousDate;
+      for (int i = 0; i < installments.length; i++) {
+        DateTime parsedDate;
+        try {
+          parsedDate = DateTime.parse(installments[i].dueDate);
+        } catch (e) {
+          CustomSnackBar.show(context, message: "Error al leer la fecha de la cuota ${i+1}.", isError: true);
+          return;
+        }
+
+        if (i == 0) {
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          if (parsedDate.isBefore(today)) {
+             CustomSnackBar.show(context, message: "Cronograma inválido: La cuota 1 no puede vencer antes de hoy.", isError: true);
+             return;
+          }
+        } else {
+          if (parsedDate.isBefore(previousDate!) || parsedDate.isAtSameMomentAs(previousDate)) {
+             CustomSnackBar.show(context, message: "Cronograma inválido: La cuota ${i+1} vence antes o igual que la cuota $i.", isError: true);
+             return;
+          }
+        }
+        previousDate = parsedDate;
+      }
     }
 
     double subtotal = quotation.totalAmount;
@@ -276,7 +312,7 @@ class CheckoutActionFooter extends StatelessWidget {
                     paymentStatus == 'pagado'
                         ? "COBRAR  S/ ${displayTotal.toStringAsFixed(2)}"
                         : (!isMathValid
-                            ? (installments.isEmpty ? "FALTA CRONOGRAMA" : "CUOTAS INVÁLIDAS")
+                            ? (installments.isEmpty ? "FALTA CRONOGRAMA" : (isScheduleDirty ? "CRONOGRAMA INVÁLIDO" : "CUOTAS INVÁLIDAS"))
                             : "VENDER A CRÉDITO S/ ${displayTotal.toStringAsFixed(2)}"),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1),
                   ),

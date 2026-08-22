@@ -351,11 +351,19 @@ class SalesStatsModel {
   final double totalIngresos;
   final double totalDeuda;
   final int cantidadVentas;
+  final double totalEfectivo;
+  final double totalTransferencia;
+  final double totalDigital;
+  final int totalProductosVendidos;
 
   SalesStatsModel({
     required this.totalIngresos,
     required this.totalDeuda,
     required this.cantidadVentas,
+    this.totalEfectivo = 0.0,
+    this.totalTransferencia = 0.0,
+    this.totalDigital = 0.0,
+    this.totalProductosVendidos = 0,
   });
 
   factory SalesStatsModel.fromJson(Map<String, dynamic> json) {
@@ -363,6 +371,10 @@ class SalesStatsModel {
       totalIngresos: _parseDouble(json['total_ingresos']),
       totalDeuda: _parseDouble(json['total_deuda']),
       cantidadVentas: json['cantidad_ventas'] ?? 0,
+      totalEfectivo: _parseDouble(json['total_efectivo']),
+      totalTransferencia: _parseDouble(json['total_transferencia']),
+      totalDigital: _parseDouble(json['total_digital']),
+      totalProductosVendidos: json['total_productos_vendidos'] ?? 0,
     );
   }
 }

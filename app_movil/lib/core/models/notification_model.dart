@@ -24,6 +24,13 @@ class NotificationModel {
     this.objetoRelacionadoId,
   });
 
+  /// Una notificación es accionable si es una ALERTA que requiere acción del usuario.
+  /// Las notificaciones informativas (exito, info) nunca son accionables.
+  bool get isActionable {
+    if (type == 'alerta') return true;
+    return false;
+  }
+
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
     return NotificationModel(
       id: json['id'],

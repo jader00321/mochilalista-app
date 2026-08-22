@@ -113,6 +113,11 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
         }
       }
 
+      String currentTitle = "REPORTE GLOBAL DE VENTAS";
+      if (provider.currentTab == 'smart_quotation') currentTitle = "REPORTE DE COTIZACIONES VENDIDAS";
+      if (provider.currentTab == 'pos_rapido') currentTitle = "REPORTE DE CAJA RÁPIDA";
+      if (provider.currentTab == 'archivadas') currentTitle = "REPORTE DE VENTAS ANULADAS";
+
       File file;
       if (isPdf) {
         file = await HistoryExportService.exportToPdf(
@@ -120,6 +125,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
           stats: provider.currentStats,
           businessName: businessName,
           dateRangeText: periodText,
+          reportTitle: currentTitle,
         );
       } else {
         file = await HistoryExportService.exportToCsv(
@@ -127,6 +133,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
           stats: provider.currentStats,
           businessName: businessName,
           dateRangeText: periodText,
+          reportTitle: currentTitle,
         );
       }
       
@@ -199,7 +206,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
                 labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 tabs: const [
                   Tab(text: "Todas"),
-                  Tab(text: "Listas Escolares"),
+                  Tab(text: "Cotizaciones Vendidas"),
                   Tab(text: "Caja Rápida"),
                   Tab(text: "Archivadas / Anuladas"),
                 ],
