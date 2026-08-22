@@ -4,6 +4,7 @@ import 'package:app_movil/features/analytics/services/inventory_intelligence_ser
 import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class RestockSmartBanner extends StatefulWidget {
   const RestockSmartBanner({super.key});
@@ -30,6 +31,26 @@ class _RestockSmartBannerState extends State<RestockSmartBanner> {
         return;
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = 'restock_alert_count_${auth.activeBusinessId}';
+      final cacheTimeKey = 'restock_alert_time_${auth.activeBusinessId}';
+
+      final lastCount = prefs.getInt(cacheKey);
+      final lastTimeStr = prefs.getString(cacheTimeKey);
+
+      if (lastCount != null && lastTimeStr != null) {
+        final lastTime = DateTime.tryParse(lastTimeStr);
+        if (lastTime != null && DateTime.now().difference(lastTime).inHours < 4) {
+          if (mounted) {
+            setState(() {
+              _alertCount = lastCount;
+              _isLoading = false;
+            });
+          }
+          return; // Usamos el caché
+        }
+      }
+
       final db = await LocalDatabase.instance.database;
       final biService = InventoryIntelligenceService();
 
@@ -52,6 +73,9 @@ class _RestockSmartBannerState extends State<RestockSmartBanner> {
           count++;
         }
       }
+
+      await prefs.setInt(cacheKey, count);
+      await prefs.setString(cacheTimeKey, DateTime.now().toIso8601String());
 
       if (mounted) {
         setState(() {

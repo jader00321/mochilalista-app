@@ -52,9 +52,7 @@ class ScannerProvider with ChangeNotifier {
     int count = 0;
     for (var group in _stagingData!.productosAgrupados) {
       for (var v in group.variantes) {
-        if (v.isConfirmed &&
-            (!v.matchPresentacion.estado.contains("MATCH_EXACTO") &&
-                !v.matchPresentacion.estado.contains("MATCH_MANUAL"))) {
+        if (v.isConfirmed && !v.matchPresentacion.estado.contains("MATCH")) {
           count++;
         }
       }
@@ -182,7 +180,13 @@ class ScannerProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _aiRawData = await _aiService.analyzeInvoiceImage(imageFile);
+      _aiRawData = await _aiService.analyzeInvoiceImage(
+        imageFile, 
+        onRetrying: (msg) {
+          _statusMessage = msg;
+          notifyListeners();
+        }
+      );
       return _aiRawData != null;
     } catch (e) {
       _statusMessage = "Error de conexión con la IA: $e";
@@ -433,15 +437,25 @@ class ScannerProvider with ChangeNotifier {
   }
 
   void switchVariantLink(String variantUuid, int newPresentationId) {
-    var variant = _findVariant(variantUuid);
-    var currentMatchData = variant?.matchPresentacion.datos;
-    if (variant == null ||
-        currentMatchData == null ||
-        currentMatchData.availablePresentations == null) {
-      return;
+    StagingVariant? variant;
+    StagingProductGroup? parentGroup;
+
+    if (_stagingData == null) return;
+    for (var group in _stagingData!.productosAgrupados) {
+      int idx = group.variantes.indexWhere((v) => v.uuidTemporal == variantUuid);
+      if (idx != -1) {
+        variant = group.variantes[idx];
+        parentGroup = group;
+        break;
+      }
     }
 
-    var selectedSibling = currentMatchData.availablePresentations!.firstWhere(
+    if (variant == null || parentGroup == null) return;
+    
+    var availablePresentations = parentGroup.matchProducto.datos?.availablePresentations;
+    if (availablePresentations == null || availablePresentations.isEmpty) return;
+
+    var selectedSibling = availablePresentations.firstWhere(
       (p) => p['id'] == newPresentationId,
       orElse: () => <String, dynamic>{},
     );
@@ -461,7 +475,7 @@ class ScannerProvider with ChangeNotifier {
             (selectedSibling['precio_costo'] ?? 0).toDouble(),
         unidadesPorVenta: selectedSibling['factor_conversion'] ?? 1,
         unidadVenta: selectedSibling['unidad'] ?? 'Unidad',
-        availablePresentations: currentMatchData.availablePresentations,
+        availablePresentations: availablePresentations,
       ),
     );
     notifyListeners();

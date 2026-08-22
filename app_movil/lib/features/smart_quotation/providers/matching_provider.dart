@@ -45,6 +45,7 @@ class MatchingProvider with ChangeNotifier {
   ClientModel? get selectedClient => _selectedClient;
   bool get hasModifications => _hasModifications;
   List<BundleModel> get activeBundles => _activeBundles;
+  Map<int, List<BundleItemModel>> get bundleItemsCache => _bundleItemsCache;
 
   double get totalNetAmount {
     final total = _pairs.fold(0.0, (sum, pair) => sum + pair.subtotal);
@@ -188,6 +189,7 @@ class MatchingProvider with ChangeNotifier {
     // 1. Reset all bundleIds
     for (var pair in _pairs) {
       pair.bundleId = null;
+      pair.bundleName = null;
       pair.overridePrice = null; // Reiniciar
     }
     
@@ -212,12 +214,19 @@ class MatchingProvider with ChangeNotifier {
       
       if (canFormBundle && matchedPairsForBundle.length == requiredItems.length) { // Validación estricta 1 a 1 para simplificar
         // Agruparlos
-        double totalOriginal = matchedPairsForBundle.fold(0.0, (sum, p) => sum + (p.originalUnitPrice * p.selectedQuantity));
-        if (totalOriginal > 0 && bundle.precioVentaTotal < totalOriginal) {
-          double discountFactor = bundle.precioVentaTotal / totalOriginal;
+        // Agruparlos evaluando el precio que realmente tiene aplicado el producto
+        double totalEffective = matchedPairsForBundle.fold(0.0, (sum, p) => sum + (p.effectiveUnitPrice * p.selectedQuantity));
+        
+        if (totalEffective > 0 && bundle.precioVentaTotal < totalEffective) {
+          double discountFactor = bundle.precioVentaTotal / totalEffective;
           for (var p in matchedPairsForBundle) {
-            p.bundleId = bundle.id;
-            p.overridePrice = p.originalUnitPrice * discountFactor;
+            double proposedPrice = p.effectiveUnitPrice * discountFactor;
+            // Solo aplicamos si el precio del paquete realmente beneficia a este producto
+            if (proposedPrice < p.effectiveUnitPrice) {
+              p.bundleId = bundle.id;
+              p.bundleName = bundle.nombrePaquete;
+              p.overridePrice = proposedPrice;
+            }
           }
         }
       }
@@ -234,6 +243,7 @@ class MatchingProvider with ChangeNotifier {
       } else {
         if (pair.bundleId == bundleId) {
           pair.bundleId = null;
+          pair.bundleName = null;
           pair.overridePrice = null;
         }
       }
@@ -331,33 +341,15 @@ class MatchingProvider with ChangeNotifier {
           uploadedImageUrl = await _service.uploadImageToBackend(_localImageFile!);
       }
 
-      final Map<int, Map<String, dynamic>> groupedItems = {};
+      final List<Map<String, dynamic>> validItems = [];
 
       for (var p in _pairs.where((p) => p.selectedProduct != null)) {
-        int pId = p.selectedProduct!.presentationId;
-        
-        if (groupedItems.containsKey(pId)) {
-          groupedItems[pId]!['quantity'] += p.selectedQuantity;
-          if (p.sourceItem.originalText.isNotEmpty) {
-            groupedItems[pId]!['original_text'] += " | ${p.sourceItem.originalText}";
-          }
-          
-          double currentPrice = groupedItems[pId]!['unit_price_applied'];
-          if (p.effectiveUnitPrice < currentPrice) {
-             groupedItems[pId]!['unit_price_applied'] = p.effectiveUnitPrice;
-             // SQLite format: 1 (true), 0 (false)
-             groupedItems[pId]!['is_manual_price'] = p.overridePrice != null ? 1 : 0;
-          }
-        } else {
-          var itemJson = p.toQuotationItemJson(); 
-          if (itemJson != null) {
-            itemJson['original_text'] = p.sourceItem.originalText;
-            groupedItems[pId] = itemJson;
-          }
+        var itemJson = p.toQuotationItemJson(); 
+        if (itemJson != null) {
+          itemJson['original_text'] = p.sourceItem.originalText;
+          validItems.add(itemJson);
         }
       }
-
-      final validItems = groupedItems.values.toList();
 
       if (validItems.isEmpty) {
         _errorMessage = "Selecciona al menos un producto para guardar.";

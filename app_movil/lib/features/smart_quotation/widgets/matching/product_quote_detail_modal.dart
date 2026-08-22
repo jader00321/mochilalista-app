@@ -8,6 +8,10 @@ import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart'; 
 import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/promotions/models/bundle_model.dart';
+import 'package:app_movil/features/promotions/models/bundle_item_model.dart';
+
+enum _PricingMode { normal, catalogOffer, manualDiscount }
 
 class ProductQuoteDetailModal extends StatefulWidget {
   final InventoryWrapper wrapper; 
@@ -16,7 +20,9 @@ class ProductQuoteDetailModal extends StatefulWidget {
   final double? currentOverridePrice; 
   final Function(ProductPresentation newPresentation, int newQty, double? newPrice, String? newName) onSave;
   final String? currentSnapshotName;
-  final String? categoryName; 
+  final String? categoryName;
+  final List<BundleModel>? availableBundles;
+  final Map<int, List<BundleItemModel>>? bundleItemsCache;
 
   const ProductQuoteDetailModal({
     super.key,
@@ -27,6 +33,8 @@ class ProductQuoteDetailModal extends StatefulWidget {
     required this.onSave,
     this.currentSnapshotName,
     this.categoryName,
+    this.availableBundles,
+    this.bundleItemsCache,
   });
 
   @override
@@ -45,7 +53,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
   final _priceCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
 
-  bool _isManualPrice = false;
+  _PricingMode _pricingMode = _PricingMode.normal;
   bool _isSyncing = false;
 
   @override
@@ -63,24 +71,40 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     _currentCategoryName = widget.categoryName ?? "";
     _qtyCtrl.text = _quantity.toString();
 
-    double systemPrice = widget.wrapper.effectivePrice;
-    double effectivePrice = widget.currentOverridePrice ?? systemPrice;
+    _initializePricing();
+    _loadFullProductDetails();
+  }
+
+  void _initializePricing() {
+    final double basePrice = _selectedPresentation.precioVentaFinal;
+    final bool hasOffer = _selectedPresentation.precioOferta != null && _selectedPresentation.precioOferta! > 0;
+    final double offerPrice = hasOffer ? _selectedPresentation.precioOferta! : basePrice;
+
+    double effectivePrice = widget.currentOverridePrice ?? (hasOffer ? offerPrice : basePrice);
+    
+    if (widget.currentOverridePrice != null) {
+      if (widget.currentOverridePrice == offerPrice && hasOffer) {
+        _pricingMode = _PricingMode.catalogOffer;
+        _discountCtrl.text = (basePrice - offerPrice).toStringAsFixed(2);
+      } else if (widget.currentOverridePrice == basePrice) {
+        _pricingMode = _PricingMode.normal;
+        _discountCtrl.text = "";
+      } else {
+        _pricingMode = _PricingMode.manualDiscount;
+        double discount = basePrice - widget.currentOverridePrice!;
+        _discountCtrl.text = discount > 0 ? discount.toStringAsFixed(2) : "";
+      }
+    } else {
+      if (hasOffer) {
+        _pricingMode = _PricingMode.catalogOffer;
+        _discountCtrl.text = (basePrice - offerPrice).toStringAsFixed(2);
+      } else {
+        _pricingMode = _PricingMode.normal;
+        _discountCtrl.text = "";
+      }
+    }
     
     _priceCtrl.text = effectivePrice.toStringAsFixed(2);
-    double initialDiscount = systemPrice - effectivePrice;
-    
-    if (initialDiscount > 0.01) {
-      _isManualPrice = true;
-      _discountCtrl.text = initialDiscount.toStringAsFixed(2);
-    } else if (widget.currentOverridePrice != null && widget.currentOverridePrice != systemPrice) {
-      _isManualPrice = true;
-      _discountCtrl.text = "0.00";
-    } else {
-      _isManualPrice = false;
-      _discountCtrl.text = "";
-    }
-
-    _loadFullProductDetails();
   }
 
   Future<void> _loadFullProductDetails() async {
@@ -116,25 +140,37 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     super.dispose();
   }
 
-  double _getCurrentListPrice() {
-    return _selectedPresentation.precioOferta != null && _selectedPresentation.precioOferta! > 0 
-           ? _selectedPresentation.precioOferta! 
-           : _selectedPresentation.precioVentaFinal;
+  double _getEffectivePrice() {
+    switch (_pricingMode) {
+      case _PricingMode.normal:
+        return _selectedPresentation.precioVentaFinal;
+      case _PricingMode.catalogOffer:
+        return _selectedPresentation.precioOferta ?? _selectedPresentation.precioVentaFinal;
+      case _PricingMode.manualDiscount:
+        return double.tryParse(_priceCtrl.text) ?? _selectedPresentation.precioVentaFinal;
+    }
   }
 
   void _onDiscountChanged(String val) {
     if (_isSyncing) return;
     _isSyncing = true;
-    double sysPrice = _getCurrentListPrice();
-    double disc = double.tryParse(val) ?? 0.0;
+    double basePrice = _selectedPresentation.precioVentaFinal;
     
-    if (disc < 0) disc = 0;
-    if (disc > sysPrice) {
-      disc = sysPrice;
-      _discountCtrl.text = sysPrice.toStringAsFixed(2);
+    if (val.trim().isEmpty) {
+      _priceCtrl.text = basePrice.toStringAsFixed(2);
+      _isSyncing = false;
+      setState(() {});
+      return;
     }
 
-    double newPrice = sysPrice - disc;
+    double disc = double.tryParse(val) ?? 0.0;
+    if (disc < 0) disc = 0;
+    if (disc > basePrice) {
+      disc = basePrice;
+      _discountCtrl.text = basePrice.toStringAsFixed(2);
+    }
+
+    double newPrice = basePrice - disc;
     _priceCtrl.text = newPrice.toStringAsFixed(2);
     _isSyncing = false;
     setState(() {}); 
@@ -143,19 +179,26 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
   void _onPriceChanged(String val) {
     if (_isSyncing) return;
     _isSyncing = true;
-    double sysPrice = _getCurrentListPrice();
-    double price = double.tryParse(val) ?? sysPrice;
+    double basePrice = _selectedPresentation.precioVentaFinal;
     
+    if (val.trim().isEmpty) {
+      _discountCtrl.text = "";
+      _isSyncing = false;
+      setState(() {});
+      return;
+    }
+
+    double price = double.tryParse(val) ?? basePrice;
     if (price < 0) {
       price = 0;
       _priceCtrl.text = "0.00";
     }
-    if (price > sysPrice) {
-      price = sysPrice;
-      _priceCtrl.text = sysPrice.toStringAsFixed(2);
+    if (price > basePrice) {
+      price = basePrice;
+      _priceCtrl.text = basePrice.toStringAsFixed(2);
     }
     
-    double disc = sysPrice - price;
+    double disc = basePrice - price;
     _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
     _isSyncing = false;
     setState(() {}); 
@@ -176,12 +219,289 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
   }
 
   void _handleSave() {
-    final sysPrice = _getCurrentListPrice();
-    final finalPrice = _isManualPrice ? (double.tryParse(_priceCtrl.text) ?? sysPrice) : sysPrice;
-    final overridePrice = (finalPrice == sysPrice) ? null : finalPrice;
+    final double finalPrice = _getEffectivePrice();
+    final double defaultSystemPrice = _selectedPresentation.precioOferta != null && _selectedPresentation.precioOferta! > 0 
+        ? _selectedPresentation.precioOferta! 
+        : _selectedPresentation.precioVentaFinal;
+
+    final overridePrice = (finalPrice == defaultSystemPrice) ? null : finalPrice;
     
     widget.onSave(_selectedPresentation, _quantity, overridePrice, null);
     Navigator.pop(context);
+  }
+
+  List<BundleModel> _getApplicableBundles() {
+    if (widget.availableBundles == null || widget.bundleItemsCache == null || _fullProduct == null) return [];
+    
+    List<BundleModel> applicable = [];
+    for (var bundle in widget.availableBundles!) {
+       final items = widget.bundleItemsCache![bundle.id] ?? [];
+       if (items.any((item) => item.productoId == _fullProduct!.id)) {
+           applicable.add(bundle);
+       }
+    }
+    return applicable;
+  }
+
+  Widget _buildPricingSection(bool isDark, TextTheme textTheme, NumberFormat currency) {
+    final basePrice = _selectedPresentation.precioVentaFinal;
+    final hasOffer = _selectedPresentation.precioOferta != null && _selectedPresentation.precioOferta! > 0;
+    final offerPrice = hasOffer ? _selectedPresentation.precioOferta! : basePrice;
+    
+    final applicableBundles = _getApplicableBundles();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Configuración de Precio", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[800])),
+        const SizedBox(height: 12),
+        
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1A1A24) : Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200)
+          ),
+          child: Column(
+            children: [
+              _buildRadioOption(
+                isDark: isDark,
+                textTheme: textTheme,
+                currency: currency,
+                mode: _PricingMode.normal,
+                title: "Precio Normal",
+                subtitle: "Sin descuento aplicado",
+                price: basePrice,
+                activeColor: Colors.blue,
+              ),
+              
+              if (hasOffer) ...[
+                Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey.shade200),
+                _buildRadioOption(
+                  isDark: isDark,
+                  textTheme: textTheme,
+                  currency: currency,
+                  mode: _PricingMode.catalogOffer,
+                  title: "Oferta de Catálogo",
+                  subtitle: "Descuento individual activo",
+                  price: offerPrice,
+                  activeColor: Colors.green,
+                ),
+              ],
+              
+              Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey.shade200),
+              _buildRadioOption(
+                isDark: isDark,
+                textTheme: textTheme,
+                currency: currency,
+                mode: _PricingMode.manualDiscount,
+                title: "Precio Especial Manual",
+                subtitle: "Aplica un descuento personalizado",
+                price: null,
+                activeColor: Colors.orange,
+              ),
+              
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 300),
+                crossFadeState: _pricingMode == _PricingMode.manualDiscount ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                firstChild: const SizedBox(width: double.infinity, height: 0),
+                secondChild: _buildManualDiscountUI(isDark, textTheme, currency, basePrice),
+              )
+            ],
+          ),
+        ),
+        
+        if (applicableBundles.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text("Paquetes Disponibles", style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.amber[300] : Colors.amber[800])),
+          const SizedBox(height: 8),
+          ...applicableBundles.map((b) => Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.amber.withValues(alpha: 0.1) : Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: isDark ? Colors.amber.withValues(alpha: 0.3) : Colors.amber.shade200)
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(b.nombrePaquete, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold, color: isDark ? Colors.amber[200] : Colors.amber[900])),
+                        Text("Se aplica automáticamente (Referencial)", style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.amber[100] : Colors.amber[800])),
+                      ]
+                    )
+                  ),
+                ]
+              )
+            )
+          ))
+        ]
+      ],
+    );
+  }
+
+  Widget _buildRadioOption({
+    required bool isDark,
+    required TextTheme textTheme,
+    required NumberFormat currency,
+    required _PricingMode mode,
+    required String title,
+    required String subtitle,
+    required double? price,
+    required MaterialColor activeColor,
+  }) {
+    final bool isSelected = _pricingMode == mode;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _pricingMode = mode;
+          if (mode == _PricingMode.manualDiscount) {
+            if (_discountCtrl.text.isEmpty || (double.tryParse(_discountCtrl.text) ?? 0.0) == 0.0) {
+              final double basePrice = _selectedPresentation.precioVentaFinal;
+              final bool hasOffer = _selectedPresentation.precioOferta != null && _selectedPresentation.precioOferta! > 0;
+              if (hasOffer) {
+                final double offerPrice = _selectedPresentation.precioOferta!;
+                _discountCtrl.text = (basePrice - offerPrice).toStringAsFixed(2);
+                _priceCtrl.text = offerPrice.toStringAsFixed(2);
+              } else {
+                _priceCtrl.text = basePrice.toStringAsFixed(2);
+              }
+            }
+          }
+        });
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? (isDark ? activeColor.withValues(alpha: 0.1) : activeColor.shade50) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Radio<_PricingMode>(
+              value: mode,
+              // ignore: deprecated_member_use
+              groupValue: _pricingMode,
+              // ignore: deprecated_member_use
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() {
+                    _pricingMode = v;
+                    if (v == _PricingMode.manualDiscount) {
+                      if (_discountCtrl.text.isEmpty || (double.tryParse(_discountCtrl.text) ?? 0.0) == 0.0) {
+                        final double basePrice = _selectedPresentation.precioVentaFinal;
+                        final bool hasOffer = _selectedPresentation.precioOferta != null && _selectedPresentation.precioOferta! > 0;
+                        if (hasOffer) {
+                          final double offerPrice = _selectedPresentation.precioOferta!;
+                          _discountCtrl.text = (basePrice - offerPrice).toStringAsFixed(2);
+                          _priceCtrl.text = offerPrice.toStringAsFixed(2);
+                        } else {
+                          _priceCtrl.text = basePrice.toStringAsFixed(2);
+                        }
+                      }
+                    }
+                  });
+                }
+              },
+              activeColor: activeColor,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: textTheme.titleMedium?.copyWith(color: isSelected ? (isDark ? activeColor[300] : activeColor[900]) : (isDark ? Colors.white : Colors.black87))),
+                  Text(subtitle, style: textTheme.bodySmall?.copyWith(color: isSelected ? (isDark ? activeColor[200] : activeColor[700]) : (isDark ? Colors.grey[500] : Colors.grey))),
+                ],
+              ),
+            ),
+            if (price != null)
+              Text(currency.format(price), style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: isSelected ? (isDark ? activeColor[300] : activeColor[900]) : (isDark ? Colors.grey[400] : Colors.grey[700]))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildManualDiscountUI(bool isDark, TextTheme textTheme, NumberFormat currency, double basePrice) {
+    double currentDiscount = double.tryParse(_discountCtrl.text) ?? 0.0;
+    double currentPrice = double.tryParse(_priceCtrl.text) ?? basePrice;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.orange.withValues(alpha: 0.05) : Colors.orange.shade50,
+        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(16), bottomRight: Radius.circular(16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("S/ a Descontar", style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900])),
+                    TextField(
+                      controller: _discountCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: textTheme.displayMedium?.copyWith(color: isDark ? Colors.white : Colors.black87),
+                      decoration: InputDecoration(prefixText: "- ", prefixStyle: textTheme.displayMedium?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900]), isDense: true, border: InputBorder.none, hintText: "0.00"),
+                      onChanged: _onDiscountChanged,
+                    ),
+                  ],
+                ),
+              ),
+              Container(width: 1, height: 50, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[300]),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Precio Final Unit.", style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[900])),
+                    TextField(
+                      controller: _priceCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: textTheme.displayMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue),
+                      decoration: InputDecoration(prefixText: "S/ ", prefixStyle: textTheme.displayMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue), isDense: true, border: InputBorder.none),
+                      onChanged: _onPriceChanged,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black26 : Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300)
+            ),
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(text: "Base: ", style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  TextSpan(text: currency.format(basePrice), style: textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, color: isDark ? Colors.grey[300] : Colors.grey[800])),
+                  TextSpan(text: " → Menos ", style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  TextSpan(text: currency.format(currentDiscount), style: textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, color: isDark ? Colors.orange[300] : Colors.orange[800])),
+                  TextSpan(text: " = Final: ", style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  TextSpan(text: currency.format(currentPrice), style: textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
+                ]
+              )
+            )
+          )
+        ],
+      ),
+    );
   }
 
   @override
@@ -195,10 +515,13 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     
-    final sysPrice = _getCurrentListPrice();
-    final unitPrice = _isManualPrice ? (double.tryParse(_priceCtrl.text) ?? sysPrice) : sysPrice;
+    final basePrice = _selectedPresentation.precioVentaFinal;
+    final hasOffer = _selectedPresentation.precioOferta != null && _selectedPresentation.precioOferta! > 0;
+    final defaultSystemPrice = hasOffer ? _selectedPresentation.precioOferta! : basePrice;
+
+    final unitPrice = _getEffectivePrice();
     final subtotal = unitPrice * _quantity;
-    final originalTotal = sysPrice * _quantity;
+    final originalTotal = defaultSystemPrice * _quantity;
     final savings = originalTotal - subtotal;
 
     bool isStockEmpty = _selectedPresentation.stockActual <= 0;
@@ -210,8 +533,9 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                          currentBuiltName.toLowerCase() != snapshot.toLowerCase() &&
                          !snapshot.toLowerCase().contains("nuevo ítem");
 
-    final double initialSize = isClient ? 0.50 : 0.55;
-    final double maxSize = isClient ? 0.60 : 0.65;
+    // Increased height to accommodate offers section
+    final double initialSize = isClient ? 0.65 : 0.70;
+    final double maxSize = isClient ? 0.80 : 0.85;
 
     return DraggableScrollableSheet(
       initialChildSize: initialSize, 
@@ -334,21 +658,25 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                       children: _fullProduct!.presentaciones.map((p) {
                         final isSelected = p.id == _selectedPresentation.id;
                         final isOutOfStockVariant = p.stockActual <= 0;
-                        // 🔥 BLOQUEO DE VARIANTE: Si es cliente y no hay stock, no la puede seleccionar
                         final isDisabled = isClient && isOutOfStockVariant;
 
                         return Padding(
                           padding: const EdgeInsets.only(right: 12),
                           child: ChoiceChip(
-                            label: Text(p.unidadVenta ?? "Unidad", style: textTheme.bodyMedium?.copyWith(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)), 
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text("${p.unidadVenta ?? 'Unidad'} - ${currency.format(p.precioVentaFinal)}", style: textTheme.bodyMedium?.copyWith(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                                const SizedBox(width: 6),
+                                Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: isOutOfStockVariant ? Colors.red : (p.stockActual < 10 ? Colors.orange : Colors.green)))
+                              ],
+                            ), 
                             selected: isSelected, 
                             onSelected: isDisabled ? null : (v) {
                               if (v) {
                                 setState(() {
                                   _selectedPresentation = p;
-                                  _isManualPrice = false;
-                                  _priceCtrl.text = _getCurrentListPrice().toStringAsFixed(2);
-                                  _discountCtrl.text = "";
+                                  _initializePricing();
                                   
                                   if (isClient && _quantity > p.stockActual) {
                                      _quantity = p.stockActual > 0 ? p.stockActual : 1;
@@ -373,64 +701,12 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                   const SizedBox(height: 20),
                 ],
 
-                if (!isClient)
-                  Container(
-                    decoration: BoxDecoration(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50]) : (isDark ? Colors.white10 : Colors.grey[50]), borderRadius: BorderRadius.circular(16), border: Border.all(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade200) : (isDark ? Colors.transparent : Colors.grey.shade300))),
-                    child: Column(
-                      children: [
-                        SwitchListTile(
-                          title: Text("Precio Especial al Cliente", style: textTheme.titleMedium?.copyWith(color: _isManualPrice ? (isDark ? Colors.orange[300] : Colors.orange[900]) : textColor)),
-                          subtitle: Text("Precio de Lista: ${currency.format(sysPrice)}", style: textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[700])),
-                          value: _isManualPrice,
-                          activeThumbColor: Colors.orange,
-                          onChanged: (v) => setState(() {
-                            _isManualPrice = v;
-                            if (!v) { _priceCtrl.text = sysPrice.toStringAsFixed(2); _discountCtrl.text = ""; }
-                          }),
-                        ),
-                        if (_isManualPrice) ...[
-                          Divider(height: 1, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[200]),
-                          Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text("S/ a Descontar", style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900])),
-                                      TextField(
-                                        controller: _discountCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                        style: textTheme.displayMedium?.copyWith(color: textColor),
-                                        decoration: InputDecoration(prefixText: "- ", prefixStyle: textTheme.displayMedium?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900]), isDense: true, border: InputBorder.none),
-                                        onChanged: _onDiscountChanged,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(width: 1, height: 50, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[300]),
-                                const SizedBox(width: 20),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text("Precio Final Unit.", style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[900])),
-                                      TextField(
-                                        controller: _priceCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                        style: textTheme.displayMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue),
-                                        decoration: InputDecoration(prefixText: "S/ ", prefixStyle: textTheme.displayMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue), isDense: true, border: InputBorder.none),
-                                        onChanged: _onPriceChanged,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        ]
-                      ],
-                    ),
-                  ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: (!_isLoading && !isClient) ? _buildPricingSection(isDark, textTheme, currency) : const SizedBox.shrink(),
+                ),
+
                 if (!isClient) const SizedBox(height: 30),
 
                 Row(

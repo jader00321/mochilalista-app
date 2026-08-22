@@ -1,5 +1,7 @@
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:app_movil/core/database/local_db.dart';
 
 class QuotationService {
@@ -56,6 +58,7 @@ class QuotationService {
       List<StockWarning> warnings = [];
       List<PriceChange> prices = [];
       List<NameChange> nameChanges = [];
+      List<BundleChange> bundleChanges = [];
 
       for (var item in iRows) {
         if (item['bundle_id'] != null) {
@@ -94,6 +97,121 @@ class QuotationService {
                 message: "Un componente del paquete ya no existe.",
               ));
             }
+          }
+          
+          // --- Validación adicional para bundles (Deep Compare) ---
+          final bRows = await db.query('paquetes', where: 'id = ?', whereArgs: [bId]);
+          if (bRows.isEmpty) {
+            // Bundle eliminado
+            hasIssues = true;
+            canSell = false;
+            bundleChanges.add(BundleChange(
+              itemId: item['id'] as int,
+              bundleId: bId,
+              bundleName: item['product_name'] as String? ?? "Oferta",
+              changes: ["La oferta fue eliminada del catálogo"],
+              isDeleted: true,
+            ));
+            continue;
+          }
+
+          final bundle = bRows.first;
+          bool bundleActive = (bundle['activo'] as int?) == 1;
+
+          if (!bundleActive) {
+            hasIssues = true;
+            canSell = false;
+            bundleChanges.add(BundleChange(
+              itemId: item['id'] as int,
+              bundleId: bId,
+              bundleName: bundle['nombre_paquete'] as String? ?? "Oferta",
+              changes: ["La oferta fue desactivada por el administrador"],
+              isDeactivated: true,
+            ));
+            continue;
+          }
+
+          List<String> detectedChanges = [];
+          bool isBlockingChange = false;
+          
+          String currentName = bundle['nombre_paquete'] as String? ?? "";
+          String savedName = item['product_name'] as String? ?? "";
+          if (currentName.toLowerCase() != savedName.toLowerCase()) {
+            detectedChanges.add("Nombre: \"$savedName\" → \"$currentName\"");
+          }
+
+          double currentPrice = (bundle['precio_venta_total'] as num).toDouble();
+          double appliedPrice = (item['unit_price_applied'] as num).toDouble();
+          bool isManual = item['is_manual_price'] == 1 || item['is_manual_price'] == true;
+          if (!isManual && (appliedPrice - currentPrice).abs() > 0.01) {
+            detectedChanges.add("Precio: S/ ${appliedPrice.toStringAsFixed(2)} → S/ ${currentPrice.toStringAsFixed(2)}");
+          }
+
+          String currentType = bundle['tipo_promocion'] as String? ?? "paquete";
+          String? savedSnapshotJson = item['bundle_items_snapshot'] as String?;
+
+          if (savedSnapshotJson != null && savedSnapshotJson.isNotEmpty) {
+            try {
+              final savedSnapshot = jsonDecode(savedSnapshotJson);
+              final savedItems = (savedSnapshot['items'] as List?) ?? [];
+              final currentBundleItems = await db.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bId]);
+
+              if (savedItems.length != currentBundleItems.length) {
+                detectedChanges.add("Composición: ${savedItems.length} productos → ${currentBundleItems.length} productos");
+                isBlockingChange = true;
+              } else {
+                for (var savedItem in savedItems) {
+                  int savedPresId = savedItem['presentacion_id'] as int;
+                  int savedQty = savedItem['cantidad_requerida'] as int;
+                  final match = currentBundleItems.where((ci) => ci['presentacion_id'] == savedPresId).firstOrNull;
+                  if (match == null) {
+                    detectedChanges.add("Se removió un producto de la oferta (ID: $savedPresId)");
+                    isBlockingChange = true;
+                  } else if ((match['cantidad_requerida'] as int? ?? 1) != savedQty) {
+                    detectedChanges.add("Cambió la cantidad de un componente de la oferta");
+                    isBlockingChange = true;
+                  }
+                }
+                for (var current in currentBundleItems) {
+                  int currentPresId = current['presentacion_id'] as int;
+                  if (!savedItems.any((si) => si['presentacion_id'] == currentPresId)) {
+                    detectedChanges.add("Se agregó un nuevo producto a la oferta");
+                    isBlockingChange = true;
+                  }
+                }
+              }
+
+              String? savedType = savedSnapshot['bundle_type'] as String?;
+              if (savedType != null && savedType != currentType) {
+                detectedChanges.add("Tipo: \"$savedType\" → \"$currentType\"");
+                isBlockingChange = true;
+              }
+            } catch (e) {
+              debugPrint("Error parseando snapshot del bundle: $e");
+            }
+          } else {
+            // Si no hay snapshot, igual comparamos descripción por retrocompatibilidad
+            String currentDesc = bundle['descripcion'] as String? ?? "";
+            String? specificName = item['specific_name'] as String?;
+            if (specificName != null && specificName.toLowerCase() != currentDesc.toLowerCase()) {
+               detectedChanges.add("La descripción de la oferta cambió.");
+               isBlockingChange = true;
+            }
+          }
+
+          if (detectedChanges.isNotEmpty) {
+            hasIssues = true;
+            if (isBlockingChange) canSell = false;
+            
+            bundleChanges.add(BundleChange(
+              itemId: item['id'] as int,
+              bundleId: bId,
+              bundleName: currentName,
+              changes: detectedChanges,
+              oldPrice: appliedPrice,
+              newPrice: currentPrice,
+              isCompositionChange: isBlockingChange,
+            ));
           }
           continue; 
         }
@@ -180,7 +298,7 @@ class QuotationService {
         }
       }
 
-      return ValidationResult(hasIssues: hasIssues, canSell: canSell, stockWarnings: warnings, priceChanges: prices, nameChanges: nameChanges);
+      return ValidationResult(hasIssues: hasIssues, canSell: canSell, stockWarnings: warnings, priceChanges: prices, nameChanges: nameChanges, bundleChanges: bundleChanges);
     } catch (e) {
       throw Exception("Error local al validar integridad: $e");
     }
@@ -213,14 +331,37 @@ class QuotationService {
         }
 
         for (var item in items) {
+          String? bundleSnapshot;
+          if (item['bundle_id'] != null) {
+            final bundleRows = await txn.query('paquetes', where: 'id = ?', whereArgs: [item['bundle_id']]);
+            final bundleItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [item['bundle_id']]);
+            if (bundleRows.isNotEmpty) {
+              final b = bundleRows.first;
+              bundleSnapshot = jsonEncode({
+                'bundle_name': b['nombre_paquete'],
+                'bundle_price': b['precio_venta_total'],
+                'bundle_type': b['tipo_promocion'] ?? 'paquete',
+                'bundle_active': (b['activo'] as int?) == 1,
+                'items': bundleItems.map((bi) => {
+                  'presentacion_id': bi['presentacion_id'],
+                  'producto_id': bi['producto_id'],
+                  'cantidad_requerida': bi['cantidad_requerida'],
+                  'precio_original': bi['precio_original_unitario'],
+                }).toList(),
+              });
+            }
+          }
+
           await txn.insert('smart_quotation_items', {
             'quotation_id': targetId,
             'product_id': item['product_id'],
             'presentation_id': item['presentation_id'],
             'bundle_id': item['bundle_id'],
+            'bundle_items_snapshot': bundleSnapshot,
             'quantity': item['quantity'],
             'unit_price_applied': item['unit_price_applied'],
             'original_unit_price': item['original_unit_price'],
+            'discount_catalog_amount': item['discount_catalog_amount'] ?? 0.0,
             'product_name': item['product_name'],
             'brand_name': item['brand_name'],
             'specific_name': item['specific_name'],
@@ -243,13 +384,85 @@ class QuotationService {
     } catch (e) { throw Exception("Error al actualizar estado local: $e"); }
   }
 
-  Future<bool> refreshQuotation(int id, {bool fixPrices = true, bool fixStock = false, bool fixNames = false}) async {
+  Future<bool> refreshQuotation(int id, {bool fixPrices = true, bool fixStock = false, bool fixNames = false, bool fixBundles = false}) async {
     try {
       final db = await dbHelper.database;
       final items = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
       
       await db.transaction((txn) async {
         for (var item in items) {
+          if (item['bundle_id'] != null) {
+            final bRows = await txn.query('paquetes', where: 'id = ?', whereArgs: [item['bundle_id']]);
+            if (bRows.isNotEmpty) {
+              final bundle = bRows.first;
+              Map<String, dynamic> updates = {};
+
+              if (fixPrices && item['is_manual_price'] == 0) {
+                double currentPrice = (bundle['precio_venta_total'] as num).toDouble();
+                updates['unit_price_applied'] = currentPrice;
+                updates['original_unit_price'] = currentPrice;
+              }
+
+              if (fixNames) {
+                updates['product_name'] = bundle['nombre_paquete'];
+                updates['specific_name'] = bundle['descripcion'];
+              }
+
+              if (fixStock) {
+                final bItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [item['bundle_id']]);
+                int maxBundles = 999999;
+                for (var bItem in bItems) {
+                  int pId = bItem['presentacion_id'] as int;
+                  int reqQty = (bItem['cantidad_requerida'] as int?) ?? 1;
+                  final prRows = await txn.query('presentaciones_producto', where: 'id = ?', whereArgs: [pId]);
+                  if (prRows.isNotEmpty) {
+                    int currentStock = prRows.first['stock_actual'] as int;
+                    if (reqQty > 0) {
+                       int possible = (currentStock / reqQty).floor();
+                       if (possible < maxBundles) maxBundles = possible;
+                    }
+                  } else {
+                    maxBundles = 0;
+                  }
+                }
+                if (maxBundles == 999999) maxBundles = 0;
+                
+                int reqQty = item['quantity'] as int;
+                updates['is_available'] = maxBundles < reqQty ? 0 : 1;
+              }
+
+              if (fixBundles) {
+                updates['product_name'] = bundle['nombre_paquete'];
+                updates['specific_name'] = bundle['descripcion'];
+                updates['unit_price_applied'] = (bundle['precio_venta_total'] as num).toDouble();
+                updates['original_unit_price'] = (bundle['precio_venta_total'] as num).toDouble();
+                updates['image_url'] = bundle['imagen_url'];
+                updates['is_available'] = (bundle['activo'] as int?) == 1 ? 1 : 0;
+                
+                final bundleItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [item['bundle_id']]);
+                updates['bundle_items_snapshot'] = jsonEncode({
+                  'bundle_name': bundle['nombre_paquete'],
+                  'bundle_price': bundle['precio_venta_total'],
+                  'bundle_type': bundle['tipo_promocion'] ?? 'paquete',
+                  'bundle_active': (bundle['activo'] as int?) == 1,
+                  'items': bundleItems.map((bi) => {
+                    'presentacion_id': bi['presentacion_id'],
+                    'producto_id': bi['producto_id'],
+                    'cantidad_requerida': bi['cantidad_requerida'],
+                    'precio_original': bi['precio_original_unitario'],
+                  }).toList(),
+                });
+              }
+
+              if (updates.isNotEmpty) {
+                await txn.update('smart_quotation_items', updates, where: 'id = ?', whereArgs: [item['id']]);
+              }
+            } else {
+              if (fixStock || fixBundles) await txn.update('smart_quotation_items', {'is_available': 0}, where: 'id = ?', whereArgs: [item['id']]);
+            }
+            continue;
+          }
+
           if (item['presentation_id'] != null) {
             final pres = await txn.query('presentaciones_producto', where: 'id = ?', whereArgs: [item['presentation_id']]);
             
@@ -258,11 +471,13 @@ class QuotationService {
               Map<String, dynamic> updates = {};
               
               if (fixPrices && item['is_manual_price'] == 0) {
-                double currentPrice = (p['precio_oferta'] != null && (p['precio_oferta'] as num) > 0) 
+                double basePrice = (p['precio_venta_final'] as num).toDouble();
+                double offerPrice = (p['precio_oferta'] != null && (p['precio_oferta'] as num) > 0) 
                     ? (p['precio_oferta'] as num).toDouble() 
-                    : (p['precio_venta_final'] as num).toDouble();
-                updates['unit_price_applied'] = currentPrice;
-                updates['original_unit_price'] = (p['precio_venta_final'] as num).toDouble();
+                    : basePrice;
+                updates['unit_price_applied'] = offerPrice;
+                updates['original_unit_price'] = basePrice;
+                updates['discount_catalog_amount'] = basePrice - offerPrice;
               }
               
               if (fixStock) {

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
+import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
 import 'package:app_movil/features/promotions/models/bundle_model.dart';
+
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart'; 
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
@@ -101,7 +103,7 @@ class QuickSaleProvider with ChangeNotifier {
       fullName: "${itemWrapper.product.nombre} ${itemWrapper.presentation.nombreEspecifico ?? ''}".trim(),
       productName: itemWrapper.product.nombre,
       specificName: itemWrapper.presentation.nombreEspecifico,
-      brand: itemWrapper.product.marcaNombre, 
+      brand: itemWrapper.product.marcaNombre,
       price: itemWrapper.presentation.precioVentaFinal, 
       offerPrice: (itemWrapper.presentation.precioOferta != null && itemWrapper.presentation.precioOferta! > 0) ? itemWrapper.presentation.precioOferta : null,
       stock: itemWrapper.presentation.stockActual,
@@ -253,6 +255,7 @@ class QuickSaleProvider with ChangeNotifier {
   Future<Map<String, List<String>>> restoreCartFromHistory(
     List<dynamic> historicalItems, 
     InventoryProvider invProv,
+    PromotionProvider promoProv,
     {bool clearPrevious = true}
   ) async {
     List<String> notFound = [];
@@ -261,11 +264,37 @@ class QuickSaleProvider with ChangeNotifier {
     if (clearPrevious) clearCart();
 
     for (var item in historicalItems) {
+      int requestedQty = item['quantity'] ?? 1;
+      String fallbackName = item['product_name'] ?? 'Ítem desconocido';
+
+      int? bundleId = item['bundle_id'];
+      if (bundleId != null) {
+        final bundle = promoProv.bundles.where((b) => b.id == bundleId).firstOrNull;
+        if (bundle == null || !bundle.activo) {
+          notFound.add(fallbackName);
+          continue;
+        }
+        
+        int maxStock = promoProv.calculateBundleMaxStock(bundle.id);
+        if (maxStock <= 0) {
+          outOfStock.add(fallbackName);
+          continue;
+        }
+
+        int finalQty = requestedQty > maxStock ? maxStock : requestedQty;
+        String? error = addBundleToCart(bundle, maxStock);
+        if (error != null) {
+          outOfStock.add(fallbackName);
+        } else {
+          // addBundleToCart adds 1 by default, update to correct quantity
+          final fakePresId = -(bundle.id);
+          _quantities[fakePresId] = finalQty;
+        }
+        continue;
+      }
+
       int? prodId = item['product_id'];
       int? presId = item['presentation_id'];
-      int requestedQty = item['quantity'] ?? 1;
-      
-      String fallbackName = item['product_name'] ?? 'Ítem desconocido';
 
       if (prodId == null || presId == null) {
         notFound.add(fallbackName);

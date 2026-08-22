@@ -34,7 +34,6 @@ class QuotationDetailScreen extends StatefulWidget {
 
 class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   bool _isLoading = true;
-  final bool _filterErrorItems = false; 
   SmartQuotationModel? _fullQuotation;
 
   @override
@@ -114,11 +113,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => SmartUpdateModal(
         validation: validation,
-        onUpdatePrices: () => _executeRefresh(prices: true, stock: false, names: false),
-        onFixStock: () => _executeRefresh(prices: false, stock: true, names: false),
-        onFixAll: () => _executeRefresh(prices: true, stock: true, names: true),
+        onUpdatePrices: () => _executeRefresh(prices: true, stock: false, names: false, bundles: false),
+        onFixStock: () => _executeRefresh(prices: false, stock: true, names: false, bundles: false),
+        onFixAll: () => _executeRefresh(prices: true, stock: true, names: true, bundles: false),
         
-        onUpdateNames: () => _executeRefresh(prices: false, stock: false, names: true),
+        onUpdateNames: () => _executeRefresh(prices: false, stock: false, names: true, bundles: false),
+        onSyncBundles: () => _executeRefresh(prices: false, stock: false, names: false, bundles: true),
         onFixSingleStock: (itemId, newQty) => _handleIndividualFix(itemId: itemId, newQty: newQty),
         onRemoveSingleItem: (itemId) => _handleIndividualFix(itemId: itemId, remove: true),
         onAcceptSinglePrice: (itemId, newPrice, newBase) => _handleIndividualFix(itemId: itemId, newAppliedPrice: newPrice, newOriginalPrice: newBase),
@@ -157,6 +157,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           itemsPayload.add({
             "product_id": qItem.productId, 
             "presentation_id": qItem.presentationId, 
+            "bundle_id": qItem.bundleId,
             "quantity": qty,
             "unit_price_applied": appliedPrice, 
             "original_unit_price": originalPrice, 
@@ -176,6 +177,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           itemsPayload.add({
             "product_id": qItem.productId, 
             "presentation_id": qItem.presentationId, 
+            "bundle_id": qItem.bundleId,
             "quantity": qItem.quantity,
             "unit_price_applied": qItem.unitPriceApplied, 
             "original_unit_price": qItem.originalUnitPrice, 
@@ -214,15 +216,16 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     }
   }
 
-  Future<void> _executeRefresh({required bool prices, required bool stock, required bool names}) async {
-    final workbench = Provider.of<WorkbenchProvider>(context, listen: false);
-    bool success = await workbench.refreshQuotation(widget.quotationId, fixPrices: prices, fixStock: stock, fixNames: names);
-    
-    if (success) {
-      if (mounted) CustomSnackBar.show(context, message: "Cotización actualizada", isError: false);
-      await _loadData(); 
-    } else {
-      if (mounted) CustomSnackBar.show(context, message: "Error al actualizar", isError: true);
+  Future<void> _executeRefresh({required bool prices, required bool stock, required bool names, required bool bundles}) async {
+    final wp = Provider.of<WorkbenchProvider>(context, listen: false);
+    setState(() => _isLoading = true);
+    final success = await wp.refreshQuotation(widget.quotationId, fixPrices: prices, fixStock: stock, fixNames: names, fixBundles: bundles);
+    if (success && mounted) {
+      CustomSnackBar.show(context, message: "Cotización actualizada correctamente.", isError: false);
+      _loadData();
+    } else if (mounted) {
+      CustomSnackBar.show(context, message: "Error al actualizar la cotización.", isError: true);
+      setState(() => _isLoading = false);
     }
   }
 
@@ -522,65 +525,80 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       ),
       body: _isLoading 
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
+          : CustomScrollView(
+              slivers: [
                 if (!isClient && validation != null && (validation.hasIssues || !validation.canSell) && _fullQuotation?.status != 'SOLD') 
-                  _buildSmartAlertBanner(validation, isDark),
+                  SliverToBoxAdapter(
+                    child: _buildSmartAlertBanner(validation, isDark)
+                  ),
                 
                 if (_fullQuotation?.status == 'SOLD')
-                  Container(
-                    width: double.infinity,
-                    color: Colors.green[700],
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.verified, color: Colors.white, size: 28),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            isClient ? "¡COMPRA CONFIRMADA Y PROCESADA!" : "LISTA VENDIDA Y CERRADA",
-                            style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 15, letterSpacing: 0.5),
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                      ],
+                  SliverToBoxAdapter(
+                    child: Container(
+                      width: double.infinity,
+                      color: Colors.green[700],
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.verified, color: Colors.white, size: 28),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              isClient ? "¡COMPRA CONFIRMADA Y PROCESADA!" : "LISTA VENDIDA Y CERRADA",
+                              style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 15, letterSpacing: 0.5),
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        ],
+                      ),
                     ),
                   ),
                 
-                QuoteDetailHeader(quotation: _fullQuotation, fallbackClientName: widget.clientName, isDark: isDark),
+                SliverPersistentHeader(
+                  pinned: false,
+                  floating: true,
+                  delegate: _QuoteHeaderDelegate(
+                    quotation: _fullQuotation,
+                    fallbackClientName: widget.clientName,
+                    isDark: isDark,
+                  ),
+                ),
                 
                 if (showEvidence)
-                  QuoteEvidencePanel(
-                    hasImage: hasImage, hasText: hasTextEvidence, imageUrl: _fullQuotation?.sourceImageUrl, isDark: isDark,
-                    onImageTap: () {
-                       if (_fullQuotation?.sourceImageUrl != null) {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageUrl: _fullQuotation!.sourceImageUrl!, tag: "${_fullQuotation!.id}_evidence")));
-                       }
-                    },
-                    onDownloadTap: _downloadImage, onTextEvidenceTap: () => _showTextEvidenceDialog(isDark),
+                  SliverToBoxAdapter(
+                    child: QuoteEvidencePanel(
+                      hasImage: hasImage, hasText: hasTextEvidence, imageUrl: _fullQuotation?.sourceImageUrl, isDark: isDark,
+                      onImageTap: () {
+                         if (_fullQuotation?.sourceImageUrl != null) {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageUrl: _fullQuotation!.sourceImageUrl!, tag: "${_fullQuotation!.id}_evidence")));
+                         }
+                      },
+                      onDownloadTap: _downloadImage, onTextEvidenceTap: () => _showTextEvidenceDialog(isDark),
+                    ),
                   ),
                 
-                Expanded(
-                  child: items.isEmpty 
-                    ? Center(child: Text("No hay productos en esta cotización", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 16)))
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 20, top: 8),
-                        itemCount: items.length, 
-                        itemBuilder: (ctx, i) {
+                if (items.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: Text("No hay productos en esta cotización", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 16)))
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.only(bottom: 20, top: 8),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (ctx, i) {
                           final item = items[i];
                           final stockWarning = isClient ? null : validation?.stockWarnings.firstWhere((w) => w.itemId == item.id, orElse: () => StockWarning(itemId: -1, productName: "", requested: 0, available: 0));
                           final priceChange = isClient ? null : validation?.priceChanges.firstWhere((p) => p.itemId == item.id, orElse: () => PriceChange(itemId: -1, productName: "", oldPrice: 0, newPrice: 0));
                           
-                          if (_filterErrorItems && !isClient) {
-                            bool hasError = (stockWarning != null && stockWarning.itemId != -1) || (priceChange != null && priceChange.itemId != -1);
-                            if (!hasError) return const SizedBox.shrink();
-                          }
-                          
                           return QuoteItemListRow(item: item, stockError: stockWarning, priceError: priceChange, isDark: isDark);
                         },
+                        childCount: items.length,
                       ),
-                ),
+                    ),
+                  ),
               ],
             ),
       bottomNavigationBar: QuotationActionButtons(
@@ -613,5 +631,52 @@ class _StatusRow extends StatelessWidget {
       const SizedBox(width: 12), 
       Text(text, style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w500))
     ]);
+  }
+}
+
+class _QuoteHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final SmartQuotationModel? quotation;
+  final String? fallbackClientName;
+  final bool isDark;
+
+  _QuoteHeaderDelegate({
+    required this.quotation,
+    this.fallbackClientName,
+    required this.isDark,
+  });
+
+  @override
+  double get minExtent => 75.0;
+
+  @override
+  double get maxExtent {
+    double baseHeight = 110.0;
+    if (quotation?.institutionName != null && quotation!.institutionName!.isNotEmpty) baseHeight += 25.0;
+    if (quotation?.gradeLevel != null && quotation!.gradeLevel!.isNotEmpty) baseHeight += 25.0;
+    if (quotation?.notas != null && quotation!.notas!.isNotEmpty) baseHeight += 60.0;
+    return baseHeight;
+  }
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    double currentExtent = maxExtent - shrinkOffset;
+    double shrinkFactor = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
+
+    return SizedBox(
+      height: currentExtent.clamp(minExtent, maxExtent),
+      child: QuoteDetailHeader(
+        quotation: quotation,
+        fallbackClientName: fallbackClientName,
+        isDark: isDark,
+        shrinkFactor: shrinkFactor,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _QuoteHeaderDelegate oldDelegate) {
+    return quotation != oldDelegate.quotation ||
+           fallbackClientName != oldDelegate.fallbackClientName ||
+           isDark != oldDelegate.isDark;
   }
 }

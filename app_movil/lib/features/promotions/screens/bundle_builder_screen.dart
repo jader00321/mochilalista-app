@@ -55,14 +55,11 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
       _fechaFin = widget.bundleToEdit!.fechaFin;
       _userEditedName = true;
       _userEditedDesc = _descController.text.isNotEmpty;
-      // NO bloqueamos _userEditedPrice para que al cambiar tipo se recalcule
-      
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final prov = Provider.of<PromotionProvider>(context, listen: false);
-        setState(() {
-          _selectedItems = List.from(prov.getItemsForBundle(widget.bundleToEdit!.id));
-        });
-      });
+      _userEditedDesc = _descController.text.isNotEmpty;
+      _userEditedPrice = false; // Permitimos que recalcule al cambiar de tipo
+
+      final prov = Provider.of<PromotionProvider>(context, listen: false);
+      _selectedItems = List.from(prov.getItemsForBundle(widget.bundleToEdit!.id));
     } else if (widget.initialMultipleItems != null && widget.initialMultipleItems!.isNotEmpty) {
       if (widget.initialTipoPromocion != null) {
         _tipoPromocion = widget.initialTipoPromocion!;
@@ -415,6 +412,11 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
                         final p = filteredCatalog[i];
                         final isAlreadyAdded = _selectedItems.any((item) => item.presentacionId == p.presentation.id);
                         
+                        final displayName = (p.product.marcaNombre != null && p.product.marcaNombre!.isNotEmpty && p.product.marcaNombre!.toLowerCase() != 'sin marca' ? '${p.product.marcaNombre} ' : '') + 
+                                            p.product.nombre + 
+                                            (p.presentation.nombreEspecifico != null && p.presentation.nombreEspecifico!.isNotEmpty ? ' - ${p.presentation.nombreEspecifico}' : '');
+                        final unidadVenta = p.presentation.unidadVenta ?? 'Unidad';
+
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ListTile(
@@ -424,12 +426,27 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
                               child: p.presentation.imagenUrl == null ? const Icon(Icons.inventory_2, color: Colors.blue) : null,
                             ),
                             title: Text(
-                              (p.product.marcaNombre != null && p.product.marcaNombre!.isNotEmpty && p.product.marcaNombre!.toLowerCase() != 'sin marca' ? '${p.product.marcaNombre} ' : '') + 
-                              p.product.nombre + 
-                              (p.presentation.nombreEspecifico != null && p.presentation.nombreEspecifico!.isNotEmpty ? ' - ${p.presentation.nombreEspecifico}' : ''), 
-                              maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)
+                              displayName,
+                              maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)
                             ),
-                            subtitle: Text("Stock disponible: ${p.presentation.stockActual} | Venta: ${_currency.format(p.effectivePrice)}"),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                                      child: Text(unidadVenta, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.black87)),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text("Stock: ${p.presentation.stockActual} | Venta: ${_currency.format(p.effectivePrice)}"),
+                              ],
+                            ),
+                            isThreeLine: true,
                             trailing: isAlreadyAdded 
                               ? const Icon(Icons.check_circle, color: Colors.green)
                               : IconButton(
@@ -1008,7 +1025,43 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
             ..._selectedItems.asMap().entries.map((entry) {
               int idx = entry.key;
               var item = entry.value;
-              final prodWrap = invProv.items.firstWhere((p) => p.presentation.id == item.presentacionId, orElse: () => throw Exception());
+              final prodWrap = invProv.items.where((p) => p.presentation.id == item.presentacionId).firstOrNull;
+              
+              if (prodWrap == null) {
+                return Card(
+                  elevation: 1,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  color: isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red[50],
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.red.withValues(alpha: 0.3))),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red, size: 36),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("Producto no disponible", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 15)),
+                              Text("Este producto fue eliminado del inventario.", style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _removeItem(idx),
+                        )
+                      ],
+                    ),
+                  )
+                );
+              }
+
+              final String fullName = (prodWrap.product.marcaNombre != null && prodWrap.product.marcaNombre!.isNotEmpty && prodWrap.product.marcaNombre!.toLowerCase() != 'sin marca' ? '${prodWrap.product.marcaNombre} ' : '') + 
+                                      prodWrap.product.nombre + 
+                                      (prodWrap.presentation.nombreEspecifico != null && prodWrap.presentation.nombreEspecifico!.isNotEmpty ? ' - ${prodWrap.presentation.nombreEspecifico}' : '');
+
               return Card(
                 elevation: 1,
                 margin: const EdgeInsets.only(bottom: 12),
@@ -1033,16 +1086,48 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              (prodWrap.product.marcaNombre != null && prodWrap.product.marcaNombre!.isNotEmpty && prodWrap.product.marcaNombre!.toLowerCase() != 'sin marca' ? '${prodWrap.product.marcaNombre} ' : '') + 
-                              prodWrap.product.nombre + 
-                              (prodWrap.presentation.nombreEspecifico != null && prodWrap.presentation.nombreEspecifico!.isNotEmpty ? ' - ${prodWrap.presentation.nombreEspecifico}' : ''), 
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15), maxLines: 2, overflow: TextOverflow.ellipsis
+                              fullName, 
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), 
+                              maxLines: 2, 
+                              overflow: TextOverflow.ellipsis
                             ),
                             const SizedBox(height: 4),
-                            Text("Costo: ${_currency.format(prodWrap.presentation.costoUnitarioCalculado ?? 0)} | Venta norm: ${_currency.format(prodWrap.effectivePrice)}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.inventory_2_rounded, size: 12, color: Colors.grey[500]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  prodWrap.presentation.unidadVenta ?? "UND", 
+                                  style: TextStyle(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w600)
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  "Costo: ${_currency.format(prodWrap.presentation.costoUnitarioCalculado ?? 0)}", 
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[500])
+                                ),
+                                Container(
+                                  width: 4,
+                                  height: 4,
+                                  decoration: BoxDecoration(color: Colors.grey[400], shape: BoxShape.circle),
+                                ),
+                                Text(
+                                  "Normal: ${_currency.format(prodWrap.effectivePrice)}", 
+                                  style: TextStyle(fontSize: 12, color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.w600)
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Container(
                         decoration: BoxDecoration(
                           color: isDark ? const Color(0xFF2C2C3E) : Colors.grey[100],
@@ -1095,7 +1180,7 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
         onPressed: _saveBundle,
         backgroundColor: Colors.blue,
         icon: const Icon(Icons.save, color: Colors.white),
-        label: const Text("Guardar Paquete", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: Text(widget.bundleToEdit == null ? "Guardar Paquete" : "Actualizar Paquete", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ) : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );

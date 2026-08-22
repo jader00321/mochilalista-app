@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:multi_split_view/multi_split_view.dart';
@@ -115,20 +116,26 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
         return Scaffold(
           backgroundColor: bgColor,
           appBar: AppBar(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(isClient ? "Revisa tu Lista Escolar" : "Validar Datos Extraídos", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                Text("${provider.items.length} productos identificados", style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[200] : Colors.blue[100], fontWeight: FontWeight.w500)),
-              ],
+            title: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(isClient ? "Revisa tu Lista Escolar" : "Validar Datos Extraídos", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text("${provider.items.length} productos identificados", style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[200] : Colors.blue[100], fontWeight: FontWeight.w500)),
+                ],
+              ),
             ),
             backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
             foregroundColor: Colors.white,
             elevation: 0,
             actions: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                child: FilledButton.icon(
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: FilledButton.icon(
                   onPressed: () {
                     final smartProvider = Provider.of<SmartQuotationProvider>(context, listen: false);
                     final matchingProvider = Provider.of<MatchingProvider>(context, listen: false); 
@@ -156,8 +163,15 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
                     );
                   },
                   icon: const Icon(Icons.check_circle_outline, size: 20),
-                  label: Text(isClient ? "BUSCAR PRODUCTOS" : "COTIZAR", style: const TextStyle(fontWeight: FontWeight.bold)),
-                  style: FilledButton.styleFrom(backgroundColor: isDark ? Colors.blue[600] : Colors.blue[700], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  label: Builder(
+                    builder: (context) {
+                      int readyCount = provider.items.where((i) => i.fullName.trim().isNotEmpty).length;
+                      String buttonText = isClient ? "BUSCAR PRODUCTOS" : "COTIZAR ($readyCount/${provider.items.length})";
+                      return Text(buttonText, style: const TextStyle(fontWeight: FontWeight.bold));
+                    }
+                  ),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -172,28 +186,7 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
                   axis: Axis.vertical,
                   controller: _splitController,
                   dividerBuilder: (axis, index, resizable, dragging, highlighted, themeData) {
-                    return Container(
-                      color: isDark ? const Color(0xFF1A1A24) : Colors.grey[100], 
-                      alignment: Alignment.center,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: dragging ? (isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100]) : (isDark ? const Color(0xFF23232F) : Colors.white),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: dragging ? Colors.transparent : (isDark ? Colors.white10 : Colors.grey.shade300)),
-                          boxShadow: [if (!dragging && !isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.drag_handle, size: 22, color: dragging ? Colors.blue : (isDark ? Colors.grey[400] : Colors.grey[600])),
-                            const SizedBox(width: 10),
-                            Text("ARRASTRAR", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: dragging ? Colors.blue : (isDark ? Colors.grey[400] : Colors.grey[600]))),
-                          ],
-                        ),
-                      ),
-                    );
+                    return _PulsingDragHandle(isDark: isDark, dragging: dragging);
                   },
                   builder: (BuildContext context, Area area) {
                     if (area.index == 0) {
@@ -276,7 +269,16 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                       child: OutlinedButton.icon(
-                        onPressed: () => provider.addItem(),
+                        onPressed: () {
+                          provider.addItem();
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _scrollController.animateTo(
+                              _scrollController.position.maxScrollExtent + 200,
+                              duration: const Duration(milliseconds: 400),
+                              curve: Curves.easeOut,
+                            );
+                          });
+                        },
                         icon: const Icon(Icons.add_circle_outline, size: 22),
                         label: const Text("Añadir Fila Manualmente", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                         style: OutlinedButton.styleFrom(
@@ -414,15 +416,32 @@ class _InternalItemCard extends StatefulWidget {
   State<_InternalItemCard> createState() => _InternalItemCardState();
 }
 
-class _InternalItemCardState extends State<_InternalItemCard> {
+class _InternalItemCardState extends State<_InternalItemCard> with SingleTickerProviderStateMixin {
   late TextEditingController _nameCtrl;
   late TextEditingController _qtyCtrl;
   late TextEditingController _unitCtrl;
   late TextEditingController _brandCtrl;
   late TextEditingController _notesCtrl;
 
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+
+  Timer? _debounce;
+
   @override
-  void initState() { super.initState(); _initControllers(); }
+  void initState() { 
+    super.initState(); 
+    _initControllers(); 
+    
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
+    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
+    
+    Future.delayed(Duration(milliseconds: widget.index * 50), () {
+      if (mounted) _animCtrl.forward();
+    });
+  }
   
   void _initControllers() {
     _nameCtrl = TextEditingController(text: widget.item.fullName);
@@ -445,23 +464,37 @@ class _InternalItemCardState extends State<_InternalItemCard> {
   }
   
   @override
-  void dispose() { _nameCtrl.dispose(); _qtyCtrl.dispose(); _unitCtrl.dispose(); _brandCtrl.dispose(); _notesCtrl.dispose(); super.dispose(); }
+  void dispose() { 
+    _debounce?.cancel();
+    _nameCtrl.dispose(); _qtyCtrl.dispose(); _unitCtrl.dispose(); _brandCtrl.dispose(); _notesCtrl.dispose(); 
+    _animCtrl.dispose();
+    super.dispose(); 
+  }
   
   void _saveToProvider() {
-    Provider.of<SmartQuotationProvider>(context, listen: false).updateItem(widget.item.id, fullName: _nameCtrl.text, quantity: int.tryParse(_qtyCtrl.text) ?? 1, unit: _unitCtrl.text, brand: _brandCtrl.text, notes: _notesCtrl.text);
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        Provider.of<SmartQuotationProvider>(context, listen: false).updateItem(widget.item.id, fullName: _nameCtrl.text, quantity: int.tryParse(_qtyCtrl.text) ?? 1, unit: _unitCtrl.text, brand: _brandCtrl.text, notes: _notesCtrl.text);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final cardColor = widget.isDark ? const Color(0xFF23232F) : Colors.white;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
-        boxShadow: [if (!widget.isDark) BoxShadow(color: Colors.grey.shade200, blurRadius: 6, offset: const Offset(0, 3))]
-      ),
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: SlideTransition(
+        position: _slideAnim,
+        child: Container(
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
+            boxShadow: [if (!widget.isDark) BoxShadow(color: Colors.grey.shade200, blurRadius: 6, offset: const Offset(0, 3))]
+          ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -502,7 +535,7 @@ class _InternalItemCardState extends State<_InternalItemCard> {
           ]
         ),
       ),
-    );
+    )));
   }
 
   Widget _buildTextField({required TextEditingController controller, required String label, IconData? icon, bool isNumber = false, bool isBold = false, bool isSoft = false, required bool isDark}) {
@@ -525,6 +558,68 @@ class _InternalItemCardState extends State<_InternalItemCard> {
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.withValues(alpha: 0.3))), 
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
       )
+    );
+  }
+}
+
+class _PulsingDragHandle extends StatefulWidget {
+  final bool isDark;
+  final bool dragging;
+
+  const _PulsingDragHandle({required this.isDark, required this.dragging});
+
+  @override
+  State<_PulsingDragHandle> createState() => _PulsingDragHandleState();
+}
+
+class _PulsingDragHandleState extends State<_PulsingDragHandle> with SingleTickerProviderStateMixin {
+  late AnimationController _pulseCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
+    _pulseCtrl.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[100], 
+      alignment: Alignment.center,
+      child: AnimatedBuilder(
+        animation: _pulseCtrl,
+        builder: (context, child) {
+          final scale = widget.dragging ? 1.05 : 1.0 + (_pulseCtrl.value * 0.03);
+          return Transform.scale(
+            scale: scale,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+              decoration: BoxDecoration(
+                color: widget.dragging ? (widget.isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100]) : (widget.isDark ? const Color(0xFF23232F) : Colors.white),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: widget.dragging ? Colors.transparent : (widget.isDark ? Colors.white10 : Colors.grey.shade300)),
+                boxShadow: [if (!widget.dragging && !widget.isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.drag_handle, size: 22, color: widget.dragging ? Colors.blue : (widget.isDark ? Colors.grey[400] : Colors.grey[600])),
+                  const SizedBox(width: 10),
+                  Text("ARRASTRAR", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: widget.dragging ? Colors.blue : (widget.isDark ? Colors.grey[400] : Colors.grey[600]))),
+                ],
+              ),
+            ),
+          );
+        }
+      ),
     );
   }
 }

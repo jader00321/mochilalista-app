@@ -102,7 +102,28 @@ class _CheckoutProgressDialogState extends State<CheckoutProgressDialog> {
       setState(() { _statusText = "Verificando inventario (Última milla)..."; _progress = 0.65; });
       final db = await LocalDatabase.instance.database;
       for (var item in widget.quotation.items) {
-        if (item.presentationId != null) {
+        if (item.bundleId != null) {
+          int bId = item.bundleId!;
+          int bQty = item.quantity;
+          
+          final bItems = await db.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bId]);
+          for (var bItem in bItems) {
+            int pId = bItem['presentacion_id'] as int;
+            int reqQty = (bItem['cantidad_requerida'] as int?) ?? 1;
+            int totalDeduct = reqQty * bQty;
+            
+            final res = await db.query('presentaciones_producto', columns: ['stock_actual'], where: 'id = ?', whereArgs: [pId]);
+            if (res.isNotEmpty) {
+              int currentStock = (res.first['stock_actual'] as num?)?.toInt() ?? 0;
+              if (currentStock < totalDeduct) {
+                String name = item.productName ?? "Oferta";
+                throw Exception("Stock insuficiente para componente de la oferta: $name. Solicitado: $totalDeduct, Disponible: $currentStock.");
+              }
+            } else {
+                throw Exception("Un componente de la oferta ${item.productName ?? 'Desconocida'} ya no existe en el catálogo.");
+            }
+          }
+        } else if (item.presentationId != null) {
           final res = await db.query(
             'presentaciones_producto', 
             columns: ['stock_actual'], 

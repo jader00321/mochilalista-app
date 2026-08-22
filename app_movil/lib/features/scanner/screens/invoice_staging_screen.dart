@@ -168,7 +168,10 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
       child: Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
-          title: const Text("Clasificar y Confirmar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+          title: const FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text("Clasificar y Confirmar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+          ),
           backgroundColor: isDark ? const Color(0xFF1A1A24) : const Color(0xFF1565C0),
           foregroundColor: Colors.white,
           elevation: 0,
@@ -185,16 +188,45 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
           children: [
             Column(
               children: [
-                // BARRA DE ESTADÍSTICAS
+                // BARRA DE ESTADÍSTICAS Y PROGRESO
                 Container(
                   color: isDark ? const Color(0xFF23232F) : Colors.blue[900],
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                  child: Column(
                     children: [
-                      _statItem(Icons.update, "Actualizar: ${provider.countLinked}", isDark ? Colors.green[300]! : Colors.greenAccent),
-                      _statItem(Icons.add_circle_outline, "Crear: ${provider.countNew}", isDark ? Colors.blue[300]! : Colors.lightBlueAccent),
-                      _statItem(Icons.list, "Total: ${provider.totalActiveVariants}", Colors.white),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildStatChip(Icons.check_circle, "Vinculados", provider.countLinked, isDark ? Colors.green[400]! : Colors.greenAccent),
+                          _buildStatChip(Icons.add_circle, "Nuevos", provider.countNew, isDark ? Colors.blue[400]! : Colors.lightBlueAccent),
+                          _buildStatChip(Icons.inventory_2, "Total", provider.totalActiveVariants, Colors.white),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Barra de progreso visual
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Row(
+                          children: [
+                            if (provider.totalActiveVariants > 0) ...[
+                              Expanded(
+                                flex: provider.countLinked,
+                                child: Container(height: 6, color: isDark ? Colors.green[400] : Colors.greenAccent),
+                              ),
+                              Expanded(
+                                flex: provider.countNew,
+                                child: Container(height: 6, color: isDark ? Colors.blue[400] : Colors.lightBlueAccent),
+                              ),
+                              Expanded(
+                                flex: provider.totalActiveVariants - provider.countLinked - provider.countNew,
+                                child: Container(height: 6, color: Colors.white24),
+                              ),
+                            ] else ...[
+                              Expanded(child: Container(height: 6, color: Colors.white24)),
+                            ]
+                          ],
+                        ),
+                      )
                     ],
                   ),
                 ),
@@ -296,13 +328,27 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
     );
   }
 
-  Widget _statItem(IconData icon, String text, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(width: 6),
-        Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 15)),
-      ],
+  Widget _buildStatChip(IconData icon, String label, int count, Color color) {
+    return Flexible(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.3))
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text("$count", style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

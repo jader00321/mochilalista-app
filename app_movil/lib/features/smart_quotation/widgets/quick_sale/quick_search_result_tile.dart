@@ -70,28 +70,22 @@ class QuickSearchResultTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    RichText(
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      text: TextSpan(
-                        style: TextStyle(fontSize: 16, color: textColor, height: 1.2),
-                        children: [
-                          if (showBrand)
-                            TextSpan(
-                              text: "${brandName.toUpperCase()} ",
-                              style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                            ),
-                          TextSpan(
-                            text: item.product.nombre,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          TextSpan(
-                            text: " $variantDisplay",
-                            style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontStyle: FontStyle.italic),
-                          ),
-                        ]
+                    if (showBrand)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          brandName.toUpperCase(), 
+                          style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
+                    Text(item.product.nombre, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor, height: 1.2), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    if (variantDisplay.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(variantDisplay, style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      ),
                   ],
                 ),
               ),

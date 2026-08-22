@@ -6,6 +6,7 @@ import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider
 import 'dart:async';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 
 class QuickSaleHeader extends StatelessWidget {
   final bool isGuest;
@@ -271,7 +272,8 @@ class _ClientSearchModalState extends State<_ClientSearchModal> {
     setState(() => _isLoading = true);
     final authProv = Provider.of<AuthProvider>(context, listen: false);
     if (authProv.activeBusinessId != null) {
-      final results = await Provider.of<SaleProvider>(context, listen: false).searchClients("");
+      final clientService = ClientService();
+      final results = await clientService.getRecentClients(authProv.activeBusinessId!);
       if (mounted) {
         setState(() {
           _results = results;
@@ -425,16 +427,30 @@ class _ClientSearchModalState extends State<_ClientSearchModal> {
                               ]
                             ],
                           ),
-                          trailing: (c.totalDebt > 0 || c.saldoAFavor > 0) ? Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (c.totalDebt > 0)
-                                Text("-${currency.format(c.totalDebt)}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                              if (c.saldoAFavor > 0)
-                                Text("+${currency.format(c.saldoAFavor)}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+                              if (c.totalDebt > 0 || c.saldoAFavor > 0)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      if (c.totalDebt > 0)
+                                        Text("-${currency.format(c.totalDebt)}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                      if (c.saldoAFavor > 0)
+                                        Text("+${currency.format(c.saldoAFavor)}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+                                    ],
+                                  ),
+                                ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(context, c),
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                                child: const Text("Asignar", style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
                             ],
-                          ) : null,
+                          ),
                           onTap: () => Navigator.pop(context, c),
                         );
                       },

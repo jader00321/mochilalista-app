@@ -6,6 +6,7 @@ import 'package:app_movil/features/scanner/models/scanner_models.dart';
 import 'package:app_movil/core/widgets/smart_dropdown_search.dart';
 import 'package:app_movil/core/widgets/manual_product_search.dart';
 import 'package:app_movil/features/scanner/widgets/staging/variant_editor_row.dart';
+import 'package:app_movil/core/database/local_db.dart';
 
 class StagingProductGroupCard extends StatefulWidget {
   final int groupIndex;
@@ -31,21 +32,28 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => ManualProductSearch(
-        onSelect: (wrapper) {
+        onSelect: (wrapper) async {
           final invProv = Provider.of<InventoryProvider>(context, listen: false);
-          final siblingsWrappers = invProv.items.where((w) => w.product.id == wrapper.product.id).toList();
           
-          List<Map<String, dynamic>> siblings = siblingsWrappers.map((w) {
+          // Buscar siblings directamente en SQLite
+          final db = await LocalDatabase.instance.database;
+          final presQuery = await db.query(
+            'presentaciones_producto',
+            where: 'producto_id = ?',
+            whereArgs: [wrapper.product.id],
+          );
+          
+          List<Map<String, dynamic>> siblings = presQuery.map((p) {
             return {
-              "id": w.presentation.id,
-              "nombre_presentacion": w.presentation.unidadVenta ?? "Unidad",
-              "nombre_especifico": w.presentation.nombreEspecifico,
-              "nombre_completo": "${w.presentation.unidadVenta ?? 'Unidad'} ${w.presentation.nombreEspecifico ?? ''}".trim(),
-              "stock_actual": w.presentation.stockActual,
-              "precio_venta": w.presentation.precioVentaFinal,
-              "precio_costo": w.presentation.costoUnitarioCalculado,
-              "factor_conversion": w.presentation.unidadesPorVenta,
-              "unidad": w.presentation.unidadVenta ?? "Unidad"
+              "id": p['id'],
+              "nombre_presentacion": p['unidad_venta'] ?? "Unidad",
+              "nombre_especifico": p['nombre_especifico'],
+              "nombre_completo": "${p['unidad_venta'] ?? 'Unidad'} ${p['nombre_especifico'] ?? ''}".trim(),
+              "stock_actual": p['stock_actual'],
+              "precio_venta": p['precio_venta_final'],
+              "precio_costo": p['costo_unitario_calculado'],
+              "factor_conversion": p['unidades_por_venta'],
+              "unidad": p['unidad_venta'] ?? "Unidad"
             };
           }).toList();
 
@@ -60,7 +68,7 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
             },
             siblings 
           );
-          Navigator.pop(ctx);
+          if (ctx.mounted) Navigator.pop(ctx);
         },
       ),
     );
@@ -72,8 +80,8 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
       builder: (ctx) => AlertDialog(
         backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Â¿Eliminar variante?", style: TextStyle(color: widget.isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)), 
-        content: Text("Esta fila se descartarÃ¡ y no ingresarÃ¡ al inventario.", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 13)), 
+        title: Text("¿Eliminar variante?", style: TextStyle(color: widget.isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)), 
+        content: Text("Esta fila se descartará y no ingresará al inventario.", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 13)), 
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Cancelar", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey, fontSize: 14))), 
           ElevatedButton(
@@ -206,7 +214,7 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
             decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF14141C) : Colors.white, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14))),
             child: TextButton.icon(
               icon: Icon(Icons.add_circle_outline, size: 18, color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
-              label: Text("AÃ±adir otra presentaciÃ³n (Fraccionamiento)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[700])),
+              label: Text("Añadir otra presentación (Fraccionamiento)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[700])),
               onPressed: () => widget.provider.addNewVariantToGroup(group.uuidTemporal),
             ),
           )
@@ -217,7 +225,7 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
 
   Widget _buildReadOnlyParentDetails(StagingProductGroup group, bool isDark) {
     String marca = group.matchProducto.datos?.marcaNombre ?? group.marcaTexto;
-    if (marca.isEmpty || marca == "null") marca = "GenÃ©rica";
+    if (marca.isEmpty || marca == "null") marca = "Genérica";
     String categoria = group.matchProducto.datos?.categoriaNombre ?? "General";
 
     return Wrap(
@@ -263,7 +271,7 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
         Expanded(
           flex: 5,
           child: SmartDropdownSearch<dynamic>(
-            label: "CategorÃ­a", items: inventoryProv.categories,
+            label: "Categoría", items: inventoryProv.categories,
             selectedValue: group.categoriaSugeridaId != null ? inventoryProv.categories.where((c) => c.id == group.categoriaSugeridaId).firstOrNull : null,
             itemAsString: (c) => c.nombre,
             onChanged: (c) { if (c != null) setState(() => group.categoriaSugeridaId = c.id); },

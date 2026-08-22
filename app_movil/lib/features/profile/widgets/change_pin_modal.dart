@@ -266,7 +266,7 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                       child: auth.isLoading 
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(width: 100, child: LinearProgressIndicator(color: Colors.white, backgroundColor: Colors.white24))
                         : Text(_hasPinActive ? "ACTUALIZAR" : "CREAR PIN", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
                     ),
                   ),

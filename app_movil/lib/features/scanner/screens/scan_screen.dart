@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
+import 'dart:async';
 import 'dart:ui';
 
 // Providers
@@ -29,6 +30,11 @@ class ScanScreen extends StatefulWidget {
 
 class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateMixin {
   final ImagePicker _picker = ImagePicker();
+  
+  // 🔥 FASE 1: Caché de Imagen y Estado de Error
+  File? _cachedImageFile;
+  bool _hasError = false;
+  String _errorMessage = "";
 
   void _showExplorationModal(BuildContext context, bool isQuotation, bool isDark) {
     showDialog(
@@ -59,6 +65,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
     );
   }
 
+  // Llama al ImagePicker y procesa
   Future<void> _pickImage(ImageSource source) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -68,7 +75,6 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
       return;
     }
 
-    // 🔥 VALIDACIÓN DE INTERNET: Solo avanzamos si es estable.
     bool isInternetStable = await HardwareValidator.checkInternet(
       context, 
       onNavigateToManual: () {
@@ -87,59 +93,112 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
       );
 
       if (photo == null) return;
-
-      if (mounted) {
-        final File imageFile = File(photo.path);
-        
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          barrierColor: Colors.black.withValues(alpha: 0.7), 
-          builder: (ctx) => _ScanningDialog(mode: widget.mode),
-        );
-        
-        bool success = false;
-        String errorMsg = "";
-
-        // 🔥 CORRECCIÓN AQUÍ: Eliminamos el token de los parámetros, el Provider ya lo tiene internamente
-        if (widget.mode == ScanMode.quotation) {
-          final smartProvider = Provider.of<SmartQuotationProvider>(context, listen: false);
-          success = await smartProvider.analyzeImage(context, imageFile); 
-          errorMsg = smartProvider.errorMessage;
-        } else {
-          final scannerProvider = Provider.of<ScannerProvider>(context, listen: false);
-          success = await scannerProvider.uploadAndAnalyzeImage(imageFile); 
-          errorMsg = scannerProvider.statusMessage;
-        }
-        
-        if (mounted) Navigator.pop(context); 
-
-        if (success && mounted) {
-          if (widget.mode == ScanMode.quotation) {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ExtractionResultScreen()));
-          } else {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const InvoiceReviewScreen()));
-          }
-        } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.white, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text("Error: $errorMsg", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-                ],
-              ),
-              backgroundColor: Colors.red.shade800,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              action: SnackBarAction(label: "Reintentar", textColor: Colors.white, onPressed: () => _pickImage(source)),
-            ),
-          );
-        }
-      }
+      
+      setState(() {
+        _cachedImageFile = File(photo.path);
+        _hasError = false;
+        _errorMessage = "";
+      });
+      
+      _processImage();
+      
     } catch (e) {
       debugPrint("Error al seleccionar imagen: $e");
+    }
+  }
+
+  // Usa la foto de la caché y procesa
+  Future<void> _retryWithCachedImage() async {
+    if (_cachedImageFile == null) return;
+    setState(() {
+      _hasError = false;
+      _errorMessage = "";
+    });
+    _processImage();
+  }
+
+  // Limpia caché y vuelve a pedir foto
+  void _pickNewImage() {
+    setState(() {
+      _cachedImageFile = null;
+      _hasError = false;
+      _errorMessage = "";
+    });
+  }
+
+  Future<void> _processImage() async {
+    if (_cachedImageFile == null) return;
+    
+    if (!mounted) return;
+    
+    final ValueNotifier<String> statusNotifier = ValueNotifier<String>(
+      widget.mode == ScanMode.quotation ? "Preparando imagen..." : "Preparando documento..."
+    );
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.7), 
+      builder: (ctx) => _ScanningDialog(mode: widget.mode, statusNotifier: statusNotifier),
+    );
+    
+    // 🔥 FASE 3: Lógica dinámica de textos de carga (Timer)
+    int tick = 0;
+    Timer? loadingTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      tick++;
+      if (statusNotifier.value.contains("Reintentando")) return; // Prioridad al error
+      
+      if (tick == 1) {
+        statusNotifier.value = "Enviando a la Inteligencia Artificial...";
+      } else if (tick == 2) {
+        statusNotifier.value = "Analizando contenido con IA...";
+      } else if (tick == 4) {
+        statusNotifier.value = "Extrayendo datos, casi listo...";
+      }
+    });
+    
+    bool success = false;
+    String errorMsg = "";
+
+    try {
+      if (widget.mode == ScanMode.quotation) {
+        final smartProvider = Provider.of<SmartQuotationProvider>(context, listen: false);
+        // Escucha si cambia internamente el estado (para el "Reintentando...")
+        smartProvider.addListener(() {
+          if (smartProvider.errorMessage.contains("Reintentando") && mounted) {
+            statusNotifier.value = smartProvider.errorMessage;
+          }
+        });
+        success = await smartProvider.analyzeImage(context, _cachedImageFile!); 
+        errorMsg = smartProvider.errorMessage;
+      } else {
+        final scannerProvider = Provider.of<ScannerProvider>(context, listen: false);
+        scannerProvider.addListener(() {
+          if (scannerProvider.statusMessage.contains("Reintentando") && mounted) {
+            statusNotifier.value = scannerProvider.statusMessage;
+          }
+        });
+        success = await scannerProvider.uploadAndAnalyzeImage(_cachedImageFile!); 
+        errorMsg = scannerProvider.statusMessage;
+      }
+    } finally {
+      loadingTimer.cancel();
+      statusNotifier.dispose();
+      if (mounted) Navigator.pop(context); // Cierra dialog
+    }
+
+    if (success && mounted) {
+      if (widget.mode == ScanMode.quotation) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ExtractionResultScreen()));
+      } else {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const InvoiceReviewScreen()));
+      }
+    } else if (mounted) {
+      // 🔥 FASE 2: Mostramos el error en la misma pantalla en vez del SnackBar
+      setState(() {
+        _hasError = true;
+        _errorMessage = errorMsg;
+      });
     }
   }
 
@@ -180,84 +239,168 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
               ),
             );
           },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(40),
-                decoration: BoxDecoration(
-                  color: isDark ? mainColor.withValues(alpha: 0.15) : mainColor.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    if (!isDark) BoxShadow(color: mainColor.withValues(alpha: 0.1), blurRadius: 25, spreadRadius: 5)
-                  ]
-                ),
-                child: Icon(mainIcon, size: 90, color: isDark ? mainColor.withValues(alpha: 0.9) : mainColor),
-              ),
-              const SizedBox(height: 40),
-              
-              Text(
-                isQuotation ? "Digitaliza tu Lista" : "Procesa tu Compra",
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                child: Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 16, height: 1.5),
-                ),
-              ),
-
-              if (isGuest)
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.orange.withValues(alpha: 0.5))
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.orange[700]),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          "Estás en Modo Exploración. Explora la interfaz visual, pero para procesar imágenes necesitas registrar tu negocio.",
-                          style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
-                        )
-                      )
-                    ]
-                  )
-                ),
-              
-              const SizedBox(height: 30),
-              
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _bigButton(
-                    icon: Icons.camera_alt_rounded, 
-                    label: "Cámara", 
-                    color: mainColor, 
-                    isDark: isDark,
-                    onTap: () => _pickImage(ImageSource.camera)
-                  ),
-                  const SizedBox(width: 25),
-                  _bigButton(
-                    icon: Icons.photo_library_rounded, 
-                    label: "Galería", 
-                    color: Colors.orange, 
-                    isDark: isDark,
-                    onTap: () => _pickImage(ImageSource.gallery)
-                  ),
-                ],
-              ),
-            ],
-          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            child: _hasError 
+                ? _buildErrorPanel(isDark, mainColor) 
+                : _buildMainPanel(isQuotation, isDark, mainColor, mainIcon, subtitle, isGuest),
+          )
         ),
       ),
+    );
+  }
+  
+  // 🔥 FASE 2: Panel integrado de Error
+  Widget _buildErrorPanel(bool isDark, Color mainColor) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      key: const ValueKey("error_panel"),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.red.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+            boxShadow: [
+              if (!isDark) BoxShadow(color: Colors.red.withValues(alpha: 0.1), blurRadius: 25, spreadRadius: 5)
+            ]
+          ),
+          child: Icon(Icons.error_outline_rounded, size: 70, color: Colors.red[400]),
+        ),
+        const SizedBox(height: 30),
+        
+        Text(
+          "No pudimos procesar la imagen",
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5),
+        ),
+        
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+          child: Text(
+            _errorMessage,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16, height: 1.5),
+          ),
+        ),
+        
+        const SizedBox(height: 20),
+        
+        // Botón Primario: Reintentar
+        SizedBox(
+          width: 280,
+          height: 56,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.refresh_rounded, size: 24),
+            label: const Text("Reintentar Escaneo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: mainColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 4,
+              shadowColor: mainColor.withValues(alpha: 0.4),
+            ),
+            onPressed: _retryWithCachedImage,
+          ),
+        ),
+        
+        const SizedBox(height: 16),
+        
+        // Botón Secundario: Nueva Foto
+        SizedBox(
+          width: 280,
+          height: 50,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.camera_alt_outlined, size: 20),
+            label: const Text("Escanear una nueva foto", style: TextStyle(fontWeight: FontWeight.bold)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: isDark ? Colors.grey[300] : Colors.grey[700],
+              side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[300]!, width: 2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            onPressed: _pickNewImage,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMainPanel(bool isQuotation, bool isDark, Color mainColor, IconData mainIcon, String subtitle, bool isGuest) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      key: const ValueKey("main_panel"),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(40),
+          decoration: BoxDecoration(
+            color: isDark ? mainColor.withValues(alpha: 0.15) : mainColor.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+            boxShadow: [
+              if (!isDark) BoxShadow(color: mainColor.withValues(alpha: 0.1), blurRadius: 25, spreadRadius: 5)
+            ]
+          ),
+          child: Icon(mainIcon, size: 90, color: isDark ? mainColor.withValues(alpha: 0.9) : mainColor),
+        ),
+        const SizedBox(height: 40),
+        
+        Text(
+          isQuotation ? "Digitaliza tu Lista" : "Procesa tu Compra",
+          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+          child: Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 16, height: 1.5),
+          ),
+        ),
+
+        if (isGuest)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.5))
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.orange[700]),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    "Estás en Modo Exploración. Explora la interfaz visual, pero para procesar imágenes necesitas registrar tu negocio.",
+                    style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
+                  )
+                )
+              ]
+            )
+          ),
+        
+        const SizedBox(height: 30),
+        
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _bigButton(
+              icon: Icons.camera_alt_rounded, 
+              label: "Cámara", 
+              color: mainColor, 
+              isDark: isDark,
+              onTap: () => _pickImage(ImageSource.camera)
+            ),
+            const SizedBox(width: 25),
+            _bigButton(
+              icon: Icons.photo_library_rounded, 
+              label: "Galería", 
+              color: Colors.orange, 
+              isDark: isDark,
+              onTap: () => _pickImage(ImageSource.gallery)
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -296,7 +439,8 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
 
 class _ScanningDialog extends StatefulWidget {
   final ScanMode mode;
-  const _ScanningDialog({required this.mode});
+  final ValueNotifier<String> statusNotifier;
+  const _ScanningDialog({required this.mode, required this.statusNotifier});
 
   @override
   State<_ScanningDialog> createState() => _ScanningDialogState();
@@ -324,7 +468,6 @@ class _ScanningDialogState extends State<_ScanningDialog> with SingleTickerProvi
     final bool isQuotation = widget.mode == ScanMode.quotation;
     final Color mainColor = isQuotation ? Colors.blueAccent : Colors.tealAccent;
     final IconData icon = isQuotation ? Icons.auto_awesome : Icons.document_scanner;
-    final String text = isQuotation ? "Leyendo Lista con IA..." : "Analizando Factura...";
 
     return Center(
       child: Material(
@@ -358,22 +501,60 @@ class _ScanningDialogState extends State<_ScanningDialog> with SingleTickerProvi
                   ),
                   const SizedBox(height: 30),
                   
-                  Text(
-                    text, 
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5)
+                  ValueListenableBuilder<String>(
+                    valueListenable: widget.statusNotifier,
+                    builder: (context, currentText, child) {
+                      return AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        transitionBuilder: (Widget child, Animation<double> animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: Tween<Offset>(begin: const Offset(0.0, 0.2), end: Offset.zero).animate(animation),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Text(
+                          currentText, 
+                          key: ValueKey<String>(currentText),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)
+                        ),
+                      );
+                    }
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 25),
                   
+                  // 🔥 FASE 3: Indicador de pasos visuales / segmentado
                   SizedBox(
                     width: 160,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: LinearProgressIndicator(
-                        backgroundColor: Colors.white.withValues(alpha: 0.1),
-                        valueColor: AlwaysStoppedAnimation<Color>(mainColor),
-                        minHeight: 5,
-                      ),
+                    child: ValueListenableBuilder<String>(
+                      valueListenable: widget.statusNotifier,
+                      builder: (context, currentText, child) {
+                        int step = 0;
+                        if (currentText.contains("Inteligencia")) step = 1;
+                        if (currentText.contains("Analizando")) step = 2;
+                        if (currentText.contains("Extrayendo")) step = 3;
+                        if (currentText.contains("Reintentando")) step = 1; // Mismo color/paso en reintento
+                        
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(4, (index) {
+                            bool isActive = index <= step;
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              height: 6,
+                              width: isActive ? 24 : 12,
+                              decoration: BoxDecoration(
+                                color: isActive ? mainColor : Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            );
+                          }),
+                        );
+                      }
                     ),
                   )
                 ],

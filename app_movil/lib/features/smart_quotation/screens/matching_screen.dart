@@ -429,66 +429,86 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
 
   void _openDetailsModal(BuildContext context, MatchPair pair) {
     if (pair.selectedProduct == null) return;
-    final inventoryProv = Provider.of<InventoryProvider>(context, listen: false);
-    Product? fullProduct;
     
     try {
-      fullProduct = inventoryProv.products.firstWhere((p) => p.id == pair.selectedProduct!.productId);
-    } catch (_) {
-      fullProduct = Product(
-        id: pair.selectedProduct!.productId, nombre: pair.selectedProduct!.productName, categoriaId: 0, imagenUrl: pair.selectedProduct!.imageUrl, marcaId: null, 
-        presentaciones: [
-          ProductPresentation(
-            id: pair.selectedProduct!.presentationId, 
-            unidadVenta: pair.selectedProduct!.unit, 
-            nombreEspecifico: pair.selectedProduct!.specificName, 
-            precioVentaFinal: pair.selectedProduct!.price, 
-            stockActual: pair.selectedProduct!.stock, 
-            unidadesPorLote: pair.selectedProduct!.conversionFactor, 
-            imagenUrl: pair.selectedProduct!.imageUrl,
-          )
-        ]
+      final inventoryProv = Provider.of<InventoryProvider>(context, listen: false);
+      Product? fullProduct;
+      
+      try {
+        fullProduct = inventoryProv.products.firstWhere((p) => p.id == pair.selectedProduct!.productId);
+      } catch (_) {
+        fullProduct = Product(
+          id: pair.selectedProduct!.productId, nombre: pair.selectedProduct!.productName, categoriaId: 0, imagenUrl: pair.selectedProduct!.imageUrl, marcaId: null, 
+          presentaciones: [
+            ProductPresentation(
+              id: pair.selectedProduct!.presentationId, 
+              unidadVenta: pair.selectedProduct!.unit, 
+              nombreEspecifico: pair.selectedProduct!.specificName, 
+              precioVentaFinal: pair.selectedProduct!.price, 
+              stockActual: pair.selectedProduct!.stock, 
+              unidadesPorLote: pair.selectedProduct!.conversionFactor, 
+              imagenUrl: pair.selectedProduct!.imageUrl,
+            )
+          ]
+        );
+      }
+
+      if (fullProduct.presentaciones.isEmpty) {
+        CustomSnackBar.show(context, message: "Error: El producto no tiene presentaciones válidas.", isError: true);
+        return;
+      }
+
+      final currentPres = fullProduct.presentaciones.firstWhere(
+        (p) => p.id == pair.selectedProduct!.presentationId, 
+        orElse: () => fullProduct!.presentaciones.first
       );
+      
+      final wrapper = InventoryWrapper(product: fullProduct, presentation: currentPres);
+      final String? brandName = fullProduct.marcaId != null ? inventoryProv.getBrandName(fullProduct.marcaId) : pair.selectedProduct!.brand; 
+      
+      // Capture the final Product explicitly to prevent issues with closures in the modal callback
+      final capturedProduct = fullProduct;
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        useSafeArea: false,
+        builder: (ctx) => ProductQuoteDetailModal(
+          wrapper: wrapper,
+          brandName: brandName,
+          currentQuantity: pair.selectedQuantity,
+          currentOverridePrice: pair.overridePrice,
+          availableBundles: Provider.of<MatchingProvider>(context, listen: false).activeBundles,
+          bundleItemsCache: Provider.of<MatchingProvider>(context, listen: false).bundleItemsCache,
+          onSave: (newPres, newQty, newPrice, _) { 
+            final provider = Provider.of<MatchingProvider>(context, listen: false);
+            
+            final newMatched = MatchedProduct(
+              productId: capturedProduct.id, 
+              presentationId: newPres.id!, 
+              fullName: capturedProduct.nombre, 
+              productName: capturedProduct.nombre, 
+              specificName: newPres.nombreEspecifico, 
+              brand: brandName, 
+              price: newPres.precioVentaFinal, 
+              offerPrice: newPres.precioOferta, 
+              stock: newPres.stockActual, 
+              imageUrl: newPres.imagenUrl ?? capturedProduct.imagenUrl, 
+              unit: newPres.unidadVenta ?? "Unidad",
+              conversionFactor: newPres.unidadesPorVenta 
+            );
+
+            provider.updatePairProduct(pair.sourceItem.id, newMatched);
+            provider.updatePairPrice(pair.sourceItem.id, newPrice);
+            provider.updatePairQuantity(pair.sourceItem.id, newQty);
+          },
+        ),
+      );
+    } catch (e) {
+      debugPrint("Error abriendo detalle de producto: $e");
+      CustomSnackBar.show(context, message: "Ocurrió un error al intentar abrir el detalle del producto.", isError: true);
     }
-
-    final currentPres = fullProduct.presentaciones.firstWhere((p) => p.id == pair.selectedProduct!.presentationId, orElse: () => fullProduct!.presentaciones.first);
-    final wrapper = InventoryWrapper(product: fullProduct, presentation: currentPres);
-    String? brandName = fullProduct.marcaId != null ? inventoryProv.getBrandName(fullProduct.marcaId) : pair.selectedProduct!.brand; 
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      useSafeArea: false,
-      builder: (ctx) => ProductQuoteDetailModal(
-        wrapper: wrapper,
-        brandName: brandName,
-        currentQuantity: pair.selectedQuantity,
-        currentOverridePrice: pair.overridePrice,
-        onSave: (newPres, newQty, newPrice, _) { 
-          final provider = Provider.of<MatchingProvider>(context, listen: false);
-          
-          final newMatched = MatchedProduct(
-            productId: fullProduct!.id, 
-            presentationId: newPres.id!, 
-            fullName: fullProduct.nombre, 
-            productName: fullProduct.nombre, 
-            specificName: newPres.nombreEspecifico, 
-            brand: brandName, 
-            price: newPres.precioVentaFinal, 
-            offerPrice: newPres.precioOferta, 
-            stock: newPres.stockActual, 
-            imageUrl: newPres.imagenUrl ?? fullProduct.imagenUrl, 
-            unit: newPres.unidadVenta ?? "Unidad",
-            conversionFactor: newPres.unidadesPorVenta 
-          );
-
-          provider.updatePairProduct(pair.sourceItem.id, newMatched);
-          provider.updatePairPrice(pair.sourceItem.id, newPrice);
-          provider.updatePairQuantity(pair.sourceItem.id, newQty);
-        },
-      ),
-    );
   }
 
   void _openSearchModal(BuildContext context, MatchPair pair, bool isDark) {
@@ -504,6 +524,38 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
           Provider.of<MatchingProvider>(context, listen: false).updatePairProduct(pair.sourceItem.id, product);
           Navigator.pop(ctx);
         },
+      ),
+    );
+  }
+
+  void _confirmAndDeletePair(BuildContext context, MatchPair pair, bool isDark) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red[400], size: 28),
+            const SizedBox(width: 10),
+            const Text("Eliminar Producto", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Text("¿Estás seguro de que deseas eliminar '${pair.sourceItem.fullName}' de la lista?", style: TextStyle(fontSize: 15, color: isDark ? Colors.grey[300] : Colors.black87)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text("Cancelar", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Provider.of<MatchingProvider>(context, listen: false).deletePair(pair.sourceItem.id);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            child: const Text("Eliminar"),
+          ),
+        ],
       ),
     );
   }
@@ -530,7 +582,11 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
       child: Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
-          title: Text(isClient ? "Completar mi Pedido" : "Cotización Inteligente", style: textTheme.displayMedium?.copyWith(color: textColor)),
+          title: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(isClient ? "Completar mi Pedido" : "Cotización Inteligente", style: textTheme.displayMedium?.copyWith(color: textColor)),
+          ),
           backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
           foregroundColor: Colors.white,
           iconTheme: IconThemeData(color: textColor),
@@ -548,7 +604,10 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white24, borderRadius: BorderRadius.circular(12)),
-                  child: Text("${matchingProvider.matchedCount}/${matchingProvider.pairs.length} Listos", style: textTheme.titleMedium?.copyWith(color: textColor)),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text("${matchingProvider.matchedCount}/${matchingProvider.pairs.length} Listos", style: textTheme.titleMedium?.copyWith(color: textColor)),
+                  ),
                 ),
               ),
             )
@@ -593,55 +652,82 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                                   
                                   return Container(
                                     margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
+                                    clipBehavior: Clip.antiAlias,
                                     decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.amber.shade300, width: 2),
+                                      border: Border.all(color: Colors.amber.shade300, width: 1.5),
                                       borderRadius: BorderRadius.circular(16),
-                                      color: Colors.amber.withValues(alpha: 0.05),
+                                      color: isDark ? Colors.amber.withValues(alpha: 0.03) : Colors.amber.withValues(alpha: 0.05),
                                     ),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                           decoration: BoxDecoration(
-                                            color: Colors.amber.withValues(alpha: 0.2),
-                                            borderRadius: const BorderRadius.vertical(top: Radius.circular(14))
+                                            color: isDark ? Colors.amber.withValues(alpha: 0.1) : Colors.amber.withValues(alpha: 0.2),
+                                            border: Border(bottom: BorderSide(color: isDark ? Colors.amber.withValues(alpha: 0.3) : Colors.amber.shade200, width: 1))
                                           ),
                                           child: Row(
                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Row(
-                                                children: [
-                                                  const Icon(Icons.stars, color: Colors.amber, size: 20),
-                                                  const SizedBox(width: 8),
-                                                  Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text("✨ Agrupados en ${bundleModel.nombrePaquete}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
-                                                      if (bundleModel.descripcion != null && bundleModel.descripcion!.isNotEmpty)
-                                                        Text(bundleModel.descripcion!, style: TextStyle(color: Colors.amber.shade800, fontSize: 12)),
-                                                    ],
-                                                  ),
-                                                ],
+                                              Expanded(
+                                                child: Row(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    const Padding(
+                                                      padding: EdgeInsets.only(top: 2),
+                                                      child: Icon(Icons.stars, color: Colors.amber, size: 20),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          Text("✨ Agrupados en ${bundleModel.nombrePaquete}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                                          if (bundleModel.descripcion != null && bundleModel.descripcion!.isNotEmpty)
+                                                            Padding(
+                                                              padding: const EdgeInsets.only(top: 2),
+                                                              child: Text(bundleModel.descripcion!, style: TextStyle(color: isDark ? Colors.amber.shade300 : Colors.amber.shade800, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                              TextButton(
+                                              const SizedBox(width: 8),
+                                              TextButton.icon(
                                                 onPressed: () => matchingProvider.toggleBundleGrouping(bundleModel.id, false),
-                                                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
-                                                child: const Text("Desarmar", style: TextStyle(color: Colors.red, fontSize: 13)),
+                                                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), minimumSize: const Size(0, 0), backgroundColor: Colors.red.withValues(alpha: 0.1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                                                icon: const Icon(Icons.link_off, size: 14, color: Colors.red),
+                                                label: const Text("Desarmar", style: TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.bold)),
                                               )
                                             ],
                                           ),
                                         ),
                                         if (totalSavings > 0)
                                           Padding(
-                                            padding: const EdgeInsets.only(left: 16, top: 8),
-                                            child: Text("¡Ahorro total de S/ ${totalSavings.toStringAsFixed(2)}!", style: TextStyle(color: Colors.green[600], fontWeight: FontWeight.bold, fontSize: 13)),
+                                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.green.withValues(alpha: 0.3))),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.local_offer, color: Colors.green[600], size: 14),
+                                                  const SizedBox(width: 6),
+                                                  Text("Ahorro Múltiple de S/ ${totalSavings.toStringAsFixed(2)}", style: TextStyle(color: isDark ? Colors.green[400] : Colors.green[700], fontWeight: FontWeight.bold, fontSize: 12)),
+                                                ],
+                                              ),
+                                            ),
                                           ),
+                                          const SizedBox(height: 8),
                                         ...bundlePairs.map((bp) {
                                           int originalIndex = matchingProvider.pairs.indexOf(bp);
                                           bool isRepeated = matchingProvider.isProductRepeated(bp.selectedProduct?.presentationId);
                                           return Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 0),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
                                             child: MatchingItemRow(
                                               pair: bp,
                                               index: originalIndex,
@@ -649,11 +735,12 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                                               isClient: isClient, 
                                               onTapProduct: () => _openDetailsModal(context, bp),
                                               onChangeRequest: () => _openSearchModal(context, bp, isDark),
-                                              onDelete: () => matchingProvider.deletePair(bp.sourceItem.id),
+                                              onDelete: () => _confirmAndDeletePair(context, bp, isDark),
                                               onUnlink: () => matchingProvider.unmatchItem(bp.sourceItem.id),
                                             ),
                                           );
                                         }),
+                                        const SizedBox(height: 8),
                                       ],
                                     ),
                                   );
@@ -670,7 +757,7 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                                     isClient: isClient, 
                                     onTapProduct: () => _openDetailsModal(context, pair),
                                     onChangeRequest: () => _openSearchModal(context, pair, isDark),
-                                    onDelete: () => matchingProvider.deletePair(pair.sourceItem.id),
+                                    onDelete: () => _confirmAndDeletePair(context, pair, isDark),
                                     onUnlink: () => matchingProvider.unmatchItem(pair.sourceItem.id),
                                   ),
                                 );
@@ -705,38 +792,52 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
             if (matchingProvider.isSaving)
               Container(color: Colors.black54, child: const Center(child: CircularProgressIndicator(color: Colors.white))),
             
-            if (_isFabOpen) GestureDetector(onTap: _toggleFab, child: Container(color: Colors.black87, width: double.infinity, height: double.infinity)),
-            
-            if (_isFabOpen) 
-              Positioned(
-                bottom: 190, right: 16,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (isClient) ...[
-                      MatchingSpeedDialButton(
-                        icon: Icons.send, label: "Confirmar y Enviar Pedido", color: isDark ? Colors.green[400]! : Colors.green[700]!, isDark: isDark, theme: textTheme,
-                        onTap: () => _handleActionWithConfirmation('client_send', isDark)
-                      )
-                    ] else ...[
-                      MatchingSpeedDialButton(
-                        icon: Icons.list_alt, label: "Guardar y ver Mesa de Trabajo", color: isDark ? Colors.blue[400]! : Colors.blue[800]!, isDark: isDark, theme: textTheme,
-                        onTap: () => _handleActionWithConfirmation('save', isDark)
-                      ),
-                      const SizedBox(height: 20),
-                      MatchingSpeedDialButton(
-                        icon: Icons.picture_as_pdf, label: "Generar PDF Directo", color: isDark ? Colors.red[400]! : Colors.red[700]!, isDark: isDark, theme: textTheme,
-                        onTap: () => _handleActionWithConfirmation('pdf', isDark)
-                      ),
-                      const SizedBox(height: 20),
-                      MatchingSpeedDialButton(
-                        icon: Icons.chat, label: "Enviar por WhatsApp", color: isDark ? Colors.green[400]! : Colors.green[600]!, isDark: isDark, theme: textTheme,
-                        onTap: () => _handleActionWithConfirmation('whatsapp', isDark)
-                      ),
-                    ]
-                  ],
+            IgnorePointer(
+              ignoring: !_isFabOpen,
+              child: FadeTransition(
+                opacity: _fabAnimationCtrl,
+                child: GestureDetector(
+                  onTap: _toggleFab, 
+                  child: Container(color: Colors.black87, width: double.infinity, height: double.infinity)
                 ),
               ),
+            ),
+            
+            Positioned(
+              bottom: 190, right: 16,
+              child: IgnorePointer(
+                ignoring: !_isFabOpen,
+                child: FadeTransition(
+                  opacity: _fabAnimationCtrl,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (isClient) ...[
+                        MatchingSpeedDialButton(
+                          icon: Icons.send, label: "Confirmar y Enviar Pedido", color: isDark ? Colors.green[400]! : Colors.green[700]!, isDark: isDark, theme: textTheme,
+                          onTap: () => _handleActionWithConfirmation('client_send', isDark)
+                        )
+                      ] else ...[
+                        MatchingSpeedDialButton(
+                          icon: Icons.list_alt, label: "Guardar y ver Mesa de Trabajo", color: isDark ? Colors.blue[400]! : Colors.blue[800]!, isDark: isDark, theme: textTheme,
+                          onTap: () => _handleActionWithConfirmation('save', isDark)
+                        ),
+                        const SizedBox(height: 20),
+                        MatchingSpeedDialButton(
+                          icon: Icons.picture_as_pdf, label: "Generar PDF Directo", color: isDark ? Colors.red[400]! : Colors.red[700]!, isDark: isDark, theme: textTheme,
+                          onTap: () => _handleActionWithConfirmation('pdf', isDark)
+                        ),
+                        const SizedBox(height: 20),
+                        MatchingSpeedDialButton(
+                          icon: Icons.chat, label: "Enviar por WhatsApp", color: isDark ? Colors.green[400]! : Colors.green[600]!, isDark: isDark, theme: textTheme,
+                          onTap: () => _handleActionWithConfirmation('whatsapp', isDark)
+                        ),
+                      ]
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
             Positioned(
               bottom: 115, right: 16,
@@ -794,30 +895,6 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                   } : _clearClient,
                 ),
                 const SizedBox(height: 10),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-          
-          // Sugerencias de Paquetes
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: isDark ? Colors.amber.withValues(alpha: 0.05) : Colors.amber.withValues(alpha: 0.1),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.auto_awesome, color: Colors.amber, size: 18),
-                    const SizedBox(width: 8),
-                    Text("IA: Promociones analizadas", style: theme.bodyMedium?.copyWith(color: isDark ? Colors.amber[200] : Colors.amber[800], fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                TextButton(
-                  onPressed: () => provider.toggleBundleGrouping(-1, true),
-                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), minimumSize: const Size(0, 0), backgroundColor: Colors.amber.withValues(alpha: 0.2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  child: const Text("Re-Agrupar", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13)),
-                )
               ],
             ),
           ),

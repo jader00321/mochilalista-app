@@ -178,10 +178,18 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       final lineTotal = item.quantity * item.unitPriceApplied;
       final hasDiscount = (item.originalUnitPrice - item.unitPriceApplied) > 0.01;
 
-      String line = "▪ ${item.quantity}x ${item.displayName}";
+      String name = (item.bundleId != null) 
+          ? (item.productName ?? 'Paquete') 
+          : item.displayName;
+
+      String line = "▪ ${item.quantity}x $name";
       
       if (_config.showSubtotals) {
         line += " -> *${currency.format(lineTotal).trim()}*";
+      }
+
+      if (item.bundleId != null && item.specificName != null && item.specificName!.isNotEmpty && item.specificName != "Paquete") {
+        line += "\n   _${item.specificName}_";
       }
 
       if (_config.showSavingsSection && _config.showDiscountDetail && hasDiscount) {

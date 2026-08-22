@@ -70,21 +70,28 @@ class QuoteItemListRow extends StatelessWidget {
             children: [
               Container(
                 width: 55, height: 55, 
+                alignment: Alignment.center,
                 decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200)), 
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12), 
                   child: (item.imageUrl != null && item.imageUrl!.isNotEmpty) 
-                      ? UniversalImage(path: item.imageUrl, fit: BoxFit.cover) 
+                      ? UniversalImage(path: item.imageUrl, fit: BoxFit.cover, width: 55, height: 55) 
                       : Icon(Icons.inventory_2, size: 28, color: hasStockIssue ? (isDark ? Colors.red[300] : Colors.red) : (isDark ? Colors.grey[400] : Colors.blueGrey))
                 )
               ), 
               if (hasStockIssue) 
                 Positioned(
-                  bottom: -8, right: -8, left: -8, 
-                  child: Container(
-                    decoration: BoxDecoration(color: isDark ? Colors.red[800] : Colors.red, borderRadius: BorderRadius.circular(6)), 
-                    padding: const EdgeInsets.symmetric(vertical: 4), 
-                    child: const Text("AGOTADO", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5))
+                  bottom: -6, left: 0, right: 0, 
+                  child: Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 55),
+                      decoration: BoxDecoration(color: isDark ? Colors.red[800] : Colors.red, borderRadius: BorderRadius.circular(6)), 
+                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2), 
+                      child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text("AGOTADO", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5))
+                      )
+                    ),
                   )
                 )
             ]
@@ -111,18 +118,12 @@ class QuoteItemListRow extends StatelessWidget {
                       ),
                    
                    const SizedBox(height: 2),
-                   // 🔥 TEXTO ENRIQUECIDO: Nombre General + Variante (Mismo tamaño, MÁXIMO 5 LÍNEAS)
-                   RichText(
-                     maxLines: 5,
-                     overflow: TextOverflow.ellipsis,
-                     text: TextSpan(
-                       children: [
-                         TextSpan(text: "${item.productName!} ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, height: 1.2, color: hasStockIssue ? (isDark ? Colors.red[300] : Colors.red[900]) : textColor)),
-                         if (item.specificName != null && item.specificName!.isNotEmpty)
-                           TextSpan(text: item.specificName!, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, height: 1.2, color: isDark ? Colors.teal[300] : Colors.teal[700])),
-                       ],
+                   Text("${item.productName!} ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, height: 1.2, color: hasStockIssue ? (isDark ? Colors.red[300] : Colors.red[900]) : textColor)),
+                   if (item.specificName != null && item.specificName!.isNotEmpty)
+                     Padding(
+                       padding: const EdgeInsets.only(top: 2),
+                       child: Text(item.specificName!, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600])),
                      ),
-                   ),
                 ] else ...[
                    // 🔥 LEGADO ELIMINADO: Reemplazado productNameSnapshot por displayName
                    Text(item.displayName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, height: 1.2, color: hasStockIssue ? (isDark ? Colors.red[300] : Colors.red[900]) : textColor), maxLines: 5, overflow: TextOverflow.ellipsis),

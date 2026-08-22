@@ -190,6 +190,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
+    final textTheme = Theme.of(context).textTheme;
 
     String brandName = "";
     if (_currentSelection.brand != null && _currentSelection.brand != "null") {
@@ -240,27 +241,18 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        RichText(
-                          text: TextSpan(
-                            style: TextStyle(fontSize: 20, height: 1.2, color: textColor),
-                            children: [
-                              if (showBrand)
-                                TextSpan(
-                                  text: "${brandName.toUpperCase()} ",
-                                  style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                                ),
-                              TextSpan(
-                                text: _currentSelection.productName,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              if (_currentSelection.specificName != null)
-                                TextSpan(
-                                  text: " ${_currentSelection.specificName!}",
-                                  style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontStyle: FontStyle.italic),
-                                ),
-                            ],
+
+                        if (showBrand)
+                          Text(brandName.toUpperCase(), style: TextStyle(fontSize: 14, color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                        
+                        Text("${_currentSelection.productName} ", style: textTheme.titleLarge?.copyWith(color: textColor), maxLines: 3, overflow: TextOverflow.ellipsis),
+                        
+                        if (_currentSelection.specificName != null && _currentSelection.specificName!.isNotEmpty && _currentSelection.specificName != "Paquete")
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(_currentSelection.specificName!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
                           ),
-                        ),
+                        
                         const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

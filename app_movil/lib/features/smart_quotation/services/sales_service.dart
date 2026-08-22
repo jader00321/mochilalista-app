@@ -399,6 +399,7 @@ class SalesService {
                 'id': e['id'],
                 'presentation_id': e['presentation_id'],
                 'product_id': e['product_id'],
+                'bundle_id': e['bundle_id'],
                 'quantity': e['cantidad'],
                 'unit_price_applied': e['precio_unitario'],
                 'original_unit_price':

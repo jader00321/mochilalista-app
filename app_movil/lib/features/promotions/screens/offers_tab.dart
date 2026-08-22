@@ -144,6 +144,19 @@ class _OffersTabState extends State<OffersTab> {
             final cost = bundle.costoTotalCalculado ?? 0;
             final margin = bundle.precioVentaTotal > 0 ? (bundle.precioVentaTotal - cost) / bundle.precioVentaTotal : 0;
             final color = margin < 0.1 ? Colors.red : (margin < 0.25 ? Colors.orange : Colors.green);
+            
+            final isAgotado = maxStock <= 0;
+            
+            // Map promo types to UI
+            IconData promoIcon; Color promoColor; String promoLabel;
+            switch(bundle.tipoPromocion) {
+              case 'flash': promoIcon = Icons.bolt; promoColor = Colors.amber; promoLabel = "Flash"; break;
+              case 'liquidez_costo': promoIcon = Icons.water_drop; promoColor = Colors.cyan; promoLabel = "Liquidez"; break;
+              case '2x1': promoIcon = Icons.exposure_plus_2; promoColor = Colors.green; promoLabel = "2x1"; break;
+              case 'volumen': promoIcon = Icons.shopping_cart; promoColor = Colors.deepPurple; promoLabel = "Mayoreo"; break;
+              case 'escolar': promoIcon = Icons.school; promoColor = Colors.teal; promoLabel = "Escolar"; break;
+              default: promoIcon = Icons.inventory_2; promoColor = Colors.blue; promoLabel = "Fusión"; break;
+            }
 
             return Container(
               margin: const EdgeInsets.only(bottom: 16),
@@ -160,13 +173,18 @@ class _OffersTabState extends State<OffersTab> {
                     )
                 ]
               ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => BundleBuilderScreen(bundleToEdit: bundle)));
-                },
+              child: Opacity(
+                opacity: isAgotado ? 0.6 : 1.0,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                  onTap: () {
+                    if (isAgotado) {
+                      CustomSnackBar.show(context, message: "Este paquete está agotado. Revísalo y actívalo cuando haya stock disponible.", isError: false);
+                    }
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => BundleBuilderScreen(bundleToEdit: bundle)));
+                  },
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -176,10 +194,27 @@ class _OffersTabState extends State<OffersTab> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Text(bundle.nombrePaquete, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: -0.2), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: promoColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(promoIcon, color: promoColor, size: 14),
+                                      const SizedBox(width: 4),
+                                      Text(promoLabel, style: TextStyle(color: promoColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    ],
+                                  )
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(bundle.nombrePaquete, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: -0.2), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                              ],
+                            ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: bundle.activo ? color.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
@@ -220,15 +255,39 @@ class _OffersTabState extends State<OffersTab> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: maxStock > 0 ? (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50) : (isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red.shade50),
+                                  color: isAgotado ? (isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red.shade50) : (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50),
                                   borderRadius: BorderRadius.circular(8)
                                 ),
-                                child: Text("$maxStock uds", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: maxStock > 0 ? (isDark ? Colors.blue[300] : Colors.blue[700]) : (isDark ? Colors.red[300] : Colors.red[700]))),
+                                child: Text(isAgotado ? "AGOTADO" : "$maxStock uds", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: isAgotado ? (isDark ? Colors.red[300] : Colors.red[700]) : (isDark ? Colors.blue[300] : Colors.blue[700]))),
                               ),
                             ],
                           ),
                         ],
                       ),
+                      if (bundle.fechaFin != null) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_today, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                            const SizedBox(width: 6),
+                            Text("Vigente hasta ${DateFormat('dd/MM/yyyy').format(bundle.fechaFin!)}", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w500)),
+                          ],
+                        )
+                      ],
+                      if (!isAgotado && maxStock > 0 && maxStock <= 5) ...[
+                        const SizedBox(height: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: maxStock / 10.0,
+                            minHeight: 4,
+                            backgroundColor: isDark ? Colors.black26 : Colors.grey[200],
+                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.orange),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text("¡Quedan pocas unidades!", style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.bold)),
+                      ],
                       const Divider(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -289,7 +348,8 @@ class _OffersTabState extends State<OffersTab> {
                 ),
               ),
              ),
-            );
+            ),
+           );
           }),
           const SizedBox(height: 60),
         ],

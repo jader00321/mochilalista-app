@@ -139,7 +139,7 @@ class _TopProductsChartState extends State<TopProductsChart> {
                     ),
                     if (isSelected) ...[
                       const SizedBox(height: 16),
-                      _buildDetailPanel(p),
+                      _buildDetailPanel(p, index),
                     ]
                   ],
                 ),
@@ -151,9 +151,25 @@ class _TopProductsChartState extends State<TopProductsChart> {
     );
   }
 
-  Widget _buildDetailPanel(Map<String, dynamic> p) {
+  Widget _buildDetailPanel(Map<String, dynamic> p, int index) {
     String name = p['nombre']?.toString() ?? 'Producto';
     int totalVendido = (p['total_vendido'] as num).toInt();
+    
+    String insightText;
+    if (p['monto_vendido'] != null) {
+      double monto = (p['monto_vendido'] as num).toDouble();
+      if (index == 0) {
+        insightText = "🥇 $name es tu ESTRELLA ABSOLUTA: $totalVendido unidades y S/ ${monto.toStringAsFixed(2)}. Este producto sostiene tu negocio. Negocia mejores precios con tu proveedor por volumen.";
+      } else {
+        insightText = "$name ha generado S/ ${monto.toStringAsFixed(2)} en $totalVendido unidades vendidas. No dejes que se quede sin stock.";
+      }
+    } else {
+      if (index == 0) {
+        insightText = "🥇 $name es tu ESTRELLA ABSOLUTA con $totalVendido unidades vendidas. Asegúrate de nunca quebrar stock para no perder ventas.";
+      } else {
+        insightText = "El producto $name es un pilar de tu negocio con $totalVendido unidades vendidas. No dejes que se quede sin stock.";
+      }
+    }
     
     return Container(
       padding: const EdgeInsets.all(12),
@@ -165,11 +181,11 @@ class _TopProductsChartState extends State<TopProductsChart> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.star, color: Colors.orange[400], size: 20),
+          Icon(index == 0 ? Icons.workspace_premium : Icons.star, color: Colors.orange[400], size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              "El producto $name es un pilar de tu negocio con $totalVendido unidades vendidas. Asegúrate de nunca quebrar stock para no perder este flujo de ingresos.",
+              insightText,
               style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[700], height: 1.4),
             ),
           )

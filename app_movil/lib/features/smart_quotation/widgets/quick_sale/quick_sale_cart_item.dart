@@ -113,33 +113,25 @@ class QuickSaleCartItem extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        RichText(
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          text: TextSpan(
-                            style: TextStyle(fontSize: 16, height: 1.2, color: textColor),
-                            children: [
-                              if (showBrand)
-                                TextSpan(
-                                  text: "${brandName.toUpperCase()} ", 
-                                  style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, letterSpacing: 0.5)
-                                ),
-                              TextSpan(
-                                text: displayFullName,
-                                style: const TextStyle(fontWeight: FontWeight.bold)
-                              ),
-                            ]
-                          )
-                        ),
-                        
-                        // 🔥 Descripción del paquete
-                        if (isBundle && product.specificName != null && product.specificName!.isNotEmpty && product.specificName != "Paquete")
+                        if (showBrand)
                           Padding(
-                            padding: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              brandName.toUpperCase(), 
+                              style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        Text(product.productName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor, height: 1.2), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        
+                        if (product.specificName != null && product.specificName!.isNotEmpty && product.specificName != "Paquete")
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               product.specificName!, 
-                              style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontSize: 13, fontWeight: FontWeight.w600), 
-                              maxLines: 2, 
+                              style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13), 
+                              maxLines: 3, 
                               overflow: TextOverflow.ellipsis
                             ),
                           ),

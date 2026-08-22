@@ -20,7 +20,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 16,
+      version: 18,
       onCreate: _createDB,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -249,6 +249,22 @@ class LocalDatabase {
         debugPrint("Error migración V16 (tipo_promocion, fecha_inicio, fecha_fin): \$e");
       }
     }
+    if (oldVersion < 17) {
+      // Migración V16 -> V17: Snapshot de composición del bundle para Deep Compare
+      try {
+        await db.execute("ALTER TABLE smart_quotation_items ADD COLUMN bundle_items_snapshot TEXT");
+      } catch (e) {
+        debugPrint("Error migración V17 (bundle_items_snapshot): $e");
+      }
+    }
+    if (oldVersion < 18) {
+      // Migración V17 -> V18: Trazabilidad del descuento de catálogo
+      try {
+        await db.execute("ALTER TABLE smart_quotation_items ADD COLUMN discount_catalog_amount REAL DEFAULT 0.0");
+      } catch (e) {
+        debugPrint("Error migración V18 (discount_catalog_amount): $e");
+      }
+    }
   }
 
   // ==========================================
@@ -395,7 +411,7 @@ class LocalDatabase {
       '''CREATE TABLE smart_quotations (id $idType, negocio_id $intType, creado_por_usuario_id $intType, client_id $intNullable, client_name $textNullable, institution_name $textNullable, grade_level $textNullable, notas $textNullable, total_amount $realNullable DEFAULT 0.0, total_savings $realNullable DEFAULT 0.0, status $textNullable DEFAULT 'PENDING', type $textNullable DEFAULT 'manual', is_template $boolTypeFalse, clone_source_id $intNullable, valid_until $textNullable, source_image_url $textNullable, original_text_dump $textNullable, created_at $textNullable, updated_at $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (client_id) REFERENCES clientes (id))''',
     );
     await db.execute(
-      '''CREATE TABLE smart_quotation_items (id $idType, quotation_id $intType, product_id $intNullable, presentation_id $intNullable, bundle_id $intNullable, quantity $intNullable DEFAULT 1, unit_price_applied $realType, original_unit_price $realType, product_name $textNullable, brand_name $textNullable, specific_name $textNullable, sales_unit $textNullable, original_text $textNullable, image_url $textNullable, is_manual_price $boolTypeFalse, is_available $boolType, FOREIGN KEY (quotation_id) REFERENCES smart_quotations (id), FOREIGN KEY (product_id) REFERENCES productos (id), FOREIGN KEY (presentation_id) REFERENCES presentaciones_producto (id), FOREIGN KEY (bundle_id) REFERENCES paquetes (id))''',
+      '''CREATE TABLE smart_quotation_items (id $idType, quotation_id $intType, product_id $intNullable, presentation_id $intNullable, bundle_id $intNullable, quantity $intNullable DEFAULT 1, unit_price_applied $realType, original_unit_price $realType, discount_catalog_amount $realNullable DEFAULT 0.0, product_name $textNullable, brand_name $textNullable, specific_name $textNullable, sales_unit $textNullable, original_text $textNullable, image_url $textNullable, bundle_items_snapshot $textNullable, is_manual_price $boolTypeFalse, is_available $boolType, FOREIGN KEY (quotation_id) REFERENCES smart_quotations (id), FOREIGN KEY (product_id) REFERENCES productos (id), FOREIGN KEY (presentation_id) REFERENCES presentaciones_producto (id), FOREIGN KEY (bundle_id) REFERENCES paquetes (id))''',
     );
 
     // 4. Ventas y Pagos

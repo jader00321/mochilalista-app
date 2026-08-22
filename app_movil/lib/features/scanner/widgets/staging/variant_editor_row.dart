@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
 import 'package:app_movil/features/scanner/models/scanner_models.dart';
 import 'package:app_movil/features/scanner/widgets/staging/variant_price_calculator.dart';
+import 'package:app_movil/features/scanner/services/scanner_cost_engine.dart';
 
 // ============================================================================
-// ðŸ”¥ WIDGET CON ESTADO: LA CALCULADORA DE VARIANTES Y COMPARATIVA
+// 🔥 WIDGET CON ESTADO: LA CALCULADORA DE VARIANTES Y COMPARATIVA
 // ============================================================================
 class VariantEditorRow extends StatefulWidget {
   final StagingVariant variant;
@@ -47,7 +48,11 @@ class VariantEditorRowState extends State<VariantEditorRow> {
   }
 
   String _formatSmartDecimal(double value) {
-    return value.toStringAsFixed(4).replaceAll(RegExp(r'([.]*0+)(?!.*\d)'), '');
+    if (value == value.truncateToDouble()) {
+      return value.truncate().toString();
+    }
+    String formatted = value.toStringAsFixed(2);
+    return formatted.replaceAll(RegExp(r'([.]*0+)(?!.*\d)'), '');
   }
 
   void _initControllers() {
@@ -73,7 +78,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
     super.dispose();
   }
 
-  // ðŸ”¥ DETECCIÃ“N INTELIGENTE DE FACTOR AL ESCRIBIR LA UNIDAD DE VENTA
+  // 🔥 DETECCIÓN INTELIGENTE DE FACTOR AL ESCRIBIR LA UNIDAD DE VENTA
   void _onUnidadVentaChanged(String val) {
     String lower = val.toLowerCase().trim();
     int? newFactor;
@@ -93,7 +98,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
     _recalcularMatematica();
   }
 
-  // ðŸ”¥ MATEMÃTICA EN TIEMPO REAL
+  // 🔥 MATEMÁTICA EN TIEMPO REAL
   void _recalcularMatematica({bool fromMargen = true}) {
     double cantComprada = double.tryParse(_cantCompraCtrl.text) ?? 1.0;
     double totalPago = double.tryParse(_totalPagoCtrl.text) ?? 0.0;
@@ -101,25 +106,40 @@ class VariantEditorRowState extends State<VariantEditorRow> {
     
     int unidPorVenta = int.tryParse(_unidadesVentaCtrl.text) ?? 1;
 
-    double costoBaseIndiv = (cantComprada > 0 && unidPorLote > 0) ? totalPago / (cantComprada * unidPorLote) : 0.0;
-    double costoPresentacionReal = costoBaseIndiv * unidPorVenta;
+    double costoBaseIndiv = ScannerCostEngine.calculateUnitCost(
+      totalPago: totalPago,
+      cantidadUmp: cantComprada,
+      unidadesPorLote: unidPorLote,
+    );
+    
+    double costoPresentacionReal = ScannerCostEngine.calculatePresentationCost(
+      unitCost: costoBaseIndiv,
+      unidadesPorVenta: unidPorVenta,
+    );
 
     double pVenta = 0.0;
-    double margen = 1.35;
+    double margen = ScannerCostEngine.suggestDynamicMargin(fallbackMargin: 1.35);
     
     if (fromMargen) {
-      margen = double.tryParse(_margenCtrl.text) ?? 1.35;
-      pVenta = costoPresentacionReal * margen;
+      margen = double.tryParse(_margenCtrl.text) ?? margen;
+      pVenta = ScannerCostEngine.suggestSalePrice(
+        presentationCost: costoPresentacionReal,
+        marginFactor: margen,
+      );
       _precioVentaCtrl.text = pVenta.toStringAsFixed(2);
     } else {
       pVenta = double.tryParse(_precioVentaCtrl.text) ?? 0.0;
-      if (costoPresentacionReal > 0) {
-        margen = pVenta / costoPresentacionReal;
-        _margenCtrl.text = margen.toStringAsFixed(2);
-      }
+      margen = ScannerCostEngine.calculateMargin(
+        salePrice: pVenta,
+        presentationCost: costoPresentacionReal,
+      );
+      _margenCtrl.text = margen.toStringAsFixed(2);
     }
     
-    double pUmpProv = cantComprada > 0 ? totalPago / cantComprada : 0.0;
+    double pUmpProv = ScannerCostEngine.calculateProviderUmpPrice(
+      totalPago: totalPago,
+      cantidadUmp: cantComprada,
+    );
 
     setState(() {
       widget.variant.nombreEspecifico = _nombreCtrl.text;
@@ -139,6 +159,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
   }
 
   void _openComparativeModal(Map<String, dynamic> dbData) {
+    widget.variant.takeSnapshot(); // TOMAR SNAPSHOT AQUI ANTES DE ABRIR EL MODAL
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -146,8 +167,10 @@ class VariantEditorRowState extends State<VariantEditorRow> {
       builder: (ctx) {
         return ComparativeUpdateModal(
           variant: widget.variant,
+          group: widget.group,
           dbData: dbData,
           isDark: widget.isDark,
+          provider: widget.provider,
           onConfirm: () {
             widget.provider.notifyUIUpdate(); 
             Navigator.pop(ctx);
@@ -175,15 +198,44 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                 decoration: BoxDecoration(color: isVariantMatch ? (widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[100]) : (widget.isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[100]), borderRadius: BorderRadius.circular(6)),
                 child: Text(isVariantMatch ? "VARIANTE EXISTENTE" : "NUEVA VARIANTE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isVariantMatch ? (widget.isDark ? Colors.green[300] : Colors.green[800]) : (widget.isDark ? Colors.orange[300] : Colors.orange[900]))),
               ),
-              InkWell(onTap: widget.onDelete, child: Icon(Icons.close, size: 22, color: widget.isDark ? Colors.grey[500] : Colors.grey[600]))
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.variant.hasSnapshotBeenModified)
+                    IconButton(
+                      icon: const Icon(Icons.undo),
+                      color: Colors.blue,
+                      iconSize: 22,
+                      tooltip: "Deshacer cambios del modal",
+                      onPressed: () {
+                        widget.variant.restoreFromSnapshot();
+                        _initControllers();
+                        widget.provider.notifyUIUpdate();
+                      },
+                    ),
+                  if (widget.variant.hasBeenModified)
+                    IconButton(
+                      icon: const Icon(Icons.restore),
+                      color: Colors.orange,
+                      iconSize: 22,
+                      tooltip: "Restaurar valores de factura",
+                      onPressed: () {
+                        widget.variant.restoreOriginals();
+                        _initControllers();
+                        widget.provider.notifyUIUpdate();
+                      },
+                    ),
+                  InkWell(onTap: widget.onDelete, child: Icon(Icons.close, size: 22, color: widget.isDark ? Colors.grey[500] : Colors.grey[600])),
+                ],
+              )
             ],
           ),
           const SizedBox(height: 10),
           
           if (widget.group.matchProducto.estado.contains("MATCH"))
-            _buildVariantSwitcher(),
+            _buildVariantCards(),
 
-          // ðŸ”¥ VARIANTE EXISTENTE (DiseÃ±o Adaptativo + MatemÃ¡tica corregida)
+          // 🔥 VARIANTE EXISTENTE (Diseño Adaptativo + Matemática corregida)
           if (isVariantMatch) ...[
              Container(
                padding: const EdgeInsets.all(12),
@@ -202,12 +254,12 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                          ),
                          const SizedBox(height: 6),
                          Text(
-                           "Se venderÃ¡ por: ${widget.variant.matchPresentacion.datos?.unidadVenta ?? 'Unidad'} (x${widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1})", 
+                           "Se venderá por: ${widget.variant.matchPresentacion.datos?.unidadVenta ?? 'Unidad'} (x${widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1})", 
                            style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)
                          ),
                          const SizedBox(height: 8),
                          Text(
-                           "IngresarÃ¡n al Stock: +${((widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote) / (widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1)).toInt()} Unid.", 
+                           "Ingresarán al Stock: +${((widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote) / (widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1)).toInt()} Unid.", 
                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700])
                          ),
                        ],
@@ -227,7 +279,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                ),
              )
           ] else ...[
-             // ðŸ”¥ VARIANTE NUEVA (Bloques separados)
+             // 🔥 VARIANTE NUEVA (Bloques separados)
              Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[50], borderRadius: BorderRadius.circular(16), border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade200)),
@@ -235,7 +287,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Expanded(flex: 6, child: MiniInput(ctrl: _nombreCtrl, label: "Nombre EspecÃ­fico / Detalle", hint: "Ej: Rojo A4", isDark: widget.isDark, onChanged: _recalcularMatematica)),
+                    Expanded(flex: 6, child: MiniInput(ctrl: _nombreCtrl, label: "Nombre Específico / Detalle", hint: "Ej: Rojo A4", isDark: widget.isDark, onChanged: _recalcularMatematica)),
                     const SizedBox(width: 8),
                     Expanded(flex: 4, child: MiniInput(ctrl: _unidadVentaCtrl, label: "Unidad de Venta", hint: "Ej: Docena", isDark: widget.isDark, onChanged: () => _onUnidadVentaChanged(_unidadVentaCtrl.text))),
                   ]),
@@ -246,7 +298,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                     const SizedBox(width: 8),
                     Expanded(flex: 3, child: MiniInput(ctrl: _unidadesLoteCtrl, label: "Unid x Empaque", isNum: true, hint: "1000", isDark: widget.isDark, onChanged: _recalcularMatematica)),
                     const SizedBox(width: 8),
-                    Expanded(flex: 2, child: MiniInput(ctrl: _cantCompraCtrl, label: "ComprÃ³", isNum: true, hint: "0.25", isDark: widget.isDark, onChanged: _recalcularMatematica)),
+                    Expanded(flex: 2, child: MiniInput(ctrl: _cantCompraCtrl, label: "Compró", isNum: true, hint: "0.25", isDark: widget.isDark, onChanged: _recalcularMatematica)),
                     const SizedBox(width: 8),
                     Expanded(flex: 3, child: MiniInput(ctrl: _totalPagoCtrl, label: "P. Total (S/)", isNum: true, hint: "0.0", isDark: widget.isDark, onChanged: _recalcularMatematica)),
                   ]),
@@ -262,7 +314,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            "Costo Unit. Base (CÃ¡lculo Factura): S/ ${_formatSmartDecimal(widget.variant.totalPagoLote > 0 && widget.variant.cantidadUmpComprada > 0 && widget.variant.unidadesPorLote > 0 ? widget.variant.totalPagoLote / (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote) : 0.0)} c/u", 
+                            "Costo Unit. Base (Cálculo Factura): S/ ${_formatSmartDecimal(widget.variant.totalPagoLote > 0 && widget.variant.cantidadUmpComprada > 0 && widget.variant.unidadesPorLote > 0 ? widget.variant.totalPagoLote / (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote) : 0.0)} c/u", 
                             style: TextStyle(fontSize: 13, color: widget.isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)
                           ),
                         ),
@@ -299,38 +351,96 @@ class VariantEditorRowState extends State<VariantEditorRow> {
     );
   }
 
-  Widget _buildVariantSwitcher() {
-    final dbData = widget.variant.matchPresentacion.datos;
-    final alternatives = dbData?.availablePresentations ?? [];
+  Widget _buildVariantCards() {
+    final alternatives = widget.group.matchProducto.datos?.availablePresentations ?? [];
     if (alternatives.isEmpty) return const SizedBox.shrink();
 
-    int? dropdownValue = widget.variant.matchPresentacion.estado == "NUEVO_EN_PADRE" ? -1 : dbData?.id;
-    if (dropdownValue != -1 && dropdownValue != null && !alternatives.any((p) => p['id'] == dropdownValue)) dropdownValue = null; 
+    int? selectedId = widget.variant.matchPresentacion.estado == "NUEVO_EN_PADRE" ? -1 : widget.variant.matchPresentacion.datos?.id;
+    if (selectedId != -1 && selectedId != null && !alternatives.any((p) => p['id'] == selectedId)) selectedId = null; 
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      decoration: BoxDecoration(border: Border.all(color: widget.isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.shade200), borderRadius: BorderRadius.circular(10), color: widget.isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue.shade50),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          isExpanded: true, value: dropdownValue, isDense: true,
-          dropdownColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
-          icon: Icon(Icons.arrow_drop_down, color: widget.isDark ? Colors.blue[300] : Colors.blue),
-          hint: Text("Seleccionar variante...", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey, fontSize: 13)),
-          items: [
-            ...alternatives.map((p) => DropdownMenuItem<int>(
-              value: p['id'],
-              child: Text("${p['nombre_completo']} (Disp: ${p['stock_actual']})", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: widget.isDark ? Colors.white : Colors.black87), overflow: TextOverflow.ellipsis),
-            )),
-            DropdownMenuItem<int>(value: -1, child: Row(children: [Icon(Icons.add, size: 18, color: widget.isDark ? Colors.blue[300] : Colors.blue), const SizedBox(width: 8), Text("Crear Nueva Variante", style: TextStyle(color: widget.isDark ? Colors.blue[300] : Colors.blue, fontSize: 13, fontWeight: FontWeight.bold))]))
-          ],
-          onChanged: (val) {
-            if (val == -1) {
-              widget.provider.switchVariantToNew(widget.variant.uuidTemporal);
-            } else if (val != null) { widget.provider.switchVariantLink(widget.variant.uuidTemporal, val); }
-            Future.delayed(const Duration(milliseconds: 100), () { if(mounted) _initControllers(); });
-          },
-        ),
+      height: 70,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        itemCount: alternatives.length + 1,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (ctx, i) {
+          if (i == alternatives.length) {
+            bool isSelected = selectedId == -1;
+            return GestureDetector(
+              onTap: () {
+                widget.provider.switchVariantToNew(widget.variant.uuidTemporal);
+                WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) _initControllers(); });
+              },
+              child: Container(
+                width: 140,
+                decoration: BoxDecoration(
+                  color: isSelected ? (widget.isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50) : (widget.isDark ? const Color(0xFF1A1A24) : Colors.grey.shade50),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected ? (widget.isDark ? Colors.blue : Colors.blue.shade400) : (widget.isDark ? Colors.white24 : Colors.grey.shade300),
+                    width: isSelected ? 2 : 1,
+                  ),
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 18, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                      const SizedBox(width: 6),
+                      Text("Nueva", style: TextStyle(color: widget.isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          var p = alternatives[i];
+          bool isSelected = selectedId == p['id'];
+          String pName = p['nombre_completo']?.toString() ?? p['nombre_especifico']?.toString() ?? '';
+          if (pName.isEmpty || pName == 'null') pName = 'General';
+          
+          return GestureDetector(
+            onTap: () {
+              widget.provider.switchVariantLink(widget.variant.uuidTemporal, p['id']);
+              WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) _initControllers(); });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 160,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? (widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.shade50) : (widget.isDark ? const Color(0xFF23232F) : Colors.white),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected ? (widget.isDark ? Colors.green[400]! : Colors.green) : (widget.isDark ? Colors.white10 : Colors.grey.shade200),
+                  width: isSelected ? 2 : 1
+                ),
+                boxShadow: [
+                  if (!widget.isDark && !isSelected) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))
+                ]
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(pName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isSelected ? (widget.isDark ? Colors.green[300] : Colors.green[800]) : (widget.isDark ? Colors.white : Colors.black87)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Stock: ${p['stock_actual'] ?? 0}", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
+                      Text("S/${(p['precio_venta_final'] ?? 0.0).toStringAsFixed(2)}", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                    ],
+                  )
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -353,7 +463,11 @@ class MiniInput extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(label, style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.w600)),
+        ),
         const SizedBox(height: 4),
         SizedBox(
           height: 38,
@@ -394,7 +508,12 @@ class ResumenTag extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: isDark ? color[300] : color[700]),
           const SizedBox(width: 6),
-          Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? color[100] : color[800])),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? color[100] : color[800])),
+            ),
+          ),
         ],
       ),
     );

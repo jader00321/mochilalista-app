@@ -85,7 +85,7 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
                   PieChartData(
                     pieTouchData: PieTouchData(
                       touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                        if (!event.isInterestedForInteractions || event is FlPanEndEvent || event is FlLongPressEnd) return;
+                        if (event is FlPanEndEvent || event is FlLongPressEnd) return;
                         if (event is FlTapUpEvent) {
                           setState(() {
                             if (pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
@@ -145,10 +145,16 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
               ),
             ],
           ),
-          if (_selectedSegmentIndex != -1 && _selectedSegmentIndex < widget.data.salesByPaymentMethod.length) ...[
-            const SizedBox(height: 24),
-            _buildDetailPanel(widget.data.salesByPaymentMethod[_selectedSegmentIndex], total),
-          ]
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: _selectedSegmentIndex != -1 && _selectedSegmentIndex < widget.data.salesByPaymentMethod.length
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 24.0),
+                    child: _buildDetailPanel(widget.data.salesByPaymentMethod[_selectedSegmentIndex], total),
+                  )
+                : const SizedBox.shrink(),
+          )
         ],
       ),
     );
@@ -157,7 +163,21 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
   Widget _buildDetailPanel(Map<String, dynamic> item, double total) {
     String name = item['name'].toString().toUpperCase();
     double amount = (item['amount'] as num).toDouble();
-    String percentage = total > 0 ? ((amount / total) * 100).toStringAsFixed(1) : '0';
+    double pct = total > 0 ? (amount / total) * 100 : 0;
+    String percentage = pct.toStringAsFixed(1);
+    
+    String insightText;
+    String lowerName = name.toLowerCase();
+    
+    if (lowerName.contains('yape') || lowerName.contains('plin')) {
+      insightText = "$name generó ${widget.formatCurrency(amount)} ($percentage%). Recuerda verificar tus límites de recepción diaria y que tu QR esté siempre visible.";
+    } else if (lowerName.contains('efectivo')) {
+      insightText = "$name movió ${widget.formatCurrency(amount)} ($percentage%). Realiza arqueos de caja diarios para evitar faltantes y registra todo en el sistema.";
+    } else if (lowerName.contains('tarjeta') || lowerName.contains('visa') || lowerName.contains('pos')) {
+      insightText = "$name procesó ${widget.formatCurrency(amount)} ($percentage%). Monitorea las comisiones del POS para asegurar que tu margen no se erosione.";
+    } else {
+      insightText = "$name canalizó ${widget.formatCurrency(amount)} ($percentage% del ingreso). Verifica que todos los depósitos hayan sido acreditados correctamente.";
+    }
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
@@ -187,7 +207,7 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
                   Text("Método: $name", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   const SizedBox(height: 4),
                   Text(
-                    "El $percentage% del ingreso se procesó vía $name. Monitoriza este canal para prever posibles comisiones de pasarela.", 
+                    insightText, 
                     style: TextStyle(color: Colors.grey[600], fontSize: 12, height: 1.4)
                   ),
                 ],

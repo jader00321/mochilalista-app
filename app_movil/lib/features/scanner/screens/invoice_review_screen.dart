@@ -193,12 +193,15 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Revisión de Compras", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            Text("${_localItems.length} ítems detectados", style: TextStyle(fontSize: 12, color: isDark ? Colors.green[200] : Colors.green[100], fontWeight: FontWeight.w500)),
-          ],
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Revisión de Compras", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text("${_localItems.length} ítems detectados", style: TextStyle(fontSize: 12, color: isDark ? Colors.green[200] : Colors.green[100], fontWeight: FontWeight.w500)),
+            ],
+          ),
         ),
         backgroundColor: isDark ? const Color(0xFF142C23) : const Color(0xFF2E7D32),
         foregroundColor: Colors.white,

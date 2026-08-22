@@ -2,6 +2,7 @@ import 'package:app_movil/core/database/local_db.dart';
 
 import 'package:app_movil/core/database/product_queries.dart';
 import 'package:app_movil/core/utils/app_logger.dart';
+import 'package:app_movil/features/scanner/services/spanish_lemmatizer.dart';
 
 class ProductRepository {
   final _dbHelper = LocalDatabase.instance;
@@ -14,12 +15,16 @@ class ProductRepository {
       List<dynamic> args = [negocioId];
 
       if (queryParams['q'] != null && queryParams['q'].toString().isNotEmpty) {
+        String qStr = queryParams['q'].toString().trim();
+        String qLem = SpanishLemmatizer.lemmatize(qStr);
+        
         query +=
-            " AND (p.nombre LIKE ? OR pr.codigo_barras LIKE ? OR p.codigo_barras LIKE ?)";
+            " AND (p.nombre LIKE ? OR p.nombre LIKE ? OR pr.codigo_barras LIKE ? OR p.codigo_barras LIKE ?)";
         args.addAll([
-          '%${queryParams['q']}%',
-          '%${queryParams['q']}%',
-          '%${queryParams['q']}%'
+          '%$qStr%',
+          '%$qLem%',
+          '%$qStr%',
+          '%$qStr%'
         ]);
       }
       if (queryParams['estado'] != null) {
@@ -54,8 +59,8 @@ class ProductRepository {
               ? 'DESC'
               : 'ASC';
       query += " ORDER BY LOWER(p.nombre) $sortDir LIMIT ? OFFSET ?";
-      args.add(int.parse(queryParams['limit'] ?? '20'));
-      args.add(int.parse(queryParams['skip'] ?? '0'));
+      args.add(queryParams['limit'] is int ? queryParams['limit'] : int.parse(queryParams['limit']?.toString() ?? '20'));
+      args.add(queryParams['skip'] is int ? queryParams['skip'] : int.parse(queryParams['skip']?.toString() ?? '0'));
 
       return await db.rawQuery(query, args);
     } catch (e, stack) {
@@ -115,7 +120,7 @@ class ProductRepository {
     
     int res = await txn.update('productos', data, where: 'id = ?', whereArgs: [id]);
     
-    List<String> fieldsToTrack = ['nombre', 'marca_id', 'categoria_id'];
+    List<String> fieldsToTrack = ['marca_id', 'categoria_id'];
     for (String field in fieldsToTrack) {
       if (data.containsKey(field)) {
         String oldVal = old[field]?.toString() ?? '';
@@ -179,7 +184,7 @@ class ProductRepository {
     }
     
     // Interceptar otros cambios para product_history
-    List<String> fieldsToTrack = ['precio_venta_final', 'costo_unitario_calculado', 'nombre_especifico', 'codigo_barras', 'estado'];
+    List<String> fieldsToTrack = ['precio_venta_final', 'costo_unitario_calculado', 'estado'];
     for (String field in fieldsToTrack) {
       if (data.containsKey(field)) {
         String oldVal = old[field]?.toString() ?? '';

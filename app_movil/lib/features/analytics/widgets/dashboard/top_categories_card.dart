@@ -82,7 +82,7 @@ class _TopCategoriesCardState extends State<TopCategoriesCard> {
                     ),
                     if (isSelected) ...[
                       const SizedBox(height: 12),
-                      _buildDetailPanel(c),
+                      _buildDetailPanel(c, index, total),
                     ]
                   ],
                 ),
@@ -94,8 +94,19 @@ class _TopCategoriesCardState extends State<TopCategoriesCard> {
     );
   }
 
-  Widget _buildDetailPanel(Map<String, dynamic> c) {
+  Widget _buildDetailPanel(Map<String, dynamic> c, int index, double total) {
     String name = c['nombre'];
+    int unidades = total.toInt();
+    
+    String insightText;
+    if (index == 0) {
+      insightText = "🏆 $name lidera con $unidades unidades vendidas. Es tu categoría estrella. Amplía el surtido aquí: más variedad = más ventas.";
+    } else if (unidades > 50) {
+      insightText = "$name movió $unidades unidades. Tiene alta rotación. Asegura abastecimiento constante de esta línea.";
+    } else {
+      insightText = "$name vendió $unidades unidades. Hay espacio para crecer. Considera promociones cruzadas con categorías más fuertes.";
+    }
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -106,11 +117,11 @@ class _TopCategoriesCardState extends State<TopCategoriesCard> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.category, color: Colors.indigoAccent[200], size: 20),
+          Icon(index == 0 ? Icons.workspace_premium : Icons.category, color: Colors.indigoAccent[200], size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              "La categoría $name es un motor clave para tu negocio. Considera ampliar el surtido en esta línea para aprovechar su alta rotación.",
+              insightText,
               style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[700], height: 1.4),
             ),
           )

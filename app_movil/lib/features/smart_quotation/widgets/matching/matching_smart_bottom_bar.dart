@@ -45,7 +45,9 @@ class MatchingSmartBottomBar extends StatelessWidget {
               children: [
                 Text("TOTAL A PAGAR", style: theme.labelMedium?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey)),
                 const SizedBox(height: 2),
-                Text("S/ ${provider.totalNetAmount.toStringAsFixed(2)}", style: theme.displayLarge?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue)),
+                provider.totalNetAmount == 0
+                  ? Text("Falta vincular", style: theme.displayMedium?.copyWith(color: isDark ? Colors.grey[500] : Colors.grey))
+                  : Text("S/ ${provider.totalNetAmount.toStringAsFixed(2)}", style: theme.displayLarge?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue)),
               ],
             ),
           ],

@@ -18,6 +18,8 @@ import 'package:app_movil/core/widgets/home/dashboard_header.dart';
 import 'package:app_movil/core/widgets/home/quotation_banner.dart';
 import 'package:app_movil/core/widgets/home/smart_action_grid.dart';
 import 'package:app_movil/features/analytics/widgets/restock_smart_banner.dart';
+import 'package:app_movil/core/widgets/home/weekly_sales_chart.dart';
+import 'package:app_movil/core/widgets/home/recent_activity_list.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -133,11 +135,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
+          if (_currentIndex == index) return; // Evitar recargas si ya estamos en la pestaña actual
           setState(() => _currentIndex = index);
           if (index == 0 && auth.hasActiveContext) {
-             Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
-             // 🔥 CORRECCIÓN 1: Se llama a refreshActiveUser para evitar parpadeo
+             // Solo refrescamos el usuario de forma ligera para no bloquear
              auth.refreshActiveUser();
+             // El DashboardHeader se encarga de recargar el resto si es necesario
           }
         },
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white, 
@@ -194,6 +197,8 @@ class _HomeDashboardView extends StatelessWidget {
                         _buildGuestBanner(context, isDark)
                     else if (auth.isOwner || auth.isWorker) ...[
                       const RestockSmartBanner(),
+                      const WeeklySalesChart(),
+                      const SizedBox(height: 20),
                       QuotationBanner(
                         onGoToWorkbench: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkbenchScreen())),
                       )
@@ -217,6 +222,10 @@ class _HomeDashboardView extends StatelessWidget {
                     ),
                     const SizedBox(height: 16), 
                     const SmartActionGrid(),
+                    if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
+                      const SizedBox(height: 32),
+                      const RecentActivityList(),
+                    ],
                     const SizedBox(height: 40), 
                   ],
                 ),

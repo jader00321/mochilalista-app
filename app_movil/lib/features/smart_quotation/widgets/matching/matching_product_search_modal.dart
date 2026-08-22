@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
-import 'package:app_movil/core/providers/auth_provider.dart'; // 🔥 Importado para el Rol
+import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/catalog/models/category_model.dart';
+import 'package:app_movil/features/catalog/services/product_service.dart';
+import 'package:app_movil/core/services/master_data_cache.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
@@ -28,59 +31,118 @@ class MatchingProductSearchModal extends StatefulWidget {
 class _MatchingProductSearchModalState extends State<MatchingProductSearchModal> {
   final TextEditingController _searchCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
+  final ProductService _productService = ProductService();
+  
   Timer? _debounce;
-  List<InventoryWrapper> _mappedResults = []; 
+  List<InventoryWrapper> _localResults = []; 
+  List<Category> _categories = [];
   int? _selectedCategoryId; 
+  
+  bool _isLoading = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _skip = 0;
+  final int _limit = 20;
+  String _currentQuery = "";
 
   @override
   void initState() {
     super.initState();
     _searchCtrl.text = widget.initialQuery;
+    _currentQuery = widget.initialQuery;
+    
     WidgetsBinding.instance.addPostFrameCallback((_) { 
-      final prov = Provider.of<InventoryProvider>(context, listen: false);
-      prov.loadMasterData(showAll: false).then((_) {
-         _performSearch(widget.initialQuery, reset: true); 
-      });
+      final invProv = Provider.of<InventoryProvider>(context, listen: false);
+      if (invProv.negocioId != null) {
+        _productService.updateContext(invProv.negocioId);
+      }
+      _categories = MasterDataCache().categories;
+      _performSearch(_currentQuery, reset: true); 
     });
     
     _scrollCtrl.addListener(() {
       if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 200) {
-        final prov = Provider.of<InventoryProvider>(context, listen: false);
-        if (!prov.isLoadingMore && prov.hasMoreData) prov.loadMore().then((_) => _updateMappedResults());
+        if (!_isLoadingMore && _hasMore && !_isLoading) {
+           _performSearch(_currentQuery, reset: false);
+        }
       }
     });
+  }
+  
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _scrollCtrl.dispose();
+    _debounce?.cancel();
+    super.dispose();
   }
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 600), () => _performSearch(query, reset: true));
+    _debounce = Timer(const Duration(milliseconds: 600), () {
+        if (!mounted) return;
+        _currentQuery = query;
+        _performSearch(query, reset: true);
+    });
   }
 
   void _onCategorySelected(int? categoryId) {
     setState(() {
       _selectedCategoryId = categoryId;
     });
-    _performSearch(_searchCtrl.text, reset: true);
+    _performSearch(_currentQuery, reset: true);
   }
 
-  Future<void> _performSearch(String query, {bool reset = false}) async {
-    final prov = Provider.of<InventoryProvider>(context, listen: false);
-    final auth = Provider.of<AuthProvider>(context, listen: false); // 🔥 Obtener rol
-    await prov.loadInventory(
-      searchQuery: query, 
-      reset: reset,
-      minStock: auth.isCommunityClient ? 1 : null, // 🔥 FILTRO: Solo muestra stock si es cliente
-      categoryIds: _selectedCategoryId != null ? [_selectedCategoryId!] : null 
-    );
-    _updateMappedResults();
-  }
-
-  void _updateMappedResults() {
+  Future<void> _performSearch(String query, {required bool reset}) async {
     if (!mounted) return;
-    final prov = Provider.of<InventoryProvider>(context, listen: false);
-    setState(() {
-      _mappedResults = prov.items; 
-    });
+
+    if (reset) {
+      setState(() {
+        _isLoading = true;
+        _skip = 0;
+        _hasMore = true;
+      });
+    } else {
+      setState(() => _isLoadingMore = true);
+    }
+    
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false); 
+      
+      Map<String, String> queryParams = {
+        'skip': _skip.toString(),
+        'limit': _limit.toString(),
+      };
+      
+      if (query.isNotEmpty) queryParams['q'] = query;
+      if (_selectedCategoryId != null) queryParams['category_ids'] = _selectedCategoryId.toString();
+      if (auth.isCommunityClient) queryParams['min_stock'] = "1";
+      
+      final newItems = await _productService.fetchInventory(queryParams);
+      
+      if (!mounted) return;
+      
+      if (newItems != null) {
+        setState(() {
+          if (newItems.length < _limit) {
+            _hasMore = false;
+          }
+          if (reset) {
+            _localResults = newItems;
+          } else {
+            _localResults.addAll(newItems);
+          }
+          _skip += newItems.length;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+      }
+    }
   }
 
   String _cleanName(String rawName) {
@@ -92,12 +154,22 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
     if (stock < 10) return widget.isDark ? Colors.orange[300]! : Colors.orange;
     return widget.isDark ? Colors.green[400]! : Colors.green;
   }
+  
+  String _getBrandName(int? id) {
+     if (id == null) return "";
+     final list = MasterDataCache().brands.where((b) => b.id == id).toList();
+     return list.isNotEmpty ? list.first.nombre : "";
+  }
+  
+  String _getCategoryName(int? id) {
+     if (id == null) return "";
+     final list = _categories.where((c) => c.id == id).toList();
+     return list.isNotEmpty ? list.first.nombre : "";
+  }
 
   @override
   Widget build(BuildContext context) {
-    final prov = Provider.of<InventoryProvider>(context);
     final isClient = Provider.of<AuthProvider>(context, listen: false).isCommunityClient;
-    
     final textColor = widget.isDark ? Colors.white : Colors.black87;
     final textTheme = Theme.of(context).textTheme;
 
@@ -121,7 +193,7 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none), 
                       filled: true, 
                       fillColor: widget.isDark ? const Color(0xFF14141C) : Colors.grey[100], 
-                      suffixIcon: IconButton(icon: Icon(Icons.clear, color: widget.isDark ? Colors.white70 : Colors.grey), onPressed: () { _searchCtrl.clear(); _performSearch("", reset: true); })
+                      suffixIcon: IconButton(icon: Icon(Icons.clear, color: widget.isDark ? Colors.white70 : Colors.grey), onPressed: () { _searchCtrl.clear(); _currentQuery = ""; _performSearch("", reset: true); })
                     ),
                     onChanged: _onSearchChanged,
                   ),
@@ -132,13 +204,13 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
             ),
           ),
 
-          if (prov.categories.isNotEmpty)
+          if (_categories.isNotEmpty)
             SizedBox(
               height: 45,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                itemCount: prov.categories.length + 1,
+                itemCount: _categories.length + 1,
                 itemBuilder: (ctx, i) {
                   if (i == 0) {
                     final isSelected = _selectedCategoryId == null;
@@ -157,7 +229,7 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
                     );
                   }
                   
-                  final cat = prov.categories[i - 1];
+                  final cat = _categories[i - 1];
                   final isSelected = cat.id == _selectedCategoryId;
                   
                   return Padding(
@@ -180,21 +252,21 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
           Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: widget.isDark ? Colors.white10 : Colors.grey[200])),
 
           Expanded(
-            child: prov.isLoading && _mappedResults.isEmpty
+            child: _isLoading && _localResults.isEmpty
               ? const Center(child: CircularProgressIndicator())
-              : _mappedResults.isEmpty
+              : _localResults.isEmpty
                 ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.inventory_2_outlined, size: 80, color: widget.isDark ? Colors.white10 : Colors.grey[300]), const SizedBox(height: 16), Text("No se encontraron productos", style: textTheme.titleMedium?.copyWith(color: widget.isDark ? Colors.grey[500] : Colors.grey))]))
                 : ListView.separated(
-                    controller: _scrollCtrl, padding: const EdgeInsets.all(20), itemCount: _mappedResults.length + (prov.isLoadingMore ? 1 : 0), separatorBuilder: (_, __) => Divider(height: 20, color: widget.isDark ? Colors.white10 : Colors.grey[200]),
+                    controller: _scrollCtrl, padding: const EdgeInsets.all(20), itemCount: _localResults.length + (_isLoadingMore ? 1 : 0), separatorBuilder: (_, __) => Divider(height: 20, color: widget.isDark ? Colors.white10 : Colors.grey[200]),
                     itemBuilder: (ctx, i) {
-                      if (i == _mappedResults.length) return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator()));
+                      if (i == _localResults.length) return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator()));
                       
-                      final wrapper = _mappedResults[i];
+                      final wrapper = _localResults[i];
                       final prod = wrapper.product;
                       final pres = wrapper.presentation;
                       
-                      final brandName = prov.getBrandName(prod.marcaId);
-                      final catName = prov.getCategoryName(prod.categoriaId); 
+                      final brandName = _getBrandName(prod.marcaId);
+                      final catName = _getCategoryName(prod.categoriaId); 
                       
                       final hasOffer = pres.precioOferta != null && pres.precioOferta! > 0;
                       Color stockColor = _getStockColor(pres.stockActual);

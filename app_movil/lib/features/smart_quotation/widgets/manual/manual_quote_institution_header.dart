@@ -33,9 +33,9 @@ class ManualQuoteInstitutionHeader extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(child: _miniTextField(schoolCtrl, "Colegio / Institución", Icons.business)),
+                  Expanded(child: _miniTextField(schoolCtrl, "Colegio", Icons.business)),
                   const SizedBox(width: 12),
-                  Expanded(child: _miniTextField(gradeCtrl, "Grado / Sección", Icons.class_)),
+                  Expanded(child: _miniTextField(gradeCtrl, "Grado", Icons.class_)),
                 ],
               )
             ],

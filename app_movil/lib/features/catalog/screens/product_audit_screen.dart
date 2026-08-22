@@ -78,24 +78,30 @@ class _ProductAuditScreenState extends State<ProductAuditScreen> {
       double cost = (event['costo_unitario'] as num?)?.toDouble() ?? 0.0;
       double price = (event['precio_venta'] as num?)?.toDouble() ?? 0.0;
 
-      if (action == 'INVENTARIO_INICIAL') {
+      if (action == 'VENTA') {
+        icon = Icons.shopping_cart_checkout; iconColor = Colors.redAccent;
+        title = '📦 Venta en Caja';
+        description = "Salida de ${qty.abs()} unidades.";
+      } else if (action == 'INVENTARIO_INICIAL') {
         icon = Icons.flag; iconColor = Colors.blue;
-        title = "Punto de Partida";
+        title = '🏁 Punto de Partida';
         description = "Inventario inicial de $qty unidades.\nCosto: ${_currencyFmt.format(cost)} | Precio: ${_currencyFmt.format(price)}";
-      } else if (action == 'VENTA') {
-        icon = Icons.shopping_bag; iconColor = Colors.green;
-        title = "Venta Registrada";
-        description = "Se dedujeron ${qty.abs()} unidades por venta.";
       } else if (action == 'COMPRA_LOTE') {
-        icon = Icons.local_shipping; iconColor = Colors.purple;
-        title = "Abastecimiento (Lote)";
+        icon = Icons.local_shipping; iconColor = Colors.green;
+        title = '🚚 Ingreso por Factura';
         description = "Ingresaron $qty unidades.\nCosto Registrado: ${_currencyFmt.format(cost)}";
-      } else if (action == 'AJUSTE_INVENTARIO') {
-        icon = Icons.build; iconColor = Colors.orange;
-        title = "Ajuste Manual";
-        description = "${qty > 0 ? 'Agregadas' : 'Descontadas'} ${qty.abs()} unidades manualmente.";
+      } else if (action == 'AJUSTE_INVENTARIO' || action == 'AJUSTE_MANUAL' || action == 'AJUSTE') {
+        if (qty > 0) {
+          icon = Icons.add_circle_outline; iconColor = Colors.green;
+          title = '➕ Ajuste Manual (+)';
+          description = "Agregadas ${qty.abs()} unidades manualmente.";
+        } else {
+          icon = Icons.remove_circle_outline; iconColor = Colors.redAccent;
+          title = '➖ Ajuste Manual (-)';
+          description = "Descontadas ${qty.abs()} unidades manualmente.";
+        }
       } else {
-        icon = Icons.sync_alt; iconColor = Colors.grey;
+        icon = Icons.swap_horiz; iconColor = Colors.grey;
         title = "Movimiento: $action";
         description = "Variación de $qty unidades.";
       }
@@ -103,16 +109,24 @@ class _ProductAuditScreenState extends State<ProductAuditScreen> {
       String oldVal = event['valor_anterior']?.toString() ?? "N/A";
       String newVal = event['valor_nuevo']?.toString() ?? "N/A";
 
-      icon = Icons.edit_note; iconColor = Colors.teal;
-      title = "Edición de Metadatos";
-      
       if (action == 'precio_venta_final') {
-        title = "Cambio de Precio Final";
-        description = "El precio cambió de $oldVal a $newVal";
+        icon = Icons.price_change; iconColor = Colors.purpleAccent;
+        title = '💰 Precio de Venta Actualizado';
+        description = "El precio cambió de S/ $oldVal a S/ $newVal";
       } else if (action == 'costo_unitario_calculado') {
-        title = "Ajuste de Costo Interno";
-        description = "El costo interno cambió de $oldVal a $newVal";
+        icon = Icons.analytics; iconColor = Colors.purpleAccent;
+        title = '📊 Costo Interno Ajustado';
+        description = "El costo interno cambió de S/ $oldVal a S/ $newVal";
+      } else if (action == 'estado') {
+        icon = Icons.visibility; iconColor = Colors.orangeAccent;
+        title = '🔒 Visibilidad Cambiada';
+        description = "De: $oldVal\nA: $newVal";
+      } else if (action == 'marca_id' || action == 'categoria_id') {
+        icon = Icons.label; iconColor = Colors.grey;
+        title = '🏷️ Clasificación Modificada';
+        description = "De: $oldVal\nA: $newVal";
       } else {
+        icon = Icons.edit_note; iconColor = Colors.teal;
         title = "Campo '$action' Modificado";
         description = "De: $oldVal\nA: $newVal";
       }

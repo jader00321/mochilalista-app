@@ -77,6 +77,12 @@ class MatchedProduct {
     return buffer.toString().trim();
   }
 
+  /// Nombre limpio para comparar con fullName (sin inflar con marca/descripción en bundles)
+  String get displayNameForComparison {
+    if (bundleId != null) return productName.trim();
+    return displayNameClean;
+  }
+
   String get displayNameCard => "$displayNameClean ($unit)";
   String get displayNameSearch => "$displayNameClean - $unit";
 
@@ -126,12 +132,14 @@ class MatchPair {
   int selectedQuantity; 
   double? overridePrice; 
   int? bundleId; 
+  String? bundleName; 
 
   MatchPair({
     required this.sourceItem,
     this.selectedProduct,
     this.status = MatchStatus.none,
     this.bundleId,
+    this.bundleName,
   }) : selectedQuantity = sourceItem.quantity;
 
   double get effectiveUnitPrice {
@@ -166,6 +174,7 @@ class MatchPair {
       selectedProduct: selectedProduct?.clone(),
       status: status,
       bundleId: bundleId,
+      bundleName: bundleName,
     );
     copy.selectedQuantity = selectedQuantity;
     copy.overridePrice = overridePrice;
@@ -182,8 +191,11 @@ class MatchPair {
       "quantity": selectedQuantity,
       "unit_price_applied": effectiveUnitPrice, 
       "original_unit_price": originalUnitPrice, 
+      "discount_catalog_amount": (selectedProduct!.offerPrice != null && selectedProduct!.offerPrice! > 0)
+          ? (selectedProduct!.price - selectedProduct!.offerPrice!)
+          : 0.0,
       
-      "product_name": selectedProduct!.productName,
+      "product_name": bundleName ?? selectedProduct!.productName,
       "brand_name": selectedProduct!.brand,
       "specific_name": selectedProduct!.specificName,
       "sales_unit": selectedProduct!.unit,

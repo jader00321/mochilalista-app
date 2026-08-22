@@ -367,12 +367,51 @@ class SalesStatsModel {
   }
 }
 
+class BundleChange {
+  final int itemId;
+  final int bundleId;
+  final String bundleName;
+  final List<String> changes;
+  final bool isDeactivated;
+  final bool isDeleted;
+  final bool isCompositionChange;
+  final double? oldPrice;
+  final double? newPrice;
+
+  BundleChange({
+    required this.itemId,
+    required this.bundleId,
+    required this.bundleName,
+    required this.changes,
+    this.isDeactivated = false,
+    this.isDeleted = false,
+    this.isCompositionChange = false,
+    this.oldPrice,
+    this.newPrice,
+  });
+
+  factory BundleChange.fromJson(Map<String, dynamic> json) {
+    return BundleChange(
+      itemId: json['item_id'] ?? -1,
+      bundleId: json['bundle_id'] ?? -1,
+      bundleName: json['bundle_name'] ?? 'Oferta',
+      changes: (json['changes'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      isDeactivated: json['is_deactivated'] == true || json['is_deactivated'] == 1,
+      isDeleted: json['is_deleted'] == true || json['is_deleted'] == 1,
+      isCompositionChange: json['is_composition_change'] == true || json['is_composition_change'] == 1,
+      oldPrice: json['old_price'] != null ? (json['old_price'] as num).toDouble() : null,
+      newPrice: json['new_price'] != null ? (json['new_price'] as num).toDouble() : null,
+    );
+  }
+}
+
 class ValidationResult {
   final bool hasIssues;
   final bool canSell;
   final List<StockWarning> stockWarnings;
   final List<PriceChange> priceChanges;
   final List<NameChange> nameChanges;
+  final List<BundleChange> bundleChanges;
 
   ValidationResult({
     required this.hasIssues,
@@ -380,6 +419,7 @@ class ValidationResult {
     required this.stockWarnings,
     required this.priceChanges,
     this.nameChanges = const [],
+    this.bundleChanges = const [],
   });
 
   factory ValidationResult.fromJson(Map<String, dynamic> json) {
@@ -389,6 +429,7 @@ class ValidationResult {
       stockWarnings: (json['stock_warnings'] as List?)?.map((e) => StockWarning.fromJson(e)).toList() ?? [],
       priceChanges: (json['price_changes'] as List?)?.map((e) => PriceChange.fromJson(e)).toList() ?? [],
       nameChanges: (json['name_changes'] as List?)?.map((e) => NameChange.fromJson(e)).toList() ?? [],
+      bundleChanges: (json['bundle_changes'] as List?)?.map((e) => BundleChange.fromJson(e)).toList() ?? [],
     );
   }
 }

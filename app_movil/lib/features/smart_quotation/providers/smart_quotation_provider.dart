@@ -104,7 +104,14 @@ class SmartQuotationProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _service.analyzeImage(image, _aiToken ?? "");
+      final response = await _service.analyzeImage(
+        image, 
+        _aiToken ?? "",
+        onRetrying: (msg) {
+          _errorMessage = msg;
+          notifyListeners();
+        }
+      );
       _metadata = response.metadata;
       _items = response.items;
       return true;

@@ -32,6 +32,8 @@ class TrackingProvider with ChangeNotifier {
   List<SmartQuotationModel> _currentClientQuotations = [];
   bool _isLoadingQuotations = false;
 
+  int _clientCount = 0;
+
   // --- GETTERS ---
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
@@ -47,6 +49,7 @@ class TrackingProvider with ChangeNotifier {
   bool get isLoadingDebts => _isLoadingDebts;
   List<SmartQuotationModel> get currentClientQuotations => _currentClientQuotations;
   bool get isLoadingQuotations => _isLoadingQuotations;
+  int get clientCount => _clientCount;
 
   // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
   void updateContext(int? negocioId, int? usuarioId) {
@@ -65,11 +68,24 @@ class TrackingProvider with ChangeNotifier {
       _filterConfidenceLevel = "todos"; 
       _currentSort = "newest";
       _filterIsAppClient = false; 
+      _clientCount = 0;
     }
   }
 
   void _handleException(dynamic e) {
     _errorMessage = e.toString().replaceAll("Exception:", "").trim();
+  }
+
+  Future<void> loadClientCount() async {
+    if (_negocioId == null) return;
+    try {
+      final db = await _service.dbHelper.database;
+      final result = await db.rawQuery('SELECT COUNT(*) as cnt FROM clientes WHERE negocio_id = ?', [_negocioId]);
+      _clientCount = (result.first['cnt'] as int?) ?? 0;
+      notifyListeners();
+    } catch (e) {
+      // ignorar
+    }
   }
 
   Future<ClientModel?> getClientById(int clientId) async {

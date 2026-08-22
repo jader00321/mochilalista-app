@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
+import 'package:app_movil/features/promotions/screens/bundle_builder_screen.dart';
 
 class InsightsCarousel extends StatefulWidget {
   final AnalyticsData data;
@@ -15,12 +18,78 @@ class InsightsCarousel extends StatefulWidget {
   State<InsightsCarousel> createState() => _InsightsCarouselState();
 }
 
-class _InsightsCarouselState extends State<InsightsCarousel> {
+class _InsightsCarouselState extends State<InsightsCarousel> with SingleTickerProviderStateMixin {
+  late ScrollController _scrollController;
+  Timer? _timer;
+  late AnimationController _modalAnimationController;
+  List<BusinessInsight> _shuffledInsights = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _shuffledInsights = List.from(widget.data.insights)..shuffle();
+    _scrollController = ScrollController();
+    _modalAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _startAutoScroll();
+  }
+
+  @override
+  void didUpdateWidget(InsightsCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data.insights != widget.data.insights) {
+      setState(() {
+        _shuffledInsights = List.from(widget.data.insights)..shuffle();
+      });
+    }
+  }
+
+  void _startAutoScroll() {
+    _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_scrollController.hasClients) {
+        final double maxScroll = _scrollController.position.maxScrollExtent;
+        final double currentScroll = _scrollController.position.pixels;
+        final double itemWidth = 316.0; // 300 width + 16 right margin
+        
+        if (currentScroll + itemWidth <= maxScroll) {
+          _scrollController.animateTo(currentScroll + itemWidth, duration: const Duration(milliseconds: 800), curve: Curves.easeInOut);
+        } else {
+          _scrollController.animateTo(0, duration: const Duration(milliseconds: 800), curve: Curves.easeInOut);
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _scrollController.dispose();
+    _modalAnimationController.dispose();
+    super.dispose();
+  }
+
+  void _navigateToRoute(BuildContext context, String route) {
+    switch (route) {
+      case 'smart_restock':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartRestockScreen()));
+        break;
+      case 'bundle_liquidation':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const BundleBuilderScreen(initialTipoPromocion: 'PAQUETE_LIQUIDACION')));
+        break;
+      case 'bundle_flash':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const BundleBuilderScreen(initialTipoPromocion: 'PAQUETE_OFERTA')));
+        break;
+    }
+  }
+
   void _showInsightDetail(BuildContext context, BusinessInsight insight, Color bgColor, Color iconColor) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      transitionAnimationController: _modalAnimationController,
       builder: (ctx) {
         return DraggableScrollableSheet(
           initialChildSize: 0.5,
@@ -90,19 +159,48 @@ class _InsightsCarouselState extends State<InsightsCarousel> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: iconColor,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  if (insight.actionRoute != null) ...[
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _navigateToRoute(context, insight.actionRoute!);
+                        },
+                        icon: const Icon(Icons.arrow_forward),
+                        label: Text(insight.actionLabel ?? "Continuar"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: iconColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
                       ),
-                      child: const Text("Entendido", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text("Cerrar", style: TextStyle(color: widget.isDark ? Colors.white70 : Colors.black54)),
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: iconColor,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: const Text("Entendido", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             );
@@ -131,11 +229,12 @@ class _InsightsCarouselState extends State<InsightsCarousel> {
         SizedBox(
           height: 180,
           child: ListView.builder(
+            controller: _scrollController,
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: widget.data.insights.length,
+            itemCount: _shuffledInsights.length,
             itemBuilder: (context, index) {
-              final insight = widget.data.insights[index];
+              final insight = _shuffledInsights[index];
               Color bgColor = Colors.blue.withValues(alpha: 0.15);
               Color iconColor = widget.isDark ? Colors.lightBlueAccent : Colors.blue[700]!;
               

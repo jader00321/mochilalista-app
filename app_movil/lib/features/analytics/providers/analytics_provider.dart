@@ -14,8 +14,26 @@ class BusinessInsight {
   final String description;
   final InsightType type;
   final String? suggestedAction;
+  final String? actionLabel;
+  final String? actionRoute;
 
-  BusinessInsight(this.title, this.description, this.icon, this.type, {this.suggestedAction});
+  BusinessInsight(this.title, this.description, this.icon, this.type, {this.suggestedAction, this.actionLabel, this.actionRoute});
+}
+
+class FinancialHealthSummary {
+  final String balanceHeadline;
+  final String balanceDescription;
+  final String healthDiagnosis;
+  final String healthLevel;
+  final String marginContext;
+
+  FinancialHealthSummary({
+    required this.balanceHeadline,
+    required this.balanceDescription,
+    required this.healthDiagnosis,
+    required this.healthLevel,
+    required this.marginContext,
+  });
 }
 
 class AnalyticsData {
@@ -44,6 +62,7 @@ class AnalyticsData {
   final int deadStockCount;
   final List<Map<String, dynamic>> deadStockList;
   final List<BusinessInsight> insights;
+  final FinancialHealthSummary? financialHealth;
 
   AnalyticsData({
     this.totalSales = 0.0,
@@ -69,6 +88,7 @@ class AnalyticsData {
     this.deadStockCount = 0,
     this.deadStockList = const [],
     this.insights = const [],
+    this.financialHealth,
   });
 }
 
@@ -270,7 +290,7 @@ class AnalyticsProvider with ChangeNotifier {
 
       // Top Clientes
       final topClientsQuery = await db.rawQuery('''
-        SELECT c.nombre_completo, SUM(v.monto_total) as total_comprado
+        SELECT c.nombre_completo, SUM(v.monto_total) as total_comprado, COUNT(v.id) as num_compras
         FROM ventas v
         JOIN clientes c ON v.cliente_id = c.id
         WHERE v.negocio_id = ? AND v.is_archived = 0
@@ -445,7 +465,9 @@ class AnalyticsProvider with ChangeNotifier {
           "🚨 Riesgo de Quiebre", 
           "El producto '$topLow' tiene un stock crítico de $stockLow unidades. Podrías perder ventas si no reabasteces pronto.", 
           Icons.warning_amber_rounded, InsightType.warning,
-          suggestedAction: "Abre 'Alertas de Inventario' para crear una orden de compra."
+          suggestedAction: "Abre 'Alertas de Inventario' para crear una orden de compra.",
+          actionLabel: "Ir a Reponer Stock",
+          actionRoute: "smart_restock",
         ));
       }
 
@@ -455,7 +477,9 @@ class AnalyticsProvider with ChangeNotifier {
           "💡 Capital Estancado", 
           "Tienes $deadStockCount productos sin ventas en más de 90 días, lo que representa ${currencyFmt.format(immobilizedCapital)} inmovilizados.", 
           Icons.lightbulb_outline, InsightType.tip,
-          suggestedAction: "Crea una 'Promoción de Liquidación' para recuperar este capital."
+          suggestedAction: "Crea una 'Promoción de Liquidación' para recuperar este capital.",
+          actionLabel: "Crear Promoción de Liquidación",
+          actionRoute: "bundle_liquidation",
         ));
       }
 
@@ -486,7 +510,9 @@ class AnalyticsProvider with ChangeNotifier {
           "📉 Caída en Ventas", 
           "Las ventas han bajado un ${growthRate.abs().toStringAsFixed(1)}% este mes (${currencyFmt.format(currentMonthValue)}).", 
           Icons.trending_down, InsightType.warning,
-          suggestedAction: "Revisa si te falta stock de los productos estrella o lanza una promoción flash."
+          suggestedAction: "Revisa si te falta stock de los productos estrella o lanza una promoción flash.",
+          actionLabel: "Crear Oferta Flash",
+          actionRoute: "bundle_flash",
         ));
       }
 
@@ -515,6 +541,53 @@ class AnalyticsProvider with ChangeNotifier {
         }
       }
 
+      // 7. Cálculo de FinancialHealthSummary
+      String balanceHeadline = "";
+      String balanceDescription = "";
+      String healthLevel = "";
+      String marginContext = "";
+      
+      String marginFmt = margin.toStringAsFixed(1);
+      String netProfitFmt = currencyFmt.format(totalGananciaNeta);
+      String totalSalesFmt = currencyFmt.format(totalVentas);
+
+      if (margin >= 25) {
+        balanceHeadline = "¡Tu negocio es una máquina de generar! 🚀";
+        balanceDescription = "Tu margen de $marginFmt% supera el promedio. Has generado $netProfitFmt de ganancia neta sobre $totalSalesFmt en ingresos.";
+        healthLevel = 'excellent';
+      } else if (margin >= 15) {
+        balanceHeadline = "Negocio saludable y con potencial 💪";
+        balanceDescription = "Tu margen de $marginFmt% está dentro del rango saludable. De cada S/ 100 que vendes, te quedan S/ $marginFmt limpios. Optimiza costos de proveedor para acercarte al 25%.";
+        healthLevel = 'healthy';
+      } else if (margin >= 5) {
+        balanceHeadline = "Margen ajustado, pero hay oportunidad ⚡";
+        balanceDescription = "Tu margen de $marginFmt% indica que tus costos consumen la mayor parte de tus ingresos. Revisa si puedes negociar mejores precios con proveedores o incrementar tus precios de venta.";
+        healthLevel = 'warning';
+      } else {
+        balanceHeadline = "⚠️ Alerta: Tu negocio necesita atención urgente";
+        balanceDescription = "Con un margen de $marginFmt%, estás operando al límite. Si los costos suben incluso un poco, podrías operar en pérdidas. Acción inmediata: revisa la estructura de precios.";
+        healthLevel = 'critical';
+      }
+
+      if (growthRate > 10 && margin >= 15) {
+        marginContext = "Estás en el escenario ideal: vendes más y con buen margen.";
+      } else if (growthRate > 10 && margin < 15) {
+        marginContext = "Cuidado: tus ventas crecen pero tu margen es delgado. Estás vendiendo más pero ganando poco por cada venta.";
+      } else if (growthRate < -10) {
+        marginContext = "Tus ventas están cayendo. Te sugerimos armar un paquete de ofertas con tu stock estancado para reactivar el flujo.";
+      } else {
+        marginContext = "Mantienes un ritmo estable. Busca oportunidades de optimizar costos para mejorar tu margen neto.";
+      }
+
+      final financialHealth = FinancialHealthSummary(
+        balanceHeadline: balanceHeadline,
+        balanceDescription: balanceDescription,
+        healthDiagnosis: margin >= 20 ? "Excelente margen de ganancia. Tu modelo de negocio es altamente rentable." : 
+                          (margin >= 10 ? "Margen aceptable. Podrías optimizar costos de proveedores para mejorar tu rentabilidad." : "Margen crítico. Revisa tu estructura de precios de venta y costos de adquisición urgentemente."),
+        healthLevel: healthLevel,
+        marginContext: marginContext,
+      );
+
       _data = AnalyticsData(
         totalSales: totalVentas,
         netProfit: totalGananciaNeta,
@@ -539,6 +612,7 @@ class AnalyticsProvider with ChangeNotifier {
         deadStockCount: deadStockCount,
         deadStockList: deadStockList,
         insights: generatedInsights,
+        financialHealth: financialHealth,
       );
 
       _progress = 1.0;

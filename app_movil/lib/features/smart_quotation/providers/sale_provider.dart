@@ -62,6 +62,55 @@ class SaleProvider with ChangeNotifier {
     return sum;
   }
 
+  int get todaySalesCount {
+    if (_salesHistory.isEmpty) return 0;
+    final today = DateTime.now();
+    int count = 0;
+    for (var sale in _salesHistory) {
+      try {
+        final saleDate = DateTime.parse(sale.saleDate);
+        if (saleDate.year == today.year && saleDate.month == today.month && saleDate.day == today.day) {
+          count++;
+        }
+      } catch (e) { continue; }
+    }
+    return count;
+  }
+
+  double? _currentMonthMargin;
+  double? get currentMonthMargin => _currentMonthMargin;
+
+  Future<void> loadCurrentMonthMargin() async {
+    if (_negocioId == null) return;
+    try {
+      final db = await _salesService.dbHelper.database;
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month, 1).toIso8601String();
+      
+      final result = await db.rawQuery('''
+        SELECT 
+          SUM(i.cantidad * i.precio_unitario) as ventas,
+          SUM(i.cantidad * (SELECT costo FROM productos WHERE id = i.producto_id)) as costos
+        FROM venta_items i
+        JOIN ventas v ON i.venta_id = v.id
+        WHERE v.negocio_id = ? AND v.fecha_venta >= ? AND v.archivada = 0
+      ''', [_negocioId, start]);
+      
+      if (result.isNotEmpty) {
+        final ventas = (result.first['ventas'] as num?)?.toDouble() ?? 0.0;
+        final costos = (result.first['costos'] as num?)?.toDouble() ?? 0.0;
+        if (ventas > 0) {
+          _currentMonthMargin = ((ventas - costos) / ventas) * 100;
+        } else {
+          _currentMonthMargin = 0.0;
+        }
+        notifyListeners();
+      }
+    } catch(e) {
+      // ignore
+    }
+  }
+
   void updateContext(int? negocioId, int? usuarioId) {
     if (_negocioId != negocioId) {
       _negocioId = negocioId;
@@ -246,7 +295,59 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
+  void resetFilters() {
+    _currentTab = "todas";
+    _activeQuickFilter = "este_mes";
+    _searchQuery = "";
+    _currentSortBy = "fecha_venta";
+    _currentOrder = "desc";
+    
+    final now = DateTime.now();
+    _currentStartDate = DateTime(now.year, now.month, 1).toIso8601String();
+    _currentEndDate = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+  }
+
+  Future<void> silentRefresh() async {
+    if (_negocioId == null) return;
+    try {
+      bool isArchivedTab = _currentTab == "archivadas";
+      String? origen = (_currentTab == "todas" || _currentTab == "archivadas") ? null : _currentTab;
+
+      final targetLimit = _salesHistory.length < _limit ? _limit : _salesHistory.length;
+
+      final newSales = await _salesService.getHistory(
+        _negocioId!,
+        skip: 0,
+        limit: targetLimit,
+        startDate: _currentStartDate,
+        endDate: _currentEndDate,
+        searchQuery: _searchQuery,
+        isArchived: isArchivedTab,
+        origenVenta: origen,
+        sortBy: _currentSortBy,
+        order: _currentOrder,
+      );
+
+      _salesHistory = newSales;
+      _currentSkip = newSales.length;
+      _hasMoreData = newSales.length >= targetLimit;
+
+      _currentStats = await _salesService.getStats(
+        _negocioId!,
+        startDate: _currentStartDate,
+        endDate: _currentEndDate,
+        isArchived: isArchivedTab,
+        origenVenta: origen,
+      );
+      
+      notifyListeners();
+    } catch (e) {
+      // Ignoramos errores en silent refresh para no alertar al usuario
+    }
+  }
+
   Future<void> loadSalesHistory() async {
+    resetFilters();
     await loadFilteredHistory(reset: true);
   }
 

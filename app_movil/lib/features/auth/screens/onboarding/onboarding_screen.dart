@@ -5,7 +5,7 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/widgets/image_picker_field.dart'; 
 import 'package:app_movil/core/widgets/custom_text_field.dart';
 import 'package:app_movil/core/widgets/primary_button.dart';
-import 'package:app_movil/core/widgets/auth_background.dart';
+
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -92,181 +92,238 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
 
-    return AuthBackground(
-      headerContent: AnimatedBuilder(
-        animation: _animController,
-        builder: (context, child) {
-          return Opacity(
-            opacity: _fadeAnim.value,
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white), onPressed: () => Navigator.pop(context)),
-                    const Spacer(),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 15, offset: const Offset(0, 5))]),
-                  child: Image.asset('assets/logo.png', width: 50, height: 50, fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.storefront, size: 50, color: Color(0xFF1565C0))),
-                ),
-                const SizedBox(height: 12),
-                const Text("Configura tu Negocio", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-                const SizedBox(height: 4),
-                Text("Solo te tomará un minuto", style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 15)),
-              ],
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 250,
+            pinned: true,
+            stretch: true,
+            backgroundColor: isDark ? const Color(0xFF0F3A11) : const Color(0xFF1976D2),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white), 
+              onPressed: () => Navigator.pop(context)
             ),
-          );
-        }
-      ),
-      child: AnimatedBuilder(
-        animation: _animController,
-        builder: (context, child) {
-          return Opacity(
-            opacity: _fadeAnim.value,
-            child: Transform.translate(
-              offset: Offset(0, _slideAnim.value),
-              child: child,
-            ),
-          );
-        },
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 40),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: surfaceColor,
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(color: isDark ? Colors.white10 : Colors.transparent),
-              boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 25, offset: const Offset(0, 10))],
-            ),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Datos Personales", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
-                  const SizedBox(height: 16),
-                  CustomTextField(
-                    label: 'Tu Nombre Completo', icon: Icons.person_outline, controller: _nombreDuenoCtrl,
-                    validator: (v) => v!.isEmpty ? 'Requerido' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  CustomTextField(
-                    label: 'Teléfono / WhatsApp', 
-                    icon: Icons.phone_android_rounded, 
-                    controller: _telefonoCtrl, 
-                    keyboardType: TextInputType.phone,
-                    maxLength: 11, // 9 digits + 2 spaces max
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      _PhoneNumberFormatter(),
-                    ],
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Requerido';
-                      final digits = v.replaceAll(RegExp(r'\D'), '');
-                      if (digits.length != 9) return 'Debe tener 9 dígitos exactos';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 30),
-                  Text("Datos del Negocio", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
-                  const SizedBox(height: 16),
-                  CustomTextField(
-                    label: 'Nombre Comercial', icon: Icons.store_mall_directory_outlined, controller: _nombreNegocioCtrl,
-                    validator: (v) => v!.isEmpty ? 'Requerido' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  CustomTextField(
-                    label: 'Dirección del Local', icon: Icons.location_on_outlined, controller: _direccionCtrl,
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Dropdown estilizado
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF14141C) : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _monedaSeleccionada,
-                      decoration: InputDecoration(
-                        labelText: 'Moneda Principal',
-                        labelStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 13),
-                        border: InputBorder.none,
-                        icon: Icon(Icons.monetization_on_outlined, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 22),
-                      ),
-                      // 🔥 AQUÍ SE CORRIGIÓ EL ERROR ROJO (Escapando el símbolo de Dólar/Peso)
-                      items: ['S/ (Soles)', '\$ (Dólares)', '€ (Euros)', 'Bs. (Bolívares)', '\$ (Pesos)'].map((String val) {
-                        return DropdownMenuItem(value: val, child: Text(val, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15)));
-                      }).toList(),
-                      onChanged: (val) => setState(() => _monedaSeleccionada = val!),
-                      dropdownColor: isDark ? const Color(0xFF23232F) : Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  CustomTextField(
-                    label: 'Información de Pago (Yape, Plin, Cuenta, etc.)', 
-                    icon: Icons.account_balance_wallet_outlined, 
-                    controller: _infoPagoCtrl,
-                  ),
-                  const SizedBox(height: 20),
-
-                  ImagePickerField(
-                    controller: _logoCtrl,
-                    label: "Logo del Negocio (Opcional)",
-                    isDark: isDark,
-                  ),
-
-                  const SizedBox(height: 30),
-                  Text("Seguridad y Privacidad", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
-                  const SizedBox(height: 8),
-                  
-                  Container(
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.blue.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.2))
-                    ),
-                    child: SwitchListTile(
-                      title: const Text("Proteger con PIN y Huella", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      subtitle: const Text("Recomendado si compartes tu dispositivo", style: TextStyle(fontSize: 12)),
-                      value: _usarSeguridad,
-                      activeThumbColor: Colors.blue,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      onChanged: (val) => setState(() => _usarSeguridad = val),
-                    ),
-                  ),
-                  
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOutCubic,
-                    child: _usarSeguridad 
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: 16.0),
-                          child: CustomTextField(
-                            label: 'Crea un PIN de 4 dígitos', icon: Icons.password_rounded, controller: _pinCtrl,
-                            keyboardType: TextInputType.number, isPassword: true, maxLength: 4,
-                          ),
+            flexibleSpace: FlexibleSpaceBar(
+              centerTitle: true,
+              titlePadding: const EdgeInsets.only(bottom: 16),
+              title: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Cuando la altura es pequeña (colapsado), mostramos solo el logo
+                  final isCollapsed = constraints.biggest.height <= kToolbarHeight + MediaQuery.of(context).padding.top + 20;
+                  return AnimatedOpacity(
+                    opacity: isCollapsed ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: isCollapsed 
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                              child: Image.asset('assets/logo.png', width: 24, height: 24, fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.storefront, size: 24, color: Color(0xFF1565C0))),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text("Configura tu Negocio", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                          ],
                         )
                       : const SizedBox.shrink(),
+                  );
+                }
+              ),
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [const Color(0xFF0F3A11), const Color(0xFF142C23)]
+                        : [const Color(0xFF1976D2), const Color(0xFF0D47A1)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-
-                  const SizedBox(height: 40),
-                  PrimaryButton(
-                    text: "GUARDAR Y COMENZAR",
-                    icon: Icons.check_circle_outline,
-                    isLoading: auth.isLoading,
-                    onPressed: _guardarPerfil,
-                  )
-                ],
+                ),
+                child: SafeArea(
+                  child: AnimatedBuilder(
+                    animation: _animController,
+                    builder: (context, child) {
+                      return Opacity(
+                        opacity: _fadeAnim.value,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: 20),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 15, offset: const Offset(0, 5))]),
+                              child: Image.asset('assets/logo.png', width: 50, height: 50, fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.storefront, size: 50, color: Color(0xFF1565C0))),
+                            ),
+                            const SizedBox(height: 12),
+                            Text("Configura tu Negocio", style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                            const SizedBox(height: 4),
+                            Text("Solo te tomará un minuto", style: TextStyle(color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.9), fontSize: 15)),
+                          ],
+                        ),
+                      );
+                    }
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+          SliverToBoxAdapter(
+            child: AnimatedBuilder(
+              animation: _animController,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: _fadeAnim.value,
+                  child: Transform.translate(
+                    offset: Offset(0, _slideAnim.value),
+                    child: child,
+                  ),
+                );
+              },
+              child: Transform.translate(
+                offset: const Offset(0, -20),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: surfaceColor,
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(color: isDark ? Colors.white10 : Colors.transparent),
+                      boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 25, offset: const Offset(0, 10))],
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Datos Personales", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: 'Tu Nombre Completo', icon: Icons.person_outline, controller: _nombreDuenoCtrl,
+                            validator: (v) => v!.isEmpty ? 'Requerido' : null,
+                          ),
+                          const SizedBox(height: 12),
+                          CustomTextField(
+                            label: 'Teléfono / WhatsApp', 
+                            icon: Icons.phone_android_rounded, 
+                            controller: _telefonoCtrl, 
+                            keyboardType: TextInputType.phone,
+                            maxLength: 11, // 9 digits + 2 spaces max
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              _PhoneNumberFormatter(),
+                            ],
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Requerido';
+                              final digits = v.replaceAll(RegExp(r'\D'), '');
+                              if (digits.length != 9) return 'Debe tener 9 dígitos exactos';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 30),
+                          Text("Datos del Negocio", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: 'Nombre Comercial', icon: Icons.store_mall_directory_outlined, controller: _nombreNegocioCtrl,
+                            validator: (v) => v!.isEmpty ? 'Requerido' : null,
+                          ),
+                          const SizedBox(height: 12),
+                          CustomTextField(
+                            label: 'Dirección del Local', icon: Icons.location_on_outlined, controller: _direccionCtrl,
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Dropdown estilizado
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF14141C) : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _monedaSeleccionada,
+                              decoration: InputDecoration(
+                                labelText: 'Moneda Principal',
+                                labelStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 13),
+                                border: InputBorder.none,
+                                icon: Icon(Icons.monetization_on_outlined, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 22),
+                              ),
+                              items: ['S/ (Soles)', '\$ (Dólares)', '€ (Euros)', 'Bs. (Bolívares)', '\$ (Pesos)'].map((String val) {
+                                return DropdownMenuItem(value: val, child: Text(val, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15)));
+                              }).toList(),
+                              onChanged: (val) => setState(() => _monedaSeleccionada = val!),
+                              dropdownColor: isDark ? const Color(0xFF23232F) : Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: 'Información de Pago (Yape, Plin, Cuenta, etc.)', 
+                            icon: Icons.account_balance_wallet_outlined, 
+                            controller: _infoPagoCtrl,
+                          ),
+                          const SizedBox(height: 20),
+        
+                          ImagePickerField(
+                            controller: _logoCtrl,
+                            label: "Logo del Negocio (Opcional)",
+                            isDark: isDark,
+                          ),
+        
+                          const SizedBox(height: 30),
+                          Text("Seguridad y Privacidad", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
+                          const SizedBox(height: 8),
+                          
+                          Container(
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.blue.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.2))
+                            ),
+                            child: SwitchListTile(
+                              title: const Text("Proteger con PIN y Huella", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              subtitle: const Text("Recomendado si compartes tu dispositivo", style: TextStyle(fontSize: 12)),
+                              value: _usarSeguridad,
+                              activeThumbColor: Colors.blue,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              onChanged: (val) => setState(() => _usarSeguridad = val),
+                            ),
+                          ),
+                          
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOutCubic,
+                            child: _usarSeguridad 
+                              ? Padding(
+                                  padding: const EdgeInsets.only(top: 16.0),
+                                  child: CustomTextField(
+                                    label: 'Crea un PIN de 4 dígitos', icon: Icons.password_rounded, controller: _pinCtrl,
+                                    keyboardType: TextInputType.number, isPassword: true, maxLength: 4,
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                          ),
+        
+                          const SizedBox(height: 40),
+                          PrimaryButton(
+                            text: "GUARDAR Y COMENZAR",
+                            icon: Icons.check_circle_outline,
+                            isLoading: auth.isLoading,
+                            onPressed: _guardarPerfil,
+                          ),
+                          const SizedBox(height: 40),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

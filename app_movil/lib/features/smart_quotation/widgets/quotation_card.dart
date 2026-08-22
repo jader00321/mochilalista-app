@@ -128,12 +128,32 @@ class QuotationCard extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: isDark ? Colors.blueGrey[800] : Colors.blueGrey[100],
                             child: Text(
-                              quotation.clientName ?? "Sin Cliente - #${quotation.id}",
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black87),
-                              maxLines: 3, 
-                              overflow: TextOverflow.ellipsis,
+                              (quotation.clientName != null && quotation.clientName!.isNotEmpty) ? quotation.clientName![0].toUpperCase() : "#",
+                              style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.blueGrey[900], fontSize: 14),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    quotation.clientName ?? "Sin Cliente - #${quotation.id}",
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black87),
+                                    maxLines: 2, 
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (quotation.notas != null && quotation.notas!.isNotEmpty) ...[
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.push_pin, size: 16, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                                ]
+                              ],
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -180,18 +200,14 @@ class QuotationCard extends StatelessWidget {
                       if (validation != null && validation!.hasIssues)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: Row(
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
                             children: [
                               if (validation!.stockWarnings.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: _buildWarningTag("${validation!.stockWarnings.length} Stock", Colors.red),
-                                ),
+                                _buildWarningTag("${validation!.stockWarnings.length} Stock", Colors.red),
                               if (validation!.priceChanges.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: _buildWarningTag("${validation!.priceChanges.length} Precio", Colors.orange),
-                                ),
+                                _buildWarningTag("${validation!.priceChanges.length} Precio", Colors.orange),
                               if (validation!.nameChanges.isNotEmpty)
                                 _buildWarningTag("${validation!.nameChanges.length} Nombre", Colors.indigo),
                             ],

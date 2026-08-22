@@ -77,6 +77,11 @@ class PromotionRepository {
     await db.delete('items_paquete', where: 'paquete_id = ?', whereArgs: [paqueteId]);
   }
 
+  Future<int> deleteBundleItem(int id) async {
+    final db = await dbHelper.database;
+    return await db.delete('items_paquete', where: 'id = ?', whereArgs: [id]);
+  }
+
   // ================= REGLAS DE PROMOCION =================
   Future<List<Map<String, dynamic>>> getPromotionRules(int campanaId) async {
     try {

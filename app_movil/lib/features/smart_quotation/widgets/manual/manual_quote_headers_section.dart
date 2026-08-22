@@ -80,13 +80,15 @@ class ManualQuoteHeadersSection extends StatelessWidget {
                   initiallyExpanded: isQuoteDataExpanded,
                   iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
                   collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey,
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                  visualDensity: VisualDensity.compact,
                   title: Text(
                     "Identificación de la Cotización", 
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)
                   ),
                   subtitle: Text(
                     "Nombre de la lista y notas internas", 
-                    style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey)
+                    style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey)
                   ),
                   onExpansionChanged: onQuoteDataExpansionChanged,
                   children: [
@@ -138,13 +140,15 @@ class ManualQuoteHeadersSection extends StatelessWidget {
                   initiallyExpanded: isClientPanelExpanded,
                   iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
                   collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey,
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                  visualDensity: VisualDensity.compact,
                   title: Text(
                     "Datos del Cliente y Colegio", 
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)
                   ),
                   subtitle: Text(
                     "Toca para desplegar y editar", 
-                    style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey)
+                    style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey)
                   ),
                   onExpansionChanged: onClientPanelExpansionChanged,
                   children: [
@@ -168,7 +172,7 @@ class ManualQuoteHeadersSection extends StatelessWidget {
                       onSearchClientTap: onSearchClientTap,
                       onClearClient: onClearClient,
                     ),
-                    const SizedBox(height: 10)
+                    const SizedBox(height: 6)
                   ],
                 ),
               ),
@@ -176,7 +180,7 @@ class ManualQuoteHeadersSection extends StatelessWidget {
           ),
         ),
         Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-        const SizedBox(height: 16), 
+        const SizedBox(height: 8), 
       ],
     );
   }

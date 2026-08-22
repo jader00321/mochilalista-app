@@ -1,13 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_view/photo_view.dart';
 
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/theme_provider.dart';
-import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
 
 import 'package:app_movil/features/profile/widgets/business_info_card.dart';
 import 'package:app_movil/features/profile/widgets/profile_menu_item.dart';
@@ -51,7 +54,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Future<void> _refreshProfile() async {
-    await Provider.of<AuthProvider>(context, listen: false).checkInitialState();
+    await Provider.of<AuthProvider>(context, listen: false).refreshActiveUser();
     if (mounted) CustomSnackBar.show(context, message: "Datos actualizados", isError: false);
   }
 
@@ -177,6 +180,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   Widget _buildHeader(BuildContext context, AuthProvider auth, bool isDark) {
     final String? validLogoPath = _getValidLocalImagePath(auth.currentBusiness?.logoUrl);
+    
+    final catalog = Provider.of<CatalogProvider>(context);
+    final workbench = Provider.of<WorkbenchProvider>(context);
+    final salesProv = Provider.of<SaleProvider>(context);
+
+    final int productsCount = catalog.totalLoadedCount;
+    final int draftsCount = workbench.inProcessList.length;
+    final String salesTotal = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ').format(salesProv.todaySalesTotal);
 
     return Container(
       width: double.infinity,
@@ -238,6 +249,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.3))),
                     child: const Text("DUEÑO DE NEGOCIO", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildMicroKpi("Productos", "$productsCount"),
+                      _buildMicroKpi("Borradores", "$draftsCount"),
+                      _buildMicroKpi("Ventas Hoy", salesTotal),
+                    ],
                   ),
                 ],
               ),
@@ -383,6 +403,16 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           )
         ],
       ),
+    );
+  }
+
+  Widget _buildMicroKpi(String label, String value) {
+    return Column(
+      children: [
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.w500)),
+      ],
     );
   }
 }

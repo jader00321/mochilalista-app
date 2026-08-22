@@ -130,39 +130,11 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
                     ),
                   ),
                 ],
-                showingTooltipIndicators: _selectedPoint != null && chartData.contains(_selectedPoint!)
-                    ? [ShowingTooltipIndicators([LineBarSpot(
-                        LineChartBarData(spots: spots),
-                        0,
-                        spots[chartData.indexOf(_selectedPoint!)]
-                      )])]
-                    : [],
                 lineTouchData: LineTouchData(
                   handleBuiltInTouches: false,
-                  touchTooltipData: LineTouchTooltipData(
-                    tooltipMargin: 10,
-                    getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((spot) {
-                        int index = spot.x.toInt();
-                        double prevAmount = 0.0;
-                        if (index > 0 && index < chartData.length) {
-                          prevAmount = (chartData[index - 1]['amount'] as num).toDouble();
-                        }
-                        String growthText = "";
-                        if (index > 0 && prevAmount > 0) {
-                           double growth = ((spot.y - prevAmount) / prevAmount) * 100;
-                           String sign = growth >= 0 ? '+' : '';
-                           growthText = "\n$sign${growth.toStringAsFixed(1)}%";
-                        }
-                        return LineTooltipItem(
-                          "${widget.formatCurrency(spot.y)}$growthText",
-                          const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        );
-                      }).toList();
-                    },
-                  ),
+                  touchSpotThreshold: 40,
                   touchCallback: (FlTouchEvent event, LineTouchResponse? response) {
-                    if (!event.isInterestedForInteractions || event is FlPanEndEvent || event is FlLongPressEnd) return;
+                    if (event is FlPanEndEvent || event is FlLongPressEnd) return;
                     if (event is FlTapUpEvent) {
                       setState(() {
                         if (response == null || response.lineBarSpots == null || response.lineBarSpots!.isEmpty) {
@@ -186,23 +158,51 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildDetailPanel(),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: _buildDetailPanel(chartData),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDetailPanel() {
+  Widget _buildDetailPanel(List<Map<String, dynamic>> chartData) {
     if (_selectedPoint == null) return const SizedBox.shrink();
 
     bool isDaily = _selectedPoint!['isDaily'] ?? false;
-    String rawDate = isDaily ? _selectedPoint!['date'] : _selectedPoint!['month'];
+    String dateKey = isDaily ? 'date' : 'month';
+    String rawDate = _selectedPoint![dateKey] ?? '';
     double amount = (_selectedPoint!['amount'] as num).toDouble();
 
+    double prevAmount = 0;
+    bool hasPrev = false;
+    for (int i = 0; i < chartData.length; i++) {
+      if (chartData[i][dateKey] == rawDate) {
+        if (i > 0) {
+          prevAmount = (chartData[i - 1]['amount'] as num).toDouble();
+          hasPrev = true;
+        }
+        break;
+      }
+    }
+
     String displayDate = rawDate;
-    if (isDaily) {
+    if (isDaily && rawDate.isNotEmpty) {
       List<String> parts = rawDate.split('-');
       if (parts.length == 3) displayDate = "${parts[2]}/${parts[1]}/${parts[0]}";
+    }
+
+    String insightText = "Ventas totales: ${widget.formatCurrency(amount)}";
+    if (hasPrev) {
+      double diff = amount - prevAmount;
+      double pct = prevAmount > 0 ? (diff / prevAmount) * 100 : 0;
+      if (diff >= 0) {
+        insightText = "Vendiste ${widget.formatCurrency(amount)}. ¡Un aumento del ${pct.toStringAsFixed(1)}% respecto al periodo anterior!";
+      } else {
+        insightText = "Vendiste ${widget.formatCurrency(amount)}. Esto representa una caída del ${pct.abs().toStringAsFixed(1)}% respecto al periodo anterior.";
+      }
     }
 
     return AnimatedSwitcher(
@@ -232,7 +232,7 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
                 children: [
                   Text(displayDate, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   const SizedBox(height: 4),
-                  Text("Ventas totales: ${widget.formatCurrency(amount)}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                  Text(insightText, style: TextStyle(color: Colors.grey[600], fontSize: 12, height: 1.4)),
                 ],
               ),
             ),

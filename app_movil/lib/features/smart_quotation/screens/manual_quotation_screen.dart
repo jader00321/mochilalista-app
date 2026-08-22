@@ -31,6 +31,12 @@ import 'package:app_movil/features/smart_quotation/screens/sales_checkout_screen
 import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/client_orders_screen.dart';
 
+part 'manual/manual_quote_data_ext.dart';
+part 'manual/manual_quote_client_ext.dart';
+part 'manual/manual_quote_save_ext.dart';
+part 'manual/manual_quote_catalog_ext.dart';
+part 'manual/manual_quote_offers_ext.dart';
+
 class ManualQuotationScreen extends StatefulWidget {
   final int? quotationId; 
   final SmartQuotationModel? quotationSnapshot; 
@@ -186,6 +192,32 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
 
   @override
   void dispose() {
+    if (mounted) {
+       final prov = Provider.of<SmartQuotationProvider>(context, listen: false);
+       if (_items.isNotEmpty && !_isSaving) {
+          prov.saveManualDraft(
+            items: _items,
+            quantities: _quantities,
+            prices: _overriddenPrices,
+            names: _customNames,
+            client: _selectedClient,
+            cName: _clientNameCtrl.text,
+            cPhone: _clientPhoneCtrl.text,
+            cDni: _clientDniCtrl.text,
+            cAddr: _clientAddressCtrl.text,
+            cEmail: _clientEmailCtrl.text,
+            cNotes: _clientNotesCtrl.text,
+            qTitle: _quoteTitleCtrl.text,
+            qNotes: _quoteNotesCtrl.text,
+            school: _schoolCtrl.text,
+            grade: _gradeCtrl.text,
+            quotationId: _currentQuotationId,
+          );
+       } else if (_items.isEmpty) {
+          prov.clearManualDraft();
+       }
+    }
+
     _quoteTitleCtrl.dispose();
     _quoteNotesCtrl.dispose();
     _clientNameCtrl.dispose();
@@ -199,646 +231,8 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
     super.dispose();
   }
 
-  Future<void> _initData() async {
-    final prov = Provider.of<SmartQuotationProvider>(context, listen: false);
-
-    if (widget.initialItems != null && widget.initialItems!.isNotEmpty) {
-      setState(() {
-        _items = List.from(widget.initialItems!);
-        for (var item in _items) {
-          int qty = widget.initialQuantities?[item.presentationId] ?? 1;
-          _quantities[item.presentationId] = qty; 
-        }
-        _hasUnsavedChanges = true; 
-      });
-      _generateDynamicName();
-      return;
-    }
-
-    if (_currentQuotationId != null) {
-      setState(() => _isLoading = true);
-      final invProv = Provider.of<InventoryProvider>(context, listen: false); 
-      final clientService = ClientService();
-      final authProv = Provider.of<AuthProvider>(context, listen: false);
-      
-      SmartQuotationModel? data = widget.quotationSnapshot ?? await prov.getQuotationById(_currentQuotationId!);
-
-      if (data != null) {
-        _quoteTitleCtrl.text = data.clientName ?? "";
-        _quoteNotesCtrl.text = data.notas ?? "";
-        _schoolCtrl.text = data.institutionName ?? "";
-        _gradeCtrl.text = data.gradeLevel ?? "";
-        
-        _isAppOrder = (data.clientName ?? "").contains("- Pedido");
-        
-        if (data.clientId != null && !authProv.isCommunityClient) {
-          try {
-            final client = await clientService.getClientById(data.clientId!);
-            if (client != null) {
-              _selectedClient = client;
-              _clientNameCtrl.text = client.fullName;
-              _clientPhoneCtrl.text = client.phone;
-              _clientDniCtrl.text = client.docNumber ?? "";
-              _clientAddressCtrl.text = client.address ?? "";
-              _clientEmailCtrl.text = client.email ?? "";
-              _clientNotesCtrl.text = client.notes ?? "";
-            }
-          } catch (_) {}
-        }
-
-        List<MatchedProduct> convertedItems = [];
-        int outdatedItemsCount = 0; 
-
-        for (var qItem in data.items) {
-          int realStock = 0;
-          String? realImageUrl = qItem.imageUrl;
-          String currentUnit = qItem.salesUnit ?? "Unidad";
-          int currentConversion = 1;
-          
-          String realProductName = qItem.productName ?? "";
-          String realBrandName = qItem.brandName ?? "";
-          String realSpecificName = qItem.specificName ?? "";
-          double currentPrice = qItem.originalUnitPrice;
-          
-          try {
-            final realProduct = await invProv.fetchProductById(qItem.productId ?? 0);
-            if (realProduct != null) {
-               final presIndex = realProduct.presentaciones.indexWhere((p) => p.id == qItem.presentationId);
-               if (presIndex != -1) {
-                 final pres = realProduct.presentaciones[presIndex];
-                 realStock = pres.stockActual;
-                 realImageUrl = pres.imagenUrl ?? realProduct.imagenUrl;
-                 currentUnit = pres.unidadVenta ?? "Unidad";
-                 currentConversion = pres.unidadesPorVenta;
-                 
-                 realProductName = realProduct.nombre;
-                 realBrandName = realProduct.marcaNombre ?? qItem.brandName ?? "";
-                 realSpecificName = pres.nombreEspecifico ?? "";
-                 
-                 currentPrice = (pres.precioOferta != null && pres.precioOferta! > 0) 
-                     ? pres.precioOferta! 
-                     : pres.precioVentaFinal;
-               }
-            }
-          } catch(e) { debugPrint("Producto no encontrado: $e"); }
-
-          bool isOutdated = false;
-          if (realProductName != (qItem.productName ?? "")) isOutdated = true;
-          if (!qItem.isManualPrice && (qItem.unitPriceApplied - currentPrice).abs() > 0.01) isOutdated = true;
-          if (isOutdated) outdatedItemsCount++;
-
-          final matched = MatchedProduct(
-            productId: qItem.productId ?? 0, 
-            presentationId: qItem.presentationId ?? 0,
-            fullName: qItem.displayName,
-            productName: realProductName,
-            specificName: realSpecificName,
-            brand: realBrandName,
-            price: qItem.originalUnitPrice, 
-            stock: realStock, 
-            imageUrl: realImageUrl, 
-            unit: currentUnit,
-            conversionFactor: currentConversion,
-            isOriginalItem: true,
-          );
-
-          
-          _quantities[matched.presentationId] = qItem.quantity;
-          if ((qItem.unitPriceApplied - qItem.originalUnitPrice).abs() > 0.01) {
-             _overriddenPrices[matched.presentationId] = qItem.unitPriceApplied;
-          }
-          
-          if (qItem.productName == null || qItem.productName!.isEmpty) {
-              _customNames[matched.presentationId] = qItem.displayName;
-          }
-
-          convertedItems.add(matched);
-        }
-        
-        setState(() { 
-           _items = convertedItems; 
-           _hasUnsavedChanges = false; 
-           _outdatedItemsCount = outdatedItemsCount;
-        });
-      }
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-
-    if (prov.hasManualDraft && _currentQuotationId == null) {
-      setState(() {
-        _items = List.from(prov.draftManualItems!);
-        _quantities.addAll(prov.draftManualQuantities!);
-        _overriddenPrices.addAll(prov.draftManualPrices!);
-        _customNames.addAll(prov.draftManualNames!);
-        if (prov.draftClient != null) _selectClient(prov.draftClient!);
-        
-        _clientNameCtrl.text = prov.draftClientName ?? ""; _clientPhoneCtrl.text = prov.draftClientPhone ?? "";
-        _clientDniCtrl.text = prov.draftClientDni ?? ""; _clientAddressCtrl.text = prov.draftClientAddress ?? "";
-        _clientEmailCtrl.text = prov.draftClientEmail ?? ""; _clientNotesCtrl.text = prov.draftClientNotes ?? "";
-        
-        _quoteTitleCtrl.text = prov.draftQuoteTitle ?? ""; _quoteNotesCtrl.text = prov.draftQuoteNotes ?? "";
-        _schoolCtrl.text = prov.draftSchool ?? ""; _gradeCtrl.text = prov.draftGrade ?? "";
-        
-        _currentQuotationId = prov.draftQuotationId;
-        _hasUnsavedChanges = true; 
-      });
-    } else {
-        _generateDynamicName();
-    }
-  }
-
-  double get _totalAmount {
-    return _items.fold(0.0, (sum, item) {
-      final price = _overriddenPrices[item.presentationId] ?? (item.offerPrice ?? item.price);
-      return sum + (price * (_quantities[item.presentationId] ?? 1)); 
-    });
-  }
-
-  double get _totalSavings {
-    double totalListPrice = _items.fold(0.0, (sum, item) => sum + (item.price * (_quantities[item.presentationId] ?? 1)));
-    final savings = totalListPrice - _totalAmount;
-    return savings > 0 ? savings : 0.0;
-  }
-
-  void _selectClient(ClientModel client) async {
-    setState(() {
-      _selectedClient = client;
-      _updateClientData = true; 
-      _clientNameCtrl.text = client.fullName;
-      _clientPhoneCtrl.text = client.phone;
-      _clientDniCtrl.text = client.docNumber ?? "";
-      _clientAddressCtrl.text = client.address ?? "";
-      _clientEmailCtrl.text = client.email ?? "";
-      _clientNotesCtrl.text = client.notes ?? "";
-      _hasUnsavedChanges = true;
-    });
-
-    final prov = Provider.of<SmartQuotationProvider>(context, listen: false);
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final newName = await prov.generateDynamicQuoteName(client, client.fullName, isClientRole: auth.isCommunityClient, clientUserName: auth.user?.fullName, type: 'manual');
-    if (mounted) _quoteTitleCtrl.text = newName;
-  }
-
-  void _clearClient() {
-    setState(() {
-      _selectedClient = null; _updateClientData = true; 
-      _clientNameCtrl.clear(); _clientPhoneCtrl.clear(); _clientDniCtrl.clear();
-      _clientAddressCtrl.clear(); _clientEmailCtrl.clear(); _clientNotesCtrl.clear();
-      _hasUnsavedChanges = true;
-    });
-    _generateDynamicName();
-  }
-
-  void _showClientSearch() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => ClientSearchModal(
-        onClientSelected: (client) => _selectClient(client),
-      ),
-    );
-  }
-
-  void _clearWholeList() async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    bool? confirm = await ManualQuoteDialogHelper.showClearWholeListDialog(context, isDark);
-    
-    if (confirm == true) {
-      setState(() {
-        _items.clear(); _quantities.clear(); _overriddenPrices.clear(); _customNames.clear();
-        _clearClient(); _quoteTitleCtrl.clear(); _quoteNotesCtrl.clear(); _schoolCtrl.clear(); _gradeCtrl.clear();
-        _hasUnsavedChanges = true;
-      });
-      if (!mounted) return;
-      Provider.of<SmartQuotationProvider>(context, listen: false).clearManualDraft();
-      _generateDynamicName();
-    }
-  }
-
-  Future<bool> _onWillPop() async {
-    final prov = Provider.of<SmartQuotationProvider>(context, listen: false);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-
-    if (_currentQuotationId == null) {
-      if (_items.isNotEmpty || _clientNameCtrl.text.isNotEmpty || _quoteTitleCtrl.text.isNotEmpty) {
-        prov.saveManualDraft(
-          items: _items, quantities: _quantities, prices: _overriddenPrices, names: _customNames,
-          client: _selectedClient, cName: _clientNameCtrl.text, cPhone: _clientPhoneCtrl.text, cDni: _clientDniCtrl.text, 
-          cAddr: _clientAddressCtrl.text, cEmail: _clientEmailCtrl.text, cNotes: _clientNotesCtrl.text, school: _schoolCtrl.text, 
-          grade: _gradeCtrl.text, qTitle: _quoteTitleCtrl.text, qNotes: _quoteNotesCtrl.text, quotationId: _currentQuotationId,
-        );
-      }
-      return true; 
-    }
-
-    if (_currentQuotationId != null && _hasUnsavedChanges && !auth.isCommunityClient) {
-      bool? shouldPop = await ManualQuoteDialogHelper.showUnsavedChangesDialog(context, isDark);
-      if (shouldPop == true) prov.clearManualDraft(); 
-      return shouldPop ?? false;
-    }
-
-    return true;
-  }
-
-  void _onSellPressed() async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    
-    if (!auth.hasActiveContext) {
-      _showExplorationModal(context, isDark);
-      return;
-    }
-
-    if (_items.isEmpty) {
-      CustomSnackBar.show(context, message: "Agrega al menos un producto", isError: true);
-      return;
-    }
-
-    if (auth.isCommunityClient) {
-       _showClientOrderConfirmation(isDark);
-       return;
-    }
-
-    bool hasStockIssues = _items.any((item) => (_quantities[item.presentationId] ?? 1) > item.stock || item.stock <= 0);
-
-    if (hasStockIssues) {
-      bool? proceed = await ManualQuoteDialogHelper.showStockIssuesDialog(context, isDark);
-      if (proceed == true) _executeSave(status: 'PENDING', type: 'manual', navigateToDetail: true); 
-    } else {
-      bool? proceed = await ManualQuoteDialogHelper.showConfirmSaleDialog(context, isDark);
-      if (proceed == true) _executeSave(status: 'PENDING', type: 'manual', navigateToCheckout: true);
-    }
-  }
-
-  void _showClientOrderConfirmation(bool isDark) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Enviar Pedido a Tienda", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
-        content: Text(
-          "Tu pedido será enviado al negocio para verificar la disponibilidad de los productos.\n\n"
-          "Podrás ver el estado de tu pedido en la sección 'Mis Pedidos'. ¿Deseas enviarlo ahora?",
-          style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16)
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _executeSave(status: 'PENDING_APPROVAL', type: 'manual', navigateToDetail: true, isClientEnd: true);
-            },
-            child: const Text("Sí, Enviar Pedido", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          )
-        ],
-      )
-    );
-  }
-
-  Future<void> _executeSave({required String status, required String type, bool navigateToDetail = false, bool navigateToCheckout = false, bool isClientEnd = false, bool forceClone = false}) async {
-    setState(() => _isSaving = true);
-    
-    final authProv = Provider.of<AuthProvider>(context, listen: false);
-    final clientService = ClientService();
-    int? finalClientId = _selectedClient?.id;
-
-    if (!authProv.isCommunityClient && _updateClientData && _clientNameCtrl.text.isNotEmpty) {
-      final clientData = {
-        'nombre_completo': _clientNameCtrl.text, 'telefono': _clientPhoneCtrl.text.replaceAll(" ", ""),
-        'dni_ruc': _clientDniCtrl.text, 'direccion': _clientAddressCtrl.text,
-        'correo': _clientEmailCtrl.text, 'notas': _clientNotesCtrl.text
-      };
-      try {
-        if (_selectedClient != null) {
-          await clientService.updateClient(_selectedClient!.id, clientData);
-        } else {
-          final newClient = await clientService.createClient(clientData, authProv.activeBusinessId!, authProv.activeUserId!);
-          finalClientId = newClient.id;
-        }
-      } catch (e) { debugPrint("Error saving client: $e"); }
-    }
-
-    final itemsPayload = _items.map((item) {
-      final qty = _quantities[item.presentationId] ?? 1;
-      final manualPrice = _overriddenPrices[item.presentationId];
-      
-      return {
-        "product_id": item.bundleId != null ? null : item.productId, 
-        "presentation_id": item.bundleId != null ? null : item.presentationId, 
-        "bundle_id": item.bundleId,
-        "quantity": qty,
-        "unit_price_applied": manualPrice ?? (item.offerPrice ?? item.price), 
-        "original_unit_price": item.price, 
-        "product_name": item.productName,
-        "brand_name": item.brand,
-        "specific_name": item.specificName,
-        "sales_unit": item.unit,
-        "is_manual_price": manualPrice != null, 
-        "image_url": item.imageUrl 
-      };
-    }).toList();
-
-    if (!mounted) return;
-    final wbProv = Provider.of<WorkbenchProvider>(context, listen: false);
-    final qProv = Provider.of<SmartQuotationProvider>(context, listen: false);
-    
-    String finalQuoteName = _quoteTitleCtrl.text.trim();
-
-    if (finalQuoteName.isEmpty || finalQuoteName == "Cliente General") {
-        final uniqueCode = DateFormat('dd-HHmm').format(DateTime.now());
-        if (authProv.isCommunityClient) {
-            final String name = (authProv.user?.fullName != null && authProv.user!.fullName.isNotEmpty) ? authProv.user!.fullName : "Cliente";
-            finalQuoteName = "$name - Pedido Manual #$uniqueCode";
-        } else if (type == 'pack') {
-            finalQuoteName = _clientNameCtrl.text.isNotEmpty ? "Pack Escolar de ${_clientNameCtrl.text} #$uniqueCode" : "Pack Escolar #$uniqueCode";
-        } else {
-            finalQuoteName = _clientNameCtrl.text.isNotEmpty ? "${_clientNameCtrl.text} #$uniqueCode" : "Cotización Manual #$uniqueCode";
-        }
-    }
-
-    int? targetQuotationId = forceClone ? null : _currentQuotationId;
-
-    final newId = await wbProv.saveManualQuotation(
-      id: targetQuotationId, clientId: finalClientId, clientName: finalQuoteName, notas: _quoteNotesCtrl.text,
-      institution: _schoolCtrl.text, grade: _gradeCtrl.text, totalAmount: _totalAmount, totalSavings: _totalSavings,
-      items: itemsPayload, status: status, type: type 
-    );
-
-    if (mounted) {
-      setState(() { _isSaving = false; _hasUnsavedChanges = false; });
-
-      if (newId != null) {
-        _currentQuotationId = newId;
-        qProv.clearManualDraft(); 
-
-        if (isClientEnd) {
-           CustomSnackBar.show(context, message: "¡Tu pedido fue enviado a la tienda!", isError: false);
-           Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ClientOrdersScreen()));
-           return;
-        }
-
-        if (navigateToCheckout) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => SalesCheckoutScreen(quotationId: newId)));
-        } else if (navigateToDetail) {
-          if (widget.quotationId != null && widget.quotationId == newId) {
-            Navigator.pop(context, true);
-          } else {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => QuotationDetailScreen(quotationId: newId)));
-          }
-        } else {
-          CustomSnackBar.show(context, message: forceClone ? "Pedido clonado exitosamente" : "Guardado exitosamente", isError: false);
-        }
-      } else {
-        CustomSnackBar.show(context, message: "Error al guardar localmente", isError: true);
-      }
-    }
-  }
-
-  void _openSaveModal() {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    if (!auth.hasActiveContext) {
-      _showExplorationModal(context, isDark);
-      return;
-    }
-
-    if (_items.isEmpty) {
-      CustomSnackBar.show(context, message: "La lista está vacía", isError: true);
-      return;
-    }
-    
-    showModalBottomSheet(
-      context: context, backgroundColor: Colors.transparent, isScrollControlled: true,
-      builder: (ctx) => ManualQuoteSaveModal(
-        isEditing: _currentQuotationId != null,
-        isAppOrder: _isAppOrder,
-        onSave: (status, type, {bool forceClone = false}) {
-          String finalStatus = status == 'MAINTAIN_CURRENT' ? (widget.quotationSnapshot?.status ?? 'DRAFT') : status;
-          _executeSave(status: finalStatus, type: type, navigateToDetail: true, forceClone: forceClone);
-        },
-      ),
-    );
-  }
-
-  void _showCatalogModal(bool isDark) {
-    showModalBottomSheet(
-      context: context, isScrollControlled: true, backgroundColor: Colors.transparent, useSafeArea: false,
-      builder: (ctx) => CatalogSearchModal(
-        onAddProduct: (product, quantity, overridePrice, customName) {
-          setState(() {
-            final index = _items.indexWhere((p) => p.presentationId == product.presentationId);
-            if (index != -1) {
-              _quantities[product.presentationId] = (_quantities[product.presentationId] ?? 0) + quantity;
-            } else { 
-              _items.add(product); _quantities[product.presentationId] = quantity; 
-            }
-            if (overridePrice != null) _overriddenPrices[product.presentationId] = overridePrice;
-            if (customName != null) _customNames[product.presentationId] = customName;
-            _hasUnsavedChanges = true;
-          });
-        },
-      ),
-    );
-  }
-
-  void _editItem(MatchedProduct item, int index) {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    
-    showModalBottomSheet(
-      context: context, isScrollControlled: true, backgroundColor: Colors.transparent, useSafeArea: false, 
-      builder: (ctx) => ManualQuoteDetailModal(
-        product: item, initialQty: _quantities[item.presentationId] ?? 1,
-        initialOverridePrice: _overriddenPrices[item.presentationId], initialCustomName: _customNames[item.presentationId],
-        isNewAddition: false,
-        isEditingSavedQuote: _currentQuotationId != null,
-        onConfirm: (newProd, newQty, newPrice, newName) {
-          setState(() {
-            if (newProd.presentationId != item.presentationId) {
-              _items.removeAt(index); _quantities.remove(item.presentationId); _overriddenPrices.remove(item.presentationId); _customNames.remove(item.presentationId);
-              _items.insert(index, newProd); _quantities[newProd.presentationId] = newQty;
-              if (!auth.isCommunityClient && newPrice != null) _overriddenPrices[newProd.presentationId] = newPrice;
-              if (newName != null) {
-                 _customNames[newProd.presentationId] = newName;
-              } else {
-                 _customNames.remove(newProd.presentationId);
-              }
-            } else {
-              _quantities[item.presentationId] = newQty;
-              if (!auth.isCommunityClient && newPrice != null) {
-                _overriddenPrices[item.presentationId] = newPrice;
-              } else {
-                _overriddenPrices.remove(item.presentationId);
-              }
-              if (newName != null) {
-                 _customNames[item.presentationId] = newName;
-              } else {
-                 _customNames.remove(item.presentationId);
-              }
-            }
-            _hasUnsavedChanges = true;
-          });
-        },
-      ),
-    );
-  }
-
-  Widget _buildOffersPanel(bool isDark) {
-    final promoProv = Provider.of<PromotionProvider>(context);
-    final now = DateTime.now();
-    final validBundles = promoProv.bundles.where((b) {
-      if (!b.activo) return false;
-      if (b.fechaInicio != null && b.fechaInicio!.isAfter(now)) return false;
-      if (b.fechaFin != null && b.fechaFin!.isBefore(now)) return false;
-      return promoProv.calculateBundleMaxStock(b.id) > 0;
-    }).toList();
-
-    if (validBundles.isEmpty) return const SizedBox();
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      color: isDark ? const Color(0xFF1A1A24) : Colors.pink[50],
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () => setState(() => _isOffersExpanded = !_isOffersExpanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              child: Row(
-                children: [
-                  Text("🔥 Paquetes Especiales (${validBundles.length})", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
-                  const Spacer(),
-                  Icon(_isOffersExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: isDark ? Colors.white : Colors.black87, size: 22),
-                ],
-              ),
-            ),
-          ),
-          if (_isOffersExpanded)
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.4,
-              ),
-              child: ListView.builder(
-                shrinkWrap: true,
-                physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: validBundles.length,
-              itemBuilder: (ctx, i) {
-                final bundle = validBundles[i];
-                final maxStock = promoProv.calculateBundleMaxStock(bundle.id);
-                
-                IconData iconData = Icons.inventory_2;
-                Color iconColor = Colors.amberAccent;
-                String prefix = "Paquete";
-                if (bundle.tipoPromocion == 'flash') {
-                  iconData = Icons.bolt; iconColor = Colors.orangeAccent; prefix = "Flash";
-                } else if (bundle.tipoPromocion == 'liquidez_costo') {
-                  iconData = Icons.water_drop; iconColor = Colors.lightBlue; prefix = "Liquidez";
-                } else if (bundle.tipoPromocion == '2x1') {
-                  iconData = Icons.exposure_plus_2; iconColor = Colors.green; prefix = "2x1";
-                } else if (bundle.tipoPromocion == 'volumen') {
-                  iconData = Icons.shopping_cart; iconColor = Colors.deepPurple; prefix = "Mayoreo";
-                } else if (bundle.tipoPromocion == 'escolar') {
-                  iconData = Icons.school; iconColor = Colors.teal; prefix = "Escolar";
-                }
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white10 : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))]
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.15), shape: BoxShape.circle),
-                        child: Icon(iconData, color: iconColor, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(bundle.nombrePaquete, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14)),
-                            if (bundle.descripcion != null && bundle.descripcion!.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2, bottom: 2),
-                                child: Text(bundle.descripcion!, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
-                              ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
-                                  child: Text(prefix, style: TextStyle(color: iconColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(_currency.format(bundle.precioVentaTotal), style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 13)),
-                                const SizedBox(width: 8),
-                                Text("Stock: $maxStock", style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 11)),
-                              ],
-                            )
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.add_shopping_cart, color: isDark ? Colors.white : Colors.black87),
-                        onPressed: () {
-                          final fakePresId = -(bundle.id);
-                          setState(() {
-                            final index = _items.indexWhere((p) => p.presentationId == fakePresId);
-                            if (index != -1) {
-                               int newQty = (_quantities[fakePresId] ?? 0) + 1;
-                               if (newQty <= maxStock) {
-                                  _quantities[fakePresId] = newQty;
-                                  CustomSnackBar.show(context, message: "Cantidad actualizada", isError: false);
-                               } else {
-                                  CustomSnackBar.show(context, message: "No hay más stock", isError: true);
-                               }
-                            } else { 
-                              final matched = MatchedProduct(
-                                productId: 0,
-                                presentationId: fakePresId,
-                                fullName: bundle.nombrePaquete,
-                                productName: bundle.nombrePaquete,
-                                specificName: "Paquete",
-                                brand: "OFERTA",
-                                description: bundle.descripcion,
-                                price: bundle.precioVentaTotal,
-                                stock: maxStock,
-                                imageUrl: bundle.imagenUrl,
-                                unit: "Paquete",
-                                bundleId: bundle.id,
-                              );
-                              _items.add(matched);
-                              _quantities[fakePresId] = 1; 
-                              CustomSnackBar.show(context, message: "Paquete agregado", isError: false);
-                            }
-                            _hasUnsavedChanges = true;
-                          });
-                        },
-                      )
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+  void updateState(VoidCallback fn) {
+    if (mounted) setState(fn);
   }
 
   @override
@@ -848,6 +242,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     final auth = Provider.of<AuthProvider>(context);
+    final workbench = Provider.of<WorkbenchProvider>(context);
     final isClient = auth.isCommunityClient;
     final isGuest = !auth.hasActiveContext;
 
@@ -861,9 +256,13 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       child: Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
-          title: Text(
-            isClient ? "Mi Pedido" : (_currentQuotationId == null ? "Nueva Cotización" : "Editar Cotización"), 
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)
+          title: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              isClient ? "Mi Pedido" : (_currentQuotationId == null ? "Nueva Cotización" : "Editar Cotización"), 
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)
+            ),
           ),
           backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
           foregroundColor: textColor, elevation: 0,
@@ -924,7 +323,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                         ),
                         TextButton(
                            onPressed: () {
-                              Provider.of<WorkbenchProvider>(context, listen: false).refreshQuotation(widget.quotationId!, fixPrices: true, fixStock: true, fixNames: true).then((_) {
+                              Provider.of<WorkbenchProvider>(context, listen: false).refreshQuotation(widget.quotationId!, fixPrices: true, fixStock: true, fixNames: true, fixBundles: true).then((_) {
                                  if (!context.mounted) return;
                                  CustomSnackBar.show(context, message: "Cotización actualizada correctamente.", isError: false);
                                  _initData();
@@ -1027,6 +426,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                               isDark: isDark,
                               isClient: isClient,
                               isEditing: _currentQuotationId != null, 
+                              isBundleOutdated: _currentQuotationId != null && item.bundleId != null && (workbench.getValidationFor(_currentQuotationId!)?.bundleChanges.any((bc) => bc.bundleId == item.bundleId) ?? false),
                               quantity: _quantities[item.presentationId] ?? 1,
                               manualPrice: _overriddenPrices[item.presentationId] ?? (item.offerPrice ?? item.price),
                               customName: _customNames[item.presentationId] ?? "", 

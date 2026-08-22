@@ -68,7 +68,7 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
                 barTouchData: BarTouchData(
                   handleBuiltInTouches: false,
                   touchCallback: (FlTouchEvent event, barTouchResponse) {
-                    if (!event.isInterestedForInteractions || event is FlPanEndEvent || event is FlLongPressEnd) return;
+                    if (event is FlPanEndEvent || event is FlLongPressEnd) return;
                     if (event is FlTapUpEvent) {
                       setState(() {
                         if (barTouchResponse == null || barTouchResponse.spot == null) {
@@ -84,14 +84,6 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
                       });
                     }
                   },
-                  touchTooltipData: BarTouchTooltipData(
-                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                      return BarTooltipItem(
-                        "${widget.data.salesByDayOfWeek[groupIndex]['name']}\n${widget.formatCurrency(rod.toY)}",
-                        const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      );
-                    },
-                  ),
                 ),
                 titlesData: FlTitlesData(
                   show: true,
@@ -128,7 +120,6 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
                   
                   return BarChartGroupData(
                     x: e.key,
-                    showingTooltipIndicators: isTouched ? [0] : [],
                     barRods: [
                       BarChartRodData(
                         toY: e.value['amount'],
@@ -151,10 +142,16 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
               ),
             ),
           ),
-          if (_selectedBarIndex != -1 && _selectedBarIndex < widget.data.salesByDayOfWeek.length) ...[
-            const SizedBox(height: 24),
-            _buildDetailPanel(widget.data.salesByDayOfWeek[_selectedBarIndex], avgVal),
-          ]
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: _selectedBarIndex != -1 && _selectedBarIndex < widget.data.salesByDayOfWeek.length
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 24.0),
+                    child: _buildDetailPanel(widget.data.salesByDayOfWeek[_selectedBarIndex], avgVal),
+                  )
+                : const SizedBox.shrink(),
+          )
         ],
       ),
     );
@@ -192,10 +189,12 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Día: $name", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text("$name — ${widget.formatCurrency(amount)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   const SizedBox(height: 4),
                   Text(
-                    "Las ventas de este día están un ${diffPct.abs().toStringAsFixed(1)}% ${isAboveAvg ? 'por encima' : 'por debajo'} de tu promedio diario (${widget.formatCurrency(avgVal)}).", 
+                    isAboveAvg 
+                      ? "Vendiste ${widget.formatCurrency(amount)} los días $name. Esto es un ${diffPct.abs().toStringAsFixed(1)}% por encima de tu promedio diario de ${widget.formatCurrency(avgVal)}. ¡Aprovecha este día para lanzar ofertas!"
+                      : "Los días $name generaste ${widget.formatCurrency(amount)}, un ${diffPct.abs().toStringAsFixed(1)}% por debajo del promedio (${widget.formatCurrency(avgVal)}). Considera promociones flash para impulsar este día.",
                     style: TextStyle(color: Colors.grey[600], fontSize: 12, height: 1.4)
                   ),
                 ],

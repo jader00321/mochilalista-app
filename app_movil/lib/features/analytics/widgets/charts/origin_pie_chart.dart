@@ -62,7 +62,7 @@ class _OriginPieChartState extends State<OriginPieChart> {
                       centerSpaceRadius: 40,
                       pieTouchData: PieTouchData(
                         touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                          if (!event.isInterestedForInteractions || event is FlPanEndEvent || event is FlLongPressEnd) return;
+                          if (event is FlPanEndEvent || event is FlLongPressEnd) return;
                           if (event is FlTapUpEvent) {
                             setState(() {
                               if (pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
@@ -140,10 +140,16 @@ class _OriginPieChartState extends State<OriginPieChart> {
               ],
             ),
           ),
-          if (_selectedSegmentIndex != -1 && _selectedSegmentIndex < widget.data.salesByOrigin.length) ...[
-            const SizedBox(height: 24),
-            _buildDetailPanel(widget.data.salesByOrigin[_selectedSegmentIndex], totalForChart),
-          ]
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: _selectedSegmentIndex != -1 && _selectedSegmentIndex < widget.data.salesByOrigin.length
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 24.0),
+                    child: _buildDetailPanel(widget.data.salesByOrigin[_selectedSegmentIndex], totalForChart),
+                  )
+                : const SizedBox.shrink(),
+          )
         ],
       ),
     );
@@ -152,7 +158,17 @@ class _OriginPieChartState extends State<OriginPieChart> {
   Widget _buildDetailPanel(Map<String, dynamic> item, double total) {
     String name = item['name'];
     double amount = (item['amount'] as num).toDouble();
-    String percentage = total > 0 ? ((amount / total) * 100).toStringAsFixed(1) : '0';
+    double pct = total > 0 ? (amount / total) * 100 : 0;
+    String percentage = pct.toStringAsFixed(1);
+    
+    String insightText;
+    if (pct >= 50) {
+      insightText = "El canal $name es tu FUENTE PRINCIPAL con ${widget.formatCurrency(amount)} ($percentage%). Más de la mitad de tus ingresos dependen de él. Diversifica para reducir riesgos.";
+    } else if (pct >= 20) {
+      insightText = "$name generó ${widget.formatCurrency(amount)} ($percentage%). Es un canal relevante. Mantén su rendimiento y busca oportunidades de crecimiento aquí.";
+    } else {
+      insightText = "$name aportó ${widget.formatCurrency(amount)} ($percentage%). Es un canal secundario. Evalúa si vale la pena invertir más en este origen o redirigir esfuerzos.";
+    }
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
@@ -182,7 +198,7 @@ class _OriginPieChartState extends State<OriginPieChart> {
                   Text("Canal: $name", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   const SizedBox(height: 4),
                   Text(
-                    "Este canal representa el $percentage% de tus ventas totales. Analiza sus costos de adquisición para optimizar su rentabilidad.", 
+                    insightText, 
                     style: TextStyle(color: Colors.grey[600], fontSize: 12, height: 1.4)
                   ),
                 ],

@@ -7,6 +7,7 @@ import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart'
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
 import 'package:app_movil/core/providers/notification_provider.dart';
+import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class QuickCheckoutModal extends StatefulWidget {
@@ -64,6 +65,19 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
     setState(() => _isProcessing = true);
 
     try {
+      final promoProv = Provider.of<PromotionProvider>(context, listen: false);
+      for (var item in quickProv.cartItems) {
+        if (item.bundleId != null) {
+          int maxStock = promoProv.calculateBundleMaxStock(item.bundleId!);
+          int requested = quickProv.getQuantity(item.presentationId);
+          if (requested > maxStock) {
+            setState(() => _isProcessing = false);
+            CustomSnackBar.show(context, message: "El paquete '${item.productName}' ya no tiene stock suficiente (Máx disponible: $maxStock).", isError: true);
+            return;
+          }
+        }
+      }
+
       final clientResult = await _processClientInfo(saleProv, quickProv);
       int? finalClientId = clientResult["id"];
       String finalQuoteName = clientResult["name"];
@@ -119,6 +133,7 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
           Provider.of<InventoryProvider>(context, listen: false).refreshAfterSale();
           Provider.of<CatalogProvider>(context, listen: false).initCatalog();
           Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+          Provider.of<PromotionProvider>(context, listen: false).refreshUI();
         } catch (_) {}
 
         if (mounted) Navigator.pop(context, true); 

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
+import 'package:app_movil/features/catalog/services/product_service.dart';
 
 class ManualProductSearch extends StatefulWidget {
   final Function(InventoryWrapper) onSelect;
@@ -16,19 +17,42 @@ class ManualProductSearch extends StatefulWidget {
 
 class _ManualProductSearchState extends State<ManualProductSearch> {
   final TextEditingController _searchCtrl = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final ProductService _productService = ProductService();
   
+  List<InventoryWrapper> _localResults = [];
   bool _isSearching = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _skip = 0;
+  final int _limit = 20;
+  String _currentQuery = "";
+  
   Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
-    _performServerSearch(""); 
+    // Inject negocioId immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final invProv = Provider.of<InventoryProvider>(context, listen: false);
+      _productService.updateContext(invProv.negocioId);
+      _performSearch("", reset: true);
+    });
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+        if (!_isLoadingMore && _hasMore && !_isSearching) {
+          _performSearch(_currentQuery, reset: false);
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _scrollController.dispose();
     _debounce?.cancel();
     super.dispose();
   }
@@ -38,28 +62,58 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
     
     _debounce = Timer(const Duration(milliseconds: 600), () {
       if (!mounted) return; 
-      _performServerSearch(query);
+      _currentQuery = query;
+      _performSearch(query, reset: true);
     });
   }
 
-  Future<void> _performServerSearch(String query) async {
+  Future<void> _performSearch(String query, {required bool reset}) async {
     if (!mounted) return;
-    setState(() => _isSearching = true);
+    
+    if (reset) {
+      setState(() {
+        _isSearching = true;
+        _skip = 0;
+        _hasMore = true;
+      });
+    } else {
+      setState(() => _isLoadingMore = true);
+    }
 
-    await Provider.of<InventoryProvider>(context, listen: false).loadInventory(
-      reset: true, 
-      searchQuery: query
-    );
+    try {
+      final newItems = await _productService.fetchInventory({
+        'q': query.isEmpty ? null : query,
+        'skip': _skip,
+        'limit': _limit,
+      });
 
-    if (mounted) {
-      setState(() => _isSearching = false);
+      if (!mounted) return;
+
+      if (newItems != null) {
+        setState(() {
+          if (newItems.length < _limit) {
+            _hasMore = false;
+          }
+          if (reset) {
+            _localResults = newItems;
+          } else {
+            _localResults.addAll(newItems);
+          }
+          _skip += newItems.length;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+          _isLoadingMore = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final invProv = Provider.of<InventoryProvider>(context);
-    final results = invProv.items; 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -106,7 +160,7 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
                 Padding(
                   padding: const EdgeInsets.only(top: 12.0),
                   child: Text(
-                    "${results.length} resultados encontrados",
+                    "${_localResults.length} resultados encontrados",
                     style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.bold),
                   ),
                 )
@@ -116,15 +170,21 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
           
           // LISTA DE RESULTADOS
           Expanded(
-            child: _isSearching
+            child: _isSearching && _localResults.isEmpty
               ? const Center(child: CircularProgressIndicator())
-              : results.isEmpty
+              : _localResults.isEmpty
                   ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.search_off, size: 60, color: isDark ? Colors.white10 : Colors.grey[300]), const SizedBox(height: 16), Text("No se encontraron coincidencias", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 16, fontWeight: FontWeight.bold))]))
                   : ListView.separated(
+                      controller: _scrollController,
                       padding: EdgeInsets.fromLTRB(20, 16, 20, bottomInset + 20),
-                      itemCount: results.length,
+                      itemCount: _localResults.length + (_isLoadingMore ? 1 : 0),
                       separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (ctx, i) => _buildResultCard(results[i], isDark),
+                      itemBuilder: (ctx, i) {
+                        if (i == _localResults.length) {
+                          return const Padding(padding: EdgeInsets.all(16.0), child: Center(child: CircularProgressIndicator()));
+                        }
+                        return _buildResultCard(_localResults[i], isDark);
+                      },
                     ),
           ),
         ],
@@ -141,7 +201,6 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
     String marca = invProv.getBrandName(prod.marcaId);
     if (marca.isEmpty) marca = "Genérica";
 
-    // 🔥 USANDO LA NUEVA UMP DE COMPRA
     String variantDisplay = pres.umpCompra ?? "Unidad";
     if (pres.nombreEspecifico != null && pres.nombreEspecifico!.isNotEmpty) {
         variantDisplay += " - ${pres.nombreEspecifico}";
@@ -181,11 +240,14 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  // CAMBIO FASE 3: Separación visual de Marca y Categoría
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[50], borderRadius: BorderRadius.circular(6)), child: Text(categoria.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.orange[300] : Colors.orange[800], letterSpacing: 0.5))),
-                      const SizedBox(width: 8),
-                      Text(marca, style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.blueGrey.withValues(alpha: 0.15) : Colors.blueGrey[50], borderRadius: BorderRadius.circular(6)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.branding_watermark, size: 10, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700]), const SizedBox(width: 4), Text(marca, style: TextStyle(fontSize: 10, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[800], fontWeight: FontWeight.w900, letterSpacing: 0.5))])),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -193,11 +255,20 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
                   const SizedBox(height: 4),
                   Text(variantDisplay, style: TextStyle(fontSize: 14, color: isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Icon(Icons.layers, size: 18, color: pres.stockActual > 0 ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.red[400] : Colors.red)),
-                      const SizedBox(width: 6),
-                      Text("Stock: ${pres.stockActual}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: pres.stockActual > 0 ? (isDark ? Colors.green[300] : Colors.green[700]) : (isDark ? Colors.red[300] : Colors.red[700]))),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.layers, size: 18, color: pres.stockActual > 0 ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.red[400] : Colors.red)),
+                          const SizedBox(width: 6),
+                          Text("Stock: ${pres.stockActual}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: pres.stockActual > 0 ? (isDark ? Colors.green[300] : Colors.green[700]) : (isDark ? Colors.red[300] : Colors.red[700]))),
+                        ],
+                      ),
+                      Text("P.Venta: S/${pres.precioVentaFinal.toStringAsFixed(2)}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey[600])),
                     ],
                   )
                 ],

@@ -202,9 +202,26 @@ class StagingVariant {
   bool updateCosto = true;
   bool updatePrecio = false;
   bool updateNombre = false; 
+  bool updateUnidadVenta = false; 
   
   bool keepDescuento = true;
   String stockOperation = 'sumar'; // 'sumar' o 'reemplazar'
+
+  // Backup de valores originales de factura
+  late final double _originalCostoSugerido;
+  late final double _originalMargen;
+  late final double _originalPrecioVenta;
+  late final String _originalNombreEspecifico;
+  late final String _originalUnidadVenta;
+  late final int _originalUnidadesPorVenta;
+  
+  // Backup intermedio de BD (Snapshot antes de edición del modal)
+  double? _snapshotCosto;
+  double? _snapshotMargen;
+  double? _snapshotPrecioVenta;
+  String? _snapshotNombreEspecifico;
+  String? _snapshotUnidadVenta;
+  int? _snapshotUnidadesPorVenta;
 
   StagingVariant({
     String? uuidTemporal,
@@ -222,7 +239,14 @@ class StagingVariant {
     required this.matchPresentacion,
     this.codigoBarra,
     this.isConfirmed = true,
-  }) : uuidTemporal = uuidTemporal ?? generateFrontendUuid();
+  }) : uuidTemporal = uuidTemporal ?? generateFrontendUuid() {
+    _originalCostoSugerido = costoUnitarioSugerido;
+    _originalMargen = factorGananciaVentaSugerido;
+    _originalPrecioVenta = precioVentaSugerido;
+    _originalNombreEspecifico = nombreEspecifico;
+    _originalUnidadVenta = unidadVenta;
+    _originalUnidadesPorVenta = unidadesPorVenta;
+  }
 
   factory StagingVariant.fromJson(Map<String, dynamic> json) {
     return StagingVariant(
@@ -243,6 +267,57 @@ class StagingVariant {
       isConfirmed: json['confirmado'] == 1 || json['confirmado'] == true || json['confirmado'] == null
     );
   }
+
+  void takeSnapshot() {
+    _snapshotCosto = costoUnitarioSugerido;
+    _snapshotMargen = factorGananciaVentaSugerido;
+    _snapshotPrecioVenta = precioVentaSugerido;
+    _snapshotNombreEspecifico = nombreEspecifico;
+    _snapshotUnidadVenta = unidadVenta;
+    _snapshotUnidadesPorVenta = unidadesPorVenta;
+  }
+
+  void restoreFromSnapshot() {
+    if (_snapshotCosto != null) {
+      costoUnitarioSugerido = _snapshotCosto!;
+      factorGananciaVentaSugerido = _snapshotMargen!;
+      precioVentaSugerido = _snapshotPrecioVenta!;
+      nombreEspecifico = _snapshotNombreEspecifico!;
+      unidadVenta = _snapshotUnidadVenta!;
+      unidadesPorVenta = _snapshotUnidadesPorVenta!;
+    }
+  }
+
+  bool get hasSnapshotBeenModified =>
+      _snapshotCosto != null &&
+      (costoUnitarioSugerido != _snapshotCosto ||
+       factorGananciaVentaSugerido != _snapshotMargen ||
+       precioVentaSugerido != _snapshotPrecioVenta ||
+       nombreEspecifico != _snapshotNombreEspecifico ||
+       unidadVenta != _snapshotUnidadVenta ||
+       unidadesPorVenta != _snapshotUnidadesPorVenta);
+
+  void restoreOriginals() {
+    costoUnitarioSugerido = _originalCostoSugerido;
+    factorGananciaVentaSugerido = _originalMargen;
+    precioVentaSugerido = _originalPrecioVenta;
+    nombreEspecifico = _originalNombreEspecifico;
+    unidadVenta = _originalUnidadVenta;
+    unidadesPorVenta = _originalUnidadesPorVenta;
+    updateCosto = true;
+    updatePrecio = false;
+    updateNombre = false;
+    updateUnidadVenta = false;
+    _snapshotCosto = null; // Clear snapshot when reverting to absolute original
+  }
+
+  bool get hasBeenModified => 
+    costoUnitarioSugerido != _originalCostoSugerido || 
+    factorGananciaVentaSugerido != _originalMargen || 
+    precioVentaSugerido != _originalPrecioVenta || 
+    nombreEspecifico != _originalNombreEspecifico ||
+    unidadVenta != _originalUnidadVenta ||
+    unidadesPorVenta != _originalUnidadesPorVenta;
 }
 
 class StagingProductGroup {

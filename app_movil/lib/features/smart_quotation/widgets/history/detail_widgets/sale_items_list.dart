@@ -93,7 +93,7 @@ class SaleItemsList extends StatelessWidget {
                             if (item['specific_name'] != null && item['specific_name'].toString().isNotEmpty)
                                Padding(
                                  padding: const EdgeInsets.only(top: 2),
-                                 child: Text(item['specific_name'], style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: isDark ? Colors.teal[300] : Colors.teal[700]), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                 child: Text(item['specific_name'], style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
                                ),
                           ] else ...[
                             Text(item['product_name_snapshot'] ?? 'Producto', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, height: 1.2, color: textColor), maxLines: 2, overflow: TextOverflow.ellipsis), 

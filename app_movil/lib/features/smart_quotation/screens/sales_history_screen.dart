@@ -36,7 +36,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<SaleProvider>(context, listen: false).loadFilteredHistory(reset: true);
+      final prov = Provider.of<SaleProvider>(context, listen: false);
+      prov.resetFilters();
+      prov.loadFilteredHistory(reset: true);
     });
   }
 
@@ -145,88 +147,107 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        title: const Text("Historial de Ventas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-        backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.file_download, size: 26),
-            tooltip: "Exportar Reporte",
-            onSelected: (value) {
-              if (value == 'pdf') _exportReport(true);
-              if (value == 'csv') _exportReport(false);
-            },
-            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem<String>(
-                value: 'pdf',
-                child: Row(
-                  children: [
-                    Icon(Icons.picture_as_pdf, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Descargar PDF Profesional'),
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            SliverAppBar(
+              title: const Text("Historial de Ventas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+              backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
+              foregroundColor: Colors.white,
+              elevation: 0,
+              pinned: true,
+              actions: [
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.file_download, size: 26),
+                  tooltip: "Exportar Reporte",
+                  onSelected: (value) {
+                    if (value == 'pdf') _exportReport(true);
+                    if (value == 'csv') _exportReport(false);
+                  },
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                    const PopupMenuItem<String>(
+                      value: 'pdf',
+                      child: Row(
+                        children: [
+                          Icon(Icons.picture_as_pdf, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Descargar PDF Profesional'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'csv',
+                      child: Row(
+                        children: [
+                          Icon(Icons.table_chart, color: Colors.green),
+                          SizedBox(width: 8),
+                          Text('Descargar Excel (CSV)'),
+                        ],
+                      ),
+                    ),
                   ],
-                ),
+                )
+              ],
+              bottom: TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                indicatorColor: Colors.orange,
+                indicatorWeight: 3,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white54,
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                tabs: const [
+                  Tab(text: "Todas"),
+                  Tab(text: "Listas Escolares"),
+                  Tab(text: "Caja Rápida"),
+                  Tab(text: "Archivadas / Anuladas"),
+                ],
               ),
-              const PopupMenuItem<String>(
-                value: 'csv',
-                child: Row(
-                  children: [
-                    Icon(Icons.table_chart, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Descargar Excel (CSV)'),
-                  ],
-                ),
-              ),
-            ],
-          )
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          indicatorColor: Colors.orange,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white54,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-          tabs: const [
-            Tab(text: "Todas"),
-            Tab(text: "Listas Escolares"),
-            Tab(text: "Caja Rápida"),
-            Tab(text: "Archivadas / Anuladas"),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          if (isGuest)
-            Container(
-              width: double.infinity,
-              color: Colors.orange.withValues(alpha: 0.15),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.orange[700]),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      "Modo Exploración. Registra tu negocio para empezar a ver tus métricas de ventas e ingresos reales aquí.",
-                      style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
-                    )
-                  )
-                ]
-              )
             ),
-          
-          const HistoryDashboardCards(),
-          const HistoryFilterBar(),
-          const SizedBox(height: 10),
-          const Expanded(
-            child: SalesListBuilder(),
-          ),
-        ],
+            if (isGuest)
+              SliverToBoxAdapter(
+                child: Container(
+                  width: double.infinity,
+                  color: Colors.orange.withValues(alpha: 0.15),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange[700]),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "Modo Exploración. Registra tu negocio para empezar a ver tus métricas de ventas e ingresos reales aquí.",
+                          style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
+                        )
+                      )
+                    ]
+                  )
+                ),
+              ),
+            SliverAppBar(
+              automaticallyImplyLeading: false,
+              floating: true,
+              snap: true,
+              pinned: false,
+              elevation: 0,
+              backgroundColor: bgColor,
+              toolbarHeight: 0,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(190), // Estimado de altura de las tarjetas y filtros
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    HistoryDashboardCards(),
+                    HistoryFilterBar(),
+                    SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            ),
+          ];
+        },
+        body: const SalesListBuilder(),
       ),
     );
   }

@@ -139,14 +139,15 @@ class PredictiveService {
       String direction = velocity > 0 ? "creció" : "disminuyó";
       String magnitude = velocity.abs().toStringAsFixed(1);
       
-      explanationText = "El sistema ha suavizado los picos inusuales de tus ventas y ha analizado tu tendencia. Tu ritmo de ventas $direction un $magnitude% en la última quincena. Basándonos en este ritmo, proyectamos tu próximo mes de forma conservadora.";
-
       if (velocity > 10) {
-        actionText = "Acción Recomendada: Tienes una proyección alcista. Revisa tu Motor de Abastecimiento hoy mismo para garantizar que tus productos estrella no sufran quiebre de stock.";
+        explanationText = "📈 Buenas noticias: tu ritmo de ventas $direction un $magnitude% en la última quincena.\nBasándonos en esta tendencia, proyectamos que el próximo mes podrías superar tu marca actual.\nClave: No pierdas impulso. Asegura stock de tus productos estrella.";
+        actionText = "💡 Revisa tu Motor de Abastecimiento para que tus productos estrella no se agoten.";
       } else if (velocity < -10) {
-        actionText = "Acción Recomendada: El ritmo de ventas ha disminuido. Es el momento ideal para lanzar una promoción agresiva o armar un pack de ofertas en el cotizador.";
+        explanationText = "📉 Tu ritmo de ventas $direction un $magnitude% en la última quincena.\nEl motor ha ajustado la proyección de forma conservadora.\nClave: Es el momento ideal para lanzar una promoción flash y reactivar las ventas.";
+        actionText = "💡 Lanza una oferta desde Promociones o arma un pack con productos de baja rotación.";
       } else {
-        actionText = "Acción Recomendada: Mantienes un ritmo estable. Revisa si hay inventario estancado en el catálogo que puedas liquidar para optimizar tu liquidez.";
+        explanationText = "📊 Tu ritmo de ventas es estable. El motor usa tus últimos 60 días de historial para proyectar el próximo mes.\nClave: Estabilidad es buena, pero revisa si hay productos estancados que puedas liquidar.";
+        actionText = "💡 Revisa el inventario muerto en tu dashboard y libera capital estancado.";
       }
 
       return PredictiveData(

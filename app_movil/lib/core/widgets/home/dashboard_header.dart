@@ -8,11 +8,13 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/notification_provider.dart'; 
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart'; 
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 
 // Screens
 import 'package:app_movil/features/profile/screens/profile_screen.dart'; 
 import 'package:app_movil/features/profile/screens/notifications_screen.dart'; 
 import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart'; // 🔥 Ajustado para usar la selección de perfiles
+import 'package:app_movil/core/widgets/shimmer_box.dart';
 
 class DashboardHeader extends StatefulWidget {
   const DashboardHeader({super.key});
@@ -23,24 +25,52 @@ class DashboardHeader extends StatefulWidget {
 
 class _DashboardHeaderState extends State<DashboardHeader> {
 
+  DateTime? _lastLoadTime;
+  late String _greeting;
+
   @override
   void initState() {
     super.initState();
+    _greeting = _getGreeting();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
   }
 
   Future<void> _loadData({bool forceRefresh = false}) async {
+    if (!forceRefresh && _lastLoadTime != null) {
+      if (DateTime.now().difference(_lastLoadTime!).inSeconds < 30) {
+        return; // Debounce de 30 segundos
+      }
+    }
+    _lastLoadTime = DateTime.now();
+
+    if (mounted) {
+      setState(() {
+        _greeting = _getGreeting();
+      });
+    }
+
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    final salesProv = Provider.of<SaleProvider>(context, listen: false);
     
-    // Si es un refresh manual, await the auth state. Si no, let it run non-blocking.
+    // Si ya hay datos y el refresh es forceRefresh, usamos silentRefresh para evitar parpadeos
+    if (forceRefresh && salesProv.salesHistory.isNotEmpty) {
+      salesProv.silentRefresh();
+      Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
+      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      if (!auth.isCommunityClient) {
+        salesProv.loadCurrentMonthMargin();
+        Provider.of<TrackingProvider>(context, listen: false).loadClientCount();
+      }
+      return;
+    }
+
     if (forceRefresh) {
       await auth.checkInitialState();
     }
     
     if (auth.isAuthenticated && auth.hasActiveContext) {
-      // Carga asíncrona sin bloquear la UI (staggered)
       Future.microtask(() {
         if (mounted) Provider.of<NotificationProvider>(context, listen: false).fetchNotifications(); 
       });
@@ -51,7 +81,11 @@ class _DashboardHeaderState extends State<DashboardHeader> {
       
       if (!auth.isCommunityClient) {
         Future.delayed(const Duration(milliseconds: 200), () {
-          if (mounted) Provider.of<SaleProvider>(context, listen: false).loadSalesHistory();
+          if (mounted) {
+            salesProv.loadSalesHistory();
+            salesProv.loadCurrentMonthMargin();
+            Provider.of<TrackingProvider>(context, listen: false).loadClientCount();
+          }
         });
       }
     }
@@ -118,7 +152,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _getGreeting(),
+                      _greeting,
                       style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 4),
@@ -200,19 +234,14 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                   ),
                   const SizedBox(width: 8),
                   
-                  GestureDetector(
+                    GestureDetector(
                     onTap: () {
                       if (auth.isAuthenticated) {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()))
                           .then((_) {
-                            // Delay aumentado a 800ms para permitir que termine la animación
-                            Future.delayed(const Duration(milliseconds: 800), () {
-                              if (mounted) {
-                                WidgetsBinding.instance.addPostFrameCallback((_) {
-                                  if (mounted) _loadData(forceRefresh: true);
-                                });
-                              }
-                            });
+                            if (mounted) {
+                              _loadData(forceRefresh: true);
+                            }
                           });
                       } else {
                         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()));
@@ -251,7 +280,8 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                     label: "Por Revisar",
                     value: "$pendingQuotes",
                     color: Colors.orangeAccent,
-                    isDark: isDark
+                    isDark: isDark,
+                    isLoading: workbench.isLoading,
                   ),
                 ),
                 const SizedBox(width: 16), 
@@ -261,7 +291,8 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                     label: "Ventas Hoy",
                     value: currency.format(todaySales), 
                     color: Colors.greenAccent,
-                    isDark: isDark
+                    isDark: isDark,
+                    isLoading: salesProv.isLoading,
                   ),
                 ),
               ],
@@ -272,7 +303,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     );
   }
 
-  Widget _buildKpiCard({required IconData icon, required String label, required String value, required Color color, required bool isDark}) {
+  Widget _buildKpiCard({required IconData icon, required String label, required String value, required Color color, required bool isDark, bool isLoading = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
@@ -292,12 +323,18 @@ class _DashboardHeaderState extends State<DashboardHeader> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  value, 
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
-                  overflow: TextOverflow.ellipsis, 
-                ),
-                const SizedBox(height: 2),
+                if (isLoading)
+                  const ShimmerBox(width: 80, height: 20, borderRadius: 4)
+                else
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      value, 
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+                    ),
+                  ),
+                const SizedBox(height: 4),
                 Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.w600)),
               ],
             ),
@@ -309,8 +346,9 @@ class _DashboardHeaderState extends State<DashboardHeader> {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
+    if (hour >= 0 && hour < 6) return "¿Trabajando hasta tarde?";
     if (hour < 12) return "Buenos días,";
-    if (hour < 18) return "Buenas tardes,";
+    if (hour < 19) return "Buenas tardes,";
     return "Buenas noches,";
   }
 }

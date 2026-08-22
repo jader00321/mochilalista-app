@@ -191,7 +191,7 @@ class _EditBusinessModalState extends State<EditBusinessModal> {
                     }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  child: auth.isLoading ? const CircularProgressIndicator(color: Colors.white) : Text(widget.isMandatory ? "CREAR NEGOCIO Y EMPEZAR" : "GUARDAR CAMBIOS", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
+                  child: auth.isLoading ? const SizedBox(width: 150, child: LinearProgressIndicator(color: Colors.white, backgroundColor: Colors.white24)) : Text(widget.isMandatory ? "CREAR NEGOCIO Y EMPEZAR" : "GUARDAR CAMBIOS", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
                 ),
               )
             ],

@@ -6,6 +6,7 @@ import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart'
 import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
 
 import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
 
@@ -140,6 +141,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
   void _handleSellAgainQuickSale(bool isDark) {
     final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
+    final promoProv = Provider.of<PromotionProvider>(context, listen: false);
     
     final items = _saleData!['items'] as List<dynamic>? ?? [];
 
@@ -160,7 +162,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
-                _executeRestoreCart(items, invProv, quickProv, clearFirst: false);
+                _executeRestoreCart(items, invProv, promoProv, quickProv, clearFirst: false);
               },
               child: Text("Mezclar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontSize: 16)),
             ),
@@ -168,7 +170,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () {
                 Navigator.pop(ctx);
-                _executeRestoreCart(items, invProv, quickProv, clearFirst: true);
+                _executeRestoreCart(items, invProv, promoProv, quickProv, clearFirst: true);
               },
               child: const Text("Limpiar y Cargar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             )
@@ -176,14 +178,14 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
         )
       );
     } else {
-      _executeRestoreCart(items, invProv, quickProv, clearFirst: true);
+      _executeRestoreCart(items, invProv, promoProv, quickProv, clearFirst: true);
     }
   }
 
-  Future<void> _executeRestoreCart(List<dynamic> items, InventoryProvider invProv, QuickSaleProvider quickProv, {required bool clearFirst}) async {
+  Future<void> _executeRestoreCart(List<dynamic> items, InventoryProvider invProv, PromotionProvider promoProv, QuickSaleProvider quickProv, {required bool clearFirst}) async {
     setState(() => _isProcessingAction = true);
 
-    final report = await quickProv.restoreCartFromHistory(items, invProv, clearPrevious: clearFirst);
+    final report = await quickProv.restoreCartFromHistory(items, invProv, promoProv, clearPrevious: clearFirst);
     
     if (!mounted) return;
     setState(() => _isProcessingAction = false);
@@ -524,6 +526,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                   institution: institution,
                   grade: grade,
                   isDark: isDark,
+                  clientId: _saleData!['cliente_id'],
                 ),
 
                 DetailNotesCard(

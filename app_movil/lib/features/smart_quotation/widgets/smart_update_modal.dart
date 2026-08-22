@@ -13,6 +13,7 @@ class SmartUpdateModal extends StatelessWidget {
   final Function(int itemId, double newPrice, double newBase)? onAcceptSinglePrice;
   final Function(int itemId, String newName)? onAcceptSingleName;
   final VoidCallback? onUpdateNames;
+  final VoidCallback? onSyncBundles;
 
   const SmartUpdateModal({
     super.key,
@@ -25,6 +26,7 @@ class SmartUpdateModal extends StatelessWidget {
     this.onAcceptSinglePrice,
     this.onAcceptSingleName,
     this.onUpdateNames,
+    this.onSyncBundles,
   });
 
   @override
@@ -33,12 +35,13 @@ class SmartUpdateModal extends StatelessWidget {
     final stockIssues = validation.stockWarnings;
     final priceIssues = validation.priceChanges;
     final nameIssues = validation.nameChanges;
+    final bundleIssues = validation.bundleChanges;
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    bool hasNoRealIssues = stockIssues.isEmpty && priceIssues.isEmpty && nameIssues.isEmpty;
+    bool hasNoRealIssues = stockIssues.isEmpty && priceIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -184,6 +187,37 @@ class SmartUpdateModal extends StatelessWidget {
                               icon: const Icon(Icons.drive_file_rename_outline, size: 20),
                               label: const Text("Actualizar Todos los Nombres", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                               style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.indigo[300] : Colors.indigo[800], side: BorderSide(color: isDark ? Colors.indigo.withValues(alpha: 0.5) : Colors.indigo[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            ),
+                          ),
+                         Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),
+                      ],
+
+                      // 4. BLOQUE DE OFERTAS (Bundles desactualizados)
+                      if (bundleIssues.isNotEmpty) ...[
+                        _buildSectionHeader("Ofertas Desactualizadas", Icons.sync_problem, isDark ? Colors.deepPurple[300]! : Colors.deepPurple[800]!),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(color: isDark ? Colors.deepPurple.withValues(alpha: 0.1) : Colors.deepPurple[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.deepPurple.withValues(alpha: 0.3) : Colors.deepPurple.shade200)),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.inventory_2, color: isDark ? Colors.deepPurple[300] : Colors.deepPurple[800], size: 24),
+                              const SizedBox(width: 12),
+                              Expanded(child: Text("La composición, nombre o precio de estas ofertas ha cambiado, o han sido eliminadas/desactivadas.", style: TextStyle(fontSize: 14, color: isDark ? Colors.deepPurple[200] : Colors.deepPurple[900]))),
+                            ],
+                          ),
+                        ),
+                        ...bundleIssues.map((b) => _buildBundleRow(b, isDark, context)),
+                        const SizedBox(height: 12),
+                        if (onSyncBundles != null)
+                          SizedBox(
+                            width: double.infinity, height: 50,
+                            child: OutlinedButton.icon(
+                              onPressed: () { Navigator.pop(context); onSyncBundles!(); },
+                              icon: const Icon(Icons.sync, size: 20),
+                              label: const Text("Sincronizar Ofertas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.deepPurple[300] : Colors.deepPurple[800], side: BorderSide(color: isDark ? Colors.deepPurple.withValues(alpha: 0.5) : Colors.deepPurple[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                             ),
                           ),
                         Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),
@@ -376,6 +410,42 @@ class SmartUpdateModal extends StatelessWidget {
               child: const Text("Aceptar Nuevo Nombre", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             ),
           )
+        ],
+      ),
+    );
+  }
+  Widget _buildBundleRow(BundleChange b, bool isDark, BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.white10 : Colors.deepPurple.shade200)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory_2, size: 16, color: isDark ? Colors.deepPurple[300] : Colors.deepPurple[700]),
+              const SizedBox(width: 8),
+              Expanded(child: Text(b.bundleName, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.deepPurple[300] : Colors.deepPurple[800]), maxLines: 2, overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...b.changes.map((change) => Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.arrow_right, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                const SizedBox(width: 4),
+                Expanded(child: Text(change, style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[300] : Colors.grey[700]))),
+              ],
+            ),
+          )),
+          if (b.isDeleted || b.isDeactivated)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(b.isDeleted ? "Esta oferta ya no existe en el sistema." : "Esta oferta está desactivada.", style: TextStyle(fontSize: 13, color: isDark ? Colors.red[300] : Colors.red[600], fontWeight: FontWeight.bold)),
+            ),
         ],
       ),
     );

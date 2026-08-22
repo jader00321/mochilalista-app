@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 
 class _PhoneNumberFormatter extends TextInputFormatter {
   @override
@@ -30,10 +33,11 @@ class ClientBottomSheet extends StatefulWidget {
   State<ClientBottomSheet> createState() => _ClientBottomSheetState();
 }
 
-class _ClientBottomSheetState extends State<ClientBottomSheet> {
+class _ClientBottomSheetState extends State<ClientBottomSheet> with TickerProviderStateMixin {
   final _searchCtrl = TextEditingController();
   List<ClientModel> _searchResults = [];
   bool _isSearching = false;
+  bool _isLoadingRecent = false;
 
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
@@ -43,13 +47,75 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> {
   final _emailCtrl = TextEditingController();
   final _notesCtrl = TextEditingController(); 
 
+  late TabController _tabController;
+  final FocusNode _searchFocusNode = FocusNode();
+  final FocusNode _nameFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_handleTabChange);
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRecentClients();
+      if (mounted) _searchFocusNode.requestFocus();
+    });
+  }
+
+  void _handleTabChange() {
+    if (_tabController.indexIsChanging) return;
+    if (_tabController.index == 0) {
+      _nameFocusNode.unfocus();
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) _searchFocusNode.requestFocus();
+      });
+    } else {
+      _searchFocusNode.unfocus();
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) _nameFocusNode.requestFocus();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchFocusNode.dispose();
+    _nameFocusNode.dispose();
+    _searchCtrl.dispose();
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _dniCtrl.dispose();
+    _addressCtrl.dispose();
+    _emailCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  void _loadRecentClients() async {
+    setState(() => _isLoadingRecent = true);
+    final authProv = Provider.of<AuthProvider>(context, listen: false);
+    if (authProv.activeBusinessId != null) {
+      final results = await ClientService().getRecentClients(authProv.activeBusinessId!);
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _isLoadingRecent = false;
+        });
+      }
+    } else {
+      if (mounted) setState(() => _isLoadingRecent = false);
+    }
+  }
+
   void _search(String query) async {
     if (query.isNotEmpty) {
       setState(() => _isSearching = true);
       final results = await Provider.of<SaleProvider>(context, listen: false).searchClients(query);
       if (mounted) setState(() { _searchResults = results; _isSearching = false; });
     } else {
-      if (mounted) setState(() { _searchResults = []; });
+      _loadRecentClients();
     }
   }
 
@@ -80,44 +146,44 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> {
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    return DefaultTabController(
-      length: 2,
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.85, 
-        padding: EdgeInsets.fromLTRB(0, 24, 0, bottomInset),
-        decoration: BoxDecoration(
-          color: surfaceColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          children: [
-            Container(width: 50, height: 5, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-            Text("Gestión de Clientes", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
-            const SizedBox(height: 16),
-            
-            TabBar(
-              labelColor: isDark ? Colors.blue[300] : Colors.blue[800],
-              unselectedLabelColor: isDark ? Colors.grey[500] : Colors.grey,
-              indicatorColor: isDark ? Colors.blue[300] : Colors.blue[800],
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              tabs: const [
-                Tab(icon: Icon(Icons.search), text: "Buscar Existente"),
-                Tab(icon: Icon(Icons.person_add), text: "Crear Nuevo"),
-              ],
-            ),
-            
-            Expanded(
-              child: TabBarView(
-                children: [
-                  // --- TAB 1: BUSCAR ---
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
-                        TextField(
-                          controller: _searchCtrl,
-                          autofocus: true,
-                          style: TextStyle(color: textColor, fontSize: 16),
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85, 
+      padding: EdgeInsets.fromLTRB(0, 24, 0, bottomInset),
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        children: [
+          Container(width: 50, height: 5, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+          Text("Gestión de Clientes", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
+          const SizedBox(height: 16),
+          
+          TabBar(
+            controller: _tabController,
+            labelColor: isDark ? Colors.blue[300] : Colors.blue[800],
+            unselectedLabelColor: isDark ? Colors.grey[500] : Colors.grey,
+            indicatorColor: isDark ? Colors.blue[300] : Colors.blue[800],
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            tabs: const [
+              Tab(icon: Icon(Icons.search), text: "Buscar Existente"),
+              Tab(icon: Icon(Icons.person_add), text: "Crear Nuevo"),
+            ],
+          ),
+          
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // --- TAB 1: BUSCAR ---
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _searchCtrl,
+                        focusNode: _searchFocusNode,
+                        style: TextStyle(color: textColor, fontSize: 16),
                           decoration: InputDecoration(
                             hintText: "Buscar por nombre o celular...",
                             hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey),
@@ -129,28 +195,82 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> {
                           onChanged: _search,
                         ),
                         const SizedBox(height: 20),
-                        Expanded(
-                          child: _searchResults.isEmpty 
+                      Expanded(
+                        child: _isLoadingRecent 
+                          ? const Center(child: CircularProgressIndicator())
+                          : _searchResults.isEmpty && _searchCtrl.text.isEmpty
                             ? Center(child: Text("Busca un cliente para asignarlo", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 16)))
-                            : ListView.separated(
-                                itemCount: _searchResults.length,
-                                separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-                                itemBuilder: (ctx, i) {
-                                  final c = _searchResults[i];
-                                  return ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                                    leading: CircleAvatar(backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50], radius: 24, child: Icon(Icons.person, color: isDark ? Colors.blue[300] : Colors.blue)),
-                                    title: Text(c.fullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                                    subtitle: Text("Tel: ${c.phone}", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                                    trailing: ElevatedButton(
-                                      onPressed: () => Navigator.pop(context, c),
-                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                                      child: const Text("Asignar", style: TextStyle(fontWeight: FontWeight.bold)),
-                                    ),
-                                  );
-                                },
-                              ),
-                        )
+                            : _searchResults.isEmpty && _searchCtrl.text.isNotEmpty
+                              ? Center(child: Text("No se encontraron coincidencias", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 16)))
+                              : ListView.separated(
+                                  itemCount: _searchResults.length,
+                                  separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+                                  itemBuilder: (ctx, i) {
+                                    final c = _searchResults[i];
+                                    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
+                                    return ListTile(
+                                      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                      leading: CircleAvatar(
+                                        backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[100], 
+                                        radius: 24, 
+                                        child: Text(
+                                          c.fullName.isNotEmpty ? c.fullName[0].toUpperCase() : "?",
+                                          style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 18)
+                                        )
+                                      ),
+                                      title: Row(
+                                        children: [
+                                          Expanded(child: Text(c.fullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                          if (c.usuarioVinculadoId != null)
+                                            Container(
+                                              margin: const EdgeInsets.only(left: 6),
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                              decoration: BoxDecoration(color: Colors.teal.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.teal.withValues(alpha: 0.5))),
+                                              child: const Text("APP", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.teal)),
+                                            )
+                                        ],
+                                      ),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Icon(Icons.phone_android, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                              const SizedBox(width: 4),
+                                              Text(c.phone, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                                            ],
+                                          )
+                                        ],
+                                      ),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (c.totalDebt > 0 || c.saldoAFavor > 0)
+                                            Padding(
+                                              padding: const EdgeInsets.only(right: 8.0),
+                                              child: Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                crossAxisAlignment: CrossAxisAlignment.end,
+                                                children: [
+                                                  if (c.totalDebt > 0)
+                                                    Text("-${currency.format(c.totalDebt)}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                                                  if (c.saldoAFavor > 0)
+                                                    Text("+${currency.format(c.saldoAFavor)}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+                                                ],
+                                              ),
+                                            ),
+                                          ElevatedButton(
+                                            onPressed: () => Navigator.pop(context, c),
+                                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                                            child: const Text("Asignar", style: TextStyle(fontWeight: FontWeight.bold)),
+                                          ),
+                                        ],
+                                      )
+                                    );
+                                  },
+                                ),
+                      )
                       ],
                     ),
                   ),
@@ -164,6 +284,7 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> {
                         children: [
                           _buildTextField(
                             controller: _nameCtrl, 
+                            focusNode: _nameFocusNode,
                             label: "Nombre Completo *", 
                             icon: Icons.person, 
                             isDark: isDark, 
@@ -193,8 +314,8 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> {
                             width: double.infinity, height: 60,
                             child: ElevatedButton(
                               onPressed: _returnNewClient, 
-                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                              child: const Text("ASIGNAR PARA LA VENTA", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1)),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                              child: const Text("Asignar para la Venta", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1)),
                             ),
                           )
                         ],
@@ -206,7 +327,6 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> {
             )
           ],
         ),
-      ),
     );
   }
 
@@ -217,11 +337,13 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> {
     required bool isDark, 
     TextInputType inputType = TextInputType.text, 
     String? Function(String?)? validator, 
+    FocusNode? focusNode,
     int maxLines = 1,
     List<TextInputFormatter>? formatters,
   }) {
     return TextFormField(
       controller: controller, 
+      focusNode: focusNode,
       keyboardType: inputType, 
       validator: validator, 
       maxLines: maxLines,

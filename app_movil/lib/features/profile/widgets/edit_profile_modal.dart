@@ -90,7 +90,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                 child: auth.isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white) 
+                    ? const SizedBox(width: 150, child: LinearProgressIndicator(color: Colors.white, backgroundColor: Colors.white24)) 
                     : const Text("GUARDAR CAMBIOS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1)),
               ),
             )

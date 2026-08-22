@@ -137,13 +137,41 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: const BoxDecoration(
-              color: Colors.white24,
-              shape: BoxShape.circle,
+          IconButton(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: const Row(
+                    children: [
+                      Icon(Icons.help_outline, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text('Trazabilidad', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  content: Text(
+                    "Esta pantalla muestra el historial completo de movimientos de tu producto: cada venta, compra, ajuste manual y cambio de precio. Los colores te indican si el stock entró (verde) o salió (rojo).",
+                    style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[300] : Colors.grey[800], height: 1.5),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Entendido'),
+                    )
+                  ],
+                )
+              );
+            },
+            icon: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(
+                color: Colors.white24,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.help_outline, color: Colors.white, size: 28),
             ),
-            child: const Icon(Icons.history, color: Colors.white, size: 28),
           )
         ],
       ),
@@ -162,18 +190,29 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
     String displayAction;
 
     if (isStockOp) {
+      int qty = (item['cantidad'] as num?)?.toInt() ?? 0;
       if (rawAction == 'VENTA') {
         icon = Icons.shopping_cart_checkout;
-        color = Colors.blueAccent;
-        displayAction = 'Venta';
+        color = Colors.redAccent;
+        displayAction = '📦 Venta en Caja';
       } else if (rawAction == 'INVENTARIO_INICIAL') {
         icon = Icons.flag;
+        color = Colors.blue;
+        displayAction = '🏁 Punto de Partida';
+      } else if (rawAction == 'COMPRA_LOTE') {
+        icon = Icons.local_shipping;
         color = Colors.green;
-        displayAction = 'Inventario Inicial';
-      } else if (rawAction == 'AJUSTE_MANUAL' || rawAction == 'AJUSTE') {
-        icon = Icons.edit_note;
-        color = Colors.orangeAccent;
-        displayAction = 'Ajuste Manual';
+        displayAction = '🚚 Ingreso por Factura';
+      } else if (rawAction == 'AJUSTE_INVENTARIO' || rawAction == 'AJUSTE_MANUAL' || rawAction == 'AJUSTE') {
+        if (qty > 0) {
+          icon = Icons.add_circle_outline;
+          color = Colors.green;
+          displayAction = '➕ Ajuste Manual (+)';
+        } else {
+          icon = Icons.remove_circle_outline;
+          color = Colors.redAccent;
+          displayAction = '➖ Ajuste Manual (-)';
+        }
       } else {
         icon = Icons.swap_horiz;
         color = Colors.grey;
@@ -181,10 +220,28 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
         displayAction = displayAction.isNotEmpty ? displayAction[0].toUpperCase() + displayAction.substring(1) : displayAction;
       }
     } else {
-      icon = Icons.build_circle_outlined;
-      color = Colors.purpleAccent;
-      displayAction = rawAction.replaceAll('_', ' ').toLowerCase();
-      displayAction = displayAction.isNotEmpty ? displayAction[0].toUpperCase() + displayAction.substring(1) : displayAction;
+      if (rawAction == 'precio_venta_final') {
+        icon = Icons.price_change;
+        color = Colors.purpleAccent;
+        displayAction = '💰 Precio de Venta Actualizado';
+      } else if (rawAction == 'costo_unitario_calculado') {
+        icon = Icons.analytics;
+        color = Colors.purpleAccent;
+        displayAction = '📊 Costo Interno Ajustado';
+      } else if (rawAction == 'estado') {
+        icon = Icons.visibility;
+        color = Colors.orangeAccent;
+        displayAction = '🔒 Visibilidad Cambiada';
+      } else if (rawAction == 'marca_id' || rawAction == 'categoria_id') {
+        icon = Icons.label;
+        color = Colors.grey;
+        displayAction = '🏷️ Clasificación Modificada';
+      } else {
+        icon = Icons.build_circle_outlined;
+        color = Colors.purpleAccent;
+        displayAction = rawAction.replaceAll('_', ' ').toLowerCase();
+        displayAction = displayAction.isNotEmpty ? displayAction[0].toUpperCase() + displayAction.substring(1) : displayAction;
+      }
     }
 
     return IntrinsicHeight(
@@ -231,7 +288,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(displayAction, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
+                        Expanded(child: Text(displayAction, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: color))),
                         Text(formattedTime, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                       ],
                     ),
@@ -241,12 +298,17 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                         children: [
                           Icon(Icons.tag, size: 14, color: Colors.grey[400]),
                           const SizedBox(width: 4),
-                          Text("Cantidad involucrada: ${item['cantidad']}", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[300] : Colors.grey[800])),
+                          Text(
+                            "Cantidad involucrada: ${((item['cantidad'] as num?)?.toInt() ?? 0) > 0 ? '+' : ''}${item['cantidad']}", 
+                            style: TextStyle(
+                              fontSize: 14, 
+                              fontWeight: FontWeight.bold,
+                              color: ((item['cantidad'] as num?)?.toInt() ?? 0) > 0 ? Colors.green : Colors.redAccent
+                            )
+                          ),
                         ],
                       ),
                     ] else ...[
-                      Text("Actualización de $displayAction", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[300] : Colors.grey[800])),
-                      const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(

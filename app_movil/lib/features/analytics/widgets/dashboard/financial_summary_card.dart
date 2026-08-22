@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 
-class FinancialSummaryCard extends StatelessWidget {
+class FinancialSummaryCard extends StatefulWidget {
   final AnalyticsData data;
   final bool isDark;
   final String Function(double) formatCurrency;
@@ -14,13 +14,36 @@ class FinancialSummaryCard extends StatelessWidget {
     required this.formatCurrency,
   });
 
+  @override
+  State<FinancialSummaryCard> createState() => _FinancialSummaryCardState();
+}
+
+class _FinancialSummaryCardState extends State<FinancialSummaryCard> with SingleTickerProviderStateMixin {
+  late AnimationController _modalAnimationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _modalAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+  }
+
+  @override
+  void dispose() {
+    _modalAnimationController.dispose();
+    super.dispose();
+  }
+
   void _showFinancialBreakdown(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      transitionAnimationController: _modalAnimationController,
       builder: (ctx) {
-        final double costoMercancia = data.totalSales - data.netProfit;
+        final double costoMercancia = widget.data.totalSales - widget.data.netProfit;
         return DraggableScrollableSheet(
           initialChildSize: 0.85,
           minChildSize: 0.5,
@@ -28,7 +51,7 @@ class FinancialSummaryCard extends StatelessWidget {
           builder: (_, controller) {
             return Container(
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                color: widget.isDark ? const Color(0xFF1E293B) : Colors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
               ),
               child: Column(
@@ -38,7 +61,7 @@ class FinancialSummaryCard extends StatelessWidget {
                     width: 40,
                     height: 5,
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.white24 : Colors.grey[300],
+                      color: widget.isDark ? Colors.white24 : Colors.grey[300],
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
@@ -60,8 +83,8 @@ class FinancialSummaryCard extends StatelessWidget {
                       physics: const BouncingScrollPhysics(),
                       children: [
                         Text(
-                          "Estos datos se calculan a partir de todas las ventas registradas. El margen representa el porcentaje de ganancia neta sobre los ingresos totales.",
-                          style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], height: 1.5),
+                          widget.data.financialHealth?.balanceDescription ?? "Estos datos se calculan a partir de todas las ventas registradas. El margen representa el porcentaje de ganancia neta sobre los ingresos totales.",
+                          style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[700], height: 1.5),
                         ),
                         const SizedBox(height: 32),
                       
@@ -71,12 +94,12 @@ class FinancialSummaryCard extends StatelessWidget {
                         child: BarChart(
                           BarChartData(
                             alignment: BarChartAlignment.spaceAround,
-                            maxY: data.totalSales > 0 ? data.totalSales * 1.2 : 100,
+                            maxY: widget.data.totalSales > 0 ? widget.data.totalSales * 1.2 : 100,
                             barTouchData: BarTouchData(
                               touchTooltipData: BarTouchTooltipData(
                                 getTooltipItem: (group, groupIndex, rod, rodIndex) {
                                   return BarTooltipItem(
-                                    formatCurrency(rod.toY),
+                                    widget.formatCurrency(rod.toY),
                                     const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                   );
                                 },
@@ -88,7 +111,7 @@ class FinancialSummaryCard extends StatelessWidget {
                                 sideTitles: SideTitles(
                                   showTitles: true,
                                   getTitlesWidget: (double value, TitleMeta meta) {
-                                    final style = TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[300] : Colors.grey[800]);
+                                    final style = TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.grey[300] : Colors.grey[800]);
                                     String text;
                                     switch (value.toInt()) {
                                       case 0: text = 'Ingresos'; break;
@@ -107,34 +130,34 @@ class FinancialSummaryCard extends StatelessWidget {
                             gridData: const FlGridData(show: false),
                             borderData: FlBorderData(show: false),
                             barGroups: [
-                              BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: data.totalSales, color: Colors.blueAccent, width: 24, borderRadius: BorderRadius.circular(6))]),
+                              BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: widget.data.totalSales, color: Colors.blueAccent, width: 24, borderRadius: BorderRadius.circular(6))]),
                               BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: costoMercancia, color: Colors.redAccent, width: 24, borderRadius: BorderRadius.circular(6))]),
-                              BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: data.netProfit, color: Colors.greenAccent, width: 24, borderRadius: BorderRadius.circular(6))]),
+                              BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: widget.data.netProfit, color: Colors.greenAccent, width: 24, borderRadius: BorderRadius.circular(6))]),
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(height: 32),
 
-                      const Text("Tabla Estadística de Resultados", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const Text("Desglose Financiero", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 16),
                       
                       // Tabla de Resultados
                       Container(
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.black12 : Colors.grey[50],
+                          color: widget.isDark ? Colors.black12 : Colors.grey[50],
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!),
+                          border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey[200]!),
                         ),
                         child: Column(
                           children: [
-                            _buildTableRow("Concepto Matemático", "Monto", isHeader: true),
-                            _buildTableRow("(+) Ingresos Brutos Totales", formatCurrency(data.totalSales), isBold: true, color: Colors.blueAccent),
-                            _buildTableRow("(-) Costo Directo Mercancía", formatCurrency(costoMercancia), color: Colors.redAccent),
+                            _buildTableRow("Concepto", "Monto", isHeader: true),
+                            _buildTableRow("(+) Ingresos Brutos Totales", widget.formatCurrency(widget.data.totalSales), isBold: true, color: Colors.blueAccent),
+                            _buildTableRow("(-) Costo Directo Mercancía", widget.formatCurrency(costoMercancia), color: Colors.redAccent),
                             const Divider(height: 1),
-                            _buildTableRow("(=) Ganancia Neta Calculada", formatCurrency(data.netProfit), isBold: true, color: Colors.green),
+                            _buildTableRow("(=) Ganancia Neta Calculada", widget.formatCurrency(widget.data.netProfit), isBold: true, color: Colors.green),
                             const Divider(height: 1),
-                            _buildTableRow("Ratio de Margen Neto", "${data.estimatedMarginPercentage.toStringAsFixed(1)}%", isBold: true),
+                            _buildTableRow("Ratio de Margen Neto", "${widget.data.estimatedMarginPercentage.toStringAsFixed(1)}%", isBold: true),
                           ],
                         ),
                       ),
@@ -145,21 +168,21 @@ class FinancialSummaryCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: data.estimatedMarginPercentage >= 20 ? Colors.green.withValues(alpha: 0.1) : 
-                                 (data.estimatedMarginPercentage >= 10 ? Colors.orange.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1)),
+                          color: widget.data.estimatedMarginPercentage >= 20 ? Colors.green.withValues(alpha: 0.1) : 
+                                 (widget.data.estimatedMarginPercentage >= 10 ? Colors.orange.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1)),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: data.estimatedMarginPercentage >= 20 ? Colors.green.withValues(alpha: 0.3) : 
-                                   (data.estimatedMarginPercentage >= 10 ? Colors.orange.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3))
+                            color: widget.data.estimatedMarginPercentage >= 20 ? Colors.green.withValues(alpha: 0.3) : 
+                                   (widget.data.estimatedMarginPercentage >= 10 ? Colors.orange.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3))
                           ),
                         ),
                         child: Row(
                           children: [
                             Icon(
-                              data.estimatedMarginPercentage >= 20 ? Icons.health_and_safety : 
-                              (data.estimatedMarginPercentage >= 10 ? Icons.warning_amber_rounded : Icons.dangerous),
-                              color: data.estimatedMarginPercentage >= 20 ? Colors.green : 
-                                     (data.estimatedMarginPercentage >= 10 ? Colors.orange : Colors.red),
+                              widget.data.estimatedMarginPercentage >= 20 ? Icons.health_and_safety : 
+                              (widget.data.estimatedMarginPercentage >= 10 ? Icons.warning_amber_rounded : Icons.dangerous),
+                              color: widget.data.estimatedMarginPercentage >= 20 ? Colors.green : 
+                                     (widget.data.estimatedMarginPercentage >= 10 ? Colors.orange : Colors.red),
                               size: 32,
                             ),
                             const SizedBox(width: 16),
@@ -167,13 +190,19 @@ class FinancialSummaryCard extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("Diagnóstico de Salud", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                                  Text("Diagnóstico de Salud", style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
                                   const SizedBox(height: 4),
                                   Text(
-                                    data.estimatedMarginPercentage >= 20 ? "Excelente margen de ganancia. Tu modelo de negocio es altamente rentable." : 
-                                    (data.estimatedMarginPercentage >= 10 ? "Margen aceptable. Podrías optimizar costos de proveedores para mejorar tu rentabilidad." : "Margen crítico. Revisa tu estructura de precios de venta y costos de adquisición urgentemente."),
-                                    style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                                    widget.data.financialHealth?.healthDiagnosis ?? "",
+                                    style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
                                   ),
+                                  if (widget.data.financialHealth?.marginContext != null) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      widget.data.financialHealth!.marginContext,
+                                      style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: widget.isDark ? Colors.grey[500] : Colors.grey[600]),
+                                    ),
+                                  ]
                                 ],
                               ),
                             )
@@ -204,7 +233,7 @@ class FinancialSummaryCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: isHeader ? 12 : 14, 
                 fontWeight: isHeader || isBold ? FontWeight.bold : FontWeight.normal,
-                color: isHeader ? Colors.grey : (isDark ? Colors.grey[300] : Colors.grey[800])
+                color: isHeader ? Colors.grey : (widget.isDark ? Colors.grey[300] : Colors.grey[800])
               )
             ),
           ),
@@ -213,7 +242,7 @@ class FinancialSummaryCard extends StatelessWidget {
             style: TextStyle(
               fontSize: isHeader ? 12 : 14, 
               fontWeight: isHeader || isBold ? FontWeight.bold : FontWeight.normal,
-              color: color ?? (isHeader ? Colors.grey : (isDark ? Colors.white : Colors.black))
+              color: color ?? (isHeader ? Colors.grey : (widget.isDark ? Colors.white : Colors.black))
             )
           ),
         ],
@@ -250,7 +279,7 @@ class FinancialSummaryCard extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: isDark 
+            colors: widget.isDark 
                 ? [const Color(0xFF1E1B4B), const Color(0xFF312E81)] 
                 : [const Color(0xFF4F46E5), const Color(0xFF3730A3)],
             begin: Alignment.topLeft,
@@ -275,7 +304,14 @@ class FinancialSummaryCard extends StatelessWidget {
                   children: [
                     const Icon(Icons.account_balance_wallet, color: Colors.white70, size: 20),
                     const SizedBox(width: 8),
-                    const Text("Balance Total", style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w500)),
+                    Expanded(
+                      child: Text(
+                        widget.data.financialHealth?.balanceHeadline ?? "Balance Total",
+                        style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w500),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
                 Container(
@@ -289,15 +325,37 @@ class FinancialSummaryCard extends StatelessWidget {
             FittedBox(
               fit: BoxFit.scaleDown, 
               alignment: Alignment.centerLeft, 
-              child: Text(formatCurrency(data.totalSales), style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold, letterSpacing: -1))
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: widget.data.totalSales),
+                duration: const Duration(milliseconds: 1500),
+                curve: Curves.easeOutQuart,
+                builder: (_, value, __) => Text(
+                  widget.formatCurrency(value), 
+                  style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold, letterSpacing: -1)
+                ),
+              ),
             ),
             const SizedBox(height: 24),
             Row(
               children: [
-                Expanded(child: _buildMiniStat("Ganancia Neta", formatCurrency(data.netProfit), Icons.trending_up, const Color(0xFF34D399))),
+                Expanded(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: widget.data.netProfit),
+                    duration: const Duration(milliseconds: 1500),
+                    curve: Curves.easeOutQuart,
+                    builder: (_, value, __) => _buildMiniStat("Ganancia Neta", widget.formatCurrency(value), Icons.trending_up, const Color(0xFF34D399))
+                  ),
+                ),
                 Container(width: 1, height: 40, color: Colors.white24),
                 const SizedBox(width: 16),
-                Expanded(child: _buildMiniStat("Margen", "${data.estimatedMarginPercentage.toStringAsFixed(1)}%", Icons.pie_chart_outline, const Color(0xFFFBBF24))),
+                Expanded(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: widget.data.estimatedMarginPercentage),
+                    duration: const Duration(milliseconds: 1500),
+                    curve: Curves.easeOutQuart,
+                    builder: (_, value, __) => _buildMiniStat("Margen", "${value.toStringAsFixed(1)}%", Icons.pie_chart_outline, const Color(0xFFFBBF24))
+                  ),
+                ),
               ],
             )
           ],

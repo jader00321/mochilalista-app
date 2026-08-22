@@ -19,6 +19,8 @@ class ManualQuoteDetailModal extends StatefulWidget {
   final String? categoryName; 
   final bool isNewAddition; 
   final bool isEditingSavedQuote;
+  final bool isBundleOutdated;
+  final Future<bool> Function()? onSyncBundle;
   
   final Function(MatchedProduct product, int qty, double? overridePrice, String? customName) onConfirm;
 
@@ -31,6 +33,8 @@ class ManualQuoteDetailModal extends StatefulWidget {
     this.categoryName,
     this.isNewAddition = false, 
     this.isEditingSavedQuote = false,
+    this.isBundleOutdated = false,
+    this.onSyncBundle,
     required this.onConfirm,
   });
 
@@ -252,7 +256,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
     bool exceedsStock = currentQty > _currentSelection.stock && !isStockEmpty;
 
     String originalName = widget.product.fullName.trim(); 
-    String currentBuiltName = _currentSelection.displayNameClean.trim();
+    String currentBuiltName = _currentSelection.displayNameForComparison.trim();
     bool hasCustomName = widget.initialCustomName != null && widget.initialCustomName!.isNotEmpty;
     
     // Nueva lógica refinada
@@ -296,6 +300,46 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                     ],
                   ),
                 ),
+
+              if (widget.isBundleOutdated)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: isDark ? Colors.deepPurple.withValues(alpha: 0.15) : Colors.deepPurple.shade50, borderRadius: BorderRadius.circular(8)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.sync_problem, size: 20, color: isDark ? Colors.deepPurple[300] : Colors.deepPurple[700]),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text("Oferta desactualizada", style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.deepPurple[300] : Colors.deepPurple[700], fontWeight: FontWeight.bold))),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text("La composición, nombre o precio de esta oferta ha cambiado en el catálogo.", style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.deepPurple[200] : Colors.deepPurple[800])),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: _isSyncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync, size: 18),
+                          label: const Text("Sincronizar Oferta"),
+                          style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.deepPurple[300] : Colors.deepPurple[700], side: BorderSide(color: isDark ? Colors.deepPurple.withValues(alpha: 0.5) : Colors.deepPurple.shade300)),
+                          onPressed: _isSyncing || widget.onSyncBundle == null ? null : () async {
+                            setState(() => _isSyncing = true);
+                            final success = await widget.onSyncBundle!();
+                            if (mounted) {
+                              setState(() => _isSyncing = false);
+                            }
+                            if (success && context.mounted) {
+                              Navigator.of(context).pop();
+                            }
+                          },
+                        ),
+                      )
+                    ],
+                  ),
+                ),
               
               // 1. INFO SUPERIOR
               Row(
@@ -326,22 +370,18 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                         
                         const SizedBox(height: 2),
 
-                        RichText(
-                           maxLines: 3,
-                           overflow: TextOverflow.ellipsis,
-                           text: TextSpan(
-                             children: [
-                               TextSpan(text: "${_currentSelection.productName} ", style: textTheme.titleLarge?.copyWith(color: textColor)),
-                               if (_currentSelection.specificName != null && _currentSelection.specificName!.isNotEmpty)
-                                 TextSpan(text: _currentSelection.specificName!, style: textTheme.titleLarge?.copyWith(color: isDark ? Colors.teal[300] : Colors.teal[700])),
-                             ],
-                           ),
-                         ),
+                        Text("${_currentSelection.productName} ", style: textTheme.titleLarge?.copyWith(color: textColor), maxLines: 3, overflow: TextOverflow.ellipsis),
                         
-                        if (_currentSelection.description != null && _currentSelection.description!.isNotEmpty)
+                        if (_currentSelection.specificName != null && _currentSelection.specificName!.isNotEmpty && _currentSelection.specificName != "Paquete")
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(_currentSelection.specificName!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
+                          ),
+                        
+                        if (_currentSelection.description != null && _currentSelection.description!.isNotEmpty && _currentSelection.description != _currentSelection.specificName)
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
-                            child: Text(_currentSelection.description!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            child: Text(_currentSelection.description!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
                           ),
                         
                         const SizedBox(height: 10),

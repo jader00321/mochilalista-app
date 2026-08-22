@@ -6,6 +6,7 @@ import 'package:app_movil/features/smart_quotation/services/quotation_service.da
 import 'package:app_movil/core/database/local_db.dart';
 
 enum WorkbenchSort { time, alpha }
+enum TimeFilter { today, thisWeek, thisMonth, sixMonths, custom }
 
 class WorkbenchProvider with ChangeNotifier {
   int? _negocioId;
@@ -18,6 +19,7 @@ class WorkbenchProvider with ChangeNotifier {
   final dbHelper = LocalDatabase.instance;
   
   List<SmartQuotationModel> _allQuotations = [];
+  List<SmartQuotationModel> _timeFilteredQuotations = [];
   
   List<SmartQuotationModel> _inProcessList = []; 
   List<SmartQuotationModel> _readyAndPacksList = []; 
@@ -28,6 +30,15 @@ class WorkbenchProvider with ChangeNotifier {
 
   WorkbenchSort _sortType = WorkbenchSort.time;
   bool _sortAsc = false; 
+  String _selectedFilter = "Todo";
+
+  TimeFilter _timeFilter = TimeFilter.thisMonth;
+  DateTimeRange? _customRange;
+
+  // Listas pre-procesadas para la UI actual (filtradas y ordenadas)
+  List<SmartQuotationModel> _filteredInProcessList = [];
+  List<SmartQuotationModel> _filteredReadyAndPacksList = [];
+  List<SmartQuotationModel> _filteredSoldList = [];
 
   WorkbenchSort get sortType => _sortType;
   bool get sortAsc => _sortAsc;
@@ -38,6 +49,42 @@ class WorkbenchProvider with ChangeNotifier {
   List<SmartQuotationModel> get readyAndPacksList => _readyAndPacksList;
   List<SmartQuotationModel> get soldList => _soldList;
   List<SmartQuotationModel> get archivedList => _archivedList;
+  
+  List<SmartQuotationModel> get filteredInProcessList => _filteredInProcessList;
+  List<SmartQuotationModel> get filteredReadyAndPacksList => _filteredReadyAndPacksList;
+  List<SmartQuotationModel> get filteredSoldList => _filteredSoldList;
+  
+  String get selectedFilter => _selectedFilter;
+  
+  TimeFilter get timeFilter => _timeFilter;
+  DateTimeRange? get customRange => _customRange;
+
+  String get timeFilterLabel {
+    switch (_timeFilter) {
+      case TimeFilter.today: return "Hoy";
+      case TimeFilter.thisWeek: return "Esta Semana";
+      case TimeFilter.thisMonth: return "Este Mes";
+      case TimeFilter.sixMonths: return "Últimos 6 Meses";
+      case TimeFilter.custom: return "Personalizado";
+    }
+  }
+
+  DateTimeRange get activeRange {
+    final now = DateTime.now();
+    switch (_timeFilter) {
+      case TimeFilter.today:
+        return DateTimeRange(start: DateTime(now.year, now.month, now.day), end: now);
+      case TimeFilter.thisWeek:
+        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+        return DateTimeRange(start: DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day), end: now);
+      case TimeFilter.thisMonth:
+        return DateTimeRange(start: DateTime(now.year, now.month, 1), end: now);
+      case TimeFilter.sixMonths:
+        return DateTimeRange(start: DateTime(now.year, now.month - 6, now.day), end: now);
+      case TimeFilter.custom:
+        return _customRange ?? DateTimeRange(start: DateTime(now.year, now.month, 1), end: now);
+    }
+  }
 
   int get criticalAlertsCount {
     int count = 0;
@@ -46,6 +93,10 @@ class WorkbenchProvider with ChangeNotifier {
       if (val != null && !val.canSell) count++;
     }
     return count;
+  }
+
+  double get totalDaySales {
+    return _soldList.fold(0.0, (sum, q) => sum + q.totalAmount);
   }
 
   void updateContext(int? negocioId, int? usuarioId) {
@@ -74,7 +125,72 @@ class WorkbenchProvider with ChangeNotifier {
       _sortType = type;
       _sortAsc = type == WorkbenchSort.alpha ? true : false; 
     }
+    _applyFilterAndSort();
     notifyListeners();
+  }
+
+  void setFilter(String filter) {
+    if (_selectedFilter != filter) {
+      _selectedFilter = filter;
+      _applyFilterAndSort();
+      notifyListeners();
+    }
+  }
+
+  void setTimeFilter(TimeFilter filter, {DateTimeRange? customRange}) {
+    if (_timeFilter != filter || (filter == TimeFilter.custom && _customRange != customRange)) {
+      _timeFilter = filter;
+      if (filter == TimeFilter.custom) {
+        _customRange = customRange;
+      }
+      _applyTimeFilter();
+      _organizeLists();
+      _applyFilterAndSort();
+      notifyListeners();
+    }
+  }
+
+  void _applyTimeFilter() {
+    final range = activeRange;
+    _timeFilteredQuotations = _allQuotations.where((q) {
+      final date = DateTime.tryParse(q.createdAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return date.isAfter(range.start.subtract(const Duration(seconds: 1))) && 
+             date.isBefore(range.end.add(const Duration(days: 1))); // Para incluir todo el día final
+    }).toList();
+  }
+
+  void _applyFilterAndSort() {
+    _filteredInProcessList = _filterAndSortList(_inProcessList);
+    _filteredReadyAndPacksList = _filterAndSortList(_readyAndPacksList);
+    _filteredSoldList = _filterAndSortList(_soldList);
+  }
+
+  List<SmartQuotationModel> _filterAndSortList(List<SmartQuotationModel> baseList) {
+    var filtered = baseList.where((q) {
+      final validation = getValidationFor(q.id);
+      if (_selectedFilter == "Todo") return true;
+      if (_selectedFilter == "Solo Alertas ⚠️") return validation != null && (!validation.canSell || validation.hasIssues);
+      if (_selectedFilter == "Manual") return q.type == "manual";
+      if (_selectedFilter == "Escaneadas IA") return q.type == "ai_scan";
+      if (_selectedFilter == "Comunidad 🌐") return (q.clientName ?? "").contains("- Pedido");
+      return true;
+    }).toList();
+
+    filtered.sort((a, b) {
+      int cmp;
+      if (_sortType == WorkbenchSort.alpha) {
+        final nameA = a.clientName ?? "Z_Sin Cliente"; 
+        final nameB = b.clientName ?? "Z_Sin Cliente";
+        cmp = nameA.toLowerCase().compareTo(nameB.toLowerCase());
+      } else {
+        final timeA = DateTime.tryParse(a.createdAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeB = DateTime.tryParse(b.createdAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        cmp = timeA.compareTo(timeB);
+      }
+      return _sortAsc ? cmp : -cmp;
+    });
+
+    return filtered;
   }
 
   Future<void> loadDashboard() async {
@@ -97,12 +213,14 @@ class WorkbenchProvider with ChangeNotifier {
           itemsMap.putIfAbsent(qId, () => []).add(item);
       }
 
-      _allQuotations = quotesRows.map((q) {
+      List<SmartQuotationModel> allQs = [];
+      for (var q in quotesRows) {
           var map = Map<String, dynamic>.from(q);
           map['items'] = itemsMap[q['id']] ?? [];
-          return SmartQuotationModel.fromJson(map);
-      }).toList();
-
+          allQs.add(SmartQuotationModel.fromJson(map));
+      }
+      _allQuotations = allQs;
+      _applyTimeFilter();
       _organizeLists();
       await _evaluateHealthAndAutoDowngrade();
 
@@ -115,20 +233,20 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   void _organizeLists() {
-    _inProcessList = _allQuotations.where((q) => 
+    _inProcessList = _timeFilteredQuotations.where((q) => 
         (q.status == 'DRAFT' || q.status == 'PENDING' || q.status == 'PENDING_APPROVAL') && q.type != 'pack' && _isRealQuotation(q)
     ).toList();
 
-    _readyAndPacksList = _allQuotations.where((q) => 
+    _readyAndPacksList = _timeFilteredQuotations.where((q) => 
         (q.status == 'READY' || q.type == 'pack') && q.status != 'SOLD' && q.status != 'ARCHIVED' && _isRealQuotation(q)
     ).toList();
 
-    _soldList = _allQuotations.where((q) {
+    _soldList = _timeFilteredQuotations.where((q) {
         if (q.status != 'SOLD') return false; 
         return _isRealQuotation(q);
     }).toList();
 
-    _archivedList = _allQuotations.where((q) => 
+    _archivedList = _timeFilteredQuotations.where((q) => 
         q.status == 'ARCHIVED' && _isRealQuotation(q)
     ).toList();
   }
@@ -152,8 +270,11 @@ class WorkbenchProvider with ChangeNotifier {
 
   Future<void> _evaluateHealthAndAutoDowngrade() async {
     bool listsChanged = false;
+    
+    // Batch validation sin notifyListeners individual
+    await _batchValidate([..._inProcessList, ..._readyAndPacksList]);
+    
     for (var q in [..._inProcessList, ..._readyAndPacksList]) {
-      await checkTrafficLight(q.id);
       final validation = _trafficLights[q.id];
       
       if (q.status == 'READY' && validation != null && !validation.canSell) {
@@ -166,8 +287,20 @@ class WorkbenchProvider with ChangeNotifier {
       }
     }
     if (listsChanged) {
+      _applyTimeFilter();
       _organizeLists();
-      notifyListeners();
+    }
+    _applyFilterAndSort(); // Aplica después de evaluar todo
+  }
+
+  Future<void> _batchValidate(List<SmartQuotationModel> quotes) async {
+    for (var q in quotes) {
+      try {
+        final result = await _quotationService.validateIntegrity(q.id);
+        _trafficLights[q.id] = result;
+      } catch (e) {
+        debugPrint("Error verificando integridad local: $e");
+      }
     }
   }
 
@@ -241,14 +374,22 @@ class WorkbenchProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> refreshQuotation(int id, {bool fixPrices = true, bool fixStock = false, bool fixNames = false}) async {
+  Future<bool> refreshQuotation(int id, {
+    bool fixPrices = true, 
+    bool fixStock = false, 
+    bool fixNames = false,
+    bool fixBundles = false
+  }) async {
     _isLoading = true;
     notifyListeners();
+
     try {
-      final success = await _quotationService.refreshQuotation(id, fixPrices: fixPrices, fixStock: fixStock, fixNames: fixNames);
+      final success = await _quotationService.refreshQuotation(id, 
+        fixPrices: fixPrices, fixStock: fixStock, fixNames: fixNames, fixBundles: fixBundles);
+      
       if (success) {
-        await checkTrafficLight(id); 
-        await loadDashboard(); 
+        await checkTrafficLight(id);
+        await loadDashboard();
       }
       return success;
     } catch (e) {
@@ -258,6 +399,11 @@ class WorkbenchProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Sincroniza todas las ofertas (bundles) de una cotización con su estado actual en el catálogo
+  Future<bool> syncBundles(int quotationId) async {
+    return refreshQuotation(quotationId, fixPrices: false, fixStock: false, fixNames: false, fixBundles: true);
   }
 
   Future<int?> cloneQuotation(int id) async {

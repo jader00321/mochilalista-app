@@ -312,11 +312,11 @@ class PdfGenerator {
                     decoration: pw.BoxDecoration(color: config.theme == PdfTheme.classic ? PdfColors.black : PdfColors.orange, borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4))),
                     child: pw.Text("PAQUETE", style: pw.TextStyle(fontSize: 7, color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
                   ),
-                  pw.Text(item.displayName, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(item.productName ?? "Paquete", style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
                   if (item.specificName != null && item.specificName!.isNotEmpty && item.specificName != "Paquete")
                     pw.Padding(
                       padding: const pw.EdgeInsets.only(top: 2),
-                      child: pw.Text(item.specificName!, style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                      child: pw.Text(item.specificName!, style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700, fontStyle: pw.FontStyle.italic)),
                     ),
                ]
             );

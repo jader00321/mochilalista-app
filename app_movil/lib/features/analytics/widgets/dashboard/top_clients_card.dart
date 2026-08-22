@@ -93,7 +93,7 @@ class _TopClientsCardState extends State<TopClientsCard> {
                     ),
                     if (isSelected) ...[
                       const SizedBox(height: 12),
-                      _buildDetailPanel(c),
+                      _buildDetailPanel(c, idx),
                     ]
                   ],
                 ),
@@ -105,8 +105,21 @@ class _TopClientsCardState extends State<TopClientsCard> {
     );
   }
 
-  Widget _buildDetailPanel(Map<String, dynamic> c) {
-    String name = c['nombre_completo'] ?? 'el cliente';
+  Widget _buildDetailPanel(Map<String, dynamic> c, int index) {
+    String name = c['nombre_completo'] ?? 'Cliente';
+    double totalComprado = (c['total_comprado'] as num).toDouble();
+    int numCompras = c['num_compras'] ?? 1;
+    double ticketPromedio = totalComprado / numCompras;
+
+    String insightText;
+    if (index == 0) {
+      insightText = "🏆 $name es tu cliente VIP con ${widget.formatCurrency(totalComprado)} en $numCompras compras (Ticket prom: ${widget.formatCurrency(ticketPromedio)}). ¡Envíale una oferta exclusiva por WhatsApp usando el Cotizador Manual para premiar su lealtad!";
+    } else if (index <= 2) {
+      insightText = "$name ha invertido ${widget.formatCurrency(totalComprado)} en $numCompras compras. Está a punto de convertirse en tu próximo VIP. Una promoción personalizada podría impulsar su recurrencia.";
+    } else {
+      insightText = "$name acumula ${widget.formatCurrency(totalComprado)} en $numCompras compras. Cada cliente cuenta. Recuérdale tus ofertas vigentes para fidelizarlo.";
+    }
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -117,11 +130,11 @@ class _TopClientsCardState extends State<TopClientsCard> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.auto_awesome, color: Colors.amber[400], size: 20),
+          Icon(index == 0 ? Icons.workspace_premium : Icons.auto_awesome, color: Colors.amber[400], size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              "Fidelización: $name es uno de tus mayores compradores históricos. Envíale una oferta personalizada mediante el cotizador manual para incentivar su recurrencia.",
+              insightText,
               style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[700], height: 1.4),
             ),
           )

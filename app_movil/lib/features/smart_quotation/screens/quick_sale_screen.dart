@@ -28,6 +28,7 @@ class QuickSaleScreen extends StatefulWidget {
 
 class _QuickSaleScreenState extends State<QuickSaleScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
   Timer? _debounce;
   bool _saleCompleted = false; 
   bool _isOffersExpanded = false;
@@ -43,6 +44,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _searchFocus.dispose();
     _debounce?.cancel();
     super.dispose();
   }
@@ -76,7 +78,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
+    _debounce = Timer(const Duration(milliseconds: 250), () {
       final searchProv = Provider.of<QuickSearchProvider>(context, listen: false);
       if (query.isNotEmpty) {
         searchProv.searchProducts(query);
@@ -92,6 +94,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       MaterialPageRoute(builder: (_) => const BarcodeScannerScreen(isFromQuickSale: true)),
     ).then((_) {
       _searchCtrl.clear();
+      _searchFocus.requestFocus();
       if (!mounted) return;
       Provider.of<QuickSearchProvider>(context, listen: false).clearSearch();
     });
@@ -108,6 +111,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     }
     
     _searchCtrl.clear();
+    _searchFocus.requestFocus();
     Provider.of<QuickSearchProvider>(context, listen: false).clearSearch();
     FocusScope.of(context).unfocus();
     CustomSnackBar.show(context, message: "Agregado: ${item.product.nombre}", isError: false);
@@ -294,169 +298,187 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              QuickSaleHeader(isGuest: isGuest, isDark: isDark),
+              Expanded(
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: QuickSaleHeader(isGuest: isGuest, isDark: isDark),
+                    ),
 
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: appBarColor, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))),
-                child: TextField(
-                  controller: _searchCtrl,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                  cursorColor: Colors.white,
-                  decoration: InputDecoration(
-                    hintText: "Buscar por nombre o código...",
-                    hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 15),
-                    prefixIcon: const Icon(Icons.search, color: Colors.white, size: 24),
-                    filled: true,
-                    fillColor: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.2),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (searchProv.isSearching) 
-                          Transform.scale(scale: 0.5, child: const CircularProgressIndicator(color: Colors.white))
-                        else if (_searchCtrl.text.isNotEmpty) 
-                          IconButton(icon: const Icon(Icons.clear, color: Colors.white), onPressed: () { _searchCtrl.clear(); searchProv.clearSearch(); }),
-                        IconButton(icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 26), onPressed: _scanBarcode),
-                      ],
-                    )
-                  ),
-                  onChanged: _onSearchChanged,
-                ),
-              ),
-
-              if (promoProv.bundles.isNotEmpty && searchProv.searchResults.isEmpty)
-                Builder(builder: (ctx) {
-                  final now = DateTime.now();
-                  final validBundles = promoProv.bundles.where((b) {
-                    if (!b.activo) return false;
-                    if (b.fechaInicio != null && b.fechaInicio!.isAfter(now)) return false;
-                    if (b.fechaFin != null && b.fechaFin!.isBefore(now)) return false;
-                    final maxStock = promoProv.calculateBundleMaxStock(b.id);
-                    return maxStock > 0;
-                  }).toList();
-
-                  if (validBundles.isEmpty) return const SizedBox();
-
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    color: appBarColor,
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        InkWell(
-                          onTap: () => setState(() => _isOffersExpanded = !_isOffersExpanded),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                            child: Row(
+                    SliverAppBar(
+                      pinned: true,
+                      automaticallyImplyLeading: false,
+                      backgroundColor: appBarColor,
+                      elevation: 0,
+                      toolbarHeight: 90,
+                      flexibleSpace: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(color: appBarColor, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))),
+                        child: TextField(
+                          controller: _searchCtrl,
+                          focusNode: _searchFocus,
+                          autofocus: true,
+                          style: const TextStyle(color: Colors.white, fontSize: 16),
+                          cursorColor: Colors.white,
+                          decoration: InputDecoration(
+                            hintText: "Buscar por nombre o código...",
+                            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 15),
+                            prefixIcon: const Icon(Icons.search, color: Colors.white, size: 24),
+                            filled: true,
+                            fillColor: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.2),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            suffixIcon: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text("🔥 Ofertas Disponibles (${validBundles.length})", style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1)),
-                                const Spacer(),
-                                Icon(_isOffersExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.white, size: 20),
+                                if (searchProv.isSearching) 
+                                  Transform.scale(scale: 0.5, child: const CircularProgressIndicator(color: Colors.white))
+                                else if (_searchCtrl.text.isNotEmpty) 
+                                  IconButton(icon: const Icon(Icons.clear, color: Colors.white), onPressed: () { _searchCtrl.clear(); _searchFocus.requestFocus(); searchProv.clearSearch(); }),
+                                IconButton(icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 26), onPressed: _scanBarcode),
                               ],
-                            ),
+                            )
                           ),
+                          onChanged: _onSearchChanged,
                         ),
-                        if (_isOffersExpanded)
-                          ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxHeight: MediaQuery.of(context).size.height * 0.4,
-                            ),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              physics: const BouncingScrollPhysics(),
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: validBundles.length,
-                            itemBuilder: (ctx, i) {
-                              final bundle = validBundles[i];
-                              final maxStock = promoProv.calculateBundleMaxStock(bundle.id);
-                              
-                              IconData iconData = Icons.inventory_2;
-                              Color iconColor = Colors.amberAccent;
-                              String prefix = "Paquete";
-                              if (bundle.tipoPromocion == 'flash') {
-                                iconData = Icons.bolt; iconColor = Colors.yellowAccent; prefix = "Flash";
-                              } else if (bundle.tipoPromocion == 'liquidez_costo') {
-                                iconData = Icons.water_drop; iconColor = Colors.lightBlueAccent; prefix = "Liquidez";
-                              } else if (bundle.tipoPromocion == '2x1') {
-                                iconData = Icons.exposure_plus_2; iconColor = Colors.greenAccent; prefix = "2x1";
-                              } else if (bundle.tipoPromocion == 'volumen') {
-                                iconData = Icons.shopping_cart; iconColor = Colors.deepPurpleAccent; prefix = "Mayoreo";
-                              } else if (bundle.tipoPromocion == 'escolar') {
-                                iconData = Icons.school; iconColor = Colors.tealAccent; prefix = "Escolar";
-                              }
-                              
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.2), shape: BoxShape.circle),
-                                      child: Icon(iconData, color: iconColor, size: 20),
+                      ),
+                    ),
+
+                    if (promoProv.bundles.isNotEmpty && searchProv.searchResults.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Builder(builder: (ctx) {
+                          final now = DateTime.now();
+                          final validBundles = promoProv.bundles.where((b) {
+                            if (!b.activo) return false;
+                            if (b.fechaInicio != null && b.fechaInicio!.isAfter(now)) return false;
+                            if (b.fechaFin != null && b.fechaFin!.isBefore(now)) return false;
+                            final maxStock = promoProv.calculateBundleMaxStock(b.id);
+                            return maxStock > 0;
+                          }).toList();
+
+                          if (validBundles.isEmpty) return const SizedBox();
+
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            color: appBarColor,
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                InkWell(
+                                  onTap: () => setState(() => _isOffersExpanded = !_isOffersExpanded),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                    child: Row(
+                                      children: [
+                                        Text("🔥 Ofertas Disponibles (${validBundles.length})", style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1)),
+                                        const Spacer(),
+                                        Icon(_isOffersExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.white, size: 20),
+                                      ],
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(bundle.nombrePaquete, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                                          if (bundle.descripcion != null && bundle.descripcion!.isNotEmpty)
-                                            Padding(
-                                              padding: const EdgeInsets.only(top: 2, bottom: 2),
-                                              child: Text(bundle.descripcion!, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                            ),
-                                          const SizedBox(height: 4),
-                                          Row(
+                                  ),
+                                ),
+                                if (_isOffersExpanded)
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxHeight: MediaQuery.of(context).size.height * 0.4,
+                                    ),
+                                    child: ListView.builder(
+                                      shrinkWrap: true,
+                                      physics: const BouncingScrollPhysics(),
+                                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                                      itemCount: validBundles.length,
+                                      itemBuilder: (ctx, i) {
+                                        final bundle = validBundles[i];
+                                        final maxStock = promoProv.calculateBundleMaxStock(bundle.id);
+                                        
+                                        IconData iconData = Icons.inventory_2;
+                                        Color iconColor = Colors.amberAccent;
+                                        String prefix = "Paquete";
+                                        if (bundle.tipoPromocion == 'flash') {
+                                          iconData = Icons.bolt; iconColor = Colors.yellowAccent; prefix = "Flash";
+                                        } else if (bundle.tipoPromocion == 'liquidez_costo') {
+                                          iconData = Icons.water_drop; iconColor = Colors.lightBlueAccent; prefix = "Liquidez";
+                                        } else if (bundle.tipoPromocion == '2x1') {
+                                          iconData = Icons.exposure_plus_2; iconColor = Colors.greenAccent; prefix = "2x1";
+                                        } else if (bundle.tipoPromocion == 'volumen') {
+                                          iconData = Icons.shopping_cart; iconColor = Colors.deepPurpleAccent; prefix = "Mayoreo";
+                                        } else if (bundle.tipoPromocion == 'escolar') {
+                                          iconData = Icons.school; iconColor = Colors.tealAccent; prefix = "Escolar";
+                                        }
+                                        
+                                        return Container(
+                                          margin: const EdgeInsets.only(bottom: 8),
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          child: Row(
                                             children: [
                                               Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
-                                                child: Text(prefix, style: TextStyle(color: iconColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                padding: const EdgeInsets.all(8),
+                                                decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.2), shape: BoxShape.circle),
+                                                child: Icon(iconData, color: iconColor, size: 20),
                                               ),
-                                              const SizedBox(width: 8),
-                                              Text(currency.format(bundle.precioVentaTotal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                                              const SizedBox(width: 8),
-                                              Text("Stock: $maxStock", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11)),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(bundle.nombrePaquete, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                                                    if (bundle.descripcion != null && bundle.descripcion!.isNotEmpty)
+                                                      Padding(
+                                                        padding: const EdgeInsets.only(top: 2, bottom: 2),
+                                                        child: Text(bundle.descripcion!, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                                      ),
+                                                    const SizedBox(height: 4),
+                                                    Row(
+                                                      children: [
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                          decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
+                                                          child: Text(prefix, style: TextStyle(color: iconColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        Text(currency.format(bundle.precioVentaTotal), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                                        const SizedBox(width: 8),
+                                                        Text("Stock: $maxStock", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11)),
+                                                      ],
+                                                    )
+                                                  ],
+                                                ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.add_shopping_cart, color: Colors.white),
+                                                onPressed: () {
+                                                  final error = quickProv.addBundleToCart(bundle, maxStock);
+                                                  if (error != null) {
+                                                    CustomSnackBar.show(context, message: error, isError: true);
+                                                  } else {
+                                                    CustomSnackBar.show(context, message: "Paquete agregado al carrito.", isError: false);
+                                                  }
+                                                },
+                                              )
                                             ],
-                                          )
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.add_shopping_cart, color: Colors.white),
-                                      onPressed: () {
-                                        final error = quickProv.addBundleToCart(bundle, maxStock);
-                                        if (error != null) {
-                                          CustomSnackBar.show(context, message: error, isError: true);
-                                        } else {
-                                          CustomSnackBar.show(context, message: "Paquete agregado al carrito.", isError: false);
-                                        }
+                                          ),
+                                        );
                                       },
-                                    )
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ),
 
-              Expanded(
-                child: searchProv.searchResults.isNotEmpty
-                  ? _buildSearchResults(searchProv, isDark)
-                  : _buildCart(quickProv, isDark),
+                    if (searchProv.searchResults.isNotEmpty)
+                      ..._buildSearchResultsSlivers(searchProv, isDark)
+                    else
+                      ..._buildCartSlivers(quickProv, promoProv, isDark),
+                  ],
+                ),
               ),
 
               if (quickProv.cartItems.isNotEmpty && searchProv.searchResults.isEmpty)
@@ -499,84 +521,87 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     );
   }
 
-  Widget _buildSearchResults(QuickSearchProvider searchProv, bool isDark) {
-    return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  List<Widget> _buildSearchResultsSlivers(QuickSearchProvider searchProv, bool isDark) {
+    return [
+      SliverToBoxAdapter(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("${searchProv.searchResults.length} resultados encontrados", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 14)),
+              PopupMenuButton<String>(
+                color: Theme.of(context).colorScheme.surface,
+                child: Row(children: [Icon(Icons.sort, size: 18, color: isDark ? Colors.blue[300] : Colors.blue), const SizedBox(width: 6), Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 14))]),
+                onSelected: (val) => searchProv.sortResults(val),
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(value: 'nombre_asc', child: Text("Alfabético (A-Z)", style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+                  PopupMenuItem(value: 'precio_desc', child: Text("Mayor Precio", style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+                  PopupMenuItem(value: 'precio_asc', child: Text("Menor Precio", style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+                ],
+              )
+            ],
+          ),
+        ),
+      ),
+      SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (ctx, i) {
+            if (i == searchProv.searchResults.length * 2) {
+              if (searchProv.hasMoreData) {
+                WidgetsBinding.instance.addPostFrameCallback((_) => searchProv.loadMore());
+                return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: CircularProgressIndicator()));
+              } else {
+                return Padding(
+                  padding: const EdgeInsets.all(30.0),
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const CatalogScreen()));
+                    }, 
+                    icon: const Icon(Icons.inventory_2, size: 24), 
+                    label: const Text("Ir al Catálogo Completo", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))
+                  ),
+                );
+              }
+            }
+            if (i.isOdd) {
+              return Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]);
+            }
+            final index = i ~/ 2;
+            return QuickSearchResultTile(item: searchProv.searchResults[index], onTap: () => _addToCart(searchProv.searchResults[index]));
+          },
+          childCount: searchProv.searchResults.length * 2 + (searchProv.hasMoreData ? 1 : 1),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _buildCartSlivers(QuickSaleProvider quickProv, PromotionProvider promoProv, bool isDark) {
+    if (quickProv.cartItems.isEmpty) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text("${searchProv.searchResults.length} resultados encontrados", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 14)),
-                PopupMenuButton<String>(
-                  color: Theme.of(context).colorScheme.surface,
-                  child: Row(children: [Icon(Icons.sort, size: 18, color: isDark ? Colors.blue[300] : Colors.blue), const SizedBox(width: 6), Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 14))]),
-                  onSelected: (val) => searchProv.sortResults(val),
-                  itemBuilder: (ctx) => [
-                    PopupMenuItem(value: 'nombre_asc', child: Text("Alfabético (A-Z)", style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-                    PopupMenuItem(value: 'precio_desc', child: Text("Mayor Precio", style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-                    PopupMenuItem(value: 'precio_asc', child: Text("Menor Precio", style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-                  ],
-                )
+                Icon(Icons.point_of_sale, size: 90, color: isDark ? Colors.white10 : Colors.pink[100]),
+                const SizedBox(height: 20),
+                Text("Caja Libre", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 22, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Text("Busca un producto para empezar a cobrar", style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey, fontSize: 15)),
               ],
             ),
           ),
-          Expanded(
-            child: ListView.separated(
-              itemCount: searchProv.searchResults.length + (searchProv.hasMoreData ? 1 : 1),
-              separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-              itemBuilder: (ctx, i) {
-                if (i == searchProv.searchResults.length) {
-                  if (searchProv.hasMoreData) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) => searchProv.loadMore());
-                    return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: CircularProgressIndicator()));
-                  } else {
-                    return Padding(
-                      padding: const EdgeInsets.all(30.0),
-                      child: TextButton.icon(
-                        onPressed: () {
-                          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const CatalogScreen()));
-                        }, 
-                        icon: const Icon(Icons.inventory_2, size: 24), 
-                        label: const Text("Ir al Catálogo Completo", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))
-                      ),
-                    );
-                  }
-                }
-                return QuickSearchResultTile(item: searchProv.searchResults[i], onTap: () => _addToCart(searchProv.searchResults[i]));
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCart(QuickSaleProvider quickProv, bool isDark) {
-    if (quickProv.cartItems.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.point_of_sale, size: 90, color: isDark ? Colors.white10 : Colors.pink[100]),
-            const SizedBox(height: 20),
-            Text("Caja Libre", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text("Busca un producto para empezar a cobrar", style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey, fontSize: 15)),
-          ],
-        ),
-      );
+        )
+      ];
     }
 
-    final promoProv = Provider.of<PromotionProvider>(context);
     String? upsellMessage;
-    // Check if any cart item is part of a bundle
     for (var item in quickProv.cartItems) {
        for (var bundle in promoProv.bundles) {
           if (bundle.activo) {
@@ -590,10 +615,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
        if (upsellMessage != null) break;
     }
 
-    return Column(
-      children: [
-        if (upsellMessage != null)
-          Container(
+    return [
+      if (upsellMessage != null)
+        SliverToBoxAdapter(
+          child: Container(
             width: double.infinity,
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             padding: const EdgeInsets.all(12),
@@ -610,37 +635,36 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               ],
             )
           ),
-        Expanded(
-          child: ReorderableListView.builder(
-            padding: const EdgeInsets.only(top: 16, bottom: 30),
-            itemCount: quickProv.cartItems.length,
-            onReorder: (oldIndex, newIndex) => quickProv.reorderCart(oldIndex, newIndex),
-            itemBuilder: (ctx, i) {
-              final item = quickProv.cartItems[i];
-              final qty = quickProv.getQuantity(item.presentationId);
-              final price = quickProv.getEffectivePrice(item.presentationId);
-
-              return QuickSaleCartItem(
-                key: ValueKey(item.presentationId),
-                product: item,
-                quantity: qty,
-                effectivePrice: price,
-                onTap: () => _openDetailModal(quickProv, item.presentationId),
-                onIncrease: () {
-                  // 🔥 Atrapamos y mostramos el error si el stock llegó al límite
-                  final error = quickProv.updateQuantity(item.presentationId, qty + 1, item.stock);
-                  if (error != null) CustomSnackBar.show(context, message: error, isError: true);
-                },
-                onDecrease: () {
-                  final error = quickProv.updateQuantity(item.presentationId, qty - 1, item.stock);
-                  if (error != null) CustomSnackBar.show(context, message: error, isError: true);
-                },
-                onDelete: () => quickProv.removeItem(item.presentationId),
-              );
-            },
-          ),
         ),
-      ],
-    );
+      SliverPadding(
+        padding: const EdgeInsets.only(top: 16, bottom: 30),
+        sliver: SliverReorderableList(
+          itemCount: quickProv.cartItems.length,
+          onReorder: (oldIndex, newIndex) => quickProv.reorderCart(oldIndex, newIndex),
+          itemBuilder: (ctx, i) {
+            final item = quickProv.cartItems[i];
+            final qty = quickProv.getQuantity(item.presentationId);
+            final price = quickProv.getEffectivePrice(item.presentationId);
+
+            return QuickSaleCartItem(
+              key: ValueKey(item.presentationId),
+              product: item,
+              quantity: qty,
+              effectivePrice: price,
+              onTap: () => _openDetailModal(quickProv, item.presentationId),
+              onIncrease: () {
+                final error = quickProv.updateQuantity(item.presentationId, qty + 1, item.stock);
+                if (error != null) CustomSnackBar.show(context, message: error, isError: true);
+              },
+              onDecrease: () {
+                final error = quickProv.updateQuantity(item.presentationId, qty - 1, item.stock);
+                if (error != null) CustomSnackBar.show(context, message: error, isError: true);
+              },
+              onDelete: () => quickProv.removeItem(item.presentationId),
+            );
+          },
+        ),
+      ),
+    ];
   }
 }

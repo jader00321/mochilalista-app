@@ -24,6 +24,10 @@ class PromotionProvider with ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
+  void refreshUI() {
+    notifyListeners();
+  }
+
   void updateContext(int negocioId, InventoryProvider inventoryProvider) {
     _inventoryProvider = inventoryProvider;
     if (_negocioId != negocioId) {
@@ -56,11 +60,46 @@ class PromotionProvider with ChangeNotifier {
         final rulesRows = await _repository.getPromotionRules(campaign.id);
         _promotionRules.addAll(rulesRows.map((e) => PromotionRuleModel.fromJson(e)).toList());
       }
+      
+      // Limpiar items de paquetes que ya no existen en inventario
+      await cleanOrphanedBundleItems();
     } catch (e, stack) {
       AppLogger.error('PromotionProvider.loadPromotions', e, stack);
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> cleanOrphanedBundleItems() async {
+    if (_inventoryProvider == null || _inventoryProvider!.items.isEmpty) return;
+    bool needsReload = false;
+    
+    for (var bundleId in _bundleItemsCache.keys) {
+      final items = _bundleItemsCache[bundleId]!;
+      for (var item in items) {
+        final exists = _inventoryProvider!.items.any((p) => p.presentation.id == item.presentacionId);
+        if (!exists) {
+          try {
+            await _repository.deleteBundleItem(item.id);
+            needsReload = true;
+          } catch(e) {
+            AppLogger.error('PromotionProvider.cleanOrphanedBundleItems', e);
+          }
+        }
+      }
+    }
+    
+    if (needsReload && _negocioId > 0) {
+      // Reload silently to update the cache
+      final bunRows = await _repository.getBundles(_negocioId);
+      _bundles = bunRows.map((e) => BundleModel.fromJson(e)).toList();
+
+      _bundleItemsCache.clear();
+      for (var bundle in _bundles) {
+        final itemsRows = await _repository.getBundleItems(bundle.id);
+        _bundleItemsCache[bundle.id] = itemsRows.map((e) => BundleItemModel.fromJson(e)).toList();
+      }
     }
   }
 
@@ -113,9 +152,11 @@ class PromotionProvider with ChangeNotifier {
     int maxBundles = 999999;
     for (var item in items) {
       try {
-        final productWrap = _inventoryProvider!.items.firstWhere(
+        final productWrap = _inventoryProvider!.items.where(
           (p) => p.presentation.id == item.presentacionId,
-        );
+        ).firstOrNull;
+        
+        if (productWrap == null) return 0;
         
         final currentStock = productWrap.presentation.stockActual;
         final requiredQty = item.cantidadRequerida;

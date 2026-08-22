@@ -14,6 +14,7 @@ import 'package:app_movil/features/smart_quotation/widgets/checkout/payment_conf
 import 'package:app_movil/features/smart_quotation/widgets/checkout/delivery_and_summary_cards.dart';
 import 'package:app_movil/features/smart_quotation/widgets/checkout/checkout_summary_card.dart';
 import 'package:app_movil/features/smart_quotation/widgets/checkout/checkout_action_footer.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 class _PhoneNumberFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
@@ -70,6 +71,17 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
   Future<void> _loadQuotation() async {
     final qProvider = Provider.of<SmartQuotationProvider>(context, listen: false);
     final sProvider = Provider.of<SaleProvider>(context, listen: false); 
+    final wbProvider = Provider.of<WorkbenchProvider>(context, listen: false);
+    
+    await wbProvider.checkTrafficLight(widget.quotationId);
+    final validation = wbProvider.getValidationFor(widget.quotationId);
+    
+    if (validation != null && (!validation.canSell || validation.bundleChanges.any((b) => b.isCompositionChange || b.isDeleted || b.isDeactivated))) {
+        if (mounted) {
+           _showBlockModal();
+           return;
+        }
+    }
     
     final q = await qProvider.getQuotationById(widget.quotationId); 
     
@@ -89,6 +101,63 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
 
       setState(() => _isLoadingQuote = false);
     }
+  }
+
+  void _showBlockModal() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: false, 
+      barrierColor: Colors.black87,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.shield, color: Colors.red[400], size: 60),
+              const SizedBox(height: 16),
+              Text("Venta Bloqueada", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 22)),
+              const SizedBox(height: 12),
+              Text(
+                "Se detectaron cambios en el inventario (precios, stock u ofertas) que afectan esta cotización. Por seguridad, no puedes procesar el pago con datos desactualizados.",
+                style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 15, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  onPressed: () {
+                    Navigator.pop(context); // Cierra modal
+                    Navigator.pop(context); // Cierra checkout (vuelve al detalle)
+                  },
+                  child: const Text("Ir a Corregir", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                )
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.white : Colors.black87, side: BorderSide(color: isDark ? Colors.white24 : Colors.grey[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  onPressed: () {
+                    Navigator.pop(context); // Cierra modal
+                    setState(() { _isLoadingQuote = true; });
+                    _loadQuotation(); // Reintenta
+                  },
+                  child: const Text("Refrescar y Reintentar", style: TextStyle(fontWeight: FontWeight.bold)),
+                )
+              )
+            ],
+          ),
+        );
+      },
+    );
   }
 
   // 🔥 NUEVA LÓGICA: Advertencia de Clonación B2C

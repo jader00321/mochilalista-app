@@ -6,11 +6,20 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:app_movil/core/models/user_model.dart';
 import 'package:app_movil/core/utils/hardware_validator.dart'; // 🔥 IMPORT DE SEGURIDAD
 
-class BusinessInfoCard extends StatelessWidget {
+class BusinessInfoCard extends StatefulWidget {
   final BusinessModel? business;
   final bool isCommunityClient; 
 
   const BusinessInfoCard({super.key, this.business, this.isCommunityClient = false});
+
+  @override
+  State<BusinessInfoCard> createState() => _BusinessInfoCardState();
+}
+
+class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepAliveClientMixin {
+  
+  @override
+  bool get wantKeepAlive => true;
 
   Future<void> _openGoogleMaps(BuildContext context, double lat, double lng) async {
     // 🔥 VALIDACIÓN DE INTERNET ANTES DE SALIR A MAPS
@@ -25,9 +34,10 @@ class BusinessInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final isDark = Theme.of(context).brightness == Brightness.dark; 
 
-    if (business == null) {
+    if (widget.business == null) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -57,17 +67,17 @@ class BusinessInfoCard extends StatelessWidget {
 
     bool showAddress = true;
     bool showRuc = true;
-    if (business!.printerConfig != null && business!.printerConfig!.isNotEmpty) {
+    if (widget.business!.printerConfig != null && widget.business!.printerConfig!.isNotEmpty) {
       try {
-        final Map<String, dynamic> prefs = json.decode(business!.printerConfig!);
+        final Map<String, dynamic> prefs = json.decode(widget.business!.printerConfig!);
         showAddress = prefs['show_address'] ?? true;
         showRuc = prefs['show_ruc'] ?? true;
       } catch (_) {}
     }
 
-    final bool canSeeAddress = !isCommunityClient || showAddress;
-    final bool canSeeRuc = !isCommunityClient || showRuc;
-    final hasMap = canSeeAddress && business!.latitud != null && business!.longitud != null;
+    final bool canSeeAddress = !widget.isCommunityClient || showAddress;
+    final bool canSeeRuc = !widget.isCommunityClient || showRuc;
+    final hasMap = canSeeAddress && widget.business!.latitud != null && widget.business!.longitud != null;
 
     return Container(
       width: double.infinity,
@@ -83,48 +93,71 @@ class BusinessInfoCard extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(color: isDark ? Colors.blue[900]?.withValues(alpha: 0.5) : Colors.blue[900]),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark ? [Colors.blue[900]!.withValues(alpha: 0.8), Colors.blue[800]!.withValues(alpha: 0.5)] : [Colors.blue[800]!, Colors.blue[600]!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
             child: Row(
               children: [
                 const Icon(Icons.storefront, color: Colors.white, size: 24),
                 const SizedBox(width: 10),
-                Expanded(child: Text(business!.commercialName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18), overflow: TextOverflow.ellipsis)),
+                Expanded(child: Text(widget.business!.commercialName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18), overflow: TextOverflow.ellipsis)),
                 if (canSeeRuc)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
-                    child: Text("RUC: ${business!.ruc ?? '---'}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    child: Text("RUC: ${widget.business!.ruc ?? '---'}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                   )
               ],
             ),
           ),
           
           if (hasMap)
-            SizedBox(
-              key: ValueKey('${business!.latitud}_${business!.longitud}'), 
-              height: 180,
-              width: double.infinity,
-              child: FlutterMap(
-                options: MapOptions(
-                  initialCenter: LatLng(business!.latitud!, business!.longitud!),
-                  initialZoom: 16.0,
-                  interactionOptions: const InteractionOptions(flags: InteractiveFlag.none), 
+            RepaintBoundary(
+              child: SizedBox(
+                key: ValueKey('${widget.business!.latitud}_${widget.business!.longitud}'), 
+                height: 180,
+                width: double.infinity,
+                child: Stack(
+                  children: [
+                    FlutterMap(
+                      options: MapOptions(
+                        initialCenter: LatLng(widget.business!.latitud!, widget.business!.longitud!),
+                        initialZoom: 16.0,
+                        interactionOptions: const InteractionOptions(flags: InteractiveFlag.none), 
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.example.app_movil',
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: LatLng(widget.business!.latitud!, widget.business!.longitud!),
+                              width: 40, height: 40,
+                              child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+                            )
+                          ],
+                        )
+                      ],
+                    ),
+                    Positioned(
+                      bottom: 12,
+                      right: 12,
+                      child: FloatingActionButton.small(
+                        heroTag: null,
+                        backgroundColor: isDark ? Colors.blue[700] : Colors.blue,
+                        foregroundColor: Colors.white,
+                        onPressed: () => _openGoogleMaps(context, widget.business!.latitud!, widget.business!.longitud!),
+                        child: const Icon(Icons.map_rounded),
+                      ),
+                    ),
+                  ],
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.app_movil',
-                  ),
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: LatLng(business!.latitud!, business!.longitud!),
-                        width: 40, height: 40,
-                        child: const Icon(Icons.location_on, color: Colors.red, size: 40),
-                      )
-                    ],
-                  )
-                ],
               ),
             ),
 
@@ -134,24 +167,11 @@ class BusinessInfoCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (canSeeAddress)
-                   _buildRow(Icons.location_on, business!.address ?? "Referencia no registrada", isDark ? Colors.white : Colors.black87)
+                   _buildRow(Icons.location_on, widget.business!.address ?? "Referencia no registrada", isDark ? Colors.white : Colors.black87)
                 else
                    _buildRow(Icons.location_off, "Dirección Privada", isDark ? Colors.grey[500]! : Colors.grey),
                 
-                if (hasMap) ...[
-                  const SizedBox(height: 14),
-                  InkWell(
-                    // 🔥 SE PASA EL CONTEXTO PARA VALIDAR INTERNET
-                    onTap: () => _openGoogleMaps(context, business!.latitud!, business!.longitud!),
-                    child: Row(
-                      children: [
-                        Icon(Icons.map, size: 20, color: Colors.blue[400]), 
-                        const SizedBox(width: 12),
-                        Text("Abrir App de Navegación", style: TextStyle(color: Colors.blue[400], fontSize: 15, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
-                      ],
-                    ),
-                  )
-                ] else if (canSeeAddress) ...[
+                if (!hasMap && canSeeAddress) ...[
                   const SizedBox(height: 14),
                   Row(
                     children: [
@@ -162,7 +182,7 @@ class BusinessInfoCard extends StatelessWidget {
                   )
                 ],
                 const Divider(height: 24),
-                _buildRow(Icons.verified_user, isCommunityClient ? "Tienda Verificada" : "Cuenta Verificada", isDark ? Colors.white : Colors.black87),
+                _buildRow(Icons.verified_user, widget.isCommunityClient ? "Tienda Verificada" : "Cuenta Verificada", isDark ? Colors.white : Colors.black87),
               ],
             ),
           )

@@ -1,0 +1,114 @@
+# Plan de Trabajo: Reactividad, State Leaks y Enrutamiento del Home + Historial
+
+## Resumen del Diagnóstico
+
+Tras auditar los 12 archivos clave del flujo (providers, screens y widgets), he identificado las causas raíz exactas de cada uno de los 4 problemas reportados.
+
+---
+
+## Diagnóstico Técnico Detallado
+
+### 🔴 Problema 1: Badge de "Cotizar Manual" no se actualiza
+
+**Causa raíz:** El badge de la tarjeta "Cotizar Manual" en [`smart_action_grid.dart:57-58`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/smart_action_grid.dart#L57-L58) lee `quotationScanner.hasManualDraft` y `quotationScanner.draftManualItems!.length`. Estos valores provienen de [`SmartQuotationProvider`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/providers/smart_quotation_provider.dart#L50), que solo se actualiza cuando se llama explícitamente a `saveManualDraft()` o `clearManualDraft()`.
+
+**El problema:** Cuando el usuario vuelve de la pantalla `ManualQuotationScreen` al Home, **no hay ningún mecanismo que dispare un re-read del draft**. A diferencia de `QuickSaleProvider`, cuyo carrito (`cartItems`) es una lista reactiva que se modifica en tiempo real y dispara `notifyListeners()` en cada `addItem`/`removeItem`, el `SmartQuotationProvider` solo guarda un snapshot del draft al salir de la pantalla. Si el usuario navega con `Navigator.pop()` sin pasar por `saveManualDraft()`, el badge queda obsoleto.
+
+**Contraste con "Venta Rápida":** [`smart_action_grid.dart:75-76`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/smart_action_grid.dart#L75-L76) usa `quickSaleProv.cartItems.length`, que se actualiza instantáneamente porque `QuickSaleProvider` llama `notifyListeners()` en cada operación del carrito.
+
+### 🔴 Problema 2: Refresh Tosco al volver al Home
+
+**Causa raíz:** En [`dashboard_header.dart:230-240`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/dashboard_header.dart#L230-L240), al volver del `ProfileScreen`, se ejecuta:
+```dart
+Future.delayed(const Duration(milliseconds: 800), () {
+  _loadData(forceRefresh: true);
+});
+```
+
+Y [`_loadData(forceRefresh: true)`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/dashboard_header.dart#L57-L58) hace `await auth.checkInitialState()`, que es una operación pesada que re-inicializa todo el estado de autenticación. Luego, [`loadSalesHistory()`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/providers/sale_provider.dart#L298-L300) llama internamente a `loadFilteredHistory(reset: true)`, que en [`sale_provider.dart:306-310`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/providers/sale_provider.dart#L306-L310) **limpia toda la lista, pone `_isLoading = true` y dispara `notifyListeners()`**, causando un parpadeo visible (la lista se vacía y luego se rellena).
+
+**Además:** [`recent_activity_list.dart:15-17`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/recent_activity_list.dart#L15-L17) muestra un `CircularProgressIndicator` cuando `salesProv.isLoading` es `true`, lo que causa un flash de loading spinner innecesario durante el refresh silencioso.
+
+### 🔴 Problema 3: State Leak en Tabs del Historial
+
+**Causa raíz:** En [`sales_history_screen.dart:38-40`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/screens/sales_history_screen.dart#L38-L40), el `initState` llama a `loadFilteredHistory(reset: true)`, pero **NO resetea `_currentTab` del provider a `"todas"`**. El `TabController` se inicializa siempre en el índice 0 (que es "Todas"), pero el `SaleProvider._currentTab` persiste su valor anterior (por ejemplo `"smart_quotation"` si la última vez estuviste en "Listas Escolares").
+
+**Consecuencia:** La UI muestra el tab "Todas" seleccionado visualmente, pero `loadFilteredHistory` usa `_currentTab = "smart_quotation"` del estado anterior para filtrar, mostrando datos de la pestaña equivocada.
+
+**Impacto en "Actividad Reciente":** El mismo `SaleProvider.salesHistory` es consumido por [`recent_activity_list.dart:19`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/recent_activity_list.dart#L19) con `salesProv.salesHistory.take(5)`. Como `loadSalesHistory()` llama a `loadFilteredHistory(reset: true)` sin resetear el tab, la "Actividad Reciente" del Home puede mostrar datos filtrados por la última pestaña visitada en lugar de "todas".
+
+### 🔴 Problema 4: Navegación Truncada
+
+**4a. Ventas no clickeables en "Actividad Reciente":** En [`recent_activity_list.dart:69`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/recent_activity_list.dart#L69), el `ListTile` no tiene `onTap`. No hay navegación ni efecto ripple, y no hay ícono de chevron que indique interactividad.
+
+**4b. Sin atajo a perfil del cliente en Detalle:** En [`detail_client_card.dart:33`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/history/detail_widgets/detail_client_card.dart#L33), el nombre del cliente se renderiza como texto plano. No hay `InkWell`, no hay ícono `open_in_new`, y no hay ruta hacia [`ClientDetailScreen`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/screens/crm/client_detail_screen.dart). El widget ni siquiera recibe el `clientId` como parámetro.
+
+---
+
+## Propuesta de Cambios por Fases
+
+### Fase 1: Reactividad Silenciosa (Badges y Silent Refresh)
+
+#### [MODIFY] [`sale_provider.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/providers/sale_provider.dart)
+- Crear un nuevo método `silentRefresh()` que recargue los datos **sin poner `_isLoading = true`** ni vaciar la lista. Funciona así: carga en una variable temporal y luego hace swap atómico → `_salesHistory = newSales` + `notifyListeners()`.
+- Modificar `loadSalesHistory()` para que **siempre resetee `_currentTab` a `"todas"`** antes de filtrar. Esto garantiza que cuando el Home pide datos, siempre obtenga la vista global.
+
+#### [MODIFY] [`dashboard_header.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/dashboard_header.dart)
+- Reemplazar la lógica del `.then()` tras volver del `ProfileScreen` (líneas 230-240) para usar `silentRefresh()` en vez de `_loadData(forceRefresh: true)`, eliminando el `Future.delayed(800ms)` y evitando `checkInitialState()` completo.
+- Cambiar la carga staggered inicial para usar `silentRefresh()` cuando ya existe data cargada.
+
+#### [MODIFY] [`recent_activity_list.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/recent_activity_list.dart)
+- Reemplazar el `CircularProgressIndicator` por una condición: si ya hay datos en `salesHistory`, **no mostrar el loader** aunque `isLoading` sea `true` (patrón "stale-while-revalidate"). Esto elimina el parpadeo.
+
+#### [MODIFY] [`smart_action_grid.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/smart_action_grid.dart)
+- El badge de "Cotizar Manual" ya escucha al `SmartQuotationProvider` vía `Provider.of<SmartQuotationProvider>(context)`. El problema es que el provider no se actualiza al volver. La solución real está en garantizar que `ManualQuotationScreen` **siempre llame `saveManualDraft()` en su `dispose()`** (o al hacer `Navigator.pop`), lo que dispara `notifyListeners()` y actualiza el badge automáticamente.
+
+---
+
+### Fase 2: Resolución del State Leak en Tabs
+
+#### [MODIFY] [`sale_provider.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/providers/sale_provider.dart)
+- Crear un método `resetFilters()` que restaure `_currentTab = "todas"`, `_activeQuickFilter = "este_mes"`, `_searchQuery = ""`, `_currentSortBy = "fecha_venta"` y `_currentOrder = "desc"` a sus valores por defecto.
+
+#### [MODIFY] [`sales_history_screen.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/screens/sales_history_screen.dart)
+- En `initState()` (línea 38), **antes** de llamar a `loadFilteredHistory(reset: true)`, llamar a `provider.resetFilters()`. Esto garantiza que la pestaña visual (TabController index 0 = "Todas") y la pestaña lógica del provider (`_currentTab = "todas"`) estén sincronizadas.
+
+> [!IMPORTANT]
+> Esto también arregla la "Actividad Reciente" del Home: cuando `loadSalesHistory()` se llama desde el Home, ahora siempre reseteará el tab a "todas", asegurando que las 5 ventas recientes del Home reflejen datos globales.
+
+---
+
+### Fase 3: Enrutamiento Interactivo (Home → Detalle de Venta)
+
+#### [MODIFY] [`recent_activity_list.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/widgets/home/recent_activity_list.dart)
+- Envolver cada `ListTile` en un `InkWell` que navegue a `SaleHistoryDetailScreen(saleId: sale.id)`.
+- Agregar un ícono `chevron_right` tenue en el `trailing` (al lado del monto) como affordance visual de que es clickeable.
+- Agregar efecto ripple al ListTile: ya existe el container con `borderRadius`, solo hace falta habilitar la interactividad.
+
+---
+
+### Fase 4: Atajos Visuales (Detalle → Perfil del Cliente)
+
+#### [MODIFY] [`detail_client_card.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/history/detail_widgets/detail_client_card.dart)
+- Agregar un parámetro opcional `int? clientId` al widget.
+- Si `clientId != null`, envolver la fila del nombre del cliente en un `InkWell` que:
+  1. Cargue el `ClientModel` desde `SaleProvider.getClientById(clientId)`.
+  2. Navegue a `ClientDetailScreen(client: clientModel)`.
+- Estilizar el nombre con color azul + ícono `open_in_new` para indicar que es un enlace.
+- Si `clientId == null` (cliente no registrado), mantener el texto plano sin interactividad.
+
+#### [MODIFY] [`sale_history_detail_screen.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/screens/sale_history_detail_screen.dart)
+- Pasar `saleData['cliente_id']` como parámetro al `DetailClientCard`.
+
+---
+
+## Verificación
+
+### Pruebas Manuales
+1. **Badge Manual:** Agregar 3 productos en Cotización Manual → volver al Home → el badge debe mostrar "3" sin recargar.
+2. **Silent Refresh:** Ir a Perfil → volver al Home → no debe haber parpadeo ni spinner.
+3. **State Leak:** Ir a Historial → tab "Caja Rápida" → volver → re-entrar → debe mostrar "Todas" con datos de "Todas".
+4. **Navegación:** Tocar una venta en "Actividad Reciente" → debe abrir el detalle. En el detalle, tocar el nombre del cliente → debe abrir su perfil.
+
+### Compilación
+- Verificar que la app compile sin errores con `flutter build apk`.

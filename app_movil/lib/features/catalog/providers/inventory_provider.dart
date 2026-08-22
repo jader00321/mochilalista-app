@@ -48,6 +48,8 @@ class InventoryProvider with ChangeNotifier {
   List<int> get activeCategoryIds => _lastCategoryIds ?? [];
   List<int> get activeBrandIds => _lastBrandIds ?? [];
   List<int> get activeProviderIds => _lastProviderIds ?? [];
+
+  int? get negocioId => _negocioId;
   String? get activeState => _lastEstado;
   String get activeQuery => _lastQuery ?? "";
   double? get activeMinPrice => _lastMinPrice;

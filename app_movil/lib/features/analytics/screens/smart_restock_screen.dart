@@ -54,6 +54,7 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
   
   bool _isLoading = true;
   List<SmartRestockItem> _items = [];
+  bool _showHelpCard = false;
 
   @override
   void initState() {
@@ -182,7 +183,12 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty 
               ? _buildEmptyState()
-              : _buildList(isDark),
+              : Column(
+                  children: [
+                    _buildHelpCard(isDark),
+                    Expanded(child: _buildList(isDark)),
+                  ],
+                ),
       bottomNavigationBar: _items.isNotEmpty ? _buildSummaryBar(isDark) : null,
     );
   }
@@ -198,6 +204,56 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
           const SizedBox(height: 8),
           const Text('No hay productos que requieran abastecimiento.', style: TextStyle(color: Colors.grey)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHelpCard(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        color: isDark ? const Color(0xFF1E293B) : Colors.blue[50],
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[200]!),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => setState(() => _showHelpCard = !_showHelpCard),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.lightbulb, color: Colors.amber, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('¿Cómo leer esta pantalla?', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.blue[200] : Colors.blue[800])),
+                    ),
+                    Icon(_showHelpCard ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                  ],
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: !_showHelpCard ? const SizedBox.shrink() : Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      'Este motor analiza tu ritmo de ventas para predecir cuándo te quedarás sin stock.\n\n'
+                      '🔴 Crítico: Tienes 5 unidades o menos. Reabastece urgente.\n'
+                      '🟠 Preventivo: Tu stock está por debajo del Punto de Reorden (ROP).\n\n'
+                      'Toca el icono (i) en cada métrica para más detalles, y usa "Exportar OC" para generar tu orden de compra en PDF.',
+                      style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[300] : Colors.grey[700]),
+                    ),
+                  ),
+                )
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -251,9 +307,9 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _buildMetricColumn('Stock', '${item.currentStock}', isCritical ? Colors.redAccent : null)),
-                    Expanded(child: _buildMetricColumn('Velocidad', '${item.velocityPerDay.toStringAsFixed(1)}/d', Colors.blueAccent)),
-                    Expanded(child: _buildMetricColumn('ROP', '${item.rop}', Colors.orangeAccent)),
+                    Expanded(child: _buildMetricColumn('Stock', '${item.currentStock}', isCritical ? Colors.redAccent : null, "Unidades disponibles para vender ahora mismo. Si llega a 0, pierdes ventas.")),
+                    Expanded(child: _buildMetricColumn('Velocidad', '${item.velocityPerDay.toStringAsFixed(1)}/d', Colors.blueAccent, "Ritmo de ventas promedio: cuántas unidades vendes por día. Se calcula con tus ventas de los últimos 30 días.")),
+                    Expanded(child: _buildMetricColumn('ROP', '${item.rop}', Colors.orangeAccent, "Punto de Reorden: Nivel mínimo de inventario. Si tu stock cae a este número, es momento de hacer tu pedido al proveedor.")),
                   ],
                 ),
                 
@@ -323,13 +379,48 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
     );
   }
 
-  Widget _buildMetricColumn(String label, String value, Color? valueColor) {
+  Widget _buildMetricColumn(String label, String value, Color? valueColor, String tooltipText) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        GestureDetector(
+          onTap: () => _showInfoDialog(label, tooltipText),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(width: 4),
+              const Icon(Icons.info_outline, size: 12, color: Colors.grey),
+            ],
+          ),
+        ),
         const SizedBox(height: 4),
         Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: valueColor)),
       ],
+    );
+  }
+
+  void _showInfoDialog(String title, String explanation) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.info, color: Colors.blue),
+            const SizedBox(width: 8),
+            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(explanation, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[300] : Colors.grey[800], height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Entendido'),
+          )
+        ],
+      )
     );
   }
 
@@ -349,6 +440,7 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
       child: SafeArea(
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Column(
               mainAxisSize: MainAxisSize.min,
@@ -361,14 +453,17 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
                 ),
               ],
             ),
-            ElevatedButton.icon(
-              onPressed: _exportOC,
-              icon: const Icon(Icons.picture_as_pdf),
-              label: const Text('Exportar OC'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: ElevatedButton.icon(
+                onPressed: _exportOC,
+                icon: const Icon(Icons.picture_as_pdf),
+                label: const Text('Exportar OC'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
               ),
             )
           ],

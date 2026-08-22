@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/screens/crm/client_detail_screen.dart';
 
 class DetailClientCard extends StatelessWidget {
   final Map<String, dynamic> saleData;
@@ -6,16 +9,20 @@ class DetailClientCard extends StatelessWidget {
   final String institution;
   final String grade;
   final bool isDark;
+  final int? clientId;
 
   const DetailClientCard({
     super.key, required this.saleData, required this.isQuickSale, 
-    required this.institution, required this.grade, required this.isDark
+    required this.institution, required this.grade, required this.isDark,
+    this.clientId
   });
 
   @override
   Widget build(BuildContext context) {
     final cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
+    
+    final clientName = saleData['cliente_nombre'] ?? (saleData['cliente_info'] != null ? saleData['cliente_info']['nombre_completo'] : null) ?? "Cliente No Registrado";
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -30,7 +37,43 @@ class DetailClientCard extends StatelessWidget {
             children: [
               Text("DATOS DEL CLIENTE", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey, letterSpacing: 1)),
               const SizedBox(height: 16),
-              Row(children: [Icon(Icons.person, size: 26, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey), const SizedBox(width: 12), Expanded(child: Text(saleData['cliente_nombre'] ?? (saleData['cliente_info'] != null ? saleData['cliente_info']['nombre_completo'] : null) ?? "Cliente No Registrado", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)))]),
+              
+              if (clientId != null && clientId! > 0)
+                InkWell(
+                  onTap: () async {
+                    // Show a loading indicator if necessary, or just navigate after loading
+                    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+                    final saleProv = Provider.of<SaleProvider>(context, listen: false);
+                    final client = await saleProv.getClientById(clientId!);
+                    if (context.mounted) {
+                      Navigator.pop(context); // close dialog
+                      if (client != null) {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => ClientDetailScreen(client: client)));
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo cargar el perfil del cliente")));
+                      }
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.person, size: 26, color: isDark ? Colors.blue[300] : Colors.blue[700]), 
+                        const SizedBox(width: 12), 
+                        Expanded(
+                          child: Text(
+                            clientName, 
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.blue[300] : Colors.blue[700], decoration: TextDecoration.underline)
+                          )
+                        ),
+                        Icon(Icons.open_in_new, size: 20, color: isDark ? Colors.blue[300] : Colors.blue[700])
+                      ]
+                    ),
+                  ),
+                )
+              else
+                Row(children: [Icon(Icons.person, size: 26, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey), const SizedBox(width: 12), Expanded(child: Text(clientName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)))]),
               
               if (saleData['cliente_telefono'] != null && saleData['cliente_telefono'].toString().isNotEmpty && saleData['cliente_telefono'] != "000000000") ...[
                 const SizedBox(height: 12),

@@ -21,6 +21,7 @@ class KpiSummaryRow extends StatefulWidget {
 
 class _KpiSummaryRowState extends State<KpiSummaryRow> {
   int _highlightedIndex = 0;
+  bool _isDetailExpanded = false;
   Timer? _timer;
 
   @override
@@ -49,159 +50,113 @@ class _KpiSummaryRowState extends State<KpiSummaryRow> {
   void _onCardTap(int index) {
     setState(() {
       _highlightedIndex = index;
+      _isDetailExpanded = false;
     });
     _startTimer(); // Reset timer
   }
 
   List<Map<String, dynamic>> _getKpis() {
     final data = widget.data;
+    
+    // Insights dinámicos
+    String ventasInsight = "Has completado ${data.totalTransactions} ventas. ${data.totalTransactions > 100 ? '¡Excelente volumen! Tu negocio tiene ritmo constante.' : (data.totalTransactions > 0 ? 'Mantén el esfuerzo para seguir sumando.' : 'Pocas ventas registradas. Revisa si estás capturando todas las transacciones en el sistema.')}";
+    
+    String crecInsight = data.salesGrowthRate >= 0 
+        ? "Creciste un ${data.salesGrowthRate.toStringAsFixed(1)}% respecto al mes pasado. ¡Sigue así!" 
+        : "Tus ventas cayeron un ${data.salesGrowthRate.abs().toStringAsFixed(1)}%. Revisa qué productos estrella podrían estar sin stock o lanza una promoción flash.";
+
+    String rotacionInsight = "Tu inventario rota ${data.inventoryTurnoverRatio.toStringAsFixed(2)} veces. ${data.inventoryTurnoverRatio >= 2 ? '¡Excelente! Tu mercancía se mueve rápido.' : (data.inventoryTurnoverRatio >= 1 ? 'Rotación saludable, pero hay espacio para mejorar.' : 'Rotación lenta. Tienes capital estancado. Considera liquidar productos muertos.')}";
+
+    String stockInsight = "Tienes ${widget.formatCurrency(data.inventoryValue)} invertidos en inventario. ${data.immobilizedCapital > 0 ? 'De eso, ${widget.formatCurrency(data.immobilizedCapital)} están estancados en productos sin ventas en 90 días.' : '¡Excelente gestión! Todo tu capital está en movimiento.'}";
+
+    String inmovInsight = "Tienes ${widget.formatCurrency(data.immobilizedCapital)} atrapados en ${data.deadStockCount} productos sin movimiento. ${data.deadStockCount > 0 ? 'Crea una Promoción de Liquidación para recuperar este dinero y reinvertirlo en productos que sí se venden.' : '¡Felicidades! No tienes capital inmovilizado.'}";
+
+    String liqInsight = data.recoveredLiquidity > 0 
+        ? "¡Has recuperado ${widget.formatCurrency(data.recoveredLiquidity)} vendiendo stock estancado! Sigue usando las promociones de liquidación." 
+        : "Aún no has recuperado liquidez. Crea tu primera Promoción de Liquidación desde el módulo de Promociones.";
+
+    String ticketInsight = "Cada cliente gasta en promedio ${widget.formatCurrency(data.averageTicket)} por compra. ${data.averageTicket >= 50 ? 'Buen ticket. Ofrece combos para subirlo aún más.' : 'Incentiva ventas cruzadas (ej: "¿Necesitas también X?").'}";
+
     return [
       {
         'title': 'Ventas',
         'value': '${data.totalTransactions}',
+        'rawValue': data.totalTransactions.toDouble(),
+        'format': (double v) => '${v.toInt()}',
         'icon': Icons.receipt_long,
         'color': Colors.blueAccent,
-        'explanation': 'El número total de transacciones de venta completadas en tu negocio. Un mayor número indica más actividad comercial.',
+        'explanation': ventasInsight,
       },
       {
         'title': 'Crecimiento',
         'value': '${data.salesGrowthRate > 0 ? '+' : ''}${data.salesGrowthRate.toStringAsFixed(1)}%',
+        'rawValue': data.salesGrowthRate,
+        'format': (double v) => '${v > 0 ? '+' : ''}${v.toStringAsFixed(1)}%',
         'icon': data.salesGrowthRate >= 0 ? Icons.trending_up : Icons.trending_down,
         'color': data.salesGrowthRate >= 0 ? Colors.green : Colors.redAccent,
-        'explanation': 'Compara el volumen de ventas actual con el periodo anterior. Te ayuda a saber si tu negocio está expandiéndose o contrayéndose.',
+        'explanation': crecInsight,
       },
       {
         'title': 'Rotación',
         'value': data.inventoryTurnoverRatio.toStringAsFixed(2),
+        'rawValue': data.inventoryTurnoverRatio,
+        'format': (double v) => v.toStringAsFixed(2),
         'icon': Icons.autorenew,
         'color': Colors.orangeAccent,
-        'explanation': 'Indica cuántas veces se ha vendido y reemplazado el inventario. Idealmente, busca un valor mayor a 1.0.',
+        'explanation': rotacionInsight,
       },
       {
         'title': 'Valor Stock',
         'value': widget.formatCurrency(data.inventoryValue),
+        'rawValue': data.inventoryValue,
+        'format': (double v) => widget.formatCurrency(v),
         'icon': Icons.inventory_2,
         'color': Colors.purpleAccent,
-        'explanation': 'Es el dinero total que has invertido en los productos que actualmente tienes en tu almacén. Representa tu activo más importante.',
+        'explanation': stockInsight,
       },
       {
         'title': 'Inmovilizado',
         'value': widget.formatCurrency(data.immobilizedCapital),
+        'rawValue': data.immobilizedCapital,
+        'format': (double v) => widget.formatCurrency(v),
         'icon': Icons.lock_outline,
         'color': Colors.redAccent,
-        'explanation': 'Este es el capital estancado en productos que NO se han vendido en los últimos 90 días. Dinero inmovilizado es dinero que no genera ganancias. Considera armar combos o liquidaciones para liberarlo.',
+        'explanation': inmovInsight,
       },
       {
         'title': 'Liq. Recuperada',
         'value': widget.formatCurrency(data.recoveredLiquidity),
+        'rawValue': data.recoveredLiquidity,
+        'format': (double v) => widget.formatCurrency(v),
         'icon': Icons.water_drop,
         'color': Colors.lightBlueAccent,
-        'explanation': 'Mide el dinero que has recuperado al vender productos estancados mediante estrategias de liquidación.',
+        'explanation': liqInsight,
       },
       {
         'title': 'Ticket Prom.',
         'value': widget.formatCurrency(data.averageTicket),
+        'rawValue': data.averageTicket,
+        'format': (double v) => widget.formatCurrency(v),
         'icon': Icons.confirmation_number,
         'color': Colors.teal,
-        'explanation': 'Es el monto promedio que gasta cada cliente en una sola compra. Un ticket mayor indica ventas más rentables.',
+        'explanation': ticketInsight,
       },
     ];
-  }
-
-  void _showKpiDetail(BuildContext context, String title, String value, IconData icon, Color color, String explanation) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (_, controller) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: BoxDecoration(
-                color: widget.isDark ? const Color(0xFF1E293B) : Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: ListView(
-                controller: controller,
-                children: [
-                  Center(
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 24),
-                      width: 40,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: widget.isDark ? Colors.white24 : Colors.grey[300],
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(icon, color: color, size: 40),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Center(child: Text(title, style: const TextStyle(fontSize: 18, color: Colors.grey))),
-                  const SizedBox(height: 8),
-                  Center(child: Text(value, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: color))),
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: widget.isDark ? Colors.black12 : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey[300]!),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.lightbulb_outline, color: Colors.amber[700], size: 24),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            explanation,
-                            style: TextStyle(fontSize: 14, height: 1.5, color: widget.isDark ? Colors.grey[300] : Colors.grey[800]),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: color,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      child: const Text("Entendido", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            );
-          }
-        );
-      },
-    );
   }
 
   Widget _buildHighlightedCard({required Key key, required Map<String, dynamic> kpi}) {
     return GestureDetector(
       key: key,
-      onTap: () => _showKpiDetail(context, kpi['title'], kpi['value'], kpi['icon'], kpi['color'], kpi['explanation']),
+      onTap: () {
+        setState(() {
+          _isDetailExpanded = !_isDetailExpanded;
+        });
+        if (_isDetailExpanded) {
+          _timer?.cancel();
+        } else {
+          _startTimer();
+        }
+      },
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
@@ -238,13 +193,21 @@ class _KpiSummaryRowState extends State<KpiSummaryRow> {
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        kpi['value'], 
-                        style: TextStyle(
-                          fontSize: 28, 
-                          fontWeight: FontWeight.bold, 
-                          color: widget.isDark ? Colors.white : Colors.black87
-                        )
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween<double>(begin: 0, end: kpi['rawValue'] as double),
+                        duration: const Duration(milliseconds: 1000),
+                        curve: Curves.easeOutQuart,
+                        builder: (context, value, child) {
+                          final Function(double) formatter = kpi['format'];
+                          return Text(
+                            formatter(value), 
+                            style: TextStyle(
+                              fontSize: 28, 
+                              fontWeight: FontWeight.bold, 
+                              color: widget.isDark ? Colors.white : Colors.black87
+                            )
+                          );
+                        }
                       ),
                     ),
                   ],
@@ -326,6 +289,36 @@ class _KpiSummaryRowState extends State<KpiSummaryRow> {
             key: ValueKey<int>(_highlightedIndex),
             kpi: highlighted,
           ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          child: _isDetailExpanded
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 16.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: widget.isDark ? Colors.black12 : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey[300]!),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.lightbulb_outline, color: highlighted['color'], size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            highlighted['explanation'],
+                            style: TextStyle(fontSize: 14, height: 1.5, color: widget.isDark ? Colors.grey[300] : Colors.grey[800]),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink(),
         ),
         const SizedBox(height: 16),
         // Grid de las tarjetas restantes

@@ -16,6 +16,7 @@ class ManualQuoteItemCard extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onIncrease;
   final VoidCallback onDecrease;
+  final bool isBundleOutdated;
 
   const ManualQuoteItemCard({
     super.key,
@@ -31,6 +32,7 @@ class ManualQuoteItemCard extends StatelessWidget {
     required this.onDelete,
     required this.onIncrease,
     required this.onDecrease,
+    this.isBundleOutdated = false,
   });
 
   @override
@@ -49,7 +51,7 @@ class ManualQuoteItemCard extends StatelessWidget {
     bool hasCustomName = customName.isNotEmpty && customName != item.fullName;
     
     String originalName = item.fullName.trim(); 
-    String currentBuiltName = item.displayNameClean.trim();
+    String currentBuiltName = item.displayNameForComparison.trim();
     bool isNameChanged = isEditing && 
                           item.isOriginalItem &&
                           originalName.isNotEmpty && 
@@ -113,6 +115,23 @@ class ManualQuoteItemCard extends StatelessWidget {
                     ),
                   ),
 
+                if (isBundleOutdated)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0, left: 36),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: isDark ? Colors.deepPurple.withValues(alpha: 0.2) : Colors.deepPurple.shade50, borderRadius: BorderRadius.circular(6)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.sync_problem, size: 12, color: isDark ? Colors.deepPurple[200] : Colors.deepPurple[700]),
+                          const SizedBox(width: 4),
+                          Text("Oferta desactualizada", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.deepPurple[200] : Colors.deepPurple[700], fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -147,13 +166,13 @@ class ManualQuoteItemCard extends StatelessWidget {
                             if (item.specificName != null && item.specificName!.isNotEmpty && item.specificName != "Paquete")
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),
-                                child: Text(item.specificName!, style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                child: Text(item.specificName!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
                               ),
                               
-                            if (item.description != null && item.description!.isNotEmpty)
+                            if (item.description != null && item.description!.isNotEmpty && item.description != item.specificName)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
-                                child: Text(item.description!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                child: Text(item.description!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
                               ),
                           ],
                           

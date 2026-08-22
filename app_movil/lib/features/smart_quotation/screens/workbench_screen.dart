@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/core/services/export_report_service.dart';
 import 'package:app_movil/features/smart_quotation/widgets/quotation_card.dart';
 import 'package:app_movil/features/smart_quotation/widgets/quick_actions_bottom_sheet.dart'; 
 import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart'; 
@@ -20,7 +21,6 @@ class WorkbenchScreen extends StatefulWidget {
 
 class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _selectedFilter = "Todo";
 
   final ScrollController _scrollController = ScrollController();
   bool _showScrollToTop = false;
@@ -31,6 +31,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
     _tabController = TabController(length: 3, vsync: this);
     
     _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) return;
       if (mounted) setState(() {});
     });
 
@@ -62,44 +63,10 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
     );
   }
 
-  List<SmartQuotationModel> _getFilteredAndSortedList(WorkbenchProvider provider, List<SmartQuotationModel> list) {
-    var filtered = list.where((q) {
-      final validation = provider.getValidationFor(q.id);
-      if (_selectedFilter == "Todo") return true;
-      if (_selectedFilter == "Solo Alertas ⚠️") return validation != null && (!validation.canSell || validation.hasIssues);
-      if (_selectedFilter == "Manual") return q.type == "manual";
-      if (_selectedFilter == "Escaneadas IA") return q.type == "ai_scan";
-      
-      // La propiedad type no es la que nos dice si es de la comunidad,
-      // sino si el cliente lo hizo desde la app B2C. 
-      // Una cotización B2C puede ser 'ai_scan' o 'manual'.
-      // Usaremos el nombre (ej: "Pedido IA") o un futuro flag is_from_client. 
-      // Por ahora, asumimos que si el nombre contiene "Pedido" fue hecho por B2C
-      if (_selectedFilter == "Comunidad 🌐") return (q.clientName ?? "").contains("- Pedido");
-      return true;
-    }).toList();
-
-    filtered.sort((a, b) {
-      int cmp;
-      if (provider.sortType == WorkbenchSort.alpha) {
-        final nameA = a.clientName ?? "Z_Sin Cliente"; 
-        final nameB = b.clientName ?? "Z_Sin Cliente";
-        cmp = nameA.toLowerCase().compareTo(nameB.toLowerCase());
-      } else {
-        final timeA = DateTime.tryParse(a.createdAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final timeB = DateTime.tryParse(b.createdAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
-        cmp = timeA.compareTo(timeB);
-      }
-      return provider.sortAsc ? cmp : -cmp;
-    });
-
-    return filtered;
-  }
-
-  List<SmartQuotationModel> _getCurrentList(WorkbenchProvider provider) {
-    if (_tabController.index == 0) return provider.inProcessList;
-    if (_tabController.index == 1) return provider.readyAndPacksList;
-    if (_tabController.index == 2) return provider.soldList;
+  List<SmartQuotationModel> _getCurrentFilteredList(WorkbenchProvider provider) {
+    if (_tabController.index == 0) return provider.filteredInProcessList;
+    if (_tabController.index == 1) return provider.filteredReadyAndPacksList;
+    if (_tabController.index == 2) return provider.filteredSoldList;
     return [];
   }
 
@@ -133,57 +100,87 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
                     tooltip: "Ver Listas Archivadas",
                     onPressed: () => ArchivedListsModal.show(context, provider, isDark),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.picture_as_pdf, size: 26),
+                    tooltip: "Exportar Reporte PDF",
+                    onPressed: () async {
+                      try {
+                        final service = ExportReportService();
+                        await service.generateAndShareWorkbenchPdf(
+                          timeFilterLabel: provider.timeFilterLabel,
+                          range: provider.activeRange,
+                          inProcessCount: provider.inProcessList.length,
+                          readyCount: provider.readyAndPacksList.length,
+                          alertCount: provider.criticalAlertsCount,
+                          totalSales: provider.totalDaySales,
+                          inProcessList: provider.filteredInProcessList,
+                          readyAndPacksList: provider.filteredReadyAndPacksList,
+                          soldList: provider.filteredSoldList,
+                        );
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error al exportar: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red),
+                        );
+                      }
+                    },
+                  ),
                 ],
                 backgroundColor: isDark ? const Color(0xFF0D47A1) : const Color(0xFF1565C0),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 pinned: true,
+                floating: true,
+              ),
+
+              SliverAppBar(
+                automaticallyImplyLeading: false,
+                floating: true,
+                snap: true,
+                pinned: false,
+                elevation: 0,
+                backgroundColor: bgColor,
+                toolbarHeight: 0, // We put everything in bottom
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(275), // 166 (Dashboard) + 55 (Chips) + 54 (Sort Bar)
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DashboardHeader(provider: provider, isDark: isDark),
+                      Container(
+                        color: isDark ? Theme.of(context).colorScheme.surface : Colors.white,
+                        child: Column(
+                          children: [
+                            _buildFilterChips(provider, isDark),
+                            _buildCounterAndSortBar(provider, isDark),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
 
               SliverPersistentHeader(
                 pinned: true,
                 delegate: _WorkbenchFixedHeaderDelegate(
-                  height: 200.0, 
+                  height: 74.0, 
                   child: Container(
                     color: bgColor, 
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        DashboardHeader(provider: provider, isDark: isDark),
-                        _buildTabBarSection(isDark, surfaceColor),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              SliverAppBar(
-                backgroundColor: isDark ? Theme.of(context).colorScheme.surface : Colors.white,
-                automaticallyImplyLeading: false,
-                floating: true, 
-                snap: true,
-                pinned: false,
-                elevation: 0,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Column(
-                    children: [
-                      _buildFilterChips(isDark),
-                      _buildCounterAndSortBar(provider, isDark),
-                    ],
+                    child: _buildTabBarSection(isDark, surfaceColor),
                   ),
                 ),
               ),
             ];
           },
-          
           body: provider.isLoading
               ? const Center(child: CircularProgressIndicator())
               : TabBarView(
                   controller: _tabController,
                   children: [
-                    _buildQuotationList(provider, provider.inProcessList, isDark),
-                    _buildQuotationList(provider, provider.readyAndPacksList, isDark),
-                    _buildQuotationList(provider, provider.soldList, isDark), 
+                    _buildQuotationList(provider, provider.filteredInProcessList, isDark),
+                    _buildQuotationList(provider, provider.filteredReadyAndPacksList, isDark),
+                    _buildQuotationList(provider, provider.filteredSoldList, isDark), 
                   ],
                 ),
         ),
@@ -248,17 +245,17 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
           indicatorSize: TabBarIndicatorSize.tab,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15), 
           tabs: const [
-            Tab(text: "En Preparación"),
-            Tab(text: "Listas & Packs"),
-            Tab(text: "Vendidas"),
+            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text("En Preparación"))),
+            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text("Listas & Packs"))),
+            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text("Vendidas"))),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFilterChips(bool isDark) {
-    final filters = ["Todo", "Solo Alertas ⚠️", "Comunidad 🌐", "Escaneadas IA", "Manual"];
+  Widget _buildFilterChips(WorkbenchProvider provider, bool isDark) {
+    final filters = ["Todo", "Solo Alertas ⚠️", "Escaneadas IA", "Manual"];
     return Container(
       color: isDark ? Theme.of(context).colorScheme.surface : Colors.white,
       height: 55, 
@@ -269,7 +266,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (ctx, i) {
           final filter = filters[i];
-          final isSelected = _selectedFilter == filter;
+          final isSelected = provider.selectedFilter == filter;
           
           Color activeBgColor = filter.contains("⚠️") ? (isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red[50]!) : (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50]!);
           Color activeTextColor = filter.contains("⚠️") ? (isDark ? Colors.red[300]! : Colors.red[900]!) : (isDark ? Colors.blue[300]! : Colors.blue[900]!);
@@ -278,7 +275,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
             label: Text(filter, style: const TextStyle(fontSize: 14)), 
             selected: isSelected,
             onSelected: (bool selected) {
-              setState(() => _selectedFilter = selected ? filter : "Todo");
+              provider.setFilter(selected ? filter : "Todo");
             },
             backgroundColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
             selectedColor: activeBgColor,
@@ -298,8 +295,8 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
     return AnimatedBuilder(
       animation: _tabController,
       builder: (context, child) {
-        final list = _getCurrentList(provider);
-        final count = _getFilteredAndSortedList(provider, list).length;
+        final list = _getCurrentFilteredList(provider);
+        final count = list.length;
 
         return Container(
           width: double.infinity,
@@ -362,9 +359,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
   }
 
   Widget _buildQuotationList(WorkbenchProvider provider, List<SmartQuotationModel> list, bool isDark) {
-    final filteredAndSorted = _getFilteredAndSortedList(provider, list);
-
-    if (filteredAndSorted.isEmpty) {
+    if (list.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -379,12 +374,12 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
 
     return ListView.builder(
       padding: const EdgeInsets.only(top: 4, bottom: 100),
-      itemCount: filteredAndSorted.length,
+      itemCount: list.length,
       itemBuilder: (ctx, i) {
-        final quotation = filteredAndSorted[i];
+        final quotation = list[i];
         final validation = provider.getValidationFor(quotation.id);
 
-        return QuotationCard(
+        Widget card = QuotationCard(
           quotation: quotation,
           validation: validation,
           isDark: isDark,
@@ -402,6 +397,54 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
               _showQuickActions(context, quotation, isDark);
             }
           },
+        );
+
+        if (quotation.status == 'SOLD') return card;
+
+        return Dismissible(
+          key: Key('quotation_${quotation.id}'),
+          direction: DismissDirection.horizontal,
+          background: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(color: Colors.blue[600], borderRadius: BorderRadius.circular(16)),
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: const Icon(Icons.edit, color: Colors.white, size: 28),
+          ),
+          secondaryBackground: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(color: Colors.red[500], borderRadius: BorderRadius.circular(16)),
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: const Icon(Icons.archive, color: Colors.white, size: 28),
+          ),
+          confirmDismiss: (direction) async {
+            if (direction == DismissDirection.startToEnd) {
+              // Editar (Swipe Derecha)
+              Navigator.push(context, MaterialPageRoute(builder: (_) => ManualQuotationScreen(quotationId: quotation.id)))
+                .then((_) => provider.loadDashboard());
+              return false; // No lo quitamos visualmente, la navegación recarga todo
+            } else {
+              // Archivar (Swipe Izquierda)
+              bool confirm = await showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text("Archivar Cotización"),
+                  content: Text("¿Deseas archivar la cotización de ${quotation.clientName}?"),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Archivar", style: TextStyle(color: Colors.red))),
+                  ],
+                ),
+              ) ?? false;
+              if (confirm) {
+                await provider.changeQuotationStatus(quotation.id, 'ARCHIVED');
+                return true;
+              }
+              return false;
+            }
+          },
+          child: card,
         );
       },
     );
@@ -438,5 +481,7 @@ class _WorkbenchFixedHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => child;
   @override
-  bool shouldRebuild(_WorkbenchFixedHeaderDelegate oldDelegate) => true; 
+  bool shouldRebuild(_WorkbenchFixedHeaderDelegate oldDelegate) {
+    return height != oldDelegate.height || child != oldDelegate.child;
+  }
 }

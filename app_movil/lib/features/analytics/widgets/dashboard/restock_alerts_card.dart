@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 import 'package:app_movil/features/analytics/widgets/dashboard/glass_card.dart';
 import 'package:app_movil/core/widgets/product_nomenclature_label.dart';
+import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
 
 class RestockAlertsCard extends StatefulWidget {
   final AnalyticsData data;
@@ -108,8 +109,16 @@ class _RestockAlertsCardState extends State<RestockAlertsCard> {
 
   Widget _buildDetailPanel(Map<String, dynamic> p, int actual, int alerta) {
     String name = p['nombre']?.toString() ?? 'Producto';
-    int diasRestantes = p['dias_para_agotarse'] ?? 3; // Placeholder if not in data
     
+    String insightText;
+    if (actual == 0) {
+      insightText = "⛔ $name se agotó completamente. Cada día sin stock es una venta perdida. Contacta a tu proveedor HOY.";
+    } else if (actual <= 2) {
+      insightText = "🔴 $name tiene solo $actual unidad(es). Nivel CRÍTICO. Al cruzar el umbral de seguridad ($alerta), el riesgo de quiebre es inminente. Actúa ya.";
+    } else {
+      insightText = "⚠️ $name: $actual de $alerta unidades de seguridad. Programa tu reabastecimiento antes de que baje a nivel crítico.";
+    }
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -125,17 +134,32 @@ class _RestockAlertsCardState extends State<RestockAlertsCard> {
               Icon(actual == 0 ? Icons.error_outline : Icons.speed, color: actual == 0 ? Colors.red : Colors.orange, size: 20),
               const SizedBox(width: 8),
               Text(
-                actual == 0 ? "Stock Agotado" : "Proyección de Agotamiento",
+                actual == 0 ? "Stock Agotado" : "Alerta de Stock",
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            actual == 0 
-                ? "El producto $name ha llegado a 0. Estás perdiendo ventas potenciales basándose en la velocidad de venta histórica. Abastece de inmediato."
-                : "El stock actual ($actual) ha cruzado el límite de seguridad ($alerta). Según el algoritmo predictivo, te quedarás sin stock en aproximadamente $diasRestantes días. Programa tu compra.",
+            insightText,
             style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[700], height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartRestockScreen()));
+              },
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text("Ir a Reponer Stock"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: actual == 0 ? Colors.red : Colors.orange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
           )
         ],
       ),

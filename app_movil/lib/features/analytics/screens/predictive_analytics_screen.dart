@@ -119,13 +119,13 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         children: [
           _buildPredictionCard(isDark),
           const SizedBox(height: 16),
+          _buildSimulator(isDark),
+          const SizedBox(height: 16),
           _buildExplainabilityCard(isDark),
           const SizedBox(height: 24),
           _buildPatrimonyChart(isDark),
           const SizedBox(height: 24),
           _buildWarningBanner(isDark),
-          const SizedBox(height: 24),
-          _buildSimulator(isDark),
           const SizedBox(height: 40),
         ],
       ),
@@ -263,7 +263,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
             children: [
               const Icon(Icons.smart_toy_rounded, color: Colors.blueAccent, size: 20),
               const SizedBox(width: 8),
-              const Text("🤖 ¿Cómo calculamos esto?", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text("🤖 Diagnóstico del Motor", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             ],
           ),
           const SizedBox(height: 12),
@@ -331,7 +331,13 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Esfuerzo en Ventas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Variación en Ventas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text("Proyecta si logras vender más o menos", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                ],
+              ),
               Text("${_salesSimulationPct > 0 ? '+' : ''}${_salesSimulationPct.toInt()}%", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
             ],
           ),
@@ -345,12 +351,19 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
               setState(() => _salesSimulationPct = val);
             },
           ),
+          const SizedBox(height: 16),
           
           // Slider 2: Costos
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Variación en Costos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Variación en Costos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text("Qué pasa si suben los precios de proveedor", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                ],
+              ),
               Text("${_costsSimulationPct > 0 ? '+' : ''}${_costsSimulationPct.toInt()}%", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
             ],
           ),
@@ -366,11 +379,17 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           ),
           
           const SizedBox(height: 24),
-          Container(
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: isDark ? Colors.black26 : Colors.blueGrey[50],
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: simProfit >= baseProfit 
+                    ? Colors.green.withValues(alpha: 0.3) 
+                    : Colors.redAccent.withValues(alpha: 0.3)
+              ),
             ),
             child: Column(
               children: [
@@ -378,9 +397,20 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                 const SizedBox(height: 8),
                 FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text(
-                    currencyFmt.format(simProfit),
-                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: simProfit >= baseProfit ? Colors.green : Colors.redAccent),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: baseProfit, end: simProfit),
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeOutQuart,
+                    builder: (context, value, child) {
+                      return Text(
+                        currencyFmt.format(value),
+                        style: TextStyle(
+                          fontSize: 32, 
+                          fontWeight: FontWeight.bold, 
+                          color: value >= baseProfit ? Colors.green : Colors.redAccent
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -389,11 +419,30 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                   children: [
                     Icon(diffProfit >= 0 ? Icons.arrow_upward : Icons.arrow_downward, size: 16, color: diffProfit >= 0 ? Colors.green : Colors.redAccent),
                     const SizedBox(width: 4),
-                    Text(
-                      "${currencyFmt.format(diffProfit.abs())} vs proy. base",
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: diffProfit >= 0 ? Colors.green : Colors.redAccent),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: diffProfit.abs()),
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeOutQuart,
+                      builder: (context, value, child) {
+                        return Text(
+                          "${currencyFmt.format(value)} vs proy. base",
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: diffProfit >= 0 ? Colors.green : Colors.redAccent),
+                        );
+                      },
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  diffProfit >= 0 
+                      ? "¡Excelente! Este escenario aumenta tu ganancia esperada." 
+                      : "Cuidado, este escenario reduce tu rentabilidad.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12, 
+                    fontWeight: FontWeight.w500, 
+                    color: isDark ? Colors.grey[400] : Colors.grey[700]
+                  ),
                 ),
               ],
             ),
