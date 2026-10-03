@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:googleai_dart/googleai_dart.dart' hide File;
 
 class ApiConstants {
   /// Obtiene la llave de Google Gemini de forma segura desde el archivo .env
@@ -19,4 +20,21 @@ class ApiConstants {
 
   // Tiempo de espera máximo para procesamiento de IA (en segundos)
   static const int aiTimeoutSeconds = 45;
+
+  /// Crea un cliente configurado de Google AI con la API Key del .env
+  /// El caller es responsable de cerrar el cliente cuando termine.
+  static GoogleAIClient createAIClient() {
+    final apiKey = googleApiKey;
+    if (apiKey.isEmpty) {
+      throw Exception(
+        "API Key de Google Gemini no configurada en el archivo .env",
+      );
+    }
+    return GoogleAIClient(
+      config: GoogleAIConfig.googleAI(
+        authProvider: ApiKeyProvider(apiKey),
+        timeout: Duration(seconds: aiTimeoutSeconds),
+      ),
+    );
+  }
 }

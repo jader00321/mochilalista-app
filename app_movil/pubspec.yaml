@@ -46,8 +46,8 @@ dependencies:
   # ==========================================
   # 🤖 INTELIGENCIA ARTIFICIAL NATIVA
   # ==========================================
-  # Sustituye a nuestro antiguo backend en Python
-  google_generative_ai: ^0.4.6
+  # SDK activo para Google Gemini AI (reemplaza al deprecado google_generative_ai)
+  googleai_dart: ^12.0.2
   
   # (Se removió string_similarity por falta de uso en el entorno actual)
 

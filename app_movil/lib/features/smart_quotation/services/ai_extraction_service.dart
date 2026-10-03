@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:async';
+import 'dart:async' hide TimeoutException;
 import 'package:flutter/material.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:googleai_dart/googleai_dart.dart' hide File;
 import 'package:app_movil/core/config/api_constants.dart';
 import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
 
@@ -13,21 +13,13 @@ class AIExtractionService {
     int currentTry = 0;
 
     while (currentTry <= maxRetries) {
+      GoogleAIClient? client;
       try {
-        final apiKey = ApiConstants.googleApiKey;
-        if (apiKey.isEmpty) {
-          throw Exception("Falta configurar GOOGLE_API_KEY en el archivo .env");
-        }
-
-        final model = GenerativeModel(
-          model: ApiConstants.geminiModelFlash,
-          apiKey: apiKey,
-        );
+        client = ApiConstants.createAIClient();
 
         final imageBytes = await imageFile.readAsBytes();
-        final imagePart = DataPart('image/jpeg', imageBytes); 
 
-        final prompt = TextPart('''
+        final prompt = '''
           Actúa como un experto en digitalización de listas de útiles escolares.
           Analiza la imagen proporcionada y extrae la información siguiendo ESTRICTAMENTE el esquema JSON solicitado.
 
@@ -72,11 +64,19 @@ class AIExtractionService {
               }
             ]
           }
-        ''');
+        ''';
 
-        final response = await model.generateContent([
-          Content.multi([prompt, imagePart])
-        ]);
+        final response = await client.models.generateContent(
+          model: ApiConstants.geminiModelFlash,
+          request: GenerateContentRequest(
+            contents: [
+              Content.user([
+                Part.text(prompt),
+                Part.bytes(imageBytes, 'image/jpeg'),
+              ]),
+            ],
+          ),
+        );
 
         if (response.text != null && response.text!.isNotEmpty) {
           String cleanJson = response.text!.replaceAll('```json', '').replaceAll('```', '').trim();
@@ -85,39 +85,80 @@ class AIExtractionService {
         } else {
           throw Exception("La IA no devolvió datos legibles.");
         }
-      } catch (e, stack) {
-        if (e is ServerException) {
-          final msg = e.message.toString().toLowerCase();
-          bool isRateLimit = msg.contains('503') || 
-                             msg.contains('429') || 
-                             msg.contains('exhausted') || 
-                             msg.contains('resource_exhausted') ||
-                             msg.contains('unavailable');
-          
-          if (isRateLimit) {
-            if (currentTry < maxRetries) {
-              currentTry++;
-              if (onRetrying != null) onRetrying("Reintentando conexión...");
-              await Future.delayed(const Duration(seconds: 2));
-              continue;
-            } else {
-              throw Exception("Los servidores de IA están muy concurridos en este momento. Por favor, intenta de nuevo en unos segundos.");
-            }
+      } on RateLimitException {
+        // Rate limit (429) — reintentar si hay intentos restantes
+        if (currentTry < maxRetries) {
+          currentTry++;
+          if (onRetrying != null) onRetrying("Reintentando conexión...");
+          await Future.delayed(const Duration(seconds: 2));
+          continue;
+        } else {
+          throw Exception(
+            "Los servidores de IA están muy concurridos en este momento. "
+            "Por favor, intenta de nuevo en unos segundos.",
+          );
+        }
+      } on AuthenticationException catch (e, stack) {
+        // API key inválida o sin permisos
+        debugPrint("Error IA Extracción [AUTH]: $e\n$stack");
+        throw Exception(
+          "Hubo un problema con el servicio de procesamiento. "
+          "Si el problema persiste, contacta al soporte. (Ref: AUTH-Q01)",
+        );
+      } on TimeoutException catch (e, stack) {
+        // Timeout del SDK
+        debugPrint("Error IA Extracción [TIMEOUT]: $e\n$stack");
+        throw Exception(
+          "El procesamiento tardó demasiado. Verifica tu conexión e intenta de nuevo.",
+        );
+      } on ApiException catch (e, stack) {
+        // Errores generales del API (404, 500, etc.)
+        final msg = e.message.toLowerCase();
+
+        // Reintentar si es error de servidor temporal (503, unavailable)
+        if (msg.contains('503') || msg.contains('unavailable')) {
+          if (currentTry < maxRetries) {
+            currentTry++;
+            if (onRetrying != null) onRetrying("Reintentando conexión...");
+            await Future.delayed(const Duration(seconds: 2));
+            continue;
           }
         }
-        
-        if (e is SocketException || e is TimeoutException) {
-           throw Exception("Sin conexión a Internet. Verifica tu señal y reintenta.");
+
+        // Modelo no encontrado
+        if (msg.contains('404') || msg.contains('not found')) {
+          debugPrint("Error IA Extracción [MODEL]: $e\n$stack");
+          throw Exception(
+            "El servicio de procesamiento necesita una actualización. "
+            "Contacta al soporte para resolverlo rápidamente. (Ref: MDL-Q02)",
+          );
         }
-        
-        if (e.toString().contains("Los servidores de IA") || e.toString().contains("Sin conexión a Internet") || e.toString().contains("API Key")) {
+
+        debugPrint("Error IA Extracción [API]: $e\n$stack");
+        throw Exception(
+          "No pudimos procesar esta imagen en este momento. "
+          "Intenta con otra foto o reintenta en unos segundos. (Ref: API-Q04)",
+        );
+      } on SocketException {
+        throw Exception("Sin conexión a Internet. Verifica tu señal y reintenta.");
+      } catch (e, stack) {
+        // Reenviar excepciones que ya tienen mensaje formateado
+        if (e.toString().contains("Los servidores de IA") || 
+            e.toString().contains("Sin conexión a Internet") || 
+            e.toString().contains("API Key") ||
+            e.toString().contains("Ref:")) {
            rethrow;
         }
 
         debugPrint("Error IA Extracción: $e\n$stack");
-        throw Exception("Ocurrió un error inesperado al procesar la imagen. Intenta con otra foto o reintenta.");
+        throw Exception(
+          "No pudimos procesar esta imagen en este momento. "
+          "Intenta con otra foto o reintenta en unos segundos. (Ref: GEN-Q03)",
+        );
+      } finally {
+        client?.close();
       }
     }
-    throw Exception("Ocurrió un error inesperado al procesar la imagen.");
+    throw Exception("No pudimos procesar esta imagen en este momento. (Ref: GEN-Q04)");
   }
 }

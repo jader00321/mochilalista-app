@@ -448,14 +448,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.3"
-  google_generative_ai:
+  googleai_dart:
     dependency: "direct main"
     description:
-      name: google_generative_ai
-      sha256: "71f613d0247968992ad87a0eb21650a566869757442ba55a31a81be6746e0d1f"
+      name: googleai_dart
+      sha256: "058ab1efb6529d573a13327161637214e890f45d49ca1663548c658de47e23d0"
       url: "https://pub.dev"
     source: hosted
-    version: "0.4.7"
+    version: "12.0.2"
   hooks:
     dependency: transitive
     description:
@@ -1285,6 +1285,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
+  web_socket:
+    dependency: transitive
+    description:
+      name: web_socket
+      sha256: "34d64019aa8e36bf9842ac014bb5d2f5586ca73df5e4d9bf5c936975cae6982c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   win32:
     dependency: transitive
     description:

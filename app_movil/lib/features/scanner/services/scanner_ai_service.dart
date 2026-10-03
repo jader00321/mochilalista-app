@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
-import 'dart:async';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'dart:async' hide TimeoutException;
+import 'package:googleai_dart/googleai_dart.dart' hide File;
 import 'package:app_movil/core/utils/app_logger.dart';
 import 'package:app_movil/core/config/api_constants.dart';
 import 'package:app_movil/features/scanner/models/scanner_models.dart';
@@ -23,31 +23,27 @@ class ScannerAIService {
     int currentTry = 0;
 
     while (currentTry <= maxRetries) {
+      GoogleAIClient? client;
       try {
-        final apiKey = ApiConstants.googleApiKey;
-        if (apiKey.isEmpty) {
-          throw Exception(
-            "API Key de Google Gemini no configurada en el archivo .env",
-          );
-        }
-
-        final model = GenerativeModel(
-          model: ApiConstants.geminiModelFlash,
-          apiKey: apiKey,
-          generationConfig: GenerationConfig(
-            responseMimeType: 'application/json',
-            temperature: 0.1,
-          ),
-        );
+        client = ApiConstants.createAIClient();
 
         final imageBytes = await imageFile.readAsBytes();
-        final imagePart = DataPart('image/jpeg', imageBytes);
 
-        final prompt = TextPart(_buildAnalysisPrompt());
-
-        final response = await model.generateContent([
-          Content.multi([prompt, imagePart]),
-        ]);
+        final response = await client.models.generateContent(
+          model: ApiConstants.geminiModelFlash,
+          request: GenerateContentRequest(
+            contents: [
+              Content.user([
+                Part.text(_buildAnalysisPrompt()),
+                Part.bytes(imageBytes, 'image/jpeg'),
+              ]),
+            ],
+            generationConfig: const GenerationConfig(
+              responseMimeType: 'application/json',
+              temperature: 0.1,
+            ),
+          ),
+        );
 
         if (response.text != null && response.text!.isNotEmpty) {
           String cleanJson = _sanitizeResponse(response.text!);
@@ -56,46 +52,80 @@ class ScannerAIService {
         } else {
           throw Exception("La IA no devolvió datos legibles.");
         }
-      } catch (e, stack) {
-        if (e is ServerException) {
-          final msg = e.message.toString().toLowerCase();
-          bool isRateLimit =
-              msg.contains('503') ||
-              msg.contains('429') ||
-              msg.contains('exhausted') ||
-              msg.contains('resource_exhausted') ||
-              msg.contains('unavailable');
+      } on RateLimitException {
+        // Rate limit (429) — reintentar si hay intentos restantes
+        if (currentTry < maxRetries) {
+          currentTry++;
+          if (onRetrying != null) onRetrying("Reintentando conexión...");
+          await Future.delayed(const Duration(seconds: 2));
+          continue;
+        } else {
+          throw Exception(
+            "Los servidores de IA están muy concurridos en este momento. "
+            "Por favor, intenta de nuevo en unos segundos.",
+          );
+        }
+      } on AuthenticationException catch (e, stack) {
+        // API key inválida o sin permisos
+        AppLogger.error('ScannerAIService: Error de autenticación', e, stack);
+        throw Exception(
+          "Hubo un problema con el servicio de procesamiento. "
+          "Si el problema persiste, contacta al soporte. (Ref: AUTH-S01)",
+        );
+      } on TimeoutException catch (e, stack) {
+        // Timeout del SDK
+        AppLogger.error('ScannerAIService: Timeout', e, stack);
+        throw Exception(
+          "El procesamiento tardó demasiado. Verifica tu conexión e intenta de nuevo.",
+        );
+      } on ApiException catch (e, stack) {
+        // Errores generales del API (404, 500, etc.)
+        final msg = e.message.toLowerCase();
 
-          if (isRateLimit) {
-            if (currentTry < maxRetries) {
-              currentTry++;
-              if (onRetrying != null) onRetrying("Reintentando conexión...");
-              await Future.delayed(const Duration(seconds: 2));
-              continue;
-            } else {
-              throw Exception(
-                "Los servidores de IA están muy concurridos en este momento. Por favor, intenta de nuevo en unos segundos.",
-              );
-            }
+        // Reintentar si es error de servidor temporal (503, unavailable)
+        if (msg.contains('503') || msg.contains('unavailable')) {
+          if (currentTry < maxRetries) {
+            currentTry++;
+            if (onRetrying != null) onRetrying("Reintentando conexión...");
+            await Future.delayed(const Duration(seconds: 2));
+            continue;
           }
         }
 
-        if (e is SocketException || e is TimeoutException) {
+        // Modelo no encontrado
+        if (msg.contains('404') || msg.contains('not found')) {
+          AppLogger.error('ScannerAIService: Modelo no encontrado', e, stack);
           throw Exception(
-            "Sin conexión a Internet. Verifica tu señal y reintenta.",
+            "El servicio de procesamiento necesita una actualización. "
+            "Contacta al soporte para resolverlo rápidamente. (Ref: MDL-S02)",
           );
         }
 
+        AppLogger.error('ScannerAIService: Error de API', e, stack);
+        throw Exception(
+          "No pudimos procesar esta imagen en este momento. "
+          "Intenta con otra foto o reintenta en unos segundos. (Ref: API-S04)",
+        );
+      } on SocketException {
+        throw Exception(
+          "Sin conexión a Internet. Verifica tu señal y reintenta.",
+        );
+      } catch (e, stack) {
+        // Reenviar excepciones que ya tienen mensaje formateado
         if (e.toString().contains("Los servidores de IA") ||
             e.toString().contains("Sin conexión a Internet") ||
-            e.toString().contains("API Key")) {
+            e.toString().contains("API Key") ||
+            e.toString().contains("Ref:")) {
           rethrow;
         }
 
         AppLogger.error('ScannerAIService.analyzeInvoiceImage', e, stack);
         throw Exception(
-          "Ocurrió un error inesperado al procesar la imagen. Intenta con otra foto o reintenta.",
+          "No pudimos procesar esta imagen en este momento. "
+          "Intenta con otra foto o reintenta en unos segundos. (Ref: GEN-S03)",
         );
+      } finally {
+        client?.close();
       }
     }
     return null;
