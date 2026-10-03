@@ -67,7 +67,7 @@ class ClientQuotationsTab extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(q.clientName ?? "Lista #${q.id}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        Text(q.clientName ?? "Lista #${q.displayId}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor), maxLines: 2, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 8),
                         Text("Creada el: $date", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600])),
                         const SizedBox(height: 4),

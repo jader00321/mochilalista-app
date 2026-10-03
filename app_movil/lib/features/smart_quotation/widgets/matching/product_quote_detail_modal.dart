@@ -55,6 +55,11 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
 
   _PricingMode _pricingMode = _PricingMode.normal;
   bool _isSyncing = false;
+  
+  int _getRealStock(ProductPresentation pres) {
+    int factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+    return pres.stockActual ~/ factor;
+  }
 
   @override
   void initState() {
@@ -62,8 +67,9 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     _selectedPresentation = widget.wrapper.presentation;
     
     final authProv = Provider.of<AuthProvider>(context, listen: false);
-    if (authProv.isCommunityClient && widget.currentQuantity > _selectedPresentation.stockActual) {
-      _quantity = _selectedPresentation.stockActual > 0 ? _selectedPresentation.stockActual : 1;
+    final realStock = _getRealStock(_selectedPresentation);
+    if (authProv.isCommunityClient && widget.currentQuantity > realStock) {
+      _quantity = realStock > 0 ? realStock : 1;
     } else {
       _quantity = widget.currentQuantity;
     }
@@ -106,6 +112,14 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     
     _priceCtrl.text = effectivePrice.toStringAsFixed(2);
   }
+  
+  @override
+  void dispose() {
+    _qtyCtrl.dispose();
+    _priceCtrl.dispose();
+    _discountCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadFullProductDetails() async {
     final inventoryProv = Provider.of<InventoryProvider>(context, listen: false);
@@ -132,13 +146,6 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     }
   }
 
-  @override
-  void dispose() {
-    _qtyCtrl.dispose();
-    _priceCtrl.dispose();
-    _discountCtrl.dispose();
-    super.dispose();
-  }
 
   double _getEffectivePrice() {
     switch (_pricingMode) {
@@ -209,8 +216,9 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     int newQty = current + delta;
     
     if (newQty > 0) {
-      if (isClient && newQty > _selectedPresentation.stockActual) {
-        CustomSnackBar.show(context, message: "Límite de stock alcanzado (${_selectedPresentation.stockActual} disp.)", isError: true);
+      final realStock = _getRealStock(_selectedPresentation);
+      if (isClient && newQty > realStock) {
+        CustomSnackBar.show(context, message: "Límite de stock alcanzado ($realStock disp.)", isError: true);
         return;
       }
       _qtyCtrl.text = newQty.toString();
@@ -452,8 +460,8 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                     Text("S/ a Descontar", style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900])),
                     TextField(
                       controller: _discountCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: textTheme.displayMedium?.copyWith(color: isDark ? Colors.white : Colors.black87),
-                      decoration: InputDecoration(prefixText: "- ", prefixStyle: textTheme.displayMedium?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900]), isDense: true, border: InputBorder.none, hintText: "0.00"),
+                      style: textTheme.headlineSmall?.copyWith(color: isDark ? Colors.white : Colors.black87),
+                      decoration: InputDecoration(prefixText: "- ", prefixStyle: textTheme.headlineSmall?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900]), isDense: true, border: InputBorder.none, hintText: "0.00"),
                       onChanged: _onDiscountChanged,
                     ),
                   ],
@@ -468,8 +476,8 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                     Text("Precio Final Unit.", style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[900])),
                     TextField(
                       controller: _priceCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: textTheme.displayMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue),
-                      decoration: InputDecoration(prefixText: "S/ ", prefixStyle: textTheme.displayMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue), isDense: true, border: InputBorder.none),
+                      style: textTheme.headlineSmall?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue),
+                      decoration: InputDecoration(prefixText: "S/ ", prefixStyle: textTheme.headlineSmall?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue), isDense: true, border: InputBorder.none),
                       onChanged: _onPriceChanged,
                     ),
                   ],
@@ -524,8 +532,9 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     final originalTotal = defaultSystemPrice * _quantity;
     final savings = originalTotal - subtotal;
 
-    bool isStockEmpty = _selectedPresentation.stockActual <= 0;
-    bool exceedsStock = _quantity > _selectedPresentation.stockActual && !isStockEmpty;
+    final realStock = _getRealStock(_selectedPresentation);
+    bool isStockEmpty = realStock <= 0;
+    bool exceedsStock = _quantity > realStock && !isStockEmpty;
 
     String snapshot = widget.currentSnapshotName?.trim() ?? "";
     String currentBuiltName = "${productDisplay.nombre} ${_selectedPresentation.nombreEspecifico ?? ''}".trim();
@@ -602,7 +611,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (widget.brandName != null && widget.brandName!.isNotEmpty) 
-                            Text(widget.brandName!.toUpperCase(), style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.indigo[300] : Colors.indigo[800])),
+                            Text(widget.brandName!.toUpperCase(), style: TextStyle(fontSize: 12, color: isDark ? Colors.indigo[300] : Colors.indigo[800], fontWeight: FontWeight.w800, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
                           
                           const SizedBox(height: 2),
                           
@@ -611,9 +620,9 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                              overflow: TextOverflow.ellipsis,
                              text: TextSpan(
                                children: [
-                                 TextSpan(text: "${productDisplay.nombre} ", style: textTheme.titleLarge?.copyWith(color: textColor)),
+                                 TextSpan(text: "${productDisplay.nombre} ", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor, height: 1.2)),
                                  if (_selectedPresentation.nombreEspecifico != null && _selectedPresentation.nombreEspecifico!.isNotEmpty)
-                                   TextSpan(text: _selectedPresentation.nombreEspecifico!, style: textTheme.titleLarge?.copyWith(color: isDark ? Colors.teal[300] : Colors.teal[700])),
+                                   TextSpan(text: _selectedPresentation.nombreEspecifico!, style: TextStyle(fontSize: 18, color: isDark ? Colors.teal[300] : Colors.teal[700], height: 1.2)),
                                ],
                              ),
                            ),
@@ -639,7 +648,11 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                           ),
 
                           const SizedBox(height: 8),
-                          Text(isStockEmpty ? "Agotado (0)" : "Stock disponible: ${_selectedPresentation.stockActual}", style: textTheme.bodySmall?.copyWith(color: isStockEmpty ? (isDark ? Colors.red[400] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), fontWeight: FontWeight.bold)),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Text(isStockEmpty ? "Agotado (0)" : "Stock disponible: $realStock ${_selectedPresentation.unidadVenta ?? 'Unidad'}", style: textTheme.bodySmall?.copyWith(color: isStockEmpty ? (isDark ? Colors.red[400] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), fontWeight: FontWeight.bold)),
+                          ),
                         ],
                       ),
                     )
@@ -657,7 +670,8 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                     child: Row(
                       children: _fullProduct!.presentaciones.map((p) {
                         final isSelected = p.id == _selectedPresentation.id;
-                        final isOutOfStockVariant = p.stockActual <= 0;
+                        final realVariantStock = _getRealStock(p);
+                        final isOutOfStockVariant = realVariantStock <= 0;
                         final isDisabled = isClient && isOutOfStockVariant;
 
                         return Padding(
@@ -668,7 +682,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                               children: [
                                 Text("${p.unidadVenta ?? 'Unidad'} - ${currency.format(p.precioVentaFinal)}", style: textTheme.bodyMedium?.copyWith(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
                                 const SizedBox(width: 6),
-                                Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: isOutOfStockVariant ? Colors.red : (p.stockActual < 10 ? Colors.orange : Colors.green)))
+                                Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: isOutOfStockVariant ? Colors.red : (realVariantStock < 10 ? Colors.orange : Colors.green)))
                               ],
                             ), 
                             selected: isSelected, 
@@ -678,8 +692,8 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                                   _selectedPresentation = p;
                                   _initializePricing();
                                   
-                                  if (isClient && _quantity > p.stockActual) {
-                                     _quantity = p.stockActual > 0 ? p.stockActual : 1;
+                                  if (isClient && _quantity > realVariantStock) {
+                                     _quantity = realVariantStock > 0 ? realVariantStock : 1;
                                      _qtyCtrl.text = _quantity.toString();
                                   }
                                 });
@@ -734,8 +748,9 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                                     onChanged: (v) {
                                       if (isClient) {
                                          int parsed = int.tryParse(v) ?? 1;
-                                         if (parsed > _selectedPresentation.stockActual) {
-                                            _qtyCtrl.text = _selectedPresentation.stockActual.toString();
+                                         final realStock = _getRealStock(_selectedPresentation);
+                                         if (parsed > realStock) {
+                                            _qtyCtrl.text = realStock.toString();
                                             CustomSnackBar.show(context, message: "Límite de stock alcanzado", isError: true);
                                          }
                                       }
@@ -772,7 +787,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                 if (isStockEmpty) 
                   Padding(padding: const EdgeInsets.only(top: 12), child: Text("⚠️ Producto agotado en inventario. Podrás guardar, pero se marcará como Pendiente de Stock.", style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.red[300] : Colors.red[700])))
                 else if (exceedsStock && !isClient) 
-                  Padding(padding: const EdgeInsets.only(top: 12), child: Text("⚠️ Supera el stock actual de ${_selectedPresentation.stockActual}. Se permitirá cotizar, pero requerirá reabastecimiento.", style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.orange[400] : Colors.orange[800]))),
+                  Padding(padding: const EdgeInsets.only(top: 12), child: Text("⚠️ Supera el stock actual de $realStock. Se permitirá cotizar, pero requerirá reabastecimiento.", style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.orange[400] : Colors.orange[800]))),
                 
                 const SizedBox(height: 35),
 

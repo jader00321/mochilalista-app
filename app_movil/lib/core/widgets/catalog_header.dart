@@ -40,12 +40,12 @@ class _CatalogHeaderState extends State<CatalogHeader> {
         children: [
           // 1. FILA SUPERIOR: BUSCADOR Y BOTONES
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
             child: Row(
               children: [
                 Expanded(
                   child: Container(
-                    height: 55,
+                    height: 48,
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF23232F) : const Color(0xFFF3F4F6),
                       borderRadius: BorderRadius.circular(14), 
@@ -83,7 +83,7 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                     },
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
-                      height: 55, width: 55,
+                      height: 48, width: 48,
                       decoration: BoxDecoration(
                         color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(14),
@@ -100,7 +100,7 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                   onTap: widget.onFilterTap,
                   borderRadius: BorderRadius.circular(14),
                   child: Container(
-                    height: 55, width: 55,
+                    height: 48, width: 48,
                     decoration: BoxDecoration(
                       color: isDark ? Colors.blue[800] : theme.primaryColor,
                       borderRadius: BorderRadius.circular(14),
@@ -133,7 +133,7 @@ class _CatalogHeaderState extends State<CatalogHeader> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
         ],
       ),
     );

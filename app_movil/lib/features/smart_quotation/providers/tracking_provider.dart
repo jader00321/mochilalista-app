@@ -105,6 +105,7 @@ class TrackingProvider with ChangeNotifier {
 
     try {
       _allClients = await _service.getAllClients(_negocioId!);
+      _clientCount = _allClients.length; // 🔥 Mantiene el contador del Home sincronizado al 100%
     } catch (e) {
       _handleException(e);
     } finally {
@@ -159,6 +160,16 @@ class TrackingProvider with ChangeNotifier {
 
   void toggleDebtFilter() {
     _filterHasDebt = !_filterHasDebt;
+    notifyListeners();
+  }
+
+  void resetFiltersAndSearch() {
+    _searchQuery = "";
+    _filterHasDebt = false;
+    _filterPendingDelivery = false;
+    _filterIsAppClient = false;
+    _filterConfidenceLevel = "todos";
+    _currentSort = "newest";
     notifyListeners();
   }
 
@@ -275,6 +286,45 @@ class TrackingProvider with ChangeNotifier {
       await loadClients();
       await loadClientLedger(clientId); 
       await loadClientDebts(clientId);  
+      return true;
+    } catch (e) {
+      _handleException(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> withdrawBalance(int clientId, double amount, String method) async {
+    if (_negocioId == null || _usuarioId == null) return false;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      await _service.withdrawClientBalance(clientId, _negocioId!, _usuarioId!, amount, method);
+      await loadClients();
+      await loadClientLedger(clientId);
+      return true;
+    } catch (e) {
+      _handleException(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> registerLoan(int clientId, double amount, String motivo, {double? interestRate, String? metodoPago, List<InstallmentModel>? installments}) async {
+    if (_negocioId == null || _usuarioId == null) return false;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      await _service.registerLoan(clientId, _negocioId!, _usuarioId!, amount: amount, motivo: motivo, interestRate: interestRate, metodoPago: metodoPago, installments: installments);
+      await loadClients();
+      await loadClientLedger(clientId);
+      await loadClientDebts(clientId);
       return true;
     } catch (e) {
       _handleException(e);

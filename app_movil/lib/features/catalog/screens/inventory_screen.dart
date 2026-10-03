@@ -5,7 +5,7 @@ import 'package:app_movil/core/providers/auth_provider.dart'; // 🔥 FASE 4
 import 'package:app_movil/core/widgets/filter_drawer.dart';
 
 // Pestañas
-import 'package:app_movil/features/catalog/screens/tabs/products_tab.dart'; 
+import 'package:app_movil/features/catalog/screens/tabs/products_tab.dart';
 import 'package:app_movil/features/catalog/screens/tabs/categories_tab.dart';
 import 'package:app_movil/features/catalog/screens/tabs/brands_tab.dart';
 import 'package:app_movil/features/catalog/screens/tabs/providers_tab.dart';
@@ -20,7 +20,27 @@ class PlaceholderTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(icon, size: 60, color: isDark ? Colors.white10 : Colors.grey[300]), const SizedBox(height: 16), Text("Gestión de $title", style: TextStyle(fontSize: 18, color: isDark ? Colors.grey[500] : Colors.grey[600], fontWeight: FontWeight.bold))]));
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 60,
+            color: isDark ? Colors.white10 : Colors.grey[300],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "Gestión de $title",
+            style: TextStyle(
+              fontSize: 18,
+              color: isDark ? Colors.grey[500] : Colors.grey[600],
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -31,21 +51,30 @@ class InventoryScreen extends StatefulWidget {
   State<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-class _InventoryScreenState extends State<InventoryScreen> with TickerProviderStateMixin {
+class _InventoryScreenState extends State<InventoryScreen>
+    with TickerProviderStateMixin {
   late TabController _tabController;
   late AnimationController _glowController;
   late Animation<double> _glowAnimation;
-  
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this); 
-    
-    _glowController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
-    _glowAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(CurvedAnimation(parent: _glowController, curve: Curves.easeInOut));
-    
+    _tabController = TabController(length: 5, vsync: this);
+
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+    _glowAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<InventoryProvider>(context, listen: false).loadInventory(reset: true);
+      Provider.of<InventoryProvider>(
+        context,
+        listen: false,
+      ).loadInventory(reset: true);
     });
   }
 
@@ -83,20 +112,30 @@ class _InventoryScreenState extends State<InventoryScreen> with TickerProviderSt
           children: [
             Icon(Icons.explore, color: Colors.orange[400]),
             const SizedBox(width: 10),
-            const Text("Modo Exploración", style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              "Modo Exploración",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: Text(
           "Para ver el historial inteligente de las facturas de proveedores que la IA ha procesado, necesitas registrar tu propio negocio en tu Perfil.",
-          style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16, height: 1.4),
+          style: TextStyle(
+            color: isDark ? Colors.grey[300] : Colors.grey[700],
+            fontSize: 16,
+            height: 1.4,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Entendido", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          )
+            child: const Text(
+              "Entendido",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
         ],
-      )
+      ),
     );
   }
 
@@ -105,21 +144,24 @@ class _InventoryScreenState extends State<InventoryScreen> with TickerProviderSt
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final bgColor = theme.scaffoldBackgroundColor;
-    
+
     final auth = Provider.of<AuthProvider>(context);
     final isGuest = !auth.hasActiveContext;
 
     return Scaffold(
       backgroundColor: bgColor,
       endDrawer: FilterDrawer(onApplyFilters: _applyFilters),
-      
+
       appBar: AppBar(
-        title: const Text("Gestión de Negocio", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        title: const Text(
+          "Gestión de Negocio",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        ),
         centerTitle: true,
         elevation: 0,
         backgroundColor: isDark ? const Color(0xFF1A1A24) : theme.primaryColor,
         foregroundColor: Colors.white,
-        
+
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
@@ -133,40 +175,62 @@ class _InventoryScreenState extends State<InventoryScreen> with TickerProviderSt
                     children: [
                       const Icon(Icons.receipt_long_rounded, size: 26),
                       Positioned(
-                        right: -2, top: -2,
+                        right: -2,
+                        top: -2,
                         child: Container(
                           padding: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(color: Colors.orange, shape: BoxShape.circle, border: Border.all(color: isDark ? const Color(0xFF1A1A24) : theme.primaryColor, width: 2)),
-                          child: const Icon(Icons.auto_awesome, size: 8, color: Colors.white),
+                          decoration: BoxDecoration(
+                            color: Colors.orange,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isDark
+                                  ? const Color(0xFF1A1A24)
+                                  : theme.primaryColor,
+                              width: 2,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.auto_awesome,
+                            size: 8,
+                            color: Colors.white,
+                          ),
                         ),
-                      )
+                      ),
                     ],
                   ),
                   onPressed: () {
                     // 🔥 BLOQUEO DE INVITADO PARA HISTORIAL DE FACTURAS
                     if (isGuest) {
-                       _showExplorationModal(context, isDark);
-                       return;
+                      _showExplorationModal(context, isDark);
+                      return;
                     }
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoiceHistoryScreen()));
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const InvoiceHistoryScreen(),
+                      ),
+                    );
                   },
                 ),
               ),
             ),
           ),
-          const SizedBox.shrink()
+          const SizedBox.shrink(),
         ],
-        
+
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
-          tabAlignment: TabAlignment.start, 
+          tabAlignment: TabAlignment.start,
           padding: EdgeInsets.zero,
           labelPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
           indicatorColor: Colors.white,
           indicatorWeight: 3,
           labelColor: Colors.white,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
           unselectedLabelColor: Colors.white54,
           tabs: const [
             Tab(text: "PRODUCTOS"),
@@ -193,19 +257,22 @@ class _InventoryScreenState extends State<InventoryScreen> with TickerProviderSt
                   Expanded(
                     child: Text(
                       "Modo Exploración. Para agregar productos y categorías reales, debes registrar tu negocio.",
-                      style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
-                    )
-                  )
-                ]
-              )
+                      style: TextStyle(
+                        color: isDark ? Colors.orange[200] : Colors.orange[900],
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            
+
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: const [
-                ProductsTab(), 
-                OffersTab(), 
+                ProductsTab(),
+                OffersTab(),
                 CategoriesTab(),
                 BrandsTab(),
                 ProvidersTab(),

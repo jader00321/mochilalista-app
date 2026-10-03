@@ -25,7 +25,7 @@ class Brand {
 
   Map<String, dynamic> toSqlite(int negocioId) {
     return {
-      'id': id == 0 ? null : id, 
+      'id': id == 0 ? null : id,
       'negocio_id': negocioId,
       'nombre': nombre,
       'imagen_url': urlImagen,

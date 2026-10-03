@@ -47,13 +47,14 @@ class NotificationProvider with ChangeNotifier {
       // Productos que ya tienen stock seguro: TODAS sus presentaciones activas
       // deben tener stock_actual > stock_alerta para considerarse "resueltos"
       final allPresRows = await db.rawQuery('''
-        SELECT producto_id, 
-               MIN(CASE WHEN stock_actual > COALESCE(stock_alerta, 5) THEN 1 ELSE 0 END) as all_healthy
-        FROM presentaciones_producto
-        WHERE activo = 1
-        GROUP BY producto_id
+        SELECT pp.producto_id, 
+               MIN(CASE WHEN pp.stock_actual > COALESCE(pp.stock_alerta, 5) THEN 1 ELSE 0 END) as all_healthy
+        FROM presentaciones_producto pp
+        INNER JOIN productos p ON p.id = pp.producto_id
+        WHERE pp.activo = 1 AND p.negocio_id = ?
+        GROUP BY pp.producto_id
         HAVING all_healthy = 1
-      ''');
+      ''', [_negocioId]);
       final inStockProductIds = allPresRows.map((r) => r['producto_id'] as int).toSet();
 
       _notifications = rows.map((n) {
@@ -89,8 +90,9 @@ class NotificationProvider with ChangeNotifier {
         INNER JOIN clientes cl ON v.cliente_id = cl.id
         WHERE c.estado != 'pagado' 
         AND v.is_archived = 0
+        AND v.negocio_id = ?
         AND date(c.fecha_vencimiento) < date('now', 'localtime')
-      ''');
+      ''', [_negocioId]);
 
       bool hasNew = false;
       for (var row in overdueRows) {

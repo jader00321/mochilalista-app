@@ -12,11 +12,11 @@ class ClientFilterBar extends StatelessWidget {
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
 
     return Container(
-      height: 70,
+      height: 50,
       color: bgColor,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         children: [
           _buildFilterChip(
             label: "Con Deuda",
@@ -34,15 +34,6 @@ class ClientFilterBar extends StatelessWidget {
             activeColor: isDark ? Colors.orange[300]! : Colors.orange,
             isDark: isDark,
             onSelected: (_) => provider.toggleDeliveryFilter(),
-          ),
-          const SizedBox(width: 10),
-          _buildFilterChip(
-            label: "Clientes App",
-            icon: Icons.phone_android,
-            isSelected: provider.filterIsAppClient,
-            activeColor: isDark ? Colors.teal[300]! : Colors.teal,
-            isDark: isDark,
-            onSelected: (_) => provider.toggleAppClientFilter(),
           ),
           const SizedBox(width: 10),
           _buildConfidenceChip(provider, isDark),

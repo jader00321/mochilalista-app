@@ -52,12 +52,10 @@ class QuickSaleCartItem extends StatelessWidget {
     // 🔥 Nueva lógica: Identificar si es paquete (su presentationId es negativo)
     final bool isBundle = product.presentationId < 0;
 
-    String displayFullName = isBundle ? product.productName : product.displayNameClean;
-
     // Evaluamos si, tras un refresco de backend, el producto se quedó sin stock
     final bool isOut = product.stock <= 0;
     
-    bool showBrand = brandName.isNotEmpty && !displayFullName.toUpperCase().contains(brandName.toUpperCase()) && !isBundle;
+    bool showBrand = brandName.isNotEmpty && !isBundle;
 
     return Dismissible(
       key: ValueKey("quick_item_${product.presentationId}"),
@@ -117,20 +115,25 @@ class QuickSaleCartItem extends StatelessWidget {
                           Padding(
                             padding: const EdgeInsets.only(bottom: 2),
                             child: Text(
-                              brandName.toUpperCase(), 
-                              style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5),
+                              brandName.toUpperCase(),
+                              style: TextStyle(
+                                color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                fontWeight: FontWeight.w800,
+                                fontSize: 11,
+                                letterSpacing: 0.5,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        Text(product.productName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor, height: 1.2), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        Text(product.productName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.2), maxLines: 2, overflow: TextOverflow.ellipsis),
                         
                         if (product.specificName != null && product.specificName!.isNotEmpty && product.specificName != "Paquete")
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               product.specificName!, 
-                              style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13), 
+                              style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14), 
                               maxLines: 3, 
                               overflow: TextOverflow.ellipsis
                             ),
@@ -140,7 +143,7 @@ class QuickSaleCartItem extends StatelessWidget {
                         if (product.unit.isNotEmpty && !isBundle)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
-                            child: Text("${product.unit} (x${product.conversionFactor})", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 13, fontStyle: FontStyle.italic)),
+                            child: Text("${product.unit} (x${product.conversionFactor})", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 14, fontStyle: FontStyle.italic)),
                           ),
 
                         if (isBundle)

@@ -11,6 +11,7 @@ import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_s
 import 'package:app_movil/core/screens/home_screen.dart';
 import 'package:app_movil/features/smart_quotation/widgets/workbench/archived_lists_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/workbench/dashboard_header.dart';
+import 'package:app_movil/core/widgets/export_options_modal.dart';
 
 class WorkbenchScreen extends StatefulWidget {
   const WorkbenchScreen({super.key});
@@ -21,8 +22,7 @@ class WorkbenchScreen extends StatefulWidget {
 
 class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
-  final ScrollController _scrollController = ScrollController();
+  final GlobalKey<NestedScrollViewState> _nestedScrollKey = GlobalKey();
   bool _showScrollToTop = false;
 
   @override
@@ -31,17 +31,10 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
     _tabController = TabController(length: 3, vsync: this);
     
     _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) return;
-      if (mounted) setState(() {});
+      // Ya no hacemos setState() en cada cambio. TabBarView maneja la animación.
     });
 
-    _scrollController.addListener(() {
-      if (_scrollController.offset > 300 && !_showScrollToTop) {
-        setState(() => _showScrollToTop = true);
-      } else if (_scrollController.offset <= 300 && _showScrollToTop) {
-        setState(() => _showScrollToTop = false);
-      }
-    });
+    // El tracking de scroll ahora se hace vía NotificationListener
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
@@ -51,16 +44,19 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
   @override
   void dispose() {
     _tabController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
-  void _scrollToTop() {
-    _scrollController.animateTo(
-      0, 
-      duration: const Duration(milliseconds: 600), 
-      curve: Curves.easeInOutCubic
-    );
+  void _scrollToTop() async {
+    final state = _nestedScrollKey.currentState;
+    if (state != null) {
+      for (final position in state.innerController.positions) {
+        position.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      }
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (!state.mounted) return;
+      state.outerController.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOutCubic);
+    }
   }
 
   List<SmartQuotationModel> _getCurrentFilteredList(WorkbenchProvider provider) {
@@ -82,11 +78,22 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
       body: RefreshIndicator(
         onRefresh: () => provider.loadDashboard(),
         color: Colors.blue[800],
-        child: NestedScrollView(
-          physics: const AlwaysScrollableScrollPhysics(), 
-          controller: _scrollController,
+        child: NotificationListener<ScrollUpdateNotification>(
+          onNotification: (notification) {
+            if (notification.metrics.axis == Axis.vertical) {
+              bool shouldShow = notification.metrics.pixels > 120;
+              if (shouldShow != _showScrollToTop) {
+                setState(() => _showScrollToTop = shouldShow);
+              }
+            }
+            return false;
+          },
+          child: NestedScrollView(
+            physics: const AlwaysScrollableScrollPhysics(), 
+            key: _nestedScrollKey,
           headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
             return <Widget>[
+              // 1° SliverAppBar (Título y acciones) - SIEMPRE FIJO
               SliverAppBar(
                 title: const Text("Mesa de Trabajo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
                 leading: IconButton(
@@ -101,73 +108,126 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
                     onPressed: () => ArchivedListsModal.show(context, provider, isDark),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.picture_as_pdf, size: 26),
-                    tooltip: "Exportar Reporte PDF",
-                    onPressed: () async {
-                      try {
-                        final service = ExportReportService();
-                        await service.generateAndShareWorkbenchPdf(
-                          timeFilterLabel: provider.timeFilterLabel,
-                          range: provider.activeRange,
-                          inProcessCount: provider.inProcessList.length,
-                          readyCount: provider.readyAndPacksList.length,
-                          alertCount: provider.criticalAlertsCount,
-                          totalSales: provider.totalDaySales,
-                          inProcessList: provider.filteredInProcessList,
-                          readyAndPacksList: provider.filteredReadyAndPacksList,
-                          soldList: provider.filteredSoldList,
-                        );
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error al exportar: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red),
-                        );
-                      }
+                    icon: const Icon(Icons.file_download, size: 26),
+                    tooltip: "Exportar Reportes",
+                    onPressed: () {
+                      ExportOptionsModal.show(
+                        context,
+                        options: [
+                          const ExportOption(
+                            id: 'current',
+                            title: 'Exportar Vista Actual',
+                            description: 'Lo que se ve en la pestaña actual con filtros.',
+                            icon: Icons.filter_list,
+                          ),
+                          const ExportOption(
+                            id: 'pending',
+                            title: 'Solo Pendientes',
+                            description: 'Cotizaciones en revisión y preparadas (sin vender).',
+                            icon: Icons.pending_actions,
+                          ),
+                          const ExportOption(
+                            id: 'sold',
+                            title: 'Solo Vendidas',
+                            description: 'Únicamente las cotizaciones cobradas.',
+                            icon: Icons.point_of_sale,
+                          ),
+                          const ExportOption(
+                            id: 'full',
+                            title: 'Reporte Completo',
+                            description: 'Todas las cotizaciones del periodo (vendidas o no).',
+                            icon: Icons.assessment,
+                          ),
+                        ],
+                        onExport: (selectedOptionId, format, _) async {
+                          ExportScope scope;
+                          switch (selectedOptionId) {
+                            case 'current': scope = ExportScope.currentView; break;
+                            case 'pending': scope = ExportScope.pendingOnly; break;
+                            case 'sold': scope = ExportScope.soldOnly; break;
+                            case 'full': scope = ExportScope.full; break;
+                            default: scope = ExportScope.currentView;
+                          }
+
+                          try {
+                            final service = ExportReportService();
+                            if (format == 'pdf') {
+                              await service.generateAndShareWorkbenchPdf(
+                                scope: scope,
+                                timeFilterLabel: provider.timeFilterLabel,
+                                range: provider.activeRange,
+                                inProcessCount: provider.filteredInProcessList.length,
+                                readyCount: provider.filteredReadyAndPacksList.length,
+                                alertCount: provider.totalAlertsCount,
+                                totalSales: provider.totalDaySales,
+                                inProcessList: provider.filteredInProcessList,
+                                readyAndPacksList: provider.filteredReadyAndPacksList,
+                                soldList: provider.filteredSoldList,
+                                activeTabIndex: _tabController.index,
+                              );
+                            } else {
+                              await service.generateAndShareWorkbenchCsv(
+                                scope: scope,
+                                timeFilterLabel: provider.timeFilterLabel,
+                                range: provider.activeRange,
+                                inProcessList: provider.filteredInProcessList,
+                                readyAndPacksList: provider.filteredReadyAndPacksList,
+                                soldList: provider.filteredSoldList,
+                                activeTabIndex: _tabController.index,
+                              );
+                            }
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error al exportar: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red),
+                            );
+                          }
+                        },
+                      );
                     },
                   ),
                 ],
                 backgroundColor: isDark ? const Color(0xFF0D47A1) : const Color(0xFF1565C0),
                 foregroundColor: Colors.white,
                 elevation: 0,
-                pinned: true,
-                floating: true,
+                pinned: true,     // ← FIJO
+                floating: false,  // ← YA NO ES FLOATING
               ),
 
-              SliverAppBar(
-                automaticallyImplyLeading: false,
-                floating: true,
-                snap: true,
-                pinned: false,
-                elevation: 0,
-                backgroundColor: bgColor,
-                toolbarHeight: 0, // We put everything in bottom
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(275), // 166 (Dashboard) + 55 (Chips) + 54 (Sort Bar)
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      DashboardHeader(provider: provider, isDark: isDark),
-                      Container(
-                        color: isDark ? Theme.of(context).colorScheme.surface : Colors.white,
-                        child: Column(
-                          children: [
-                            _buildFilterChips(provider, isDark),
-                            _buildCounterAndSortBar(provider, isDark),
-                          ],
-                        ),
-                      ),
-                    ],
+              // 2° SliverToBoxAdapter (Dashboard KPIs) - DESAPARECE CON SCROLL
+              SliverToBoxAdapter(
+                child: DashboardHeader(provider: provider, isDark: isDark, tabController: _tabController),
+              ),
+
+              // 3° SliverPersistentHeader (Pestañas) - SIEMPRE FIJAS DEBAJO DEL APPBAR
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _WorkbenchFixedHeaderDelegate(
+                  height: 52.0, 
+                  child: Container(
+                    color: bgColor, 
+                    child: _buildTabBarSection(isDark, surfaceColor),
                   ),
                 ),
               ),
 
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _WorkbenchFixedHeaderDelegate(
-                  height: 74.0, 
-                  child: Container(
-                    color: bgColor, 
-                    child: _buildTabBarSection(isDark, surfaceColor),
+              // 4° SliverAppBar (Filtros y Ordenamiento) - FLOTANTE Y SNAP (reaparece al subir)
+              SliverAppBar(
+                automaticallyImplyLeading: false,
+                pinned: false,
+                floating: true,
+                snap: true,
+                elevation: 0,
+                toolbarHeight: 0, 
+                backgroundColor: isDark ? Theme.of(context).colorScheme.surface : Colors.white,
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(78.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildFilterChips(provider, isDark),
+                      _buildCounterAndSortBar(provider, isDark),
+                    ],
                   ),
                 ),
               ),
@@ -183,6 +243,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
                     _buildQuotationList(provider, provider.filteredSoldList, isDark), 
                   ],
                 ),
+          ),
         ),
       ),
       
@@ -224,11 +285,11 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
 
   Widget _buildTabBarSection(bool isDark, Color surfaceColor) {
     return Container(
-      height: 74,
+      height: 52,
       color: surfaceColor,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 16),
       child: Container(
-        height: 50,
+        height: 46,
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF14141C) : Colors.grey[200],
           borderRadius: BorderRadius.circular(25),
@@ -243,11 +304,11 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
           labelColor: Colors.white,
           unselectedLabelColor: isDark ? Colors.grey[500] : Colors.grey[700],
           indicatorSize: TabBarIndicatorSize.tab,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15), 
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), 
           tabs: const [
-            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text("En Preparación"))),
-            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text("Listas & Packs"))),
-            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text("Vendidas"))),
+            Tab(child: Text("En Preparación", maxLines: 1, overflow: TextOverflow.fade, softWrap: false)),
+            Tab(child: Text("Listas & Packs", maxLines: 1, overflow: TextOverflow.fade, softWrap: false)),
+            Tab(child: Text("Vendidas", maxLines: 1, overflow: TextOverflow.fade, softWrap: false)),
           ],
         ),
       ),
@@ -258,7 +319,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
     final filters = ["Todo", "Solo Alertas ⚠️", "Escaneadas IA", "Manual"];
     return Container(
       color: isDark ? Theme.of(context).colorScheme.surface : Colors.white,
-      height: 55, 
+      height: 48, 
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         scrollDirection: Axis.horizontal,
@@ -300,7 +361,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
 
         return Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
             color: isDark ? Theme.of(context).colorScheme.surface : Colors.white,
             border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))
@@ -373,7 +434,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 4, bottom: 100),
+      padding: const EdgeInsets.only(top: 12, bottom: 100),
       itemCount: list.length,
       itemBuilder: (ctx, i) {
         final quotation = list[i];
@@ -399,53 +460,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
           },
         );
 
-        if (quotation.status == 'SOLD') return card;
-
-        return Dismissible(
-          key: Key('quotation_${quotation.id}'),
-          direction: DismissDirection.horizontal,
-          background: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(color: Colors.blue[600], borderRadius: BorderRadius.circular(16)),
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: const Icon(Icons.edit, color: Colors.white, size: 28),
-          ),
-          secondaryBackground: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(color: Colors.red[500], borderRadius: BorderRadius.circular(16)),
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: const Icon(Icons.archive, color: Colors.white, size: 28),
-          ),
-          confirmDismiss: (direction) async {
-            if (direction == DismissDirection.startToEnd) {
-              // Editar (Swipe Derecha)
-              Navigator.push(context, MaterialPageRoute(builder: (_) => ManualQuotationScreen(quotationId: quotation.id)))
-                .then((_) => provider.loadDashboard());
-              return false; // No lo quitamos visualmente, la navegación recarga todo
-            } else {
-              // Archivar (Swipe Izquierda)
-              bool confirm = await showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text("Archivar Cotización"),
-                  content: Text("¿Deseas archivar la cotización de ${quotation.clientName}?"),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
-                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Archivar", style: TextStyle(color: Colors.red))),
-                  ],
-                ),
-              ) ?? false;
-              if (confirm) {
-                await provider.changeQuotationStatus(quotation.id, 'ARCHIVED');
-                return true;
-              }
-              return false;
-            }
-          },
-          child: card,
-        );
+        return card;
       },
     );
   }
@@ -485,3 +500,4 @@ class _WorkbenchFixedHeaderDelegate extends SliverPersistentHeaderDelegate {
     return height != oldDelegate.height || child != oldDelegate.child;
   }
 }
+

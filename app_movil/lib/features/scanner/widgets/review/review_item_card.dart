@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:app_movil/features/scanner/models/scanner_models.dart';
+import 'package:app_movil/features/scanner/screens/barcode_scanner_screen.dart';
 
 class ReviewItemCard extends StatefulWidget {
   final AIItemExtracted item;
@@ -23,13 +24,17 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
   late TextEditingController _padreCtrl;
   late TextEditingController _varianteCtrl;
   late TextEditingController _marcaCtrl;
-  
+  late TextEditingController _codigoCtrl;
+
+  String? _originalCodigo;
+  bool _showCodigo = false;
+
   late TextEditingController _umpCtrl;
   late TextEditingController _cantCtrl;
-  late TextEditingController _precioUmpCtrl; 
+  late TextEditingController _precioUmpCtrl;
   late TextEditingController _totalPagoCtrl;
   late TextEditingController _unidadesLoteCtrl;
-  
+
   late TextEditingController _unidadVentaCtrl;
 
   @override
@@ -50,14 +55,29 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
     _padreCtrl = TextEditingController(text: widget.item.productoPadreEstimado);
     _varianteCtrl = TextEditingController(text: widget.item.varianteDetectada);
     _marcaCtrl = TextEditingController(text: widget.item.marcaDetectada);
+    _codigoCtrl = TextEditingController(text: widget.item.codigo);
     
+    _originalCodigo ??= widget.item.codigo;
+
     _umpCtrl = TextEditingController(text: widget.item.umpCompra);
-    _cantCtrl = TextEditingController(text: _formatSmartDecimal(widget.item.cantidadUmpComprada));
-    _precioUmpCtrl = TextEditingController(text: _formatSmartDecimal(widget.item.precioUmpProveedor));
-    _totalPagoCtrl = TextEditingController(text: widget.item.totalPagoLote.toStringAsFixed(2));
-    _unidadesLoteCtrl = TextEditingController(text: widget.item.unidadesPorLote.toString());
-    
-    _unidadVentaCtrl = TextEditingController(text: widget.item.unidadVenta.isNotEmpty ? widget.item.unidadVenta : "Unidad");
+    _cantCtrl = TextEditingController(
+      text: _formatSmartDecimal(widget.item.cantidadUmpComprada),
+    );
+    _precioUmpCtrl = TextEditingController(
+      text: _formatSmartDecimal(widget.item.precioUmpProveedor),
+    );
+    _totalPagoCtrl = TextEditingController(
+      text: widget.item.totalPagoLote.toStringAsFixed(2),
+    );
+    _unidadesLoteCtrl = TextEditingController(
+      text: widget.item.unidadesPorLote.toString(),
+    );
+
+    _unidadVentaCtrl = TextEditingController(
+      text: widget.item.unidadVenta.isNotEmpty
+          ? widget.item.unidadVenta
+          : "Unidad",
+    );
   }
 
   @override
@@ -73,6 +93,7 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
     _padreCtrl.dispose();
     _varianteCtrl.dispose();
     _marcaCtrl.dispose();
+    _codigoCtrl.dispose();
     _umpCtrl.dispose();
     _cantCtrl.dispose();
     _precioUmpCtrl.dispose();
@@ -86,11 +107,14 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
     widget.item.productoPadreEstimado = _padreCtrl.text;
     widget.item.varianteDetectada = _varianteCtrl.text;
     widget.item.marcaDetectada = _marcaCtrl.text;
-    
+    widget.item.codigo = _codigoCtrl.text;
+
     widget.item.umpCompra = _umpCtrl.text;
     widget.item.unidadesPorLote = int.tryParse(_unidadesLoteCtrl.text) ?? 1;
-    widget.item.unidadVenta = _unidadVentaCtrl.text.isEmpty ? "Unidad" : _unidadVentaCtrl.text;
-    
+    widget.item.unidadVenta = _unidadVentaCtrl.text.isEmpty
+        ? "Unidad"
+        : _unidadVentaCtrl.text;
+
     double cant = double.tryParse(_cantCtrl.text) ?? 1.0;
     widget.item.cantidadUmpComprada = cant;
 
@@ -104,26 +128,31 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
       widget.item.totalPagoLote = totalPago;
       if (cant > 0) {
         widget.item.precioUmpProveedor = totalPago / cant;
-        _precioUmpCtrl.text = _formatSmartDecimal(widget.item.precioUmpProveedor);
+        _precioUmpCtrl.text = _formatSmartDecimal(
+          widget.item.precioUmpProveedor,
+        );
       }
     }
-    
-    setState(() {}); 
+
+    setState(() {});
     widget.onChanged(widget.item);
   }
 
   bool _isItemComplete() {
-    return _padreCtrl.text.trim().isNotEmpty && 
-           _varianteCtrl.text.trim().isNotEmpty &&
-           _umpCtrl.text.trim().isNotEmpty &&
-           (double.tryParse(_totalPagoCtrl.text) ?? 0) > 0;
+    return _padreCtrl.text.trim().isNotEmpty &&
+        _varianteCtrl.text.trim().isNotEmpty &&
+        _umpCtrl.text.trim().isNotEmpty &&
+        (double.tryParse(_totalPagoCtrl.text) ?? 0) > 0;
   }
 
   @override
   Widget build(BuildContext context) {
     double costoRealUnitario = 0.0;
-    if (widget.item.cantidadUmpComprada > 0 && widget.item.unidadesPorLote > 0) {
-      costoRealUnitario = widget.item.totalPagoLote / (widget.item.cantidadUmpComprada * widget.item.unidadesPorLote);
+    if (widget.item.cantidadUmpComprada > 0 &&
+        widget.item.unidadesPorLote > 0) {
+      costoRealUnitario =
+          widget.item.totalPagoLote /
+          (widget.item.cantidadUmpComprada * widget.item.unidadesPorLote);
     }
 
     bool isQuantityOne = widget.item.cantidadUmpComprada == 1.0;
@@ -135,8 +164,17 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
       decoration: BoxDecoration(
         color: widget.isDark ? const Color(0xFF23232F) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
-        boxShadow: [if (!widget.isDark) BoxShadow(color: Colors.grey.shade200, blurRadius: 6, offset: const Offset(0, 3))]
+        border: Border.all(
+          color: widget.isDark ? Colors.white10 : Colors.grey.shade300,
+        ),
+        boxShadow: [
+          if (!widget.isDark)
+            BoxShadow(
+              color: Colors.grey.shade200,
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+        ],
       ),
       child: IntrinsicHeight(
         child: Row(
@@ -144,7 +182,7 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
           children: [
             // Indicador de completitud lateral
             Container(width: 6, color: indicatorColor),
-            
+
             // Contenido principal
             Expanded(
               child: Column(
@@ -152,37 +190,66 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
                 children: [
                   // CABECERA: Producto Padre
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
-                      color: widget.isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], 
+                      color: widget.isDark
+                          ? Colors.blue.withValues(alpha: 0.15)
+                          : Colors.blue[50],
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.inventory_2_outlined, size: 16, color: widget.isDark ? Colors.blue[300] : Colors.blue[800]),
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 16,
+                          color: widget.isDark
+                              ? Colors.blue[300]
+                              : Colors.blue[800],
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: TextField(
                             controller: _padreCtrl,
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: widget.isDark ? Colors.blue[300] : Colors.blue[800]),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: widget.isDark
+                                  ? Colors.blue[300]
+                                  : Colors.blue[800],
+                            ),
                             decoration: InputDecoration(
                               labelText: "Nombre Principal del Producto",
-                              labelStyle: TextStyle(color: widget.isDark ? Colors.blueGrey[400] : Colors.blueGrey, fontSize: 12),
-                              isDense: true, border: InputBorder.none,
+                              labelStyle: TextStyle(
+                                color: widget.isDark
+                                    ? Colors.blueGrey[400]
+                                    : Colors.blueGrey,
+                                fontSize: 12,
+                              ),
+                              isDense: true,
+                              border: InputBorder.none,
                             ),
                             onChanged: (_) => _notifyChange(),
                           ),
                         ),
                         IconButton(
-                          icon: Icon(Icons.close, color: widget.isDark ? Colors.red[300] : Colors.red[600], size: 24),
+                          icon: Icon(
+                            Icons.close,
+                            color: widget.isDark
+                                ? Colors.red[300]
+                                : Colors.red[600],
+                            size: 24,
+                          ),
                           tooltip: "Eliminar fila",
                           onPressed: widget.onDelete,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                        )
+                        ),
                       ],
                     ),
                   ),
-                  
+
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -193,68 +260,285 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
                           children: [
                             Expanded(
                               flex: 3,
-                              child: _MiniInput(ctrl: _varianteCtrl, label: "Variante / Detalle", hint: "Ej: Rojo A4", isDark: widget.isDark, isRequired: true, onChanged: () => _notifyChange()),
+                              child: _MiniInput(
+                                ctrl: _varianteCtrl,
+                                label: "Variante / Detalle",
+                                hint: "Ej: Rojo A4",
+                                isDark: widget.isDark,
+                                isRequired: true,
+                                onChanged: () => _notifyChange(),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               flex: 2,
-                              child: _MiniInput(ctrl: _marcaCtrl, label: "Marca", hint: "Opcional", isDark: widget.isDark, onChanged: () => _notifyChange()),
+                              child: _MiniInput(
+                                ctrl: _marcaCtrl,
+                                label: "Marca",
+                                hint: "Opcional",
+                                isDark: widget.isDark,
+                                onChanged: () => _notifyChange(),
+                              ),
                             ),
                           ],
                         ),
-                        Divider(height: 24, color: widget.isDark ? Colors.white10 : Colors.grey.shade200),
+                        
+                        // SECCIÓN DE CÓDIGO PLEGABLE
+                        const SizedBox(height: 8),
+                        InkWell(
+                          onTap: () => setState(() => _showCodigo = !_showCodigo),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Icon(_showCodigo ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 18, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _showCodigo ? "Ocultar código de barras" : "Ver código de barras", 
+                                  style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)
+                                ),
+                                if (!_showCodigo && _codigoCtrl.text.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Icon(Icons.qr_code_2, size: 14, color: Colors.blue[400]),
+                                ]
+                              ],
+                            ),
+                          ),
+                        ),
+                        
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeInOut,
+                          child: !_showCodigo ? const SizedBox.shrink() : Padding(
+                            padding: const EdgeInsets.only(top: 8, bottom: 4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _MiniInput(
+                                    ctrl: _codigoCtrl,
+                                    label: "Código de Barras",
+                                    hint: "Escanea o escribe",
+                                    isDark: widget.isDark,
+                                    onChanged: () => _notifyChange(),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  margin: const EdgeInsets.only(top: 18),
+                                  child: IconButton(
+                                    icon: const Icon(Icons.qr_code_scanner),
+                                    color: Colors.blue,
+                                    tooltip: "Escanear código",
+                                    onPressed: () async {
+                                      final code = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const BarcodeScannerScreen(captureOnly: true),
+                                        ),
+                                      );
+                                      if (code != null && code is String) {
+                                        setState(() {
+                                          _codigoCtrl.text = code;
+                                          _notifyChange();
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                if (_originalCodigo != null && _originalCodigo!.isNotEmpty && _codigoCtrl.text != _originalCodigo) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 18),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.restore),
+                                      color: Colors.orange,
+                                      tooltip: "Restaurar original",
+                                      onPressed: () {
+                                        setState(() {
+                                          _codigoCtrl.text = _originalCodigo!;
+                                          _notifyChange();
+                                        });
+                                      },
+                                    ),
+                                  )
+                                ]
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        Divider(
+                          height: 24,
+                          color: widget.isDark
+                              ? Colors.white10
+                              : Colors.grey.shade200,
+                        ),
 
                         // SECCIÓN 2: Datos de Factura (ZONA 2)
-                        Text("DATOS FINANCIEROS Y DE COMPRA", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[300] : Colors.orange[800], letterSpacing: 0.5)),
+                        Text(
+                          "DATOS FINANCIEROS Y DE COMPRA",
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: widget.isDark
+                                ? Colors.orange[300]
+                                : Colors.orange[800],
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            Expanded(flex: 3, child: _MiniInput(ctrl: _umpCtrl, label: "U. Prov.", hint: "Ej: MLL", isDark: widget.isDark, isRequired: true, onChanged: () => _notifyChange())),
+                            Expanded(
+                              flex: 3,
+                              child: _MiniInput(
+                                ctrl: _umpCtrl,
+                                label: "U. Prov.",
+                                hint: "Ej: MLL",
+                                isDark: widget.isDark,
+                                isRequired: true,
+                                onChanged: () => _notifyChange(),
+                              ),
+                            ),
                             const SizedBox(width: 8),
-                            Expanded(flex: 3, child: _MiniInput(ctrl: _cantCtrl, label: "Cant.", hint: "1", isNum: true, isDark: widget.isDark, isRequired: true, onChanged: () => _notifyChange())),
+                            Expanded(
+                              flex: 3,
+                              child: _MiniInput(
+                                ctrl: _cantCtrl,
+                                label: "Cant.",
+                                hint: "1",
+                                isNum: true,
+                                isDark: widget.isDark,
+                                isRequired: true,
+                                onChanged: () => _notifyChange(),
+                              ),
+                            ),
                             const SizedBox(width: 8),
                             if (!isQuantityOne) ...[
-                              Expanded(flex: 3, child: _MiniInput(ctrl: _precioUmpCtrl, label: "P. x ${_umpCtrl.text.isEmpty ? 'U.' : _umpCtrl.text}", hint: "0.0", isNum: true, isDark: widget.isDark, onChanged: () => _notifyChange(fromPrecioUnitario: true))),
+                              Expanded(
+                                flex: 3,
+                                child: _MiniInput(
+                                  ctrl: _precioUmpCtrl,
+                                  label:
+                                      "P. x ${_umpCtrl.text.isEmpty ? 'U.' : _umpCtrl.text}",
+                                  hint: "0.0",
+                                  isNum: true,
+                                  isDark: widget.isDark,
+                                  onChanged: () =>
+                                      _notifyChange(fromPrecioUnitario: true),
+                                ),
+                              ),
                               const SizedBox(width: 8),
                             ],
-                            Expanded(flex: 4, child: _MiniInput(ctrl: _totalPagoCtrl, label: "Pago Total (S/)", hint: "0.00", isNum: true, isDark: widget.isDark, isBold: true, isRequired: true, onChanged: () => _notifyChange())),
+                            Expanded(
+                              flex: 4,
+                              child: _MiniInput(
+                                ctrl: _totalPagoCtrl,
+                                label: "Pago Total (S/)",
+                                hint: "0.00",
+                                isNum: true,
+                                isDark: widget.isDark,
+                                isBold: true,
+                                isRequired: true,
+                                onChanged: () => _notifyChange(),
+                              ),
+                            ),
                           ],
                         ),
-                        
+
                         const SizedBox(height: 12),
-                        
+
                         // SECCIÓN 3: Fraccionamiento
                         Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: widget.isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green[50], borderRadius: BorderRadius.circular(10)),
+                          decoration: BoxDecoration(
+                            color: widget.isDark
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : Colors.green[50],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           child: Row(
                             children: [
                               Expanded(
                                 flex: 3,
-                                child: Text("¿Cuántas unidades individuales vienen en 1 ${_umpCtrl.text.isEmpty ? 'Lote' : _umpCtrl.text}?", style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.green[200] : Colors.green[900])),
+                                child: Text(
+                                  "¿Cuántas unidades individuales vienen en 1 ${_umpCtrl.text.isEmpty ? 'Lote' : _umpCtrl.text}?",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: widget.isDark
+                                        ? Colors.green[200]
+                                        : Colors.green[900],
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 flex: 2,
-                                child: _MiniInput(ctrl: _unidadesLoteCtrl, label: "Unid. x Lote", hint: "12", isNum: true, isDark: widget.isDark, isRequired: true, onChanged: () => _notifyChange()),
-                              )
+                                child: _MiniInput(
+                                  ctrl: _unidadesLoteCtrl,
+                                  label: "Unid. x Lote",
+                                  hint: "12",
+                                  isNum: true,
+                                  isDark: widget.isDark,
+                                  isRequired: true,
+                                  onChanged: () => _notifyChange(),
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        
+
                         const SizedBox(height: 16),
 
                         // SECCIÓN 4: Intención de venta
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(color: widget.isDark ? Colors.purple.withValues(alpha: 0.1) : Colors.purple[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: widget.isDark ? Colors.purple.withValues(alpha: 0.3) : Colors.purple.shade200)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: widget.isDark
+                                ? Colors.purple.withValues(alpha: 0.1)
+                                : Colors.purple[50],
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: widget.isDark
+                                  ? Colors.purple.withValues(alpha: 0.3)
+                                  : Colors.purple.shade200,
+                            ),
+                          ),
                           child: Row(
                             children: [
-                              Icon(Icons.storefront, size: 18, color: widget.isDark ? Colors.purple[300] : Colors.purple[700]),
+                              Icon(
+                                Icons.storefront,
+                                size: 18,
+                                color: widget.isDark
+                                    ? Colors.purple[300]
+                                    : Colors.purple[700],
+                              ),
                               const SizedBox(width: 8),
-                              Expanded(child: Text("¿Cómo piensas vender este producto en tu local?", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.purple[200] : Colors.purple[900], fontWeight: FontWeight.w600))),
+                              Expanded(
+                                child: Text(
+                                  "¿Cómo piensas vender este producto en tu local?",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: widget.isDark
+                                        ? Colors.purple[200]
+                                        : Colors.purple[900],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                               const SizedBox(width: 12),
-                              Expanded(child: _MiniInput(ctrl: _unidadVentaCtrl, label: "Unidad de Venta", hint: "Ej: Unidad", isDark: widget.isDark, onChanged: () => _notifyChange())),
+                              Expanded(
+                                child: _MiniInput(
+                                  ctrl: _unidadVentaCtrl,
+                                  label: "Unidad de Venta",
+                                  hint: "Ej: Unidad",
+                                  isDark: widget.isDark,
+                                  onChanged: () => _notifyChange(),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -262,17 +546,28 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
                         const SizedBox(height: 12),
                         Center(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
-                              color: widget.isDark ? Colors.grey[800] : Colors.grey[200],
-                              borderRadius: BorderRadius.circular(20)
+                              color: widget.isDark
+                                  ? Colors.grey[800]
+                                  : Colors.grey[200],
+                              borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              "Costo Unitario Real: S/ ${_formatSmartDecimal(costoRealUnitario)} c/u", 
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)
+                              "Costo Unitario Real: S/ ${_formatSmartDecimal(costoRealUnitario)} c/u",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: widget.isDark
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
                             ),
                           ),
-                        )
+                        ),
                       ],
                     ),
                   ),
@@ -296,8 +591,17 @@ class _MiniInput extends StatelessWidget {
   final bool isRequired;
   final VoidCallback onChanged;
 
-  const _MiniInput({required this.ctrl, required this.label, required this.hint, this.isNum = false, required this.isDark, this.isBold = false, this.isRequired = false, required this.onChanged});
-  
+  const _MiniInput({
+    required this.ctrl,
+    required this.label,
+    required this.hint,
+    this.isNum = false,
+    required this.isDark,
+    this.isBold = false,
+    this.isRequired = false,
+    required this.onChanged,
+  });
+
   @override
   Widget build(BuildContext context) {
     bool isError = isRequired && ctrl.text.trim().isEmpty;
@@ -311,10 +615,25 @@ class _MiniInput extends StatelessWidget {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
-                child: Text(label, style: TextStyle(fontSize: 10, color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.w600)),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isDark ? Colors.grey[400] : Colors.grey[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
-            if (isRequired) Text("*", style: TextStyle(color: Colors.red[400], fontSize: 10, fontWeight: FontWeight.bold)),
+            if (isRequired)
+              Text(
+                "*",
+                style: TextStyle(
+                  color: Colors.red[400],
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
           ],
         ),
         const SizedBox(height: 4),
@@ -322,17 +641,51 @@ class _MiniInput extends StatelessWidget {
           height: 38,
           child: TextField(
             controller: ctrl,
-            keyboardType: isNum ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-            style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black87, fontWeight: isBold ? FontWeight.bold : FontWeight.normal), 
+            keyboardType: isNum
+                ? const TextInputType.numberWithOptions(decimal: true)
+                : TextInputType.text,
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.white : Colors.black87,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            ),
             onChanged: (_) => onChanged(),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 12),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0), 
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isError ? Colors.red : (isDark ? Colors.white24 : Colors.grey.shade300))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isError ? Colors.red.withValues(alpha: 0.5) : (isDark ? Colors.white10 : Colors.grey.shade300))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.withValues(alpha: 0.5), width: 1.5)),
-              filled: true, 
+              hintStyle: TextStyle(
+                color: isDark ? Colors.grey[600] : Colors.grey[400],
+                fontSize: 12,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 0,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: isError
+                      ? Colors.red
+                      : (isDark ? Colors.white24 : Colors.grey.shade300),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: isError
+                      ? Colors.red.withValues(alpha: 0.5)
+                      : (isDark ? Colors.white10 : Colors.grey.shade300),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: isDark
+                      ? Colors.blue.withValues(alpha: 0.5)
+                      : Colors.blue.withValues(alpha: 0.5),
+                  width: 1.5,
+                ),
+              ),
+              filled: true,
               fillColor: isDark ? const Color(0xFF14141C) : Colors.white,
             ),
           ),

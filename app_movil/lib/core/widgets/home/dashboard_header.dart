@@ -1,4 +1,7 @@
 import 'dart:io'; // 🔥 IMPORTANTE: Necesario para leer archivos locales de SQLite
+import 'dart:async';
+import 'dart:ui'; // Para ImageFilter
+import 'dart:math' as math; // Para trigonometría
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -23,18 +26,47 @@ class DashboardHeader extends StatefulWidget {
   State<DashboardHeader> createState() => _DashboardHeaderState();
 }
 
-class _DashboardHeaderState extends State<DashboardHeader> {
+class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProviderStateMixin { // Añadido para animación
 
   DateTime? _lastLoadTime;
   late String _greeting;
+  int _kpiIndex = 0;
+  Timer? _carouselTimer;
+  late AnimationController _bgAnimController; // Para fondo animado
 
   @override
   void initState() {
     super.initState();
     _greeting = _getGreeting();
+    
+    // Controlador para gradiente de fondo pulsante
+    _bgAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
+
+    _startCarouselTimer();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
+  }
+
+  void _startCarouselTimer() {
+    _carouselTimer = Timer.periodic(const Duration(seconds: 6), (timer) {
+      if (mounted) {
+        setState(() {
+          _kpiIndex = (_kpiIndex + 1) % 3;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _carouselTimer?.cancel();
+    _bgAnimController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData({bool forceRefresh = false}) async {
@@ -102,14 +134,10 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
     final bool isGuest = !auth.hasActiveContext;
-
-    final pendingQuotes = (auth.isAuthenticated && !isGuest) ? workbench.inProcessList.length : 0;
     final userName = auth.userName; 
     
     // 🔥 CORRECCIÓN: Mostrar solo etiqueta de invitado si aplica
     final String displayRole = "MODO INVITADO";
-
-    final todaySales = (auth.isAuthenticated && !isGuest) ? salesProv.todaySalesTotal : 0.0;
 
     // 🔥 LOGO OFFLINE: Leemos la ruta local guardada en SQLite
     final String? rawLogoUrl = auth.currentBusiness?.logoUrl;
@@ -117,29 +145,12 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                               
     final int unreadCount = isGuest ? 0 : notifProv.unreadCount; 
 
-    return Container(
-      width: double.infinity,
+    final Widget mainContent = Padding(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 20,
-        bottom: 65, // Más espacio abajo para que el banner superpuesto respire
+        bottom: 65, 
         left: 24,
         right: 24
-      ),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark 
-            ? [const Color(0xFF0A2E5C), const Color(0xFF001229)] // Azul más elegante en dark mode
-            : [const Color(0xFF1976D2), const Color(0xFF0D47A1)], // Azul Material 3
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(50),
-          bottomRight: Radius.circular(50),
-        ),
-        boxShadow: [
-          if (!isDark) BoxShadow(color: Colors.blue.shade900.withValues(alpha: 0.3), blurRadius: 25, offset: const Offset(0, 10))
-        ]
       ),
       child: Column(
         children: [
@@ -229,7 +240,16 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       label: Text("$unreadCount", style: const TextStyle(fontWeight: FontWeight.bold)),
                       backgroundColor: Colors.orangeAccent,
                       offset: const Offset(4, -4),
-                      child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: isGuest ? 0.3 : 1.0), size: 28),
+                      child: AnimatedBuilder(
+                        animation: _bgAnimController,
+                        builder: (context, child) {
+                          double scale = unreadCount > 0 ? 1.0 + (_bgAnimController.value * 0.15) : 1.0;
+                          return Transform.scale(
+                            scale: scale,
+                            child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: isGuest ? 0.3 : 1.0), size: 28),
+                          );
+                        }
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -248,20 +268,19 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       }
                     },
                     child: Container(
-                      width: 50, height: 50,
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
-                        color: Colors.white, 
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2.0), 
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))]
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2),
                       ),
                       child: ClipOval(
-                        // 🔥 CARGA DE FOTOS OFFLINE O RED
                         child: hasValidLogo
-                            ? (rawLogoUrl.startsWith('http') 
-                                ? Image.network(rawLogoUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.store, color: Colors.blue))
-                                : Image.file(File(rawLogoUrl), fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.store, color: Colors.blue)))
-                            : Icon(auth.isAuthenticated ? Icons.person : Icons.login_rounded, color: const Color(0xFF1565C0), size: 28),
+                          ? (rawLogoUrl.startsWith('http') 
+                                ? Image.network(rawLogoUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.store, color: Colors.white, size: 24))
+                                : Image.file(File(rawLogoUrl), fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.store, color: Colors.white, size: 24)))
+                          : const Icon(Icons.person_rounded, color: Colors.white, size: 28),
                       ),
                     ),
                   ),
@@ -275,25 +294,11 @@ class _DashboardHeaderState extends State<DashboardHeader> {
             Row(
               children: [
                 Expanded(
-                  child: _buildKpiCard(
-                    icon: Icons.assignment_late_rounded,
-                    label: "Por Revisar",
-                    value: "$pendingQuotes",
-                    color: Colors.orangeAccent,
-                    isDark: isDark,
-                    isLoading: workbench.isLoading,
-                  ),
+                  child: _buildOperationsCarousel(workbench, isDark),
                 ),
                 const SizedBox(width: 16), 
                 Expanded(
-                  child: _buildKpiCard(
-                    icon: Icons.trending_up_rounded,
-                    label: "Ventas Hoy",
-                    value: currency.format(todaySales), 
-                    color: Colors.greenAccent,
-                    isDark: isDark,
-                    isLoading: salesProv.isLoading,
-                  ),
+                  child: _buildFinanceCarousel(salesProv, currency, isDark),
                 ),
               ],
             )
@@ -301,10 +306,168 @@ class _DashboardHeaderState extends State<DashboardHeader> {
         ],
       ),
     );
+
+    return AnimatedBuilder(
+      animation: _bgAnimController,
+      child: mainContent,
+      builder: (context, child) {
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark 
+                ? [const Color(0xFF0A2E5C), const Color(0xFF001229)] 
+                : [const Color(0xFF1976D2), const Color(0xFF0D47A1)], 
+              begin: Alignment.lerp(Alignment.topLeft, Alignment.topRight, _bgAnimController.value)!,
+              end: Alignment.lerp(Alignment.bottomRight, Alignment.bottomLeft, _bgAnimController.value)!,
+            ),
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(50),
+              bottomRight: Radius.circular(50),
+            ),
+            boxShadow: [
+              if (!isDark) BoxShadow(color: Colors.blue.shade900.withValues(alpha: 0.3), blurRadius: 25, offset: const Offset(0, 10))
+            ]
+          ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(50),
+              bottomRight: Radius.circular(50),
+            ),
+            child: Stack(
+              children: [
+                // Orbe superior izquierdo (Cian)
+                Positioned(
+                  top: -50 + math.sin(_bgAnimController.value * math.pi * 2) * 20,
+                  left: -50 + math.cos(_bgAnimController.value * math.pi * 2) * 20,
+                  child: Container(
+                    width: 250, height: 250,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.cyanAccent.withValues(alpha: isDark ? 0.1 : 0.15)),
+                  ),
+                ),
+                // Orbe inferior derecho (Azul vibrante)
+                Positioned(
+                  bottom: -80 + math.cos(_bgAnimController.value * math.pi * 2) * 30,
+                  right: -50 + math.sin(_bgAnimController.value * math.pi * 2) * 30,
+                  child: Container(
+                    width: 300, height: 300,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.blueAccent.withValues(alpha: isDark ? 0.15 : 0.2)),
+                  ),
+                ),
+                // Filtro de desenfoque para efecto aurora / glass
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+                    child: const SizedBox(),
+                  ),
+                ),
+                // Contenido Principal
+                if (child != null) child,
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
-  Widget _buildKpiCard({required IconData icon, required String label, required String value, required Color color, required bool isDark, bool isLoading = false}) {
+  Widget _buildOperationsCarousel(WorkbenchProvider workbench, bool isDark) {
+    String label = "";
+    String value = "";
+    Color color = Colors.orangeAccent;
+    IconData icon = Icons.assignment_late_rounded;
+
+    if (_kpiIndex == 0) {
+      label = "Por Revisar";
+      value = "${workbench.inProcessList.length}";
+      color = Colors.orangeAccent;
+      icon = Icons.assignment_late_rounded;
+    } else if (_kpiIndex == 1) {
+      label = "Listas Listas";
+      value = "${workbench.readyAndPacksList.length}";
+      color = Colors.lightBlueAccent;
+      icon = Icons.check_circle_outline_rounded;
+    } else {
+      label = "Vendidas";
+      value = "${workbench.soldList.length}";
+      color = Colors.tealAccent;
+      icon = Icons.monetization_on_outlined;
+    }
+
+    return _buildAnimatedKpi(
+      keyId: "op_$_kpiIndex",
+      icon: icon,
+      label: label,
+      value: value,
+      color: color,
+      isDark: isDark,
+      isLoading: workbench.isLoading,
+    );
+  }
+
+  Widget _buildFinanceCarousel(SaleProvider salesProv, NumberFormat currency, bool isDark) {
+    String label = "";
+    String value = "";
+    Color color = Colors.greenAccent;
+    IconData icon = Icons.trending_up_rounded;
+
+    if (_kpiIndex == 0) {
+      label = "Ventas Hoy";
+      value = currency.format(salesProv.todaySalesTotal);
+      color = Colors.greenAccent;
+      icon = Icons.trending_up_rounded;
+    } else if (_kpiIndex == 1) {
+      label = "Operaciones Hoy";
+      value = "${salesProv.todaySalesCount}";
+      color = Colors.pinkAccent;
+      icon = Icons.shopping_bag_outlined;
+    } else {
+      label = "Ventas Mes";
+      value = salesProv.currentMonthSalesTotal == null ? "..." : currency.format(salesProv.currentMonthSalesTotal);
+      color = Colors.cyanAccent;
+      icon = Icons.calendar_month_rounded;
+    }
+
+    return _buildAnimatedKpi(
+      keyId: "fin_$_kpiIndex",
+      icon: icon,
+      label: label,
+      value: value,
+      color: color,
+      isDark: isDark,
+      isLoading: salesProv.isLoading,
+    );
+  }
+
+  Widget _buildAnimatedKpi({required String keyId, required IconData icon, required String label, required String value, required Color color, required bool isDark, bool isLoading = false}) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 600),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(begin: const Offset(0.0, 0.2), end: Offset.zero).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: _buildKpiCard(
+        key: ValueKey(keyId),
+        icon: icon,
+        label: label,
+        value: value,
+        color: color,
+        isDark: isDark,
+        isLoading: isLoading,
+      ),
+    );
+  }
+
+  Widget _buildKpiCard({Key? key, required IconData icon, required String label, required String value, required Color color, required bool isDark, bool isLoading = false}) {
     return Container(
+      key: key,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.1),

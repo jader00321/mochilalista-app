@@ -324,6 +324,9 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
               final sale = debts[i];
               final double faltaVenta = sale.trueTotalAmount - sale.paidAmount;
               
+              bool isLoan = sale.origenVenta == 'prestamo_personal';
+              String entityName = isLoan ? "Préstamo" : "Venta";
+              
               return Card(
                 elevation: 0,
                 color: isDark ? const Color(0xFF14141C) : Colors.white,
@@ -343,12 +346,13 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                           _amountCtrl.text = faltaVenta.toStringAsFixed(2);
                         });
                       },
-                      title: Text("Venta #${sale.id}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
+                      title: Text("$entityName #${sale.displayId}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                       subtitle: Text("Falta: ${currency.format(faltaVenta)}", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
+                      // ignore: deprecated_member_use
                       activeColor: isDark ? Colors.blue[300] : Colors.blue[800],
                     )
                   : ExpansionTile(
-                      title: Text("Venta #${sale.id} (A Crédito)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
+                      title: Text("$entityName #${sale.displayId} (A Crédito)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                       subtitle: Text("Deuda Restante: ${currency.format(faltaVenta)}", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[700])),
                       iconColor: isDark ? Colors.white : Colors.black,
                       collapsedIconColor: isDark ? Colors.white70 : Colors.grey,

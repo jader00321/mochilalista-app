@@ -1,5 +1,6 @@
 class SmartQuotationModel {
   final int id;
+  final int? sequentialNumber;
   final int negocioId; 
   final int creadoPorUsuarioId; 
   final int? clientId;
@@ -21,8 +22,11 @@ class SmartQuotationModel {
   final int itemCount;
   final List<QuotationItem> items; 
 
+  String get displayId => sequentialNumber != null ? sequentialNumber.toString() : id.toString();
+
   SmartQuotationModel({
     required this.id,
+    this.sequentialNumber,
     required this.negocioId,
     required this.creadoPorUsuarioId,
     this.clientId,
@@ -50,6 +54,7 @@ class SmartQuotationModel {
 
     return SmartQuotationModel(
       id: json['id'],
+      sequentialNumber: json['numero_secuencial'],
       negocioId: json['negocio_id'] ?? 0,
       creadoPorUsuarioId: json['creado_por_usuario_id'] ?? json['user_id'] ?? 0, 
       clientId: json['client_id'],
@@ -73,6 +78,7 @@ class SmartQuotationModel {
   Map<String, dynamic> toSqlite() {
     return {
       'id': id == 0 ? null : id,
+      'numero_secuencial': sequentialNumber,
       'negocio_id': negocioId,
       'creado_por_usuario_id': creadoPorUsuarioId,
       'client_id': clientId,

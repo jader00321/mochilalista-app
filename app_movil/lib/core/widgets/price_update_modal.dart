@@ -40,6 +40,13 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
     }
   }
 
+  @override
+  void dispose() {
+    priceCtrl.dispose();
+    discountCtrl.dispose();
+    super.dispose();
+  }
+
   void _calculate() {
     double base = double.tryParse(priceCtrl.text) ?? 0.0;
     double val = double.tryParse(discountCtrl.text) ?? 0.0;
@@ -94,130 +101,160 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
     double currentBase = double.tryParse(priceCtrl.text) ?? 0.0;
     final textColor = widget.isDark ? Colors.white : Colors.black87;
 
-    return AlertDialog(
-      scrollable: true,
+    return Dialog(
       backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Text("Gestionar Precio", style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: priceCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: TextStyle(color: textColor, fontSize: 16),
-            decoration: InputDecoration(
-              labelText: "Precio Regular (S/)", 
-              labelStyle: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey)),
-              prefixIcon: Icon(Icons.attach_money, color: widget.isDark ? Colors.green[300] : Colors.green[800])
-            ),
-            onChanged: (_) => _calculate(),
-          ),
-          const SizedBox(height: 20),
-
-          Container(
-            decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF14141C) : Colors.grey[100], borderRadius: BorderRadius.circular(12)),
-            child: Row(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(child: _TabButton(label: "% Dscnt", selected: discountType == 0, isDark: widget.isDark, onTap: () { setState(() => discountType = 0); _calculate(); })),
-                Expanded(child: _TabButton(label: "S/ Nuevo", selected: discountType == 1, isDark: widget.isDark, onTap: () { setState(() => discountType = 1); _calculate(); })),
+                Text("Gestionar Precio", style: TextStyle(fontWeight: FontWeight.w900, color: textColor, fontSize: 20)),
+                IconButton(icon: Icon(Icons.close, color: widget.isDark ? Colors.grey[500] : Colors.grey), onPressed: () => Navigator.pop(context), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
               ],
             ),
-          ),
-          const SizedBox(height: 20),
-
-          TextField(
-            controller: discountCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: TextStyle(color: textColor, fontSize: 16),
-            decoration: InputDecoration(
-              labelText: discountType == 0 ? "Porcentaje (%)" : "Nuevo Precio (S/)", 
-              labelStyle: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey)),
-              errorText: errorMsg,
-              suffixText: discountType == 0 ? "%" : "S/",
-              suffixStyle: TextStyle(color: textColor)
-            ),
-            onChanged: (_) => _calculate(),
-          ),
-          
-          const SizedBox(height: 20),
-
-          Text("Accesos Rápidos:", style: TextStyle(fontSize: 14, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _QuickChip(label: "-10%", isDark: widget.isDark, onTap: () => _applyQuickOption(0, 10)),
-                const SizedBox(width: 8),
-                _QuickChip(label: "-20%", isDark: widget.isDark, onTap: () => _applyQuickOption(0, 20)),
-                const SizedBox(width: 8),
-                _QuickChip(label: "-50%", isDark: widget.isDark, onTap: () => _applyQuickOption(0, 50)),
-                const SizedBox(width: 8),
-                _QuickChip(label: "2x1", isDark: widget.isDark, onTap: () => _applyNxM(2, 1)),
-                const SizedBox(width: 8),
-                _QuickChip(label: "3x2", isDark: widget.isDark, onTap: () => _applyNxM(3, 2)),
-              ],
-            ),
-          ),
-
-          if (finalOfferPrice != null && errorMsg == null)
-            Container(
-              margin: const EdgeInsets.only(top: 24),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50],
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.withValues(alpha: 0.5))
+            const SizedBox(height: 6),
+            Text("Actualiza el precio general o agrega una oferta.", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
+            const SizedBox(height: 24),
+            
+            TextField(
+              controller: priceCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                labelText: "Precio Regular (S/)", 
+                labelStyle: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey.shade300)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey.shade300)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: widget.isDark ? Colors.blue[300]! : Colors.blue)),
+                prefixIcon: Icon(Icons.attach_money, color: widget.isDark ? Colors.green[300] : Colors.green[800])
               ),
-              child: Column(
+              onChanged: (_) => _calculate(),
+            ),
+            const SizedBox(height: 24),
+
+            Container(
+              decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF14141C) : Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+              child: Row(
                 children: [
-                  Text("PRECIO FINAL AL CLIENTE", style: TextStyle(color: widget.isDark ? Colors.green[300] : Colors.green, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1)),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text("S/ ${currentBase.toStringAsFixed(2)}", style: TextStyle(decoration: TextDecoration.lineThrough, color: widget.isDark ? Colors.grey[500] : Colors.grey, fontSize: 16, fontWeight: FontWeight.bold)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Icon(Icons.arrow_right_alt, color: widget.isDark ? Colors.green[300] : Colors.green),
-                      ),
-                      Text("S/ ${finalOfferPrice!.toStringAsFixed(2)}", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: widget.isDark ? Colors.green[400] : Colors.green[800])),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  TextButton(
-                    onPressed: () => setState(() { finalOfferPrice = null; discountCtrl.clear(); }),
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                    child: Text("Quitar Oferta", style: TextStyle(color: widget.isDark ? Colors.red[300] : Colors.red, fontSize: 13, fontWeight: FontWeight.bold)),
-                  )
+                  Expanded(child: _TabButton(label: "% Dscnt", selected: discountType == 0, isDark: widget.isDark, onTap: () { setState(() => discountType = 0); _calculate(); })),
+                  Expanded(child: _TabButton(label: "S/ Nuevo", selected: discountType == 1, isDark: widget.isDark, onTap: () { setState(() => discountType = 1); _calculate(); })),
                 ],
               ),
+            ),
+            const SizedBox(height: 20),
+
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutBack,
+              child: TextField(
+                controller: discountCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  labelText: discountType == 0 ? "Porcentaje (%)" : "Nuevo Precio (S/)", 
+                  labelStyle: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey.shade300)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey.shade300)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: widget.isDark ? Colors.blue[300]! : Colors.blue)),
+                  errorText: errorMsg,
+                  suffixText: discountType == 0 ? "%" : "S/",
+                  suffixStyle: TextStyle(color: textColor, fontWeight: FontWeight.bold)
+                ),
+                onChanged: (_) => _calculate(),
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+
+            Text("Accesos Rápidos:", style: TextStyle(fontSize: 13, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _QuickChip(label: "-10%", isDark: widget.isDark, onTap: () => _applyQuickOption(0, 10)),
+                  const SizedBox(width: 8),
+                  _QuickChip(label: "-20%", isDark: widget.isDark, onTap: () => _applyQuickOption(0, 20)),
+                  const SizedBox(width: 8),
+                  _QuickChip(label: "-50%", isDark: widget.isDark, onTap: () => _applyQuickOption(0, 50)),
+                  const SizedBox(width: 8),
+                  _QuickChip(label: "2x1", isDark: widget.isDark, onTap: () => _applyNxM(2, 1)),
+                  const SizedBox(width: 8),
+                  _QuickChip(label: "3x2", isDark: widget.isDark, onTap: () => _applyNxM(3, 2)),
+                ],
+              ),
+            ),
+
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutBack,
+              child: finalOfferPrice != null && errorMsg == null
+                ? Container(
+                    margin: const EdgeInsets.only(top: 24),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50],
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.withValues(alpha: 0.5))
+                    ),
+                    child: Column(
+                      children: [
+                        Text("PRECIO FINAL AL CLIENTE", style: TextStyle(color: widget.isDark ? Colors.green[300] : Colors.green, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1)),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text("S/ ${currentBase.toStringAsFixed(2)}", style: TextStyle(decoration: TextDecoration.lineThrough, color: widget.isDark ? Colors.grey[500] : Colors.grey, fontSize: 16, fontWeight: FontWeight.bold)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Icon(Icons.arrow_right_alt, color: widget.isDark ? Colors.green[300] : Colors.green),
+                            ),
+                            Text("S/ ${finalOfferPrice!.toStringAsFixed(2)}", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: widget.isDark ? Colors.green[400] : Colors.green[800])),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        TextButton(
+                          onPressed: () => setState(() { finalOfferPrice = null; discountCtrl.clear(); }),
+                          style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                          child: Text("Quitar Oferta", style: TextStyle(color: widget.isDark ? Colors.red[300] : Colors.red, fontSize: 13, fontWeight: FontWeight.bold)),
+                        )
+                      ],
+                    ),
+                  )
+                : const SizedBox(width: double.infinity, height: 0),
+            ),
+            
+            const SizedBox(height: 32),
+            
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: widget.isDark ? Colors.blue[300] : Colors.blue[800], 
+                foregroundColor: widget.isDark ? Colors.black87 : Colors.white, 
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+              onPressed: errorMsg != null ? null : () async { 
+                await widget.provider.updatePresentation(
+                  widget.presentation.id!,
+                  precioVentaFinal: double.tryParse(priceCtrl.text),
+                  oferta: finalOfferPrice ?? -1, 
+                  tipoDesc: discountType == 0 ? 'porcentaje' : 'monto',
+                  valorDesc: double.tryParse(discountCtrl.text)
+                );
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text("APLICAR CAMBIOS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
             )
-        ],
+          ],
+        ),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text("Cancelar", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey, fontSize: 16))),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: widget.isDark ? Colors.blue[300] : Theme.of(context).primaryColor, foregroundColor: widget.isDark ? Colors.black87 : Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          onPressed: errorMsg != null ? null : () async { 
-            await widget.provider.updatePresentation(
-              widget.presentation.id!,
-              precioVentaFinal: double.tryParse(priceCtrl.text),
-              oferta: finalOfferPrice ?? -1, 
-              tipoDesc: discountType == 0 ? 'porcentaje' : 'monto',
-              valorDesc: double.tryParse(discountCtrl.text)
-            );
-            if (context.mounted) Navigator.pop(context);
-          },
-          child: const Text("Guardar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-        )
-      ],
     );
   }
 }

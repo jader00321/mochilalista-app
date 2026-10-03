@@ -4,8 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/models/provider_model.dart';
-import 'package:app_movil/features/catalog/models/category_model.dart'; 
+import 'package:app_movil/features/catalog/models/category_model.dart';
 import 'package:app_movil/features/catalog/models/brand_model.dart';
+import 'package:app_movil/core/services/unit_catalog_service.dart';
 
 import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_general_info.dart';
 import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_presentation_list.dart';
@@ -16,9 +17,9 @@ class ProductEditScreen extends StatefulWidget {
   final int? initialPresentationId;
 
   const ProductEditScreen({
-    super.key, 
-    required this.productToEdit, 
-    this.initialPresentationId
+    super.key,
+    required this.productToEdit,
+    this.initialPresentationId,
   });
 
   @override
@@ -27,25 +28,28 @@ class ProductEditScreen extends StatefulWidget {
 
 class _ProductEditScreenState extends State<ProductEditScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   late TextEditingController _nameCtrl;
   late TextEditingController _descCtrl;
   late TextEditingController _imgUrlCtrl;
   late TextEditingController _parentBarcodeCtrl;
-  
+
   int? _selectedCategoryId;
   int? _selectedBrandId;
 
   final List<Map<String, dynamic>> _presentationControllers = [];
   final List<int> _idsToDelete = [];
-  
+
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Provider.of<InventoryProvider>(context, listen: false).loadMasterData(showAll: true);
+      await Provider.of<InventoryProvider>(
+        context,
+        listen: false,
+      ).loadMasterData(showAll: true);
       _loadExistingData();
       if (mounted) setState(() => _isLoading = false);
     });
@@ -59,13 +63,20 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     _descCtrl = TextEditingController(text: p.descripcion ?? "");
     _imgUrlCtrl = TextEditingController(text: p.imagenUrl ?? "");
     _parentBarcodeCtrl = TextEditingController(text: p.codigoBarras ?? "");
-    
-    _selectedCategoryId = invProv.categories.any((c) => c.id == p.categoriaId) ? p.categoriaId : null;
-    _selectedBrandId = p.marcaId != null && invProv.brands.any((b) => b.id == p.marcaId) ? p.marcaId : null;
+
+    _selectedCategoryId = invProv.categories.any((c) => c.id == p.categoriaId)
+        ? p.categoriaId
+        : null;
+    _selectedBrandId =
+        p.marcaId != null && invProv.brands.any((b) => b.id == p.marcaId)
+        ? p.marcaId
+        : null;
 
     List<ProductPresentation> sortedList = List.from(p.presentaciones);
     if (widget.initialPresentationId != null) {
-      int idx = sortedList.indexWhere((pres) => pres.id == widget.initialPresentationId);
+      int idx = sortedList.indexWhere(
+        (pres) => pres.id == widget.initialPresentationId,
+      );
       if (idx != -1) {
         final selected = sortedList.removeAt(idx);
         sortedList.insert(0, selected);
@@ -74,44 +85,76 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
     for (var pres in sortedList) {
       int? safeProvId = pres.proveedorId;
-      if (safeProvId != null && !invProv.providers.any((pr) => pr.id == safeProvId)) {
-          safeProvId = null;
+      if (safeProvId != null &&
+          !invProv.providers.any((pr) => pr.id == safeProvId)) {
+        safeProvId = null;
       }
 
       // 🔥 CARGA DE LA MATEMÁTICA SEPARADA (Igual a Creación)
       _presentationControllers.add({
-        'id': pres.id.toString(), // Convertimos el ID a String para la lógica de residuos
+        'id': pres.id
+            .toString(), // Convertimos el ID a String para la lógica de residuos
         'db_id': pres.id, // Guardamos el ID real de la BD
+        'isEditMode': true,
+        'stockBaseOriginal': pres.stockActual,
+        'costoBaseOriginal':
+            pres.costoUnitarioCalculado != null && pres.unidadesPorVenta > 0
+            ? pres.costoUnitarioCalculado! / pres.unidadesPorVenta
+            : 0.0,
         'childId': null,
         'leftoverCreated': false,
 
         'specific': TextEditingController(text: pres.nombreEspecifico ?? ""),
-        'unidadVenta': TextEditingController(text: pres.unidadVenta ?? "Unidad"),
-        'unidadesVenta': TextEditingController(text: pres.unidadesPorVenta.toString()),
-        
-        'costoPres': TextEditingController(text: pres.costoUnitarioCalculado?.toStringAsFixed(4).replaceAll(RegExp(r"([.]*0+)(?!.*\d)"), "") ?? "0.00"),
-        'margen': TextEditingController(text: pres.factorGananciaVenta?.toStringAsFixed(2) ?? "1.35"),
-        'precioVenta': TextEditingController(text: pres.precioVentaFinal.toStringAsFixed(2)),
-        
+        'unidadVenta': TextEditingController(
+          text: pres.unidadVenta ?? "Unidad",
+        ),
+        'unidadesVenta': TextEditingController(
+          text: pres.unidadesPorVenta.toString(),
+        ),
+
+        'costoPres': TextEditingController(
+          text: pres.costoUnitarioCalculado?.toStringAsFixed(2) ?? "0.00",
+        ),
+        'margen': TextEditingController(
+          text: pres.factorGananciaVenta?.toStringAsFixed(2) ?? "1.35",
+        ),
+        'precioVenta': TextEditingController(
+          text: pres.precioVentaFinal.toStringAsFixed(2),
+        ),
+        'precioVentaOriginal': pres.precioVentaFinal,
+
         // Stock visual = Stock base / Factor venta
-        'stockInicial': TextEditingController(text: (pres.stockActual ~/ pres.unidadesPorVenta).toString()),
+        'stockActualBase': pres.stockActual,
+        'stockInicial': TextEditingController(
+          text: (pres.stockActual ~/ pres.unidadesPorVenta).toString(),
+        ),
         'nuevoIngreso': TextEditingController(text: ""),
         'stockDescuento': TextEditingController(text: "0"),
-        'stockFinal': TextEditingController(text: (pres.stockActual ~/ pres.unidadesPorVenta).toString()),
+        'stockFinal': TextEditingController(
+          text: (pres.stockActual ~/ pres.unidadesPorVenta).toString(),
+        ),
 
         'descuentoActivo': pres.precioOferta != null && pres.precioOferta! > 0,
         'tipoDescuento': pres.tipoDescuento ?? 'porcentaje',
-        'valorDescuento': TextEditingController(text: pres.valorDescuento?.toStringAsFixed(2).replaceAll(RegExp(r"([.]*0+)(?!.*\d)"), "") ?? ""),
+        'valorDescuento': TextEditingController(
+          text: pres.valorDescuento?.toStringAsFixed(2) ?? "",
+        ),
 
         'umpCompra': TextEditingController(text: pres.umpCompra ?? ""),
-        'unidadesLote': TextEditingController(text: pres.unidadesPorLote.toString()),
-        'cantCompra': TextEditingController(text: pres.cantidadUmpComprada?.toStringAsFixed(2).replaceAll(RegExp(r"([.]*0+)(?!.*\d)"), "") ?? ""),
-        'totalPago': TextEditingController(text: pres.totalPagoLote?.toStringAsFixed(2) ?? ""),
+        'unidadesLote': TextEditingController(
+          text: pres.unidadesPorLote.toString(),
+        ),
+        'cantCompra': TextEditingController(
+          text: pres.cantidadUmpComprada?.toStringAsFixed(2) ?? "",
+        ),
+        'totalPago': TextEditingController(
+          text: pres.totalPagoLote?.toStringAsFixed(2) ?? "",
+        ),
 
         'barcode': TextEditingController(text: pres.codigoBarras ?? ""),
         'desc': TextEditingController(text: pres.descripcion ?? ""),
         'image': TextEditingController(text: pres.imagenUrl ?? ""),
-        
+        'ajusteBase': TextEditingController(),
         'providerId': safeProvId,
         'isDefault': pres.esDefault,
         'estado': pres.estado,
@@ -138,17 +181,18 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     (map['barcode'] as TextEditingController).dispose();
     (map['desc'] as TextEditingController).dispose();
     (map['image'] as TextEditingController).dispose();
+    (map['ajusteBase'] as TextEditingController).dispose();
   }
 
   @override
   void dispose() {
-    if (!_isLoading) { 
+    if (!_isLoading) {
       _nameCtrl.dispose();
       _descCtrl.dispose();
       _imgUrlCtrl.dispose();
       _parentBarcodeCtrl.dispose();
       for (var map in _presentationControllers) {
-        _disposeControllerMap(map); 
+        _disposeControllerMap(map);
       }
     }
     super.dispose();
@@ -159,18 +203,24 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   // ==========================================================
   int get _generalState {
     if (_presentationControllers.isEmpty) return 2;
-    bool allPublic = _presentationControllers.every((c) => c['estado'] == 'publico');
-    bool allPrivate = _presentationControllers.every((c) => c['estado'] == 'privado');
+    bool allPublic = _presentationControllers.every(
+      (c) => c['estado'] == 'publico',
+    );
+    bool allPrivate = _presentationControllers.every(
+      (c) => c['estado'] == 'privado',
+    );
     if (allPublic) return 2;
     if (allPrivate) return 0;
-    return 1; 
+    return 1;
   }
 
   void _setGeneralState(int stateIndex) {
-    if (stateIndex == 1) return; 
+    if (stateIndex == 1) return;
     String newState = stateIndex == 2 ? 'publico' : 'privado';
     setState(() {
-      for (var c in _presentationControllers) { c['estado'] = newState; }
+      for (var c in _presentationControllers) {
+        c['estado'] = newState;
+      }
     });
   }
 
@@ -178,7 +228,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     if (_presentationControllers.isEmpty) return null;
     int? firstId = _presentationControllers.first['providerId'];
     for (var c in _presentationControllers) {
-      if (c['providerId'] != firstId) return -2; 
+      if (c['providerId'] != firstId) return -2;
     }
     return firstId;
   }
@@ -189,7 +239,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       if (newId == null) return;
     }
     if (_generalProviderId != -2 && _presentationControllers.length <= 1) {
-      setState(() { for (var c in _presentationControllers) { c['providerId'] = newId; } });
+      setState(() {
+        for (var c in _presentationControllers) {
+          c['providerId'] = newId;
+        }
+      });
       return;
     }
     if (!mounted) return;
@@ -198,16 +252,35 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text("¿Sobreescribir Proveedores?", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
-        content: Text("Esta acción cambiará el proveedor de TODAS las presentaciones, perdiendo cualquier proveedor específico.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])),
+        title: Text(
+          "¿Sobreescribir Proveedores?",
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          "Esta acción cambiará el proveedor de TODAS las presentaciones, perdiendo cualquier proveedor específico.",
+          style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700]),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Sí, Aplicar"))
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancelar"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Sí, Aplicar"),
+          ),
         ],
-      )
+      ),
     );
     if (confirm == true) {
-      setState(() { for (var c in _presentationControllers) { c['providerId'] = newId; } });
+      setState(() {
+        for (var c in _presentationControllers) {
+          c['providerId'] = newId;
+        }
+      });
     }
   }
 
@@ -218,7 +291,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     setState(() {
       _presentationControllers.add({
         'id': UniqueKey().toString(),
-        'db_id': null, 
+        'db_id': null,
+        'isEditMode': false,
         'childId': null,
         'leftoverCreated': false,
 
@@ -229,16 +303,16 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         'costoPres': TextEditingController(text: "0.00"),
         'margen': TextEditingController(text: "1.35"),
         'precioVenta': TextEditingController(text: ""),
-        
+
         'descuentoActivo': false,
         'tipoDescuento': 'porcentaje',
         'valorDescuento': TextEditingController(text: ""),
-        
+
         'stockInicial': TextEditingController(text: "0"),
         'nuevoIngreso': TextEditingController(text: ""),
         'stockDescuento': TextEditingController(text: "0"),
         'stockFinal': TextEditingController(text: "0"),
-        
+
         'umpCompra': TextEditingController(text: ""),
         'unidadesLote': TextEditingController(text: ""),
         'cantCompra': TextEditingController(text: ""),
@@ -246,6 +320,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         'barcode': TextEditingController(),
         'desc': TextEditingController(),
         'image': TextEditingController(),
+        'ajusteBase': TextEditingController(),
         'providerId': _generalProviderId == -2 ? null : _generalProviderId,
         'isDefault': false,
         'estado': _generalState == 0 ? 'privado' : 'publico',
@@ -253,13 +328,18 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     });
   }
 
-  void _handleCreateLeftover(String parentId, int leftoverUnits, double costoBaseIndividual) {
-    int parentIndex = _presentationControllers.indexWhere((c) => c['id'] == parentId);
+  void _handleCreateLeftover(
+    String parentId,
+    int leftoverUnits,
+    double costoBaseIndividual,
+  ) {
+    int parentIndex = _presentationControllers.indexWhere(
+      (c) => c['id'] == parentId,
+    );
     if (parentIndex == -1) return;
-    
+
     Map<String, dynamic> sourceMap = _presentationControllers[parentIndex];
-    sourceMap['leftoverCreated'] = true; 
-    
+    sourceMap['leftoverCreated'] = true;
 
     String newChildId = UniqueKey().toString();
     sourceMap['childId'] = newChildId;
@@ -268,47 +348,66 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       _presentationControllers.insert(parentIndex + 1, {
         'id': newChildId,
         'db_id': null, // Es una variante totalmente nueva
+        'isEditMode': sourceMap['isEditMode'],
         'childId': null,
         'leftoverCreated': false,
-        
-        'specific': TextEditingController(text: "Unidad Suelta / Detalle"),
+
+        'specific': TextEditingController(
+          text: sourceMap['specific'].text.isNotEmpty
+              ? "${sourceMap['specific'].text} - Suelta"
+              : "Suelta",
+        ),
         'unidadVenta': TextEditingController(text: "Unidad"),
         'unidadesVenta': TextEditingController(text: "1"),
-        'costoPres': TextEditingController(text: costoBaseIndividual.toStringAsFixed(4).replaceAll(RegExp(r"([.]*0+)(?!.*\d)"), "")),
+        'costoPres': TextEditingController(
+          text: costoBaseIndividual.toStringAsFixed(2),
+        ),
         'margen': TextEditingController(text: "1.35"),
-        'precioVenta': TextEditingController(text: (costoBaseIndividual * 1.35).toStringAsFixed(2)),
-        
+        'precioVenta': TextEditingController(
+          text: (costoBaseIndividual * 1.35).toStringAsFixed(2),
+        ),
+
         'descuentoActivo': false,
         'tipoDescuento': 'porcentaje',
         'valorDescuento': TextEditingController(text: ""),
-        
+
         'stockInicial': TextEditingController(text: leftoverUnits.toString()),
-        'nuevoIngreso': TextEditingController(text: ""),
+        'nuevoIngreso': TextEditingController(text: "0"),
         'stockDescuento': TextEditingController(text: "0"),
         'stockFinal': TextEditingController(text: leftoverUnits.toString()),
-        
+
         'umpCompra': TextEditingController(text: ""),
         'unidadesLote': TextEditingController(text: ""),
         'cantCompra': TextEditingController(text: ""),
         'totalPago': TextEditingController(text: ""),
         'barcode': TextEditingController(),
         'desc': TextEditingController(),
-        'image': TextEditingController(), 
-        'providerId': sourceMap['providerId'], 
+        'image': TextEditingController(),
+        'ajusteBase': TextEditingController(),
+        'providerId': sourceMap['providerId'],
         'isDefault': false,
         'estado': sourceMap['estado'],
       });
     });
-    
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Variante sobrante creada debajo"), backgroundColor: Colors.green));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("✅ Variante sobrante creada debajo"),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   void _invalidateLeftover(String parentId) {
-    int parentIndex = _presentationControllers.indexWhere((c) => c['id'] == parentId);
+    int parentIndex = _presentationControllers.indexWhere(
+      (c) => c['id'] == parentId,
+    );
     if (parentIndex != -1) {
       String? childId = _presentationControllers[parentIndex]['childId'];
       if (childId != null) {
-        int childIndex = _presentationControllers.indexWhere((c) => c['id'] == childId);
+        int childIndex = _presentationControllers.indexWhere(
+          (c) => c['id'] == childId,
+        );
         if (childIndex != -1) {
           _disposeControllerMap(_presentationControllers[childIndex]);
           _presentationControllers.removeAt(childIndex);
@@ -316,32 +415,73 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       }
       _presentationControllers[parentIndex]['childId'] = null;
       _presentationControllers[parentIndex]['leftoverCreated'] = false;
-      setState((){});
+      setState(() {});
     }
   }
 
   void _deletePresentation(int index, bool isDark) {
     final item = _presentationControllers[index];
     if (item['isDefault'] == true) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No puedes borrar la presentación Principal.", style: TextStyle(fontWeight: FontWeight.bold))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "No puedes borrar la presentación Principal.",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
       return;
     }
-    
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [Icon(Icons.warning_amber_rounded, color: isDark ? Colors.red[300] : Colors.red, size: 28), const SizedBox(width: 8), Text("Eliminar Variante", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold))]),
-        content: Text("¿Seguro que deseas eliminar esta variante?", style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16)),
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: isDark ? Colors.red[300] : Colors.red,
+              size: 28,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              "Eliminar Variante",
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          "¿Seguro que deseas eliminar esta variante?",
+          style: TextStyle(
+            color: isDark ? Colors.grey[300] : Colors.grey[700],
+            fontSize: 16,
+          ),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey, fontSize: 15))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              "Cancelar",
+              style: TextStyle(color: Colors.grey, fontSize: 15),
+            ),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.red[800] : Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? Colors.red[800] : Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             onPressed: () {
               Navigator.pop(ctx);
               if (item['db_id'] != null) _idsToDelete.add(item['db_id']);
-              
+
               // Si era un hijo, liberar al padre
               String idToDelete = item['id'];
               for (var c in _presentationControllers) {
@@ -354,12 +494,14 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               // Eliminar padre (y su hijo si tiene)
               String? childId = item['childId'];
               setState(() {
-                _disposeControllerMap(_presentationControllers[index]); 
+                _disposeControllerMap(_presentationControllers[index]);
                 _presentationControllers.removeAt(index);
               });
 
               if (childId != null) {
-                int childIndex = _presentationControllers.indexWhere((c) => c['id'] == childId);
+                int childIndex = _presentationControllers.indexWhere(
+                  (c) => c['id'] == childId,
+                );
                 if (childIndex != -1) {
                   setState(() {
                     _disposeControllerMap(_presentationControllers[childIndex]);
@@ -368,10 +510,13 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                 }
               }
             },
-            child: const Text("Eliminar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          )
+            child: const Text(
+              "Eliminar",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+          ),
         ],
-      )
+      ),
     );
   }
 
@@ -379,21 +524,50 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   // MÉTODOS DE MODALES DE CREACIÓN RÁPIDA
   // ==========================================================
   Future<int?> _handleCreateBrand(bool isDark) async {
-    String? newName = await _showSimpleDialog("Nueva Marca", "Nombre de la marca", isDark);
+    String? newName = await _showSimpleDialog(
+      "Nueva Marca",
+      "Nombre de la marca",
+      isDark,
+    );
     if (!mounted) return null;
-    if (newName != null && newName.isNotEmpty) return await Provider.of<InventoryProvider>(context, listen: false).createBrand(newName);
+    if (newName != null && newName.isNotEmpty) {
+      return await Provider.of<InventoryProvider>(
+        context,
+        listen: false,
+      ).createBrand(newName);
+    }
     return null;
   }
+
   Future<int?> _handleCreateCategory(bool isDark) async {
-    String? newName = await _showSimpleDialog("Nueva Categoría", "Nombre de la categoría", isDark);
+    String? newName = await _showSimpleDialog(
+      "Nueva Categoría",
+      "Nombre de la categoría",
+      isDark,
+    );
     if (!mounted) return null;
-    if (newName != null && newName.isNotEmpty) return await Provider.of<InventoryProvider>(context, listen: false).createCategory(newName);
+    if (newName != null && newName.isNotEmpty) {
+      return await Provider.of<InventoryProvider>(
+        context,
+        listen: false,
+      ).createCategory(newName);
+    }
     return null;
   }
+
   Future<int?> _handleCreateProvider(bool isDark) async {
-    String? newName = await _showSimpleDialog("Nuevo Proveedor", "Nombre de la empresa", isDark);
+    String? newName = await _showSimpleDialog(
+      "Nuevo Proveedor",
+      "Nombre de la empresa",
+      isDark,
+    );
     if (!mounted) return null;
-    if (newName != null && newName.isNotEmpty) return await Provider.of<InventoryProvider>(context, listen: false).createProvider(newName);
+    if (newName != null && newName.isNotEmpty) {
+      return await Provider.of<InventoryProvider>(
+        context,
+        listen: false,
+      ).createProvider(newName);
+    }
     return null;
   }
 
@@ -404,26 +578,60 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
         content: TextField(
-          controller: ctrl, 
-          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16),
+          controller: ctrl,
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87,
+            fontSize: 16,
+          ),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            hintStyle: TextStyle(
+              color: isDark ? Colors.grey[500] : Colors.grey,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
             filled: true,
-            fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100]
-          ), 
-          textCapitalization: TextCapitalization.sentences, 
-          autofocus: true
+            fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
+          ),
+          textCapitalization: TextCapitalization.sentences,
+          autofocus: true,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Cancelar", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 16))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              "Cancelar",
+              style: TextStyle(
+                color: isDark ? Colors.grey[400] : Colors.grey,
+                fontSize: 16,
+              ),
+            ),
+          ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), 
-            style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blue[300] : Theme.of(context).primaryColor, foregroundColor: isDark ? Colors.black87 : Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            child: const Text("Crear", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark
+                  ? Colors.blue[300]
+                  : Theme.of(context).primaryColor,
+              foregroundColor: isDark ? Colors.black87 : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              "Crear",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
           ),
         ],
       ),
@@ -434,15 +642,27 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   // GUARDAR EDICIÓN
   // ==========================================================
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return; 
-    
+    if (!_formKey.currentState!.validate()) return;
+
     if (_nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Completa la Información General (Nombre)"), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Completa la Información General (Nombre)"),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
     if (_presentationControllers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Debe haber al menos una presentación", style: TextStyle(fontWeight: FontWeight.bold))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Debe haber al menos una presentación",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
       return;
     }
 
@@ -451,36 +671,92 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     final String pCode = _parentBarcodeCtrl.text.trim();
 
     List<ProductPresentation> presentacionesFinales = [];
-    
+
     for (var c in _presentationControllers) {
       String specific = (c['specific'] as TextEditingController).text.trim();
       String uVenta = (c['unidadVenta'] as TextEditingController).text.trim();
-      int factorVenta = int.tryParse((c['unidadesVenta'] as TextEditingController).text) ?? 1;
-      
-      double margen = double.tryParse((c['margen'] as TextEditingController).text) ?? 1.35;
-      double pVenta = double.tryParse((c['precioVenta'] as TextEditingController).text) ?? 0.0;
-      
-      int stockVisual = int.tryParse((c['stockFinal'] as TextEditingController).text) ?? 0;
+      int factorVenta =
+          int.tryParse((c['unidadesVenta'] as TextEditingController).text) ?? 1;
+
+      double margen =
+          double.tryParse((c['margen'] as TextEditingController).text) ?? 1.35;
+      double pVenta =
+          double.tryParse((c['precioVenta'] as TextEditingController).text) ??
+          0.0;
+
+      int stockVisual =
+          int.tryParse((c['stockFinal'] as TextEditingController).text) ?? 0;
       int stockBaseGuardar = stockVisual * factorVenta;
+      
+      String ajusteText = (c['ajusteBase'] as TextEditingController).text.trim();
+      if (ajusteText.isNotEmpty) {
+        stockBaseGuardar = int.tryParse(ajusteText) ?? stockBaseGuardar;
+      }
+
+      if (factorVenta > 1) {
+        StockValidationResult? validation = c['stockValidation'] as StockValidationResult?;
+        if (validation != null) {
+          if (validation.status == StockValidationStatus.deficit) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  "❌ '$specific': ${validation.userMessage(uVenta, factorVenta)}",
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+          if (validation.status == StockValidationStatus.hasLeftover &&
+              c['leftoverCreated'] != true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  "⚠️ '$specific' tiene unidades sueltas sin asignar. Crea su variante.",
+                ),
+                backgroundColor: Colors.orange,
+              ),
+            );
+            return;
+          }
+        }
+      }
 
       String umpC = (c['umpCompra'] as TextEditingController).text.trim();
-      double cantC = double.tryParse((c['cantCompra'] as TextEditingController).text) ?? 0.0;
-      double totalP = double.tryParse((c['totalPago'] as TextEditingController).text) ?? 0.0;
-      int loteC = int.tryParse((c['unidadesLote'] as TextEditingController).text) ?? 1;
+      double cantC =
+          double.tryParse((c['cantCompra'] as TextEditingController).text) ??
+          0.0;
+      double totalP =
+          double.tryParse((c['totalPago'] as TextEditingController).text) ??
+          0.0;
+      int loteC =
+          int.tryParse((c['unidadesLote'] as TextEditingController).text) ?? 1;
 
-      double costoPresFinal = double.tryParse((c['costoPres'] as TextEditingController).text) ?? 0.0;
+      double costoPresFinal =
+          double.tryParse((c['costoPres'] as TextEditingController).text) ??
+          0.0;
 
       String rawDesc = (c['desc'] as TextEditingController).text.trim();
-      String? finalDesc = (rawDesc.isEmpty && pDesc.isNotEmpty) ? pDesc : (rawDesc.isEmpty ? null : rawDesc);
+      String? finalDesc = (rawDesc.isEmpty && pDesc.isNotEmpty)
+          ? pDesc
+          : (rawDesc.isEmpty ? null : rawDesc);
       String rawImg = (c['image'] as TextEditingController).text.trim();
-      String? finalImg = (rawImg.isEmpty && pImg.isNotEmpty) ? pImg : (rawImg.isEmpty ? null : rawImg);
+      String? finalImg = (rawImg.isEmpty && pImg.isNotEmpty)
+          ? pImg
+          : (rawImg.isEmpty ? null : rawImg);
       String rawCode = (c['barcode'] as TextEditingController).text.trim();
-      String? finalCode = (rawCode.isEmpty && pCode.isNotEmpty) ? pCode : (rawCode.isEmpty ? null : rawCode);
+      String? finalCode = (rawCode.isEmpty && pCode.isNotEmpty)
+          ? pCode
+          : (rawCode.isEmpty ? null : rawCode);
 
       bool descuentoActivo = c['descuentoActivo'] == true;
       String tipoDescuento = c['tipoDescuento'] as String;
-      double valorDescuento = double.tryParse((c['valorDescuento'] as TextEditingController).text) ?? 0.0;
-      
+      double valorDescuento =
+          double.tryParse(
+            (c['valorDescuento'] as TextEditingController).text,
+          ) ??
+          0.0;
+
       double? precioOferta;
       if (descuentoActivo && valorDescuento > 0 && pVenta > 0) {
         if (tipoDescuento == 'porcentaje') {
@@ -490,56 +766,76 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         }
       }
 
-      presentacionesFinales.add(ProductPresentation(
-        id: c['db_id'], 
-        nombreEspecifico: specific.isEmpty ? null : specific,
-        
-        unidadVenta: uVenta.isEmpty ? "Unidad" : uVenta,
-        unidadesPorVenta: factorVenta,
-        costoUnitarioCalculado: costoPresFinal,
-        factorGananciaVenta: margen,
-        precioVentaFinal: pVenta,
-        
-        stockActual: stockBaseGuardar,
-        
-        umpCompra: umpC.isEmpty ? null : umpC,
-        cantidadUmpComprada: cantC > 0 ? cantC : null,
-        totalPagoLote: totalP > 0 ? totalP : null,
-        unidadesPorLote: loteC,
-        precioUmpProveedor: cantC > 0 ? (totalP / cantC) : null,
-        
-        codigoBarras: finalCode,
-        imagenUrl: finalImg, 
-        descripcion: finalDesc,
-        proveedorId: c['providerId'],
-        esDefault: c['isDefault'] == true,
-        estado: c['estado'] as String, 
-        tipoDescuento: descuentoActivo ? tipoDescuento : null,
-        valorDescuento: descuentoActivo && valorDescuento > 0 ? valorDescuento : null,
-        precioOferta: precioOferta,
-      ));
+      presentacionesFinales.add(
+        ProductPresentation(
+          id: c['db_id'],
+          nombreEspecifico: specific.isEmpty ? null : specific,
+
+          unidadVenta: uVenta.isEmpty ? "Unidad" : uVenta,
+          unidadesPorVenta: factorVenta,
+          costoUnitarioCalculado: costoPresFinal,
+          factorGananciaVenta: margen,
+          precioVentaFinal: pVenta,
+
+          stockActual: stockBaseGuardar,
+
+          umpCompra: umpC.isEmpty ? null : umpC,
+          cantidadUmpComprada: cantC > 0 ? cantC : null,
+          totalPagoLote: totalP > 0 ? totalP : null,
+          unidadesPorLote: loteC,
+          precioUmpProveedor: cantC > 0 ? (totalP / cantC) : null,
+
+          codigoBarras: finalCode,
+          imagenUrl: finalImg,
+          descripcion: finalDesc,
+          proveedorId: c['providerId'],
+          esDefault: c['isDefault'] == true,
+          estado: c['estado'] as String,
+          tipoDescuento: descuentoActivo ? tipoDescuento : null,
+          valorDescuento: descuentoActivo && valorDescuento > 0
+              ? valorDescuento
+              : null,
+          precioOferta: precioOferta,
+        ),
+      );
     }
 
     final provider = Provider.of<InventoryProvider>(context, listen: false);
-    
+
     final success = await provider.editFullProduct(
       productId: widget.productToEdit.id,
       nombre: _nameCtrl.text,
       descripcion: pDesc.isEmpty ? null : pDesc,
       marcaId: _selectedBrandId == 0 ? null : _selectedBrandId,
-      categoriaId: _selectedCategoryId == 0 ? null : _selectedCategoryId, 
+      categoriaId: _selectedCategoryId == 0 ? null : _selectedCategoryId,
       estado: _generalState == 2 ? 'publico' : 'privado',
-      imagenUrl: pImg.isEmpty ? null : pImg, 
+      imagenUrl: pImg.isEmpty ? null : pImg,
       codigoBarras: pCode.isEmpty ? null : pCode,
       presentaciones: presentacionesFinales,
-      idsToDelete: _idsToDelete
+      idsToDelete: _idsToDelete,
     );
 
     if (success && mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Producto actualizado correctamente", style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.green));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "✅ Producto actualizado correctamente",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${provider.errorMessage}", style: const TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Error: ${provider.errorMessage}",
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -550,136 +846,250 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
 
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    if (_isLoading) return Scaffold(backgroundColor: bgColor, body: const Center(child: CircularProgressIndicator()));
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: bgColor,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     final provider = Provider.of<InventoryProvider>(context);
 
-    List<ProviderModel> providerListForDropdown = List.from(provider.providers);
-    providerListForDropdown.insert(0, ProviderModel(id: 0, nombreEmpresa: "Ninguno", idNegocio: 0, activo: true));
-    
+    List<ProviderModel> providerListForDropdown = List.from(
+      provider.activeProviders,
+    );
+    providerListForDropdown.insert(
+      0,
+      ProviderModel(
+        id: 0,
+        nombreEmpresa: "Ninguno",
+        idNegocio: 0,
+        activo: true,
+      ),
+    );
+
     int? currentGenProv = _generalProviderId;
     if (currentGenProv == -2) {
-      providerListForDropdown.insert(0, ProviderModel(id: -2, nombreEmpresa: "Múltiples Proveedores (Mixto)", idNegocio: 0, activo: true));
+      providerListForDropdown.insert(
+        0,
+        ProviderModel(
+          id: -2,
+          nombreEmpresa: "Múltiples Proveedores (Mixto)",
+          idNegocio: 0,
+          activo: true,
+        ),
+      );
     }
 
-    List<Category> categoryListForDropdown = List.from(provider.categories);
-    categoryListForDropdown.insert(0, Category(id: 0, nombre: "Ninguno", activo: true));
+    List<Category> categoryListForDropdown = List.from(
+      provider.activeCategories,
+    );
+    categoryListForDropdown.insert(
+      0,
+      Category(id: 0, nombre: "Ninguno", activo: true),
+    );
 
-    List<Brand> brandListForDropdown = List.from(provider.brands);
-    brandListForDropdown.insert(0, Brand(id: 0, nombre: "Ninguno", activo: true));
+    List<Brand> brandListForDropdown = List.from(provider.activeBrands);
+    brandListForDropdown.insert(
+      0,
+      Brand(id: 0, nombre: "Ninguno", activo: true),
+    );
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text("Editar Producto", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)),
+        title: Text(
+          "Editar Producto",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: textColor,
+          ),
+        ),
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
         foregroundColor: textColor,
         iconTheme: IconThemeData(color: textColor),
         elevation: 0,
       ),
-      
+
       bottomNavigationBar: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A1A24) : Colors.white, 
-          boxShadow: [if(!isDark) const BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, -5))],
-          border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.transparent))
+          color: isDark ? const Color(0xFF1A1A24) : Colors.white,
+          boxShadow: [
+            if (!isDark)
+              const BoxShadow(
+                color: Colors.black12,
+                blurRadius: 15,
+                offset: Offset(0, -5),
+              ),
+          ],
+          border: Border(
+            top: BorderSide(
+              color: isDark ? Colors.white10 : Colors.transparent,
+            ),
+          ),
         ),
         child: SafeArea(
           child: SizedBox(
-            height: 50, 
+            height: 50,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: provider.isLoading ? Colors.grey : (isDark ? Colors.blue[700] : Colors.blue[800]), 
+                backgroundColor: provider.isLoading
+                    ? Colors.grey
+                    : (isDark ? Colors.blue[700] : Colors.blue[800]),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: isDark ? 0 : 4,
               ),
-              onPressed: provider.isLoading ? null : _save, 
+              onPressed: provider.isLoading ? null : _save,
               child: provider.isLoading
                   ? const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)),
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 3,
+                          ),
+                        ),
                         SizedBox(width: 12),
-                        Text("GUARDANDO...", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold))
+                        Text(
+                          "GUARDANDO...",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     )
-                  : const Text("GUARDAR CAMBIOS", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  : const Text(
+                      "GUARDAR CAMBIOS",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
+                    ),
             ),
           ),
         ),
       ),
 
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ProductGeneralInfo(
-                nameCtrl: _nameCtrl,
-                selectedBrandId: _selectedBrandId,
-                selectedCategoryId: _selectedCategoryId,
-                generalProviderId: currentGenProv,
-                generalState: _generalState,
-                brandListForDropdown: brandListForDropdown,
-                categoryListForDropdown: categoryListForDropdown,
-                providerListForDropdown: providerListForDropdown,
-                isDark: isDark,
-                onBrandChanged: (v) {
-                  if (v == -1) {
-                    _handleCreateBrand(isDark).then((id) { if (id != null) setState(() => _selectedBrandId = id); });
-                  } else {
-                    setState(() => _selectedBrandId = v);
-                  }
-                },
-                onCategoryChanged: (v) {
-                  if (v == -1) {
-                    _handleCreateCategory(isDark).then((id) { if (id != null) setState(() => _selectedCategoryId = id); });
-                  } else {
-                    setState(() => _selectedCategoryId = v);
-                  }
-                },
-                onProviderChanged: (v) => _handleGeneralProviderChange(v, isDark),
-                onStateChanged: _setGeneralState,
-              ),
-              const SizedBox(height: 16),
-              ProductOptionalInfo(descCtrl: _descCtrl, imgCtrl: _imgUrlCtrl, barcodeCtrl: _parentBarcodeCtrl),
-              const SizedBox(height: 30),
-              
-              Text(" PRESENTACIONES / VARIANTES", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: isDark ? Colors.teal[300] : Colors.teal[800], letterSpacing: 0.5)),
-              const SizedBox(height: 12),
-
-              ProductPresentationList(
-                presentationControllers: _presentationControllers,
-                isDark: isDark,
-                providerListForDropdown: providerListForDropdown,
-                handleCreateProvider: _handleCreateProvider,
-                deletePresentation: _deletePresentation,
-                handleCreateLeftover: _handleCreateLeftover,
-                invalidateLeftover: _invalidateLeftover,
-                onStateChange: () => setState(() {}),
-              ),
-
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _addPresentation,
-                  icon: const Icon(Icons.add_circle_outline, size: 20),
-                  label: const Text("AÑADIR OTRA PRESENTACIÓN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), foregroundColor: isDark ? Colors.teal[300] : Colors.teal[700], side: BorderSide(color: isDark ? Colors.teal.withValues(alpha: 0.5) : Colors.teal.shade300, width: 2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ProductGeneralInfo(
+                  nameCtrl: _nameCtrl,
+                  selectedBrandId: _selectedBrandId,
+                  selectedCategoryId: _selectedCategoryId,
+                  generalProviderId: currentGenProv,
+                  generalState: _generalState,
+                  brandListForDropdown: brandListForDropdown,
+                  categoryListForDropdown: categoryListForDropdown,
+                  providerListForDropdown: providerListForDropdown,
+                  isDark: isDark,
+                  onBrandChanged: (v) {
+                    if (v == -1) {
+                      _handleCreateBrand(isDark).then((id) {
+                        if (id != null) setState(() => _selectedBrandId = id);
+                      });
+                    } else {
+                      setState(() => _selectedBrandId = v);
+                    }
+                  },
+                  onCategoryChanged: (v) {
+                    if (v == -1) {
+                      _handleCreateCategory(isDark).then((id) {
+                        if (id != null) {
+                          setState(() => _selectedCategoryId = id);
+                        }
+                      });
+                    } else {
+                      setState(() => _selectedCategoryId = v);
+                    }
+                  },
+                  onProviderChanged: (v) =>
+                      _handleGeneralProviderChange(v, isDark),
+                  onStateChanged: _setGeneralState,
                 ),
-              ),
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 16),
+                ProductOptionalInfo(
+                  descCtrl: _descCtrl,
+                  imgCtrl: _imgUrlCtrl,
+                  barcodeCtrl: _parentBarcodeCtrl,
+                ),
+                const SizedBox(height: 30),
+
+                Text(
+                  " PRESENTACIONES / VARIANTES",
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.teal[300] : Colors.teal[800],
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                ProductPresentationList(
+                  presentationControllers: _presentationControllers,
+                  isDark: isDark,
+                  providerListForDropdown: providerListForDropdown,
+                  handleCreateProvider: _handleCreateProvider,
+                  deletePresentation: _deletePresentation,
+                  handleCreateLeftover: _handleCreateLeftover,
+                  invalidateLeftover: _invalidateLeftover,
+                  onStateChange: () => setState(() {}),
+                ),
+
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _addPresentation,
+                    icon: const Icon(Icons.add_circle_outline, size: 20),
+                    label: const Text(
+                      "AÑADIR OTRA PRESENTACIÓN",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      foregroundColor: isDark
+                          ? Colors.teal[300]
+                          : Colors.teal[700],
+                      side: BorderSide(
+                        color: isDark
+                            ? Colors.teal.withValues(alpha: 0.5)
+                            : Colors.teal.shade300,
+                        width: 2,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-
-
 }

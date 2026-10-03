@@ -190,7 +190,11 @@ class MatchingService {
       int quoteId = 0;
 
       await db.transaction((txn) async {
+        final nextSeqResult = await txn.rawQuery('SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM smart_quotations WHERE negocio_id = ?', [negocioId]);
+        int sequentialId = (nextSeqResult.first['next_val'] as int?) ?? 1;
+
         quoteId = await txn.insert('smart_quotations', {
+          'numero_secuencial': sequentialId,
           'negocio_id': negocioId,
           'creado_por_usuario_id': usuarioId,
           'client_id': quotationData['client_id'],

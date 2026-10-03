@@ -23,8 +23,6 @@ class _RestockAlertsCardState extends State<RestockAlertsCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.data.lowStockProducts.isEmpty) return const SizedBox.shrink();
-
     return GlassCard(
       isDark: widget.isDark,
       child: Column(
@@ -44,7 +42,25 @@ class _RestockAlertsCardState extends State<RestockAlertsCard> {
             ],
           ),
           const SizedBox(height: 16),
-          ...widget.data.lowStockProducts.asMap().entries.map((e) {
+          if (widget.data.lowStockProducts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24.0),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 48, color: widget.isDark ? Colors.grey[700] : Colors.grey[400]),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Tu inventario está en niveles óptimos.\nNingún producto requiere reabastecimiento urgente.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: widget.isDark ? Colors.grey[500] : Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ...widget.data.lowStockProducts.asMap().entries.map((e) {
             int index = e.key;
             var p = e.value;
             int actual = p['stock_actual'] ?? 0;

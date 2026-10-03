@@ -51,8 +51,8 @@ class ReceiptManager {
 
     final dir = await getTemporaryDirectory();
     final String fileName = isSale 
-        ? 'Comprobante_Venta_${saleData['id']}.pdf' 
-        : 'Cotizacion_${quotation.id}.pdf';
+        ? 'Recibo_${saleData['numero_secuencial'] ?? saleData['id']}.pdf'
+        : 'Cotizacion_${quotation.displayId}.pdf';
         
     final file = File('${dir.path}/$fileName');
     await file.writeAsBytes(pdfBytes);

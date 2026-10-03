@@ -105,6 +105,25 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (freshProduct.marcaNombre != null && freshProduct.marcaNombre!.isNotEmpty && freshProduct.marcaNombre != "null")
+                              Builder(
+                                builder: (context) {
+                                  final color = isDark ? Colors.blueGrey[300]! : Colors.blueGrey;
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 6),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: isDark ? color.withValues(alpha: 0.3) : color.withValues(alpha: 0.5))
+                                    ),
+                                    child: Text(
+                                      freshProduct.marcaNombre!,
+                                      style: TextStyle(fontSize: 10, color: isDark ? color : Color.lerp(color, Colors.black, 0.2)!, fontWeight: FontWeight.bold, letterSpacing: 0.5)
+                                    ),
+                                  );
+                                }
+                              ),
                             Text(
                               freshProduct.nombre,
                               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, height: 1.2, color: textColor),
@@ -115,24 +134,24 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                             Wrap(
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                Text(
-                                  selectedPresentation.unidadVenta ?? "Unidad", 
-                                  style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.grey[300] : Colors.black87, fontSize: 15)
-                                ),
-                                if (selectedPresentation.nombreEspecifico != null) ...[
-                                  const Text(" • ", style: TextStyle(color: Colors.grey)),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? Colors.teal.withValues(alpha: 0.2) : Colors.teal.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(6)
-                                    ),
-                                    child: Text(
-                                      selectedPresentation.nombreEspecifico!, 
-                                      style: TextStyle(color: isDark ? Colors.teal[200] : Colors.teal[800], fontWeight: FontWeight.bold, fontSize: 13)
-                                    ),
+                                if (selectedPresentation.nombreEspecifico != null && selectedPresentation.nombreEspecifico!.isNotEmpty) ...[
+                                  Text(
+                                    selectedPresentation.nombreEspecifico!, 
+                                    style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w700, fontSize: 15)
                                   ),
-                                ]
+                                  const SizedBox(width: 8),
+                                ],
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.blueGrey.withValues(alpha: 0.3) : Colors.blueGrey.shade50,
+                                    borderRadius: BorderRadius.circular(6)
+                                  ),
+                                  child: Text(
+                                    (selectedPresentation.unidadVenta ?? "Unidad").toUpperCase(), 
+                                    style: TextStyle(color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700], fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5)
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -271,7 +290,7 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
 
 enum _ButtonType { price, stock }
 
-class _BigSmartButton extends StatelessWidget {
+class _BigSmartButton extends StatefulWidget {
   final _ButtonType type;
   final ProductPresentation presentation;
   final bool isDark;
@@ -280,89 +299,147 @@ class _BigSmartButton extends StatelessWidget {
   const _BigSmartButton({required this.type, required this.presentation, required this.isDark, required this.onTap});
 
   @override
+  State<_BigSmartButton> createState() => _BigSmartButtonState();
+}
+
+class _BigSmartButtonState extends State<_BigSmartButton> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    if (type == _ButtonType.price) {
-      final bool hasOffer = presentation.precioOferta != null && presentation.precioOferta! > 0;
-      final Color color = hasOffer ? (isDark ? Colors.blue[300]! : Colors.blue) : (isDark ? Colors.white : Colors.grey[800]!);
-      final Color bg = hasOffer ? (isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50]!) : (isDark ? Colors.white10 : Colors.grey[100]!);
+    if (widget.type == _ButtonType.price) {
+      final bool hasOffer = widget.presentation.precioOferta != null && widget.presentation.precioOferta! > 0;
+      final Color color = hasOffer ? (widget.isDark ? Colors.blue[300]! : Colors.blue) : (widget.isDark ? Colors.white : Colors.grey[800]!);
+      final Color bg = hasOffer ? (widget.isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50]!) : (widget.isDark ? Colors.white10 : Colors.grey[100]!);
       
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.3))),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.attach_money, color: color, size: 20),
-                  const SizedBox(width: 6),
-                  Text("PRECIO", style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (hasOffer) ...[
-                Text("S/ ${presentation.precioVentaFinal.toStringAsFixed(2)}", style: TextStyle(decoration: TextDecoration.lineThrough, color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
-                Text("S/ ${presentation.precioOferta!.toStringAsFixed(2)}", style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 20)),
+      return GestureDetector(
+        onTapDown: (_) => setState(() => _isHovered = true),
+        onTapUp: (_) {
+          setState(() => _isHovered = false);
+          widget.onTap();
+        },
+        onTapCancel: () => setState(() => _isHovered = false),
+        child: AnimatedScale(
+          scale: _isHovered ? 0.95 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutBack,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.3))),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.attach_money, color: color, size: 20),
+                    const SizedBox(width: 6),
+                    Text("PRECIO", style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (hasOffer) ...[
+                  Text("S/ ${widget.presentation.precioVentaFinal.toStringAsFixed(2)}", style: TextStyle(decoration: TextDecoration.lineThrough, color: widget.isDark ? Colors.grey[500] : Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
+                  Text("S/ ${widget.presentation.precioOferta!.toStringAsFixed(2)}", style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 20)),
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: widget.isDark ? Colors.blue[800] : Colors.blue, borderRadius: BorderRadius.circular(6)),
+                    child: const Text("OFERTA", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  )
+                ] else
+                  Text("S/ ${widget.presentation.precioVentaFinal.toStringAsFixed(2)}", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: widget.isDark ? Colors.white : Colors.black87)),
+                const SizedBox(height: 12),
                 Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: isDark ? Colors.blue[800] : Colors.blue, borderRadius: BorderRadius.circular(6)),
-                  child: const Text("OFERTA", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                )
-              ] else
-                Text("S/ ${presentation.precioVentaFinal.toStringAsFixed(2)}", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: isDark ? Colors.white : Colors.black87)),
-            ],
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit, size: 10, color: color),
+                      const SizedBox(width: 4),
+                      Text("Tocar para editar", style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
     } else {
-      final int stock = presentation.stockActual;
+      int factor = widget.presentation.unidadesPorVenta;
+      if (factor <= 0) factor = 1;
+      final int stock = widget.presentation.stockActual ~/ factor;
       Color color;
       String label;
       
       if (stock <= 0) {
-        color = isDark ? Colors.red[300]! : Colors.red;
+        color = widget.isDark ? Colors.red[300]! : Colors.red;
         label = "AGOTADO";
       } else if (stock <= 5) {
-        color = isDark ? Colors.orange[300]! : Colors.orange;
+        color = widget.isDark ? Colors.orange[300]! : Colors.orange;
         label = "POCO STOCK";
       } else {
-        color = isDark ? Colors.teal[300]! : Colors.teal;
+        color = widget.isDark ? Colors.teal[300]! : Colors.teal;
         label = "DISPONIBLE";
       }
 
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.3))),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inventory, color: color, size: 20),
-                  const SizedBox(width: 6),
-                  Text("STOCK", style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text("$stock", style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 24)),
-              Container(
-                margin: const EdgeInsets.only(top: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
-                child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
-              )
-            ],
+      return GestureDetector(
+        onTapDown: (_) => setState(() => _isHovered = true),
+        onTapUp: (_) {
+          setState(() => _isHovered = false);
+          widget.onTap();
+        },
+        onTapCancel: () => setState(() => _isHovered = false),
+        child: AnimatedScale(
+          scale: _isHovered ? 0.95 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutBack,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.3))),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.inventory, color: color, size: 20),
+                    const SizedBox(width: 6),
+                    Text("STOCK", style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text("$stock", style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 24)),
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+                  child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit, size: 10, color: color),
+                      const SizedBox(width: 4),
+                      Text("Tocar para editar", style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
   }
 }
-

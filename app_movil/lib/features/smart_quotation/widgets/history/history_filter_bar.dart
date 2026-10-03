@@ -11,16 +11,19 @@ class Debouncer {
     _timer?.cancel();
     _timer = Timer(Duration(milliseconds: milliseconds), action);
   }
+  void dispose() {
+    _timer?.cancel();
+  }
 }
 
-class HistoryFilterBar extends StatefulWidget {
-  const HistoryFilterBar({super.key});
+class HistorySearchBar extends StatefulWidget {
+  const HistorySearchBar({super.key});
 
   @override
-  State<HistoryFilterBar> createState() => _HistoryFilterBarState();
+  State<HistorySearchBar> createState() => _HistorySearchBarState();
 }
 
-class _HistoryFilterBarState extends State<HistoryFilterBar> {
+class _HistorySearchBarState extends State<HistorySearchBar> {
   final _searchCtrl = TextEditingController();
   final _debouncer = Debouncer(milliseconds: 300);
 
@@ -35,8 +38,57 @@ class _HistoryFilterBarState extends State<HistoryFilterBar> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _debouncer.dispose();
     super.dispose();
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<SaleProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      color: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+      child: TextField(
+        controller: _searchCtrl,
+        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16),
+        decoration: InputDecoration(
+          hintText: "Buscar por cliente, #recibo, DNI...",
+          hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey),
+          prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey),
+          suffixIcon: provider.searchQuery.isNotEmpty 
+            ? IconButton(
+                icon: Icon(Icons.clear, color: isDark ? Colors.white : Colors.black87), 
+                onPressed: () {
+                  _searchCtrl.clear();
+                  provider.setSearchQuery(""); 
+                  FocusScope.of(context).unfocus();
+                }
+              ) 
+            : null,
+          filled: true, 
+          fillColor: isDark ? const Color(0xFF23232F) : Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        ),
+        onChanged: (val) {
+          _debouncer.run(() {
+            provider.setSearchQuery(val);
+          });
+        },
+        onSubmitted: (val) {
+          _debouncer.run(() {
+            provider.setSearchQuery(val);
+          });
+        },
+      ),
+    );
+  }
+}
+
+class HistoryFilterChips extends StatelessWidget {
+  const HistoryFilterChips({super.key});
 
   void _pickDateRange(BuildContext context, SaleProvider provider, bool isDark) async {
     final range = await showDateRangePicker(
@@ -125,82 +177,40 @@ class _HistoryFilterBarState extends State<HistoryFilterBar> {
 
     return Container(
       color: isDark ? const Color(0xFF1A1A24) : Colors.white,
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _searchCtrl,
-              style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16),
-              decoration: InputDecoration(
-                hintText: "Buscar por cliente, #recibo, DNI o método...",
-                hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey),
-                prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey),
-                suffixIcon: provider.searchQuery.isNotEmpty 
-                  ? IconButton(
-                      icon: Icon(Icons.clear, color: isDark ? Colors.white : Colors.black87), 
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        provider.setSearchQuery(""); 
-                        FocusScope.of(context).unfocus();
-                      }
-                    ) 
-                  : null,
-                filled: true, 
-                fillColor: isDark ? const Color(0xFF23232F) : Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              ),
-              onChanged: (val) {
-                _debouncer.run(() {
-                  provider.setSearchQuery(val);
-                });
-              },
-              onSubmitted: (val) {
-                _debouncer.run(() {
-                  provider.setSearchQuery(val);
-                });
-              },
+      padding: const EdgeInsets.only(bottom: 4),
+      child: SizedBox(
+        height: 45,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: [
+            _buildChip("Hoy", 'hoy', provider, isDark),
+            const SizedBox(width: 8),
+            _buildChip("Esta Semana", 'semana', provider, isDark),
+            const SizedBox(width: 8),
+            _buildChip("Este Mes", 'este_mes', provider, isDark),
+            const SizedBox(width: 8),
+            _buildChip("6 Meses", 'seis_meses', provider, isDark),
+            const SizedBox(width: 8),
+            _buildChip("Todo el Tiempo", 'todo', provider, isDark),
+            const SizedBox(width: 8),
+            
+            ActionChip(
+              label: const Text("📅 Rango", style: TextStyle(fontWeight: FontWeight.bold)), 
+              backgroundColor: provider.activeQuickFilter == 'personalizado' ? (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[100]) : (isDark ? const Color(0xFF23232F) : Colors.grey[100]), 
+              side: BorderSide(color: provider.activeQuickFilter == 'personalizado' ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade200) : Colors.transparent),
+              onPressed: () => _pickDateRange(context, provider, isDark)
             ),
-          ),
-          const SizedBox(height: 12),
-
-          SizedBox(
-            height: 45,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                _buildChip("Hoy", 'hoy', provider, isDark),
-                const SizedBox(width: 8),
-                _buildChip("Esta Semana", 'semana', provider, isDark),
-                const SizedBox(width: 8),
-                _buildChip("Este Mes", 'este_mes', provider, isDark),
-                const SizedBox(width: 8),
-                _buildChip("6 Meses", 'seis_meses', provider, isDark),
-                const SizedBox(width: 8),
-                _buildChip("Todo el Tiempo", 'todo', provider, isDark),
-                const SizedBox(width: 8),
-                
-                ActionChip(
-                  label: const Text("📅 Rango", style: TextStyle(fontWeight: FontWeight.bold)), 
-                  backgroundColor: provider.activeQuickFilter == 'personalizado' ? (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[100]) : (isDark ? const Color(0xFF23232F) : Colors.grey[100]), 
-                  side: BorderSide(color: provider.activeQuickFilter == 'personalizado' ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade200) : Colors.transparent),
-                  onPressed: () => _pickDateRange(context, provider, isDark)
-                ),
-                const SizedBox(width: 8),
-                
-                ActionChip(
-                  label: Text("↕️ Ordenar", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)), 
-                  backgroundColor: isDark ? const Color(0xFF14141C) : Colors.white, 
-                  side: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300), 
-                  onPressed: () => _showSortOptions(context, provider, isDark)
-                ),
-              ],
+            const SizedBox(width: 8),
+            
+            ActionChip(
+              label: Text("↕️ Ordenar", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)), 
+              backgroundColor: isDark ? const Color(0xFF14141C) : Colors.white, 
+              side: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300), 
+              onPressed: () => _showSortOptions(context, provider, isDark)
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

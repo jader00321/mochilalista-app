@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/widgets/marquee_text.dart';
 
 // Providers y Servicios
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
@@ -256,11 +257,11 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       child: Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
-          title: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              isClient ? "Mi Pedido" : (_currentQuotationId == null ? "Nueva Cotización" : "Editar Cotización"), 
+          title: SizedBox(
+            width: double.infinity,
+            height: 24,
+            child: MarqueeText(
+              text: isClient ? "Mi Pedido" : (_currentQuotationId == null ? "Nueva Cotización" : "Editar Cotización"), 
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)
             ),
           ),

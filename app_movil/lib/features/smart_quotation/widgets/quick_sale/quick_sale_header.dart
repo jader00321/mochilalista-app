@@ -79,8 +79,8 @@ class QuickSaleHeader extends StatelessWidget {
     final provider = Provider.of<QuickSaleProvider>(context);
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     
-    final headerColor = isDark ? const Color(0xFF14141C) : Colors.pinkAccent.shade700;
-    final bodyColor = isDark ? const Color(0xFF1A1A24) : Colors.pinkAccent;
+    final headerColor = isDark ? const Color(0xFF14141C) : const Color(0xFF1F2937); // Gris muy oscuro
+    final bodyColor = isDark ? const Color(0xFF1A1A24) : const Color(0xFF2D3748); // Gris medio oscuro
 
     return ExpansionTile(
       title: Text(provider.clientName ?? "Datos del Cliente (Opcional)", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),

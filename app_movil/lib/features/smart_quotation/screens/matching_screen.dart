@@ -7,7 +7,7 @@ import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart'; 
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
-
+import 'package:app_movil/core/widgets/marquee_text.dart';
 import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
@@ -20,7 +20,7 @@ import 'package:app_movil/features/smart_quotation/widgets/matching/matching_sma
 
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_client_header.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_institution_header.dart'; 
-import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/widgets/manual/client_search_modal.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 
 import 'package:app_movil/features/smart_quotation/screens/workbench_screen.dart';
@@ -169,97 +169,18 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
   }
 
   void _showClientSearch(bool isDark) async {
-    final clientService = ClientService();
-    final authProv = Provider.of<AuthProvider>(context, listen: false);
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final textTheme = Theme.of(context).textTheme;
-
+    // 💡 NOTA: Este modal reutiliza el componente `ClientSearchModal` de la Cotización Manual.
+    // Esto garantiza un diseño consistente, lógica independiente (estado aislado por widget)
+    // y carga automática de clientes recientes sin conflictos de estado entre pantallas.
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        Future<List<ClientModel>>? searchFuture;
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return DraggableScrollableSheet(
-              initialChildSize: 0.8, minChildSize: 0.5, maxChildSize: 0.95, expand: false,
-              builder: (_, scrollController) {
-                return Container(
-                  decoration: BoxDecoration(color: isDark ? const Color(0xFF23232F) : Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                            const SizedBox(height: 20),
-                            Text("Buscar Cliente", style: textTheme.displayMedium?.copyWith(color: textColor)),
-                            const SizedBox(height: 16),
-                            TextField(
-                              autofocus: true,
-                              style: textTheme.bodyLarge?.copyWith(color: textColor),
-                              decoration: InputDecoration(
-                                hintText: "Ej: Juan Perez...",
-                                hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey),
-                                prefixIcon: Icon(Icons.search, color: isDark ? Colors.blue[300] : Colors.blue), 
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none), 
-                                filled: true, 
-                                fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100]
-                              ),
-                              onChanged: (val) {
-                                if (val.isNotEmpty) {
-                                  setModalState(() {
-                                    // 🔥 CORRECCIÓN 2: Se usa activeBusinessId en lugar de token!
-                                    if (authProv.activeBusinessId != null) {
-                                      searchFuture = clientService.searchClients(val, authProv.activeBusinessId!).then(
-                                        (clients) => clients.where((c) => !c.fullName.startsWith("Caja Rápida -")).toList()
-                                      );
-                                    }
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: searchFuture == null
-                          ? Center(child: Text("Escribe para buscar", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[500] : Colors.grey)))
-                          : FutureBuilder<List<ClientModel>>(
-                              future: searchFuture,
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                                if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.red[300] : Colors.red)));
-                                if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text("No se encontraron coincidencias", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey)));
-                                
-                                return ListView.separated(
-                                  controller: scrollController, 
-                                  itemCount: snapshot.data!.length, 
-                                  separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-                                  itemBuilder: (context, index) {
-                                    final c = snapshot.data![index];
-                                    return ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                                      leading: CircleAvatar(backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50], child: Text(c.fullName.isNotEmpty ? c.fullName[0].toUpperCase() : "?", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 18))),
-                                      title: Text(c.fullName, style: textTheme.titleMedium?.copyWith(color: textColor)),
-                                      subtitle: Text(c.phone, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[700])),
-                                      onTap: () { _selectClient(c); Navigator.pop(ctx); },
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                      )
-                    ],
-                  ),
-                );
-              }
-            );
-          }
-        );
-      }
+      builder: (ctx) => ClientSearchModal(
+        onClientSelected: (client) {
+          _selectClient(client);
+        }
+      ),
     );
   }
 
@@ -427,7 +348,7 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
     );
   }
 
-  void _openDetailsModal(BuildContext context, MatchPair pair) {
+  Future<void> _openDetailsModal(BuildContext context, MatchPair pair) async {
     if (pair.selectedProduct == null) return;
     
     try {
@@ -435,27 +356,35 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
       Product? fullProduct;
       
       try {
-        fullProduct = inventoryProv.products.firstWhere((p) => p.id == pair.selectedProduct!.productId);
+        fullProduct = await inventoryProv.getFullProductWithFallback(pair.selectedProduct!.productId);
       } catch (_) {
+        // Fallback si incluso getFullProductWithFallback falla catastróficamente (ej. no existe ni en DB)
+        fullProduct = null;
+      }
+      
+      if (!context.mounted) return;
+
+      if (fullProduct == null || fullProduct.presentaciones.isEmpty) {
+        // FASE 3 FIX: Inyectar presentación dinámica basada en el MatchedProduct (Fallback)
         fullProduct = Product(
-          id: pair.selectedProduct!.productId, nombre: pair.selectedProduct!.productName, categoriaId: 0, imagenUrl: pair.selectedProduct!.imageUrl, marcaId: null, 
+          id: pair.selectedProduct!.productId, 
+          nombre: pair.selectedProduct!.productName, 
+          categoriaId: fullProduct?.categoriaId ?? 0, 
+          imagenUrl: pair.selectedProduct!.imageUrl, 
+          marcaId: fullProduct?.marcaId, 
           presentaciones: [
             ProductPresentation(
               id: pair.selectedProduct!.presentationId, 
               unidadVenta: pair.selectedProduct!.unit, 
               nombreEspecifico: pair.selectedProduct!.specificName, 
               precioVentaFinal: pair.selectedProduct!.price, 
+              precioOferta: pair.selectedProduct!.offerPrice,
               stockActual: pair.selectedProduct!.stock, 
               unidadesPorLote: pair.selectedProduct!.conversionFactor, 
               imagenUrl: pair.selectedProduct!.imageUrl,
             )
           ]
         );
-      }
-
-      if (fullProduct.presentaciones.isEmpty) {
-        CustomSnackBar.show(context, message: "Error: El producto no tiene presentaciones válidas.", isError: true);
-        return;
       }
 
       final currentPres = fullProduct.presentaciones.firstWhere(
@@ -582,10 +511,12 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
       child: Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
-          title: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(isClient ? "Completar mi Pedido" : "Cotización Inteligente", style: textTheme.displayMedium?.copyWith(color: textColor)),
+          title: SizedBox(
+            width: double.infinity,
+            child: MarqueeText(
+              text: isClient ? "Completar mi Pedido" : "Cotización Inteligente", 
+              style: textTheme.displayMedium?.copyWith(color: textColor, fontSize: 18),
+            ),
           ),
           backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
           foregroundColor: Colors.white,

@@ -18,18 +18,14 @@ class InventoryCompactTile extends StatelessWidget {
     final presentation = item.presentation;
     final String brandName = provider.getBrandName(product.marcaId);
     
-    final int stock = presentation.stockActual;
+    final int stock = item.displayStock;
     final bool isOut = stock <= 0;
     final Color stockColor = isOut ? (isDark ? Colors.red[400]! : Colors.red) : (stock <= 5 ? (isDark ? Colors.orange[300]! : Colors.orange) : (isDark ? Colors.green[400]! : Colors.green[700]!));
     
     final bool isPublic = presentation.estado == 'publico';
     final Color statusColor = isPublic ? (isDark ? Colors.green[400]! : Colors.green) : (isDark ? Colors.orange[400]! : Colors.orange);
 
-    // 🔥 ACTUALIZADO: Corregido para usar unidadVenta (estaba erróneamente usando umpCompra)
-    String variantDisplay = presentation.unidadVenta ?? "Unidad";
-    if (presentation.nombreEspecifico != null && presentation.nombreEspecifico!.isNotEmpty) {
-      variantDisplay += " - ${presentation.nombreEspecifico}";
-    }
+    final String unidadVentaText = presentation.unidadVenta ?? presentation.umpCompra ?? "Unidad";
 
     return Container(
       decoration: BoxDecoration(
@@ -76,14 +72,34 @@ class InventoryCompactTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    // 🔥 TEXTO ADAPTADO
-                    Text(
-                      variantDisplay, 
-                      style: TextStyle(
-                        fontSize: 14, 
-                        color: presentation.nombreEspecifico != null ? (isDark ? Colors.teal[300] : Colors.teal[700]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                        fontWeight: presentation.nombreEspecifico != null ? FontWeight.w600 : FontWeight.normal
-                      )
+                    // 🔥 Nombre de Variante
+                    if (presentation.nombreEspecifico != null && presentation.nombreEspecifico!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2, bottom: 2),
+                        child: Text(
+                          presentation.nombreEspecifico!, 
+                          style: TextStyle(
+                            fontSize: 14, 
+                            color: isDark ? Colors.teal[300] : Colors.teal[700],
+                            fontWeight: FontWeight.w600
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    
+                    // 🔥 Unidad de Venta como Badge
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.blueGrey.withValues(alpha: 0.3) : Colors.blueGrey.shade50,
+                        borderRadius: BorderRadius.circular(6)
+                      ),
+                      child: Text(
+                        unidadVentaText.toUpperCase(),
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700], letterSpacing: 0.5)
+                      ),
                     ),
                   ],
                 ),
@@ -101,7 +117,7 @@ class InventoryCompactTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      isOut ? "0" : "$stock u.", 
+                      isOut ? "Agotado" : item.displayStockText, 
                       style: TextStyle(color: stockColor, fontWeight: FontWeight.bold, fontSize: 14)
                     ),
                   ],

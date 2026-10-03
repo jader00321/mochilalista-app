@@ -6,6 +6,16 @@ import 'package:pdf/widgets.dart' as pw;
 
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
+enum ExportHistoryScope {
+  currentView,
+  fullPeriod,
+  fullHistory,
+  archivedOnly,
+  byPaymentMethodGrouped,
+  specificPaymentMethod,
+  loansOnly,
+}
+
 class HistoryExportService {
   static final currencyFmt = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
   static final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
@@ -17,6 +27,7 @@ class HistoryExportService {
     required String businessName,
     required String dateRangeText,
     String reportTitle = "REPORTE GLOBAL DE VENTAS",
+    ExportHistoryScope scope = ExportHistoryScope.currentView,
   }) async {
     final pdf = pw.Document();
     
@@ -104,23 +115,25 @@ class HistoryExportService {
           );
         },
         build: (pw.Context context) {
-          double totalIncome = sales.fold(0.0, (sum, s) => sum + s.totalAmount);
+          // If stats is missing, recalculate from the sales list provided
+          double totalIncome = stats?.totalIngresos ?? sales.fold(0.0, (sum, s) => sum + s.totalAmount);
           double avgTicket = sales.isNotEmpty ? totalIncome / sales.length : 0.0;
-          int totalItems = stats?.totalProductosVendidos ?? 0;
+          int totalItems = stats?.totalProductosVendidos ?? sales.length; // Not perfectly accurate without items details, but fallback
           
           return [
             buildSectionTitle("Resumen de Desempeño", PdfColors.blue800),
             pw.Row(
               children: [
-                buildMetricCard("INGRESOS TOTALES", currencyFmt.format(totalIncome), PdfColors.blue50, PdfColors.blue900),
-                buildMetricCard("N° DE VENTAS", "${sales.length}", PdfColors.teal50, PdfColors.teal900),
+                buildMetricCard(scope == ExportHistoryScope.loansOnly ? "TOTAL PRESTADO" : "INGRESOS TOTALES", currencyFmt.format(totalIncome), PdfColors.blue50, PdfColors.blue900),
+                buildMetricCard(scope == ExportHistoryScope.loansOnly ? "N° PRÉSTAMOS" : "N° DE VENTAS", "${sales.length}", PdfColors.teal50, PdfColors.teal900),
                 buildMetricCard("TICKET PROMEDIO", currencyFmt.format(avgTicket), PdfColors.purple50, PdfColors.purple900),
-                buildMetricCard("PRODS. VENDIDOS", "$totalItems", PdfColors.orange50, PdfColors.orange900),
+                if (scope != ExportHistoryScope.loansOnly)
+                  buildMetricCard("PRODS. VENDIDOS", "$totalItems", PdfColors.orange50, PdfColors.orange900),
               ]
             ),
             
             pw.SizedBox(height: 10),
-            if (stats != null) ...[
+            if (stats != null && scope != ExportHistoryScope.specificPaymentMethod) ...[
               pw.Row(
                 children: [
                   buildMetricCard("VENTAS EFECTIVO", currencyFmt.format(stats.totalEfectivo), PdfColors.green50, PdfColors.green900),
@@ -131,34 +144,12 @@ class HistoryExportService {
               )
             ],
 
-            buildSectionTitle("Detalle de Transacciones", PdfColors.blue800),
-            pw.TableHelper.fromTextArray(
-              context: context,
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.blue800),
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-              cellStyle: const pw.TextStyle(fontSize: 9),
-              cellPadding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-              rowDecoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey200))),
-              data: [
-                ['N°', 'Fecha', 'Cliente', 'Origen', 'Método', 'Total'],
-                ...sales.asMap().entries.map((e) {
-                  final sale = e.value;
-                  String client = sale.clientName ?? "Cliente de Mostrador";
-                  String date = sale.saleDate.isNotEmpty ? shortDateFmt.format(DateTime.tryParse(sale.saleDate) ?? DateTime.now()) : "-";
-                  String origin = sale.origenVenta == 'pos_rapido' ? 'Caja Rápida' : 
-                                 sale.origenVenta == 'ai_scan' ? 'IA Escáner' : 'Cotización';
-                  
-                  return [
-                    '#${sale.id}', 
-                    date, 
-                    client.length > 25 ? '${client.substring(0, 22)}...' : client, 
-                    origin,
-                    sale.paymentMethod.toUpperCase(),
-                    currencyFmt.format(sale.totalAmount)
-                  ];
-                }),
-              ],
-            ),
+            if (scope == ExportHistoryScope.byPaymentMethodGrouped) ...[
+              ..._buildGroupedTables(context, sales, buildSectionTitle),
+            ] else ...[
+              buildSectionTitle("Detalle de Transacciones", PdfColors.blue800),
+              _buildSalesTable(context, sales),
+            ],
           ];
         },
       ),
@@ -171,12 +162,63 @@ class HistoryExportService {
     return file;
   }
 
+  static List<pw.Widget> _buildGroupedTables(pw.Context context, List<SaleModel> sales, pw.Widget Function(String, PdfColor) buildTitle) {
+    final Map<String, List<SaleModel>> grouped = {};
+    for (var s in sales) {
+      final method = s.paymentMethod.isEmpty ? "SIN MÉTODO" : s.paymentMethod.toUpperCase();
+      grouped.putIfAbsent(method, () => []).add(s);
+    }
+
+    List<pw.Widget> widgets = [];
+    grouped.forEach((method, list) {
+      double total = list.fold(0.0, (sum, s) => sum + s.totalAmount);
+      widgets.add(buildTitle("Transacciones: $method (Total: ${currencyFmt.format(total)})", PdfColors.blueGrey800));
+      widgets.add(_buildSalesTable(context, list));
+    });
+
+    return widgets;
+  }
+
+  static pw.Widget _buildSalesTable(pw.Context context, List<SaleModel> sales) {
+    if (sales.isEmpty) {
+      return pw.Center(child: pw.Text("No hay transacciones para mostrar.", style: const pw.TextStyle(color: PdfColors.grey)));
+    }
+    return pw.TableHelper.fromTextArray(
+      context: context,
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.blue800),
+      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+      cellStyle: const pw.TextStyle(fontSize: 9),
+      cellPadding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      rowDecoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey200))),
+      data: [
+        ['N°', 'Fecha', 'Cliente', 'Origen', 'Método', 'Total'],
+        ...sales.map((sale) {
+          String client = sale.clientName ?? "Cliente de Mostrador";
+          String date = sale.saleDate.isNotEmpty ? shortDateFmt.format(DateTime.tryParse(sale.saleDate) ?? DateTime.now()) : "-";
+          String origin = sale.origenVenta == 'pos_rapido' ? 'Caja Rápida' : 
+                         sale.origenVenta == 'ai_scan' ? 'IA Escáner' : 
+                         sale.origenVenta == 'prestamo_personal' ? 'Préstamo' : 'Cotización';
+          
+          return [
+            '#${sale.displayId}', 
+            date, 
+            client.length > 25 ? '${client.substring(0, 22)}...' : client, 
+            origin,
+            sale.paymentMethod.toUpperCase(),
+            currencyFmt.format(sale.totalAmount)
+          ];
+        }),
+      ],
+    );
+  }
+
   static Future<File> exportToCsv({
     required List<SaleModel> sales,
     required SalesStatsModel? stats,
     required String businessName,
     required String dateRangeText,
     String reportTitle = "REPORTE GLOBAL DE VENTAS",
+    ExportHistoryScope scope = ExportHistoryScope.currentView,
   }) async {
     final output = await getTemporaryDirectory();
     final String path = '${output.path}/Historial_Ventas_${DateTime.now().millisecondsSinceEpoch}.csv';
@@ -189,7 +231,7 @@ class HistoryExportService {
     buffer.writeln("Período: $dateRangeText");
     buffer.writeln("");
     
-    if (stats != null) {
+    if (stats != null && scope != ExportHistoryScope.specificPaymentMethod) {
       buffer.writeln("--- RESUMEN DE MÉTODOS DE PAGO Y DEUDA ---");
       buffer.writeln("Métrica,Total");
       buffer.writeln("Efectivo,${stats.totalEfectivo}");
@@ -199,12 +241,44 @@ class HistoryExportService {
       buffer.writeln("");
     }
 
-    buffer.writeln("--- DETALLE DE VENTAS ---");
-    buffer.writeln("ID Venta,Fecha,Cliente,Origen,Método de Pago,Estado Entrega,Total");
-    for (var sale in sales) {
-      String client = sale.clientName ?? "Cliente de Mostrador";
-      client = client.replaceAll(',', ' '); // sanitize CSV
-      buffer.writeln("${sale.id},${sale.saleDate},$client,${sale.origenVenta},${sale.paymentMethod},${sale.deliveryStatus},${sale.totalAmount}");
+    if (scope == ExportHistoryScope.loansOnly) {
+      buffer.writeln("--- DETALLE DE PRÉSTAMOS ---");
+      buffer.writeln("ID Préstamo,Fecha,Cliente,Origen,Método de Pago,Estado Entrega,Total");
+    } else {
+      buffer.writeln("--- DETALLE DE VENTAS ---");
+      buffer.writeln("ID Venta,Fecha,Cliente,Origen,Método de Pago,Estado Entrega,Total");
+    }
+    
+    if (scope == ExportHistoryScope.byPaymentMethodGrouped) {
+      final Map<String, List<SaleModel>> grouped = {};
+      for (var s in sales) {
+        final method = s.paymentMethod.isEmpty ? "SIN MÉTODO" : s.paymentMethod.toUpperCase();
+        grouped.putIfAbsent(method, () => []).add(s);
+      }
+      
+      grouped.forEach((method, list) {
+        buffer.writeln("");
+        buffer.writeln(">>> GRUPO: $method <<<");
+        for (var sale in list) {
+          String client = sale.clientName ?? "Cliente de Mostrador";
+          client = client.replaceAll(',', ' '); 
+          buffer.writeln("${sale.displayId},${sale.saleDate},$client,${sale.origenVenta},${sale.paymentMethod},${sale.deliveryStatus},${sale.totalAmount}");
+        }
+      });
+    } else {
+      if (scope == ExportHistoryScope.loansOnly) {
+        buffer.writeln("\n===== HISTORIAL COMPLETO DE PRÉSTAMOS =====");
+        buffer.writeln("ID,Fecha Préstamo,Cliente,Origen,Metodo Pago,Estado Entrega,Total");
+      } else {
+        buffer.writeln("\n===== HISTORIAL COMPLETO DE VENTAS =====");
+        buffer.writeln("ID,Fecha Venta,Cliente,Origen Venta,Metodo Pago,Estado Entrega,Total");
+      }
+      for (var sale in sales) {
+        String client = (sale.clientName != null && sale.clientName!.isNotEmpty) 
+                      ? sale.clientName!.replaceAll(',', ' ') 
+                      : 'Anónimo';
+        buffer.writeln("${sale.displayId},${sale.saleDate},$client,${sale.origenVenta},${sale.paymentMethod},${sale.deliveryStatus},${sale.totalAmount}");
+      }
     }
 
     await file.writeAsString(buffer.toString());

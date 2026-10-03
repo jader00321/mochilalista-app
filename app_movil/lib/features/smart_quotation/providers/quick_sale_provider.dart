@@ -7,35 +7,44 @@ import 'package:app_movil/features/promotions/models/bundle_model.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart'; 
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
+class QuickSaleState {
+  final List<MatchedProduct> cart = [];
+  final Map<int, int> quantities = {}; 
+  final Map<int, double> overridePrices = {}; 
+
+  int? clientId; 
+  String? clientName;
+  String? clientPhone;
+  String? clientNote; 
+  String? saleNote;   
+  double clientSaldo = 0.0; 
+}
+
 class QuickSaleProvider with ChangeNotifier {
   int? _negocioId;
   int? _usuarioId;
   
-  final List<MatchedProduct> _cart = [];
-  final Map<int, int> _quantities = {}; 
-  final Map<int, double> _overridePrices = {}; 
+  final Map<int, QuickSaleState> _states = {};
 
-  int? _clientId; 
-  String? _clientName;
-  String? _clientPhone;
-  String? _clientNote; 
-  String? _saleNote;   
-  double _clientSaldo = 0.0; 
+  QuickSaleState get _currentState {
+    final key = _negocioId ?? 0;
+    return _states.putIfAbsent(key, () => QuickSaleState());
+  }
 
-  List<MatchedProduct> get cartItems => _cart;
-  int? get clientId => _clientId;
-  String? get clientName => _clientName;
-  String? get clientPhone => _clientPhone;
-  String? get clientNote => _clientNote;
-  String? get saleNote => _saleNote;
-  double get clientSaldo => _clientSaldo;
+  List<MatchedProduct> get cartItems => _currentState.cart;
+  int? get clientId => _currentState.clientId;
+  String? get clientName => _currentState.clientName;
+  String? get clientPhone => _currentState.clientPhone;
+  String? get clientNote => _currentState.clientNote;
+  String? get saleNote => _currentState.saleNote;
+  double get clientSaldo => _currentState.clientSaldo;
 
-  bool get isEmpty => _cart.isEmpty && _clientId == null && (_clientName == null || _clientName!.isEmpty) && (_saleNote == null || _saleNote!.isEmpty);
+  bool get isEmpty => _currentState.cart.isEmpty && _currentState.clientId == null && (_currentState.clientName == null || _currentState.clientName!.isEmpty) && (_currentState.saleNote == null || _currentState.saleNote!.isEmpty);
 
   double get totalOriginalPrice {
     double total = 0;
-    for (var item in _cart) {
-      final qty = _quantities[item.presentationId] ?? 1;
+    for (var item in _currentState.cart) {
+      final qty = _currentState.quantities[item.presentationId] ?? 1;
       total += item.price * qty; 
     }
     return total;
@@ -43,9 +52,9 @@ class QuickSaleProvider with ChangeNotifier {
 
   double get totalToPay {
     double total = 0;
-    for (var item in _cart) {
-      final qty = _quantities[item.presentationId] ?? 1;
-      final effectivePrice = _overridePrices[item.presentationId] ?? item.offerPrice ?? item.price;
+    for (var item in _currentState.cart) {
+      final qty = _currentState.quantities[item.presentationId] ?? 1;
+      final effectivePrice = _currentState.overridePrices[item.presentationId] ?? item.offerPrice ?? item.price;
       total += effectivePrice * qty;
     }
     return total;
@@ -56,33 +65,36 @@ class QuickSaleProvider with ChangeNotifier {
     return diff > 0 ? diff : 0.0;
   }
 
-  int getQuantity(int presentationId) => _quantities[presentationId] ?? 1;
+  int getQuantity(int presentationId) => _currentState.quantities[presentationId] ?? 1;
   
   double getEffectivePrice(int presentationId) {
-    final item = _cart.firstWhere((p) => p.presentationId == presentationId);
-    return _overridePrices[presentationId] ?? item.offerPrice ?? item.price;
+    final item = _currentState.cart.firstWhere((p) => p.presentationId == presentationId);
+    return _currentState.overridePrices[presentationId] ?? item.offerPrice ?? item.price;
   }
 
   void updateContext(int? negocioId, int? usuarioId) {
     if (_negocioId != negocioId || _usuarioId != usuarioId) {
       _negocioId = negocioId;
       _usuarioId = usuarioId;
-      clearCart();
+      // Ya no borramos el carrito, simplemente al cambiar _negocioId el getter apuntará a otro estado
+      Future.microtask(() {
+        notifyListeners();
+      });
     }
   }
 
   void setClientInfo({int? id, String? name, String? phone, String? clientNote, String? saleNote, double? saldo}) {
-    _clientId = id;
-    _clientName = name;
-    _clientPhone = phone;
-    if (clientNote != null) _clientNote = clientNote;
-    if (saleNote != null) _saleNote = saleNote;
-    if (saldo != null) _clientSaldo = saldo;
+    _currentState.clientId = id;
+    _currentState.clientName = name;
+    _currentState.clientPhone = phone;
+    if (clientNote != null) _currentState.clientNote = clientNote;
+    if (saleNote != null) _currentState.saleNote = saleNote;
+    if (saldo != null) _currentState.clientSaldo = saldo;
     notifyListeners();
   }
 
   void clearSaleNote() {
-    _saleNote = null;
+    _currentState.saleNote = null;
     notifyListeners();
   }
 
@@ -93,8 +105,8 @@ class QuickSaleProvider with ChangeNotifier {
       return "El producto '${itemWrapper.displayNameDetail}' se encuentra agotado.";
     }
 
-    if (_cart.any((p) => p.presentationId == presId)) {
-      return updateQuantity(presId, (_quantities[presId] ?? 1) + 1, itemWrapper.presentation.stockActual);
+    if (_currentState.cart.any((p) => p.presentationId == presId)) {
+      return updateQuantity(presId, (_currentState.quantities[presId] ?? 1) + 1, itemWrapper.displayStockForValidation);
     }
 
     final matched = MatchedProduct(
@@ -106,14 +118,14 @@ class QuickSaleProvider with ChangeNotifier {
       brand: itemWrapper.product.marcaNombre,
       price: itemWrapper.presentation.precioVentaFinal, 
       offerPrice: (itemWrapper.presentation.precioOferta != null && itemWrapper.presentation.precioOferta! > 0) ? itemWrapper.presentation.precioOferta : null,
-      stock: itemWrapper.presentation.stockActual,
+      stock: itemWrapper.displayStockForValidation,
       imageUrl: itemWrapper.presentation.imagenUrl ?? itemWrapper.product.imagenUrl,
       unit: itemWrapper.presentation.unidadVenta ?? "Unidad", 
       conversionFactor: itemWrapper.presentation.unidadesPorVenta, 
     );
 
-    _cart.add(matched);
-    _quantities[presId] = 1;
+    _currentState.cart.add(matched);
+    _currentState.quantities[presId] = 1;
     notifyListeners();
     return null; 
   }
@@ -123,10 +135,10 @@ class QuickSaleProvider with ChangeNotifier {
       return "El paquete '${bundle.nombrePaquete}' no tiene stock suficiente (uno o más componentes agotados).";
     }
 
-    final fakePresId = -(bundle.id); // Negative ID to avoid collision with real presentations
+    final fakePresId = -(bundle.id); 
 
-    if (_cart.any((p) => p.presentationId == fakePresId)) {
-      return updateQuantity(fakePresId, (_quantities[fakePresId] ?? 1) + 1, maxStock);
+    if (_currentState.cart.any((p) => p.presentationId == fakePresId)) {
+      return updateQuantity(fakePresId, (_currentState.quantities[fakePresId] ?? 1) + 1, maxStock);
     }
 
     final matched = MatchedProduct(
@@ -143,25 +155,30 @@ class QuickSaleProvider with ChangeNotifier {
       bundleId: bundle.id,
     );
 
-    _cart.add(matched);
-    _quantities[fakePresId] = 1;
+    _currentState.cart.add(matched);
+    _currentState.quantities[fakePresId] = 1;
     notifyListeners();
     return null;
   }
 
-  String? updateItemFromModal(MatchedProduct product, int newQty, double? newOverridePrice) {
-    final index = _cart.indexWhere((p) => p.presentationId == product.presentationId);
+  String? updateItemFromModal(int oldPresentationId, MatchedProduct product, int newQty, double? newOverridePrice) {
+    final index = _currentState.cart.indexWhere((p) => p.presentationId == oldPresentationId);
     if (index != -1) {
       if (newQty > product.stock) {
         return "Solo hay ${product.stock} unidades disponibles en stock.";
       }
 
-      _cart[index] = product; 
-      _quantities[product.presentationId] = newQty;
+      if (oldPresentationId != product.presentationId) {
+        _currentState.quantities.remove(oldPresentationId);
+        _currentState.overridePrices.remove(oldPresentationId);
+      }
+
+      _currentState.cart[index] = product; 
+      _currentState.quantities[product.presentationId] = newQty;
       if (newOverridePrice != null) {
-        _overridePrices[product.presentationId] = newOverridePrice;
+        _currentState.overridePrices[product.presentationId] = newOverridePrice;
       } else {
-        _overridePrices.remove(product.presentationId);
+        _currentState.overridePrices.remove(product.presentationId);
       }
       notifyListeners();
     }
@@ -175,43 +192,43 @@ class QuickSaleProvider with ChangeNotifier {
     } else if (newQty > maxStock) {
       return "Solo dispones de $maxStock unidades en stock.";
     } else {
-      _quantities[presentationId] = newQty;
+      _currentState.quantities[presentationId] = newQty;
       notifyListeners();
       return null;
     }
   }
 
   void removeItem(int presentationId) {
-    _cart.removeWhere((p) => p.presentationId == presentationId);
-    _quantities.remove(presentationId);
-    _overridePrices.remove(presentationId);
+    _currentState.cart.removeWhere((p) => p.presentationId == presentationId);
+    _currentState.quantities.remove(presentationId);
+    _currentState.overridePrices.remove(presentationId);
     notifyListeners();
   }
 
   void clearCart() {
-    _cart.clear();
-    _quantities.clear();
-    _overridePrices.clear();
-    _clientId = null;
-    _clientName = null;
-    _clientPhone = null;
-    _clientNote = null;
-    _saleNote = null;
-    _clientSaldo = 0.0;
+    _currentState.cart.clear();
+    _currentState.quantities.clear();
+    _currentState.overridePrices.clear();
+    _currentState.clientId = null;
+    _currentState.clientName = null;
+    _currentState.clientPhone = null;
+    _currentState.clientNote = null;
+    _currentState.saleNote = null;
+    _currentState.clientSaldo = 0.0;
     notifyListeners();
   }
 
   void reorderCart(int oldIndex, int newIndex) {
     if (oldIndex < newIndex) newIndex -= 1;
-    final item = _cart.removeAt(oldIndex);
-    _cart.insert(newIndex, item);
+    final item = _currentState.cart.removeAt(oldIndex);
+    _currentState.cart.insert(newIndex, item);
     notifyListeners();
   }
 
   SmartQuotationModel generateDummyQuotation() {
-    final items = _cart.map((p) {
-      final qty = _quantities[p.presentationId] ?? 1;
-      final effPrice = _overridePrices[p.presentationId] ?? p.offerPrice ?? p.price;
+    final items = _currentState.cart.map((p) {
+      final qty = _currentState.quantities[p.presentationId] ?? 1;
+      final effPrice = _currentState.overridePrices[p.presentationId] ?? p.offerPrice ?? p.price;
       
       return QuotationItem(
         id: p.bundleId != null ? 0 : p.presentationId, 
@@ -236,7 +253,7 @@ class QuickSaleProvider with ChangeNotifier {
       negocioId: _negocioId ?? 0, 
       creadoPorUsuarioId: _usuarioId ?? 0, 
       clientId: null,
-      clientName: _clientName ?? "Cliente Rápido", 
+      clientName: _currentState.clientName ?? "Cliente Rápido", 
       institutionName: "Venta al Paso", 
       gradeLevel: null,
       totalAmount: totalToPay,
@@ -245,7 +262,7 @@ class QuickSaleProvider with ChangeNotifier {
       type: "pos_rapido",
       isTemplate: false,
       sourceImageUrl: null,
-      originalTextDump: _saleNote, 
+      originalTextDump: _currentState.saleNote, 
       createdAt: DateTime.now().toIso8601String(),
       itemCount: items.length,
       items: items,
@@ -288,7 +305,7 @@ class QuickSaleProvider with ChangeNotifier {
         } else {
           // addBundleToCart adds 1 by default, update to correct quantity
           final fakePresId = -(bundle.id);
-          _quantities[fakePresId] = finalQty;
+          _currentState.quantities[fakePresId] = finalQty;
         }
         continue;
       }
@@ -325,13 +342,13 @@ class QuickSaleProvider with ChangeNotifier {
             conversionFactor: pres.unidadesPorVenta, 
           );
           
-          if (_cart.any((p) => p.presentationId == pres.id)) {
-            int currentQty = _quantities[pres.id!] ?? 0;
+          if (_currentState.cart.any((p) => p.presentationId == pres.id)) {
+            int currentQty = _currentState.quantities[pres.id!] ?? 0;
             int potentialQty = currentQty + finalQty;
-            _quantities[pres.id!] = potentialQty > pres.stockActual ? pres.stockActual : potentialQty;
+            _currentState.quantities[pres.id!] = potentialQty > pres.stockActual ? pres.stockActual : potentialQty;
           } else {
-            _cart.add(matched);
-            _quantities[pres.id!] = finalQty;
+            _currentState.cart.add(matched);
+            _currentState.quantities[pres.id!] = finalQty;
           }
           
         } catch(e) {

@@ -4,6 +4,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/screens/home_screen.dart'; 
+import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
 
 class LockScreen extends StatefulWidget {
   final int userId;
@@ -61,13 +62,19 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
         final authenticated = await _localAuth.authenticate(
           localizedReason: 'Verifica tu identidad para acceder a tu negocio',
           options: const AuthenticationOptions(
-            stickyAuth: true,
+            stickyAuth: false,
             biometricOnly: false, 
           ),
         );
 
         if (authenticated && mounted) {
-          _unlockApp();
+          await _unlockApp();
+        }
+      } else {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(content: Text('Tu dispositivo no soporta biometría o no está configurada.', style: TextStyle(color: Colors.white)), backgroundColor: Colors.redAccent)
+           );
         }
       }
     } catch (e) {
@@ -95,7 +102,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     bool isCorrect = await auth.verifyPin(widget.userId, _enteredPin);
     
     if (isCorrect) {
-      _unlockApp();
+      await _unlockApp();
     } else {
       HapticFeedback.vibrate(); // Vibración fuerte por error
       setState(() => _isError = true);
@@ -117,7 +124,11 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _unlockApp() {
+  Future<void> _unlockApp() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    await auth.loginWithProfile(widget.userId);
+
+    if (!mounted) return;
     // Transición suave (Fade) hacia el Home Screen
     Navigator.pushReplacement(
       context, 
@@ -193,6 +204,18 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
 
     return PopScope(
       canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        await auth.logout();
+        if (context.mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()),
+            (route) => false,
+          );
+        }
+      },
       child: Scaffold(
         backgroundColor: bgColor,
         body: SafeArea(
@@ -312,6 +335,13 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
               TextButton.icon(
                 onPressed: () async {
                   await auth.logout();
+                  if (context.mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()),
+                      (route) => false,
+                    );
+                  }
                 },
                 icon: Icon(Icons.logout_rounded, size: 18, color: isDark ? Colors.grey[400] : Colors.grey[600]),
                 label: Text("Cambiar de perfil", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14, fontWeight: FontWeight.bold)),

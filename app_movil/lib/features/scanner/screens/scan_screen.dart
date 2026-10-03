@@ -3,21 +3,19 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import 'dart:async';
-import 'dart:ui';
 
 // Providers
-import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart'; 
-import 'package:app_movil/features/scanner/providers/scanner_provider.dart'; 
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 
 // Pantallas de Destino
-import 'package:app_movil/features/smart_quotation/screens/extraction_result_screen.dart'; 
-import 'package:app_movil/features/scanner/screens/invoice_review_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/extraction_result_screen.dart';
+import 'package:app_movil/features/scanner/screens/invoice_review_screen.dart';
 
 // 🔥 IMPORT DE SEGURIDAD Y HARDWARE
 import 'package:app_movil/core/utils/hardware_validator.dart';
-
-enum ScanMode { quotation, invoice }
+import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
 
 class ScanScreen extends StatefulWidget {
   final ScanMode mode;
@@ -28,15 +26,20 @@ class ScanScreen extends StatefulWidget {
   State<ScanScreen> createState() => _ScanScreenState();
 }
 
-class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateMixin {
+class _ScanScreenState extends State<ScanScreen>
+    with SingleTickerProviderStateMixin {
   final ImagePicker _picker = ImagePicker();
-  
+
   // 🔥 FASE 1: Caché de Imagen y Estado de Error
   File? _cachedImageFile;
   bool _hasError = false;
   String _errorMessage = "";
 
-  void _showExplorationModal(BuildContext context, bool isQuotation, bool isDark) {
+  void _showExplorationModal(
+    BuildContext context,
+    bool isQuotation,
+    bool isDark,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -46,22 +49,32 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
           children: [
             Icon(Icons.explore, color: Colors.orange[400]),
             const SizedBox(width: 10),
-            const Text("Modo Exploración", style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              "Modo Exploración",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: Text(
           isQuotation
               ? "Esta es una de nuestras funciones estrella. Al registrar tu negocio, esta pantalla te permitirá usar Inteligencia Artificial para extraer los útiles de una foto y cotizarlos automáticamente.\n\nDirígete a tu Perfil para crear tu negocio y activar la IA."
               : "Aquí podrás usar la cámara para escanear tus facturas de compra. El sistema leerá los productos y repondrá tu inventario automáticamente.\n\nDirígete a tu Perfil para crear tu negocio y usar esta función.",
-          style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16, height: 1.4),
+          style: TextStyle(
+            color: isDark ? Colors.grey[300] : Colors.grey[700],
+            fontSize: 16,
+            height: 1.4,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Entendido", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          )
+            child: const Text(
+              "Entendido",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
         ],
-      )
+      ),
     );
   }
 
@@ -69,17 +82,17 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
   Future<void> _pickImage(ImageSource source) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     if (auth.activeBusinessId == null) {
       _showExplorationModal(context, widget.mode == ScanMode.quotation, isDark);
       return;
     }
 
     bool isInternetStable = await HardwareValidator.checkInternet(
-      context, 
+      context,
       onNavigateToManual: () {
         Navigator.pushReplacementNamed(context, '/manual_quotation');
-      }
+      },
     );
 
     if (!isInternetStable) return;
@@ -87,21 +100,20 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
     try {
       final XFile? photo = await _picker.pickImage(
         source: source,
-        maxWidth: 1920, 
-        maxHeight: 1920, 
-        imageQuality: 90, 
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 90,
       );
 
       if (photo == null) return;
-      
+
       setState(() {
         _cachedImageFile = File(photo.path);
         _hasError = false;
         _errorMessage = "";
       });
-      
+
       _processImage();
-      
     } catch (e) {
       debugPrint("Error al seleccionar imagen: $e");
     }
@@ -128,26 +140,31 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
 
   Future<void> _processImage() async {
     if (_cachedImageFile == null) return;
-    
+
     if (!mounted) return;
-    
+
     final ValueNotifier<String> statusNotifier = ValueNotifier<String>(
-      widget.mode == ScanMode.quotation ? "Preparando imagen..." : "Preparando documento..."
+      widget.mode == ScanMode.quotation
+          ? "Preparando imagen..."
+          : "Preparando documento...",
     );
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.7), 
-      builder: (ctx) => _ScanningDialog(mode: widget.mode, statusNotifier: statusNotifier),
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (ctx) =>
+          ScanningDialog(mode: widget.mode, statusNotifier: statusNotifier),
     );
-    
+
     // 🔥 FASE 3: Lógica dinámica de textos de carga (Timer)
     int tick = 0;
     Timer? loadingTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       tick++;
-      if (statusNotifier.value.contains("Reintentando")) return; // Prioridad al error
-      
+      if (statusNotifier.value.contains("Reintentando")) {
+        return; // Prioridad al error
+      }
+
       if (tick == 1) {
         statusNotifier.value = "Enviando a la Inteligencia Artificial...";
       } else if (tick == 2) {
@@ -156,32 +173,49 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
         statusNotifier.value = "Extrayendo datos, casi listo...";
       }
     });
-    
+
     bool success = false;
     String errorMsg = "";
 
+    VoidCallback? smartListener;
+    VoidCallback? scannerListener;
+
+    final smartProvider = widget.mode == ScanMode.quotation
+        ? Provider.of<SmartQuotationProvider>(context, listen: false)
+        : null;
+    final scannerProvider = widget.mode != ScanMode.quotation
+        ? Provider.of<ScannerProvider>(context, listen: false)
+        : null;
+
     try {
       if (widget.mode == ScanMode.quotation) {
-        final smartProvider = Provider.of<SmartQuotationProvider>(context, listen: false);
-        // Escucha si cambia internamente el estado (para el "Reintentando...")
-        smartProvider.addListener(() {
-          if (smartProvider.errorMessage.contains("Reintentando") && mounted) {
+        smartListener = () {
+          if (smartProvider!.errorMessage.contains("Reintentando") && mounted) {
             statusNotifier.value = smartProvider.errorMessage;
           }
-        });
-        success = await smartProvider.analyzeImage(context, _cachedImageFile!); 
+        };
+        smartProvider!.addListener(smartListener);
+        success = await smartProvider.analyzeImage(context, _cachedImageFile!);
         errorMsg = smartProvider.errorMessage;
       } else {
-        final scannerProvider = Provider.of<ScannerProvider>(context, listen: false);
-        scannerProvider.addListener(() {
-          if (scannerProvider.statusMessage.contains("Reintentando") && mounted) {
+        scannerListener = () {
+          if (scannerProvider!.statusMessage.contains("Reintentando") &&
+              mounted) {
             statusNotifier.value = scannerProvider.statusMessage;
           }
-        });
-        success = await scannerProvider.uploadAndAnalyzeImage(_cachedImageFile!); 
+        };
+        scannerProvider!.addListener(scannerListener);
+        success = await scannerProvider.uploadAndAnalyzeImage(
+          _cachedImageFile!,
+        );
         errorMsg = scannerProvider.statusMessage;
       }
     } finally {
+      if (smartListener != null) smartProvider?.removeListener(smartListener);
+      if (scannerListener != null) {
+        scannerProvider?.removeListener(scannerListener);
+      }
+
       loadingTimer.cancel();
       statusNotifier.dispose();
       if (mounted) Navigator.pop(context); // Cierra dialog
@@ -189,9 +223,15 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
 
     if (success && mounted) {
       if (widget.mode == ScanMode.quotation) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ExtractionResultScreen()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const ExtractionResultScreen()),
+        );
       } else {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const InvoiceReviewScreen()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InvoiceReviewScreen()),
+        );
       }
     } else if (mounted) {
       // 🔥 FASE 2: Mostramos el error en la misma pantalla en vez del SnackBar
@@ -210,16 +250,21 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
     final isGuest = auth.activeBusinessId == null;
 
     final String title = isQuotation ? "Escanear Lista" : "Escanear Factura";
-    final String subtitle = isQuotation 
+    final String subtitle = isQuotation
         ? "Toma una foto clara y bien iluminada de la lista de útiles escolares."
         : "Sube tu factura de compra para procesar y reponer el stock.";
-    final IconData mainIcon = isQuotation ? Icons.document_scanner_rounded : Icons.receipt_long_rounded;
+    final IconData mainIcon = isQuotation
+        ? Icons.document_scanner_rounded
+        : Icons.receipt_long_rounded;
     final Color mainColor = isQuotation ? Colors.blue : Colors.teal;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF14141C) : Colors.white,
       appBar: AppBar(
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: isDark ? Colors.white : Colors.black87,
@@ -241,15 +286,22 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
           },
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
-            child: _hasError 
-                ? _buildErrorPanel(isDark, mainColor) 
-                : _buildMainPanel(isQuotation, isDark, mainColor, mainIcon, subtitle, isGuest),
-          )
+            child: _hasError
+                ? _buildErrorPanel(isDark, mainColor)
+                : _buildMainPanel(
+                    isQuotation,
+                    isDark,
+                    mainColor,
+                    mainIcon,
+                    subtitle,
+                    isGuest,
+                  ),
+          ),
         ),
       ),
     );
   }
-  
+
   // 🔥 FASE 2: Panel integrado de Error
   Widget _buildErrorPanel(bool isDark, Color mainColor) {
     return Column(
@@ -262,60 +314,91 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
             color: Colors.red.withValues(alpha: 0.15),
             shape: BoxShape.circle,
             boxShadow: [
-              if (!isDark) BoxShadow(color: Colors.red.withValues(alpha: 0.1), blurRadius: 25, spreadRadius: 5)
-            ]
+              if (!isDark)
+                BoxShadow(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  blurRadius: 25,
+                  spreadRadius: 5,
+                ),
+            ],
           ),
-          child: Icon(Icons.error_outline_rounded, size: 70, color: Colors.red[400]),
+          child: Icon(
+            Icons.error_outline_rounded,
+            size: 70,
+            color: Colors.red[400],
+          ),
         ),
         const SizedBox(height: 30),
-        
+
         Text(
           "No pudimos procesar la imagen",
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5),
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            color: isDark ? Colors.white : Colors.black87,
+            letterSpacing: -0.5,
+          ),
         ),
-        
+
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
           child: Text(
             _errorMessage,
             textAlign: TextAlign.center,
-            style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16, height: 1.5),
+            style: TextStyle(
+              color: isDark ? Colors.grey[300] : Colors.grey[700],
+              fontSize: 16,
+              height: 1.5,
+            ),
           ),
         ),
-        
+
         const SizedBox(height: 20),
-        
+
         // Botón Primario: Reintentar
         SizedBox(
           width: 280,
           height: 56,
           child: ElevatedButton.icon(
             icon: const Icon(Icons.refresh_rounded, size: 24),
-            label: const Text("Reintentar Escaneo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            label: const Text(
+              "Reintentar Escaneo",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: mainColor,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               elevation: 4,
               shadowColor: mainColor.withValues(alpha: 0.4),
             ),
             onPressed: _retryWithCachedImage,
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Botón Secundario: Nueva Foto
         SizedBox(
           width: 280,
           height: 50,
           child: OutlinedButton.icon(
             icon: const Icon(Icons.camera_alt_outlined, size: 20),
-            label: const Text("Escanear una nueva foto", style: TextStyle(fontWeight: FontWeight.bold)),
+            label: const Text(
+              "Escanear una nueva foto",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             style: OutlinedButton.styleFrom(
               foregroundColor: isDark ? Colors.grey[300] : Colors.grey[700],
-              side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[300]!, width: 2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              side: BorderSide(
+                color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                width: 2,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
             onPressed: _pickNewImage,
           ),
@@ -324,7 +407,14 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildMainPanel(bool isQuotation, bool isDark, Color mainColor, IconData mainIcon, String subtitle, bool isGuest) {
+  Widget _buildMainPanel(
+    bool isQuotation,
+    bool isDark,
+    Color mainColor,
+    IconData mainIcon,
+    String subtitle,
+    bool isGuest,
+  ) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       key: const ValueKey("main_panel"),
@@ -332,26 +422,46 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
         Container(
           padding: const EdgeInsets.all(40),
           decoration: BoxDecoration(
-            color: isDark ? mainColor.withValues(alpha: 0.15) : mainColor.withValues(alpha: 0.1),
+            color: isDark
+                ? mainColor.withValues(alpha: 0.15)
+                : mainColor.withValues(alpha: 0.1),
             shape: BoxShape.circle,
             boxShadow: [
-              if (!isDark) BoxShadow(color: mainColor.withValues(alpha: 0.1), blurRadius: 25, spreadRadius: 5)
-            ]
+              if (!isDark)
+                BoxShadow(
+                  color: mainColor.withValues(alpha: 0.1),
+                  blurRadius: 25,
+                  spreadRadius: 5,
+                ),
+            ],
           ),
-          child: Icon(mainIcon, size: 90, color: isDark ? mainColor.withValues(alpha: 0.9) : mainColor),
+          child: Icon(
+            mainIcon,
+            size: 90,
+            color: isDark ? mainColor.withValues(alpha: 0.9) : mainColor,
+          ),
         ),
         const SizedBox(height: 40),
-        
+
         Text(
           isQuotation ? "Digitaliza tu Lista" : "Procesa tu Compra",
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5),
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w900,
+            color: isDark ? Colors.white : Colors.black87,
+            letterSpacing: -0.5,
+          ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
           child: Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 16, height: 1.5),
+            style: TextStyle(
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+              fontSize: 16,
+              height: 1.5,
+            ),
           ),
         ),
 
@@ -362,7 +472,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
             decoration: BoxDecoration(
               color: Colors.orange.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.5))
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
             ),
             child: Row(
               children: [
@@ -371,32 +481,35 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                 Expanded(
                   child: Text(
                     "Estás en Modo Exploración. Explora la interfaz visual, pero para procesar imágenes necesitas registrar tu negocio.",
-                    style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
-                  )
-                )
-              ]
-            )
+                    style: TextStyle(
+                      color: isDark ? Colors.orange[200] : Colors.orange[900],
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        
+
         const SizedBox(height: 30),
-        
+
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _bigButton(
-              icon: Icons.camera_alt_rounded, 
-              label: "Cámara", 
-              color: mainColor, 
+              icon: Icons.camera_alt_rounded,
+              label: "Cámara",
+              color: mainColor,
               isDark: isDark,
-              onTap: () => _pickImage(ImageSource.camera)
+              onTap: () => _pickImage(ImageSource.camera),
             ),
             const SizedBox(width: 25),
             _bigButton(
-              icon: Icons.photo_library_rounded, 
-              label: "Galería", 
-              color: Colors.orange, 
+              icon: Icons.photo_library_rounded,
+              label: "Galería",
+              color: Colors.orange,
               isDark: isDark,
-              onTap: () => _pickImage(ImageSource.gallery)
+              onTap: () => _pickImage(ImageSource.gallery),
             ),
           ],
         ),
@@ -404,7 +517,13 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _bigButton({required IconData icon, required String label, required Color color, required bool isDark, required VoidCallback onTap}) {
+  Widget _bigButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -418,148 +537,39 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF23232F) : Colors.white,
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: isDark ? color.withValues(alpha: 0.3) : color.withValues(alpha: 0.2), width: 2),
+            border: Border.all(
+              color: isDark
+                  ? color.withValues(alpha: 0.3)
+                  : color.withValues(alpha: 0.2),
+              width: 2,
+            ),
             boxShadow: [
-              if (!isDark) BoxShadow(color: color.withValues(alpha: 0.15), blurRadius: 15, offset: const Offset(0, 8))
-            ]
+              if (!isDark)
+                BoxShadow(
+                  color: color.withValues(alpha: 0.15),
+                  blurRadius: 15,
+                  offset: const Offset(0, 8),
+                ),
+            ],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 50, color: isDark ? color.withValues(alpha: 0.9) : color),
+              Icon(
+                icon,
+                size: 50,
+                color: isDark ? color.withValues(alpha: 0.9) : color,
+              ),
               const SizedBox(height: 16),
-              Text(label, style: TextStyle(color: isDark ? color.withValues(alpha: 0.9) : color, fontWeight: FontWeight.bold, fontSize: 18)),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isDark ? color.withValues(alpha: 0.9) : color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ScanningDialog extends StatefulWidget {
-  final ScanMode mode;
-  final ValueNotifier<String> statusNotifier;
-  const _ScanningDialog({required this.mode, required this.statusNotifier});
-
-  @override
-  State<_ScanningDialog> createState() => _ScanningDialogState();
-}
-
-class _ScanningDialogState extends State<_ScanningDialog> with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isQuotation = widget.mode == ScanMode.quotation;
-    final Color mainColor = isQuotation ? Colors.blueAccent : Colors.tealAccent;
-    final IconData icon = isQuotation ? Icons.auto_awesome : Icons.document_scanner;
-
-    return Center(
-      child: Material(
-        type: MaterialType.transparency, 
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              width: 280,
-              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ScaleTransition(
-                    scale: _pulseAnimation,
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: mainColor.withValues(alpha: 0.2),
-                        boxShadow: [BoxShadow(color: mainColor.withValues(alpha: 0.5), blurRadius: 25, spreadRadius: 2)]
-                      ),
-                      child: Icon(icon, color: mainColor, size: 50),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                  
-                  ValueListenableBuilder<String>(
-                    valueListenable: widget.statusNotifier,
-                    builder: (context, currentText, child) {
-                      return AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        transitionBuilder: (Widget child, Animation<double> animation) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: SlideTransition(
-                              position: Tween<Offset>(begin: const Offset(0.0, 0.2), end: Offset.zero).animate(animation),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: Text(
-                          currentText, 
-                          key: ValueKey<String>(currentText),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)
-                        ),
-                      );
-                    }
-                  ),
-                  const SizedBox(height: 25),
-                  
-                  // 🔥 FASE 3: Indicador de pasos visuales / segmentado
-                  SizedBox(
-                    width: 160,
-                    child: ValueListenableBuilder<String>(
-                      valueListenable: widget.statusNotifier,
-                      builder: (context, currentText, child) {
-                        int step = 0;
-                        if (currentText.contains("Inteligencia")) step = 1;
-                        if (currentText.contains("Analizando")) step = 2;
-                        if (currentText.contains("Extrayendo")) step = 3;
-                        if (currentText.contains("Reintentando")) step = 1; // Mismo color/paso en reintento
-                        
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(4, (index) {
-                            bool isActive = index <= step;
-                            return AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              height: 6,
-                              width: isActive ? 24 : 12,
-                              decoration: BoxDecoration(
-                                color: isActive ? mainColor : Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                            );
-                          }),
-                        );
-                      }
-                    ),
-                  )
-                ],
-              ),
-            ),
           ),
         ),
       ),

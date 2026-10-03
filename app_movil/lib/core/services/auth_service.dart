@@ -137,11 +137,59 @@ class AuthService {
     return BusinessModel.fromJson(biz.first);
   }
 
-  Future<bool> deleteLocalProfile(int userId) async {
+  Future<bool> deleteLocalProfileWithProgress(int userId, Function(String, double) onProgress) async {
     try {
       final db = await dbHelper.database;
-      // PRAGMA foreign_keys = ON borrará negocios, productos y ventas en cascada.
+      
+      // Obtener todos los negocios del usuario
+      final negocios = await db.query('negocios', columns: ['id'], where: 'id_dueno = ?', whereArgs: [userId]);
+      final List<int> negocioIds = negocios.map((n) => n['id'] as int).toList();
+
+      for (int i = 0; i < negocioIds.length; i++) {
+        int negocioId = negocioIds[i];
+        
+        onProgress('Borrando operaciones (Nivel 3 - Hojas)...', 0.2);
+        await Future.delayed(const Duration(milliseconds: 300));
+        await db.delete('pagos', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('notificaciones', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('stock_ledger', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('reglas_promocion', where: 'campana_id IN (SELECT id FROM campanas_promocionales WHERE negocio_id = ?)', whereArgs: [negocioId]);
+        await db.delete('items_paquete', where: 'paquete_id IN (SELECT id FROM paquetes WHERE negocio_id = ?)', whereArgs: [negocioId]);
+        await db.delete('venta_items', where: 'venta_id IN (SELECT id FROM ventas WHERE negocio_id = ?)', whereArgs: [negocioId]);
+        await db.delete('smart_quotation_items', where: 'quotation_id IN (SELECT id FROM smart_quotations WHERE negocio_id = ?)', whereArgs: [negocioId]);
+        await db.delete('presentaciones_producto', where: 'producto_id IN (SELECT id FROM productos WHERE negocio_id = ?)', whereArgs: [negocioId]);
+        
+        onProgress('Borrando operaciones (Nivel 2 - Ramas)...', 0.4);
+        await Future.delayed(const Duration(milliseconds: 300));
+        await db.delete('ventas', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('smart_quotations', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('paquetes', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('campanas_promocionales', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('business_snapshots', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('codigos_acceso_negocio', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('productos', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        
+        onProgress('Borrando inventario y catálogos (Nivel 1)...', 0.6);
+        await Future.delayed(const Duration(milliseconds: 300));
+        await db.delete('categorias', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('marcas', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('proveedores', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        
+        onProgress('Borrando clientes y configuraciones...', 0.8);
+        await Future.delayed(const Duration(milliseconds: 300));
+        await db.delete('clientes', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('facturas_carga', where: 'negocio_id = ?', whereArgs: [negocioId]);
+        await db.delete('negocio_usuario', where: 'negocio_id = ?', whereArgs: [negocioId]);
+      }
+
+      onProgress('Eliminando perfil de usuario...', 0.9);
+      await Future.delayed(const Duration(milliseconds: 300));
+      // Limpiar historial de productos del usuario para evitar huérfanos
+      await db.delete('product_history', where: 'usuario_id = ?', whereArgs: [userId]);
       int count = await db.delete('usuarios', where: 'id = ?', whereArgs: [userId]);
+      
+      onProgress('Limpieza finalizada.', 1.0);
+      await Future.delayed(const Duration(milliseconds: 300));
       return count > 0;
     } catch (e) {
       debugPrint("Error borrando perfil local: $e");

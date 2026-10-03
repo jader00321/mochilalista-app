@@ -72,7 +72,8 @@ class QuotationActionButtons extends StatelessWidget {
     bool isSold = status == 'SOLD';
     
     int errorCount = (validation?.stockWarnings.length ?? 0) + 
-                     (validation?.bundleChanges.where((b) => b.isDeleted || b.isDeactivated || b.isCompositionChange).length ?? 0);
+                     (validation?.bundleChanges.where((b) => b.isDeleted || b.isDeactivated || b.isCompositionChange).length ?? 0) +
+                     (validation?.unitChanges.length ?? 0);
                      
     int warningCount = (validation?.priceChanges.length ?? 0) + 
                        (validation?.nameChanges.length ?? 0) + 
@@ -144,11 +145,13 @@ class QuotationActionButtons extends StatelessWidget {
                    )
                  : ElevatedButton(
                     onPressed: () { 
-                      if (canSell && warningCount == 0) {
-                         Navigator.push(context, MaterialPageRoute(builder: (_) => SalesCheckoutScreen(quotationId: quotationId))); 
-                      } else {
+                      if (!canSell) {
+                        // BLOQUEANTE: Stock insuficiente o bundle eliminado — forzar corrección
                         if (validation != null) onHandleUpdateAnalysis(validation!);
-                      } 
+                      } else {
+                        // PERMITIDO: Aunque haya alertas de precio, el usuario puede vender libremente
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => SalesCheckoutScreen(quotationId: quotationId))); 
+                      }
                     },
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, padding: EdgeInsets.zero),
                     child: AnimatedContainer(

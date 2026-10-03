@@ -11,6 +11,26 @@ import 'package:app_movil/features/promotions/models/bundle_model.dart';
 import 'package:app_movil/features/promotions/models/bundle_item_model.dart';
 import 'package:app_movil/features/promotions/repositories/promotion_repository.dart';
 
+class MatchingState {
+  List<BundleModel> activeBundles = [];
+  final Map<int, List<BundleItemModel>> bundleItemsCache = {};
+
+  bool isLoading = false;
+  bool isSaving = false;
+  String errorMessage = '';
+  List<MatchPair> pairs = [];
+
+  List<MatchPair> originalPairs = [];
+  ExtractedMetadata? originalMetadata;
+  bool hasModifications = false;
+
+  ExtractedMetadata? metadata;
+  ClientModel? selectedClient; 
+  
+  File? localImageFile; 
+  String? fullExtractedText; 
+}
+
 class MatchingProvider with ChangeNotifier {
   int? _negocioId;
   int? _usuarioId;
@@ -19,104 +39,97 @@ class MatchingProvider with ChangeNotifier {
   final ClientService _clientService = ClientService();
   final PromotionRepository _promoRepo = PromotionRepository();
 
-  List<BundleModel> _activeBundles = [];
-  final Map<int, List<BundleItemModel>> _bundleItemsCache = {};
+  final Map<int, MatchingState> _states = {};
 
-  bool _isLoading = false;
-  bool _isSaving = false;
-  String _errorMessage = '';
-  List<MatchPair> _pairs = [];
+  MatchingState get _currentState {
+    final key = _negocioId ?? 0;
+    return _states.putIfAbsent(key, () => MatchingState());
+  }
 
-  List<MatchPair> _originalPairs = [];
-  ExtractedMetadata? _originalMetadata;
-  bool _hasModifications = false;
-
-  ExtractedMetadata? _metadata;
-  ClientModel? _selectedClient; 
-  
-  File? _localImageFile; 
-  String? _fullExtractedText; 
-
-  bool get isLoading => _isLoading;
-  bool get isSaving => _isSaving;
-  String get errorMessage => _errorMessage;
-  List<MatchPair> get pairs => _pairs;
-  ExtractedMetadata? get metadata => _metadata;
-  ClientModel? get selectedClient => _selectedClient;
-  bool get hasModifications => _hasModifications;
-  List<BundleModel> get activeBundles => _activeBundles;
-  Map<int, List<BundleItemModel>> get bundleItemsCache => _bundleItemsCache;
+  bool get isLoading => _currentState.isLoading;
+  bool get isSaving => _currentState.isSaving;
+  String get errorMessage => _currentState.errorMessage;
+  List<MatchPair> get pairs => _currentState.pairs;
+  ExtractedMetadata? get metadata => _currentState.metadata;
+  ClientModel? get selectedClient => _currentState.selectedClient;
+  bool get hasModifications => _currentState.hasModifications;
+  List<BundleModel> get activeBundles => _currentState.activeBundles;
+  Map<int, List<BundleItemModel>> get bundleItemsCache => _currentState.bundleItemsCache;
 
   double get totalNetAmount {
-    final total = _pairs.fold(0.0, (sum, pair) => sum + pair.subtotal);
+    final total = _currentState.pairs.fold(0.0, (sum, pair) => sum + pair.subtotal);
     return double.parse(total.toStringAsFixed(2));
   }
 
   double get totalSavingsAmount {
-    final total = _pairs.fold(0.0, (sum, pair) => sum + pair.totalSavings);
+    final total = _currentState.pairs.fold(0.0, (sum, pair) => sum + pair.totalSavings);
     return double.parse(total.toStringAsFixed(2));
   }
 
-  int get matchedCount => _pairs.where((p) => p.selectedProduct != null).length;
-  bool get hasStockWarnings => _pairs.any((p) => p.hasStockWarning);
+  int get matchedCount => _currentState.pairs.where((p) => p.selectedProduct != null).length;
+  bool get hasStockWarnings => _currentState.pairs.any((p) => p.hasStockWarning);
 
   bool isProductRepeated(int? presentationId) {
     if (presentationId == null) return false;
-    int count = _pairs.where((p) => p.selectedProduct?.presentationId == presentationId).length;
+    int count = _currentState.pairs.where((p) => p.selectedProduct?.presentationId == presentationId).length;
     return count > 1;
   }
 
   void _handleException(dynamic e) {
-    _errorMessage = e.toString().replaceAll("Exception:", "").trim();
+    _currentState.errorMessage = e.toString().replaceAll("Exception:", "").trim();
   }
 
   void updateContext(int? negocioId, int? usuarioId, String? aiToken) {
     if (_negocioId != negocioId) {
       _negocioId = negocioId;
-      _usuarioId = usuarioId;
-      clearState();
+      Future.microtask(() {
+        notifyListeners(); // Notificar para que tome el nuevo estado
+      });
     }
+    _usuarioId = usuarioId;
   }
 
   void clearState() {
-    _pairs.clear(); _originalPairs.clear(); _metadata = null; _originalMetadata = null;
-    _selectedClient = null; _localImageFile = null; _fullExtractedText = null;
-    _isLoading = false; _isSaving = false; _hasModifications = false; _errorMessage = '';
+    _currentState.pairs.clear(); _currentState.originalPairs.clear(); _currentState.metadata = null; _currentState.originalMetadata = null;
+    _currentState.selectedClient = null; _currentState.localImageFile = null; _currentState.fullExtractedText = null;
+    _currentState.isLoading = false; _currentState.isSaving = false; _currentState.hasModifications = false; _currentState.errorMessage = '';
     notifyListeners();
   }
 
   void setEvidence(File? image, String? fullText) {
-      _localImageFile = image;
-      _fullExtractedText = fullText;
+      _currentState.localImageFile = image;
+      _currentState.fullExtractedText = fullText;
   }
 
   void resetToInitialState() {
-    _pairs = _originalPairs.map((p) => p.clone()).toList();
-    _metadata = _originalMetadata?.clone();
-    _selectedClient = null; 
-    _hasModifications = false;
+    _currentState.pairs = _currentState.originalPairs.map((p) => p.clone()).toList();
+    _currentState.metadata = _currentState.originalMetadata?.clone();
+    _currentState.selectedClient = null; 
+    _currentState.hasModifications = false;
     notifyListeners();
   }
 
   Future<void> initializeAndMatch(List<ExtractedItem> sourceItems, ExtractedMetadata? meta, {bool isClientRole = false}) async {
-    if (_pairs.isNotEmpty || _negocioId == null) return;
-    _isLoading = true;
-    _errorMessage = '';
+    final activeState = _currentState;
+    final activeNegocioId = _negocioId;
+    if (activeState.pairs.isNotEmpty || activeNegocioId == null) return;
+    activeState.isLoading = true;
+    activeState.errorMessage = '';
 
-    _metadata = ExtractedMetadata(
+    activeState.metadata = ExtractedMetadata(
       institutionName: meta?.institutionName ?? "", studentName: meta?.studentName ?? "", gradeLevel: meta?.gradeLevel ?? "",
     );
 
-    _pairs = sourceItems.map((item) => MatchPair(sourceItem: item)).toList();
+    activeState.pairs = sourceItems.map((item) => MatchPair(sourceItem: item)).toList();
     notifyListeners();
 
     try {
-      final results = await _service.runBatchMatching(sourceItems, _negocioId!, isClientRole); 
+      final results = await _service.runBatchMatching(sourceItems, activeNegocioId, isClientRole); 
 
       for (var result in results) {
-        final index = _pairs.indexWhere((p) => p.sourceItem.id == result.itemId);
+        final index = activeState.pairs.indexWhere((p) => p.sourceItem.id == result.itemId);
         if (index != -1) {
-          final pair = _pairs[index];
+          final pair = activeState.pairs[index];
           
           if (result.suggestedProduct != null) {
             pair.selectedProduct = result.suggestedProduct;
@@ -142,24 +155,24 @@ class MatchingProvider with ChangeNotifier {
       await _loadActiveBundles();
       _detectAndApplyBundles();
       
-      _originalPairs = _pairs.map((p) => p.clone()).toList();
-      _originalMetadata = _metadata?.clone();
-      _hasModifications = false;
+      activeState.originalPairs = activeState.pairs.map((p) => p.clone()).toList();
+      activeState.originalMetadata = activeState.metadata?.clone();
+      activeState.hasModifications = false;
 
     } catch (e) {
       _handleException(e);
     } finally {
-      _isLoading = false;
+      activeState.isLoading = false;
       notifyListeners();
     }
   }
 
   void updateMetadata({String? institution, String? student, String? grade}) {
-    _metadata ??= ExtractedMetadata();
-    if (institution != null) _metadata!.institutionName = institution;
-    if (student != null) _metadata!.studentName = student;
-    if (grade != null) _metadata!.gradeLevel = grade;
-    _hasModifications = true;
+    _currentState.metadata ??= ExtractedMetadata();
+    if (institution != null) _currentState.metadata!.institutionName = institution;
+    if (student != null) _currentState.metadata!.studentName = student;
+    if (grade != null) _currentState.metadata!.gradeLevel = grade;
+    _currentState.hasModifications = true;
     notifyListeners();
   }
 
@@ -167,7 +180,7 @@ class MatchingProvider with ChangeNotifier {
     if (_negocioId == null) return;
     try {
       final bunRows = await _promoRepo.getBundles(_negocioId!);
-      _activeBundles = bunRows.map((e) => BundleModel.fromJson(e)).where((b) {
+      _currentState.activeBundles = bunRows.map((e) => BundleModel.fromJson(e)).where((b) {
         if (!b.activo) return false;
         final now = DateTime.now();
         if (b.fechaInicio != null && b.fechaInicio!.isAfter(now)) return false;
@@ -175,10 +188,10 @@ class MatchingProvider with ChangeNotifier {
         return true;
       }).toList();
 
-      _bundleItemsCache.clear();
-      for (var bundle in _activeBundles) {
+      _currentState.bundleItemsCache.clear();
+      for (var bundle in _currentState.activeBundles) {
         final itemsRows = await _promoRepo.getBundleItems(bundle.id);
-        _bundleItemsCache[bundle.id] = itemsRows.map((e) => BundleItemModel.fromJson(e)).toList();
+        _currentState.bundleItemsCache[bundle.id] = itemsRows.map((e) => BundleItemModel.fromJson(e)).toList();
       }
     } catch(e) {
       // Ignorar error al cargar bundles
@@ -187,15 +200,15 @@ class MatchingProvider with ChangeNotifier {
 
   void _detectAndApplyBundles() {
     // 1. Reset all bundleIds
-    for (var pair in _pairs) {
+    for (var pair in _currentState.pairs) {
       pair.bundleId = null;
       pair.bundleName = null;
       pair.overridePrice = null; // Reiniciar
     }
     
     // 2. Revisar cada paquete activo
-    for (var bundle in _activeBundles) {
-      final requiredItems = _bundleItemsCache[bundle.id] ?? [];
+    for (var bundle in _currentState.activeBundles) {
+      final requiredItems = _currentState.bundleItemsCache[bundle.id] ?? [];
       if (requiredItems.isEmpty) continue;
       
       // Buscar si tenemos todos los productos requeridos con la cantidad requerida (simplificado: al menos 1 unidad requerida encontrada)
@@ -203,7 +216,7 @@ class MatchingProvider with ChangeNotifier {
       bool canFormBundle = true;
       
       for (var req in requiredItems) {
-        final found = _pairs.where((p) => p.selectedProduct?.productId == req.productoId).toList();
+        final found = _currentState.pairs.where((p) => p.selectedProduct?.productId == req.productoId).toList();
         if (found.isEmpty) {
           canFormBundle = false;
           break;
@@ -234,7 +247,7 @@ class MatchingProvider with ChangeNotifier {
   }
 
   void toggleBundleGrouping(int bundleId, bool group) {
-    for (var pair in _pairs) {
+    for (var pair in _currentState.pairs) {
       if (group) {
         // En un caso real, reejecutaríamos _detectAndApplyBundles para ese bundle. 
         // Para simplificar, relanzamos la detección global:
@@ -248,70 +261,70 @@ class MatchingProvider with ChangeNotifier {
         }
       }
     }
-    _hasModifications = true;
+    _currentState.hasModifications = true;
     notifyListeners();
   }
 
   void setClient(ClientModel? client) {
-    _selectedClient = client;
-    if (client != null) _metadata?.studentName = client.fullName;
-    _hasModifications = true;
+    _currentState.selectedClient = client;
+    if (client != null) _currentState.metadata?.studentName = client.fullName;
+    _currentState.hasModifications = true;
     notifyListeners();
   }
 
   void updatePairProduct(int itemId, MatchedProduct product) {
-    final index = _pairs.indexWhere((p) => p.sourceItem.id == itemId);
+    final index = _currentState.pairs.indexWhere((p) => p.sourceItem.id == itemId);
     if (index != -1) {
-      _pairs[index].selectedProduct = product;
-      _pairs[index].overridePrice = null;
-      _pairs[index].status = MatchStatus.manual;
-      _hasModifications = true;
+      _currentState.pairs[index].selectedProduct = product;
+      _currentState.pairs[index].overridePrice = null;
+      _currentState.pairs[index].status = MatchStatus.manual;
+      _currentState.hasModifications = true;
       notifyListeners();
     }
   }
 
   void updatePairPrice(int itemId, double? newPrice) {
-    final index = _pairs.indexWhere((p) => p.sourceItem.id == itemId);
+    final index = _currentState.pairs.indexWhere((p) => p.sourceItem.id == itemId);
     if (index != -1) {
-      _pairs[index].overridePrice = newPrice;
-      _pairs[index].status = MatchStatus.manual;
-      _hasModifications = true;
+      _currentState.pairs[index].overridePrice = newPrice;
+      _currentState.pairs[index].status = MatchStatus.manual;
+      _currentState.hasModifications = true;
       notifyListeners();
     }
   }
 
   void updatePairQuantity(int itemId, int newQuantity) {
-    final index = _pairs.indexWhere((p) => p.sourceItem.id == itemId);
+    final index = _currentState.pairs.indexWhere((p) => p.sourceItem.id == itemId);
     if (index != -1) {
-      _pairs[index].selectedQuantity = newQuantity;
-      _hasModifications = true;
+      _currentState.pairs[index].selectedQuantity = newQuantity;
+      _currentState.hasModifications = true;
       notifyListeners();
     }
   }
 
   void unmatchItem(int itemId) {
-    final index = _pairs.indexWhere((p) => p.sourceItem.id == itemId);
+    final index = _currentState.pairs.indexWhere((p) => p.sourceItem.id == itemId);
     if (index != -1) {
-      _pairs[index].selectedProduct = null;
-      _pairs[index].overridePrice = null;
-      _pairs[index].status = MatchStatus.none;
-      _hasModifications = true;
+      _currentState.pairs[index].selectedProduct = null;
+      _currentState.pairs[index].overridePrice = null;
+      _currentState.pairs[index].status = MatchStatus.none;
+      _currentState.hasModifications = true;
       notifyListeners();
     }
   }
 
   void deletePair(int itemId) {
-    _pairs.removeWhere((p) => p.sourceItem.id == itemId);
-    _hasModifications = true;
+    _currentState.pairs.removeWhere((p) => p.sourceItem.id == itemId);
+    _currentState.hasModifications = true;
     notifyListeners();
   }
 
   void addManualRow() {
     int maxId = 0;
-    if (_pairs.isNotEmpty) maxId = _pairs.map((p) => p.sourceItem.id).reduce((curr, next) => curr > next ? curr : next);
+    if (_currentState.pairs.isNotEmpty) maxId = _currentState.pairs.map((p) => p.sourceItem.id).reduce((curr, next) => curr > next ? curr : next);
     final newItem = ExtractedItem(id: maxId + 1, originalText: "Agregado Manual", fullName: "Nuevo Ítem", quantity: 1, unit: "und");
-    _pairs.add(MatchPair(sourceItem: newItem, status: MatchStatus.none));
-    _hasModifications = true;
+    _currentState.pairs.add(MatchPair(sourceItem: newItem, status: MatchStatus.none));
+    _currentState.hasModifications = true;
     notifyListeners();
   }
 
@@ -321,29 +334,31 @@ class MatchingProvider with ChangeNotifier {
       bool updateClientData = true, String? institutionName, String? gradeLevel, String? type, bool isClientRole = false, 
     }
   ) async {
-    if (_negocioId == null || _usuarioId == null) return null;
+    final activeState = _currentState;
+    final activeNegocioId = _negocioId;
+    if (activeNegocioId == null || _usuarioId == null) return null;
     
-    _isSaving = true;
+    activeState.isSaving = true;
     notifyListeners();
 
     try {
-      if (_pairs.isEmpty) {
-        _errorMessage = "No se puede guardar una lista vacía";
+      if (activeState.pairs.isEmpty) {
+        activeState.errorMessage = "No se puede guardar una lista vacía";
         return null;
       }
 
-      _metadata ??= ExtractedMetadata();
-      if (institutionName != null && institutionName.isNotEmpty) _metadata!.institutionName = institutionName;
-      if (gradeLevel != null && gradeLevel.isNotEmpty) _metadata!.gradeLevel = gradeLevel;
+      activeState.metadata ??= ExtractedMetadata();
+      if (institutionName != null && institutionName.isNotEmpty) activeState.metadata!.institutionName = institutionName;
+      if (gradeLevel != null && gradeLevel.isNotEmpty) activeState.metadata!.gradeLevel = gradeLevel;
 
       String? uploadedImageUrl;
-      if (_localImageFile != null) {
-          uploadedImageUrl = await _service.uploadImageToBackend(_localImageFile!);
+      if (activeState.localImageFile != null) {
+          uploadedImageUrl = await _service.uploadImageToBackend(activeState.localImageFile!);
       }
 
       final List<Map<String, dynamic>> validItems = [];
 
-      for (var p in _pairs.where((p) => p.selectedProduct != null)) {
+      for (var p in activeState.pairs.where((p) => p.selectedProduct != null)) {
         var itemJson = p.toQuotationItemJson(); 
         if (itemJson != null) {
           itemJson['original_text'] = p.sourceItem.originalText;
@@ -352,12 +367,12 @@ class MatchingProvider with ChangeNotifier {
       }
 
       if (validItems.isEmpty) {
-        _errorMessage = "Selecciona al menos un producto para guardar.";
+        activeState.errorMessage = "Selecciona al menos un producto para guardar.";
         return null;
       }
 
-      int? finalClientId = (_selectedClient?.id == 0) ? null : _selectedClient?.id;
-      String rawClientName = _selectedClient?.fullName ?? manualClientName?.trim() ?? "";
+      int? finalClientId = (activeState.selectedClient?.id == 0) ? null : activeState.selectedClient?.id;
+      String rawClientName = activeState.selectedClient?.fullName ?? manualClientName?.trim() ?? "";
 
       if (!isClientRole && updateClientData && rawClientName.isNotEmpty) {
         final clientData = {
@@ -367,10 +382,10 @@ class MatchingProvider with ChangeNotifier {
         };
         
         try {
-          if (_selectedClient != null && _selectedClient!.id != 0) {
-            await _clientService.updateClient(_selectedClient!.id, clientData);
+          if (activeState.selectedClient != null && activeState.selectedClient!.id != 0) {
+            await _clientService.updateClient(activeState.selectedClient!.id, clientData);
           } else {
-            final newClient = await _clientService.createClient(clientData, _negocioId!, _usuarioId!);
+            final newClient = await _clientService.createClient(clientData, activeNegocioId, _usuarioId!);
             finalClientId = newClient.id; 
           }
         } catch (e) {
@@ -414,25 +429,25 @@ class MatchingProvider with ChangeNotifier {
       final quotationPayload = {
         "client_id": finalClientId, 
         "client_name": finalQuoteName, 
-        "institution_name": _metadata?.institutionName,
-        "grade_level": _metadata?.gradeLevel,
+        "institution_name": activeState.metadata?.institutionName,
+        "grade_level": activeState.metadata?.gradeLevel,
         "total_amount": double.parse(finalAmount.toStringAsFixed(2)),
         "total_savings": double.parse(finalSavings.toStringAsFixed(2)),
         "status": status, 
         "type": type ?? "ai_scan",
         "source_image_url": uploadedImageUrl, 
         "items": validItems,
-        "original_text_dump": _fullExtractedText 
+        "original_text_dump": activeState.fullExtractedText 
       };
 
-      final newId = await _service.saveQuotation(quotationPayload, _negocioId!, _usuarioId!);
+      final newId = await _service.saveQuotation(quotationPayload, activeNegocioId, _usuarioId!);
       return newId;
 
     } catch (e) {
       _handleException(e);
       return null;
     } finally {
-      _isSaving = false;
+      activeState.isSaving = false;
       notifyListeners();
     }
   }

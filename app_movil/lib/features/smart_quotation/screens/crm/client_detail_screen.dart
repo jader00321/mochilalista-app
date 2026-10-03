@@ -235,6 +235,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                 onWhatsAppTap: () => _launchWhatsApp(context),
                 onCallTap: () => _launchCall(context),
                 onGoToQuickSale: _goToQuickSale,
+                onFinanceActionCompleted: _refreshData,
               ),
             ),
             
@@ -295,17 +296,15 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
             ),
           ),
           
-          if (_currentClient.totalDebt > 0) ...[
-            const SizedBox(height: 16),
-            FloatingActionButton.extended(
-              heroTag: 'btn_abono',
-              onPressed: () => _showPaymentModal(context),
-              backgroundColor: isDark ? Colors.green[600] : Colors.green[700],
-              elevation: isDark ? 0 : 4,
-              icon: const Icon(Icons.payments, color: Colors.white, size: 24),
-              label: const Text("Registrar Abono", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
-            ),
-          ]
+          const SizedBox(height: 16),
+          FloatingActionButton.extended(
+            heroTag: 'btn_abono',
+            onPressed: () => _showPaymentModal(context),
+            backgroundColor: isDark ? Colors.green[600] : Colors.green[700],
+            elevation: isDark ? 0 : 4,
+            icon: const Icon(Icons.payments, color: Colors.white, size: 24),
+            label: const Text("Registrar Abono", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
+          ),
         ],
       ),
     );

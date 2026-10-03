@@ -366,7 +366,7 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> with SingleTick
                     Icon(Icons.receipt_long, color: isDark ? Colors.green[400] : Colors.green[700]),
                     const SizedBox(width: 8),
                     Text(
-                      "Compra #${sale.id}",
+                      "Compra #${sale.displayId}",
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black87),
                     ),
                   ],

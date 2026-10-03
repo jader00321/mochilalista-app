@@ -9,6 +9,7 @@ import 'package:app_movil/features/smart_quotation/providers/matching_provider.d
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
+import 'package:app_movil/core/widgets/marquee_text.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 
 class ExtractionResultScreen extends StatefulWidget {
@@ -116,15 +117,18 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
         return Scaffold(
           backgroundColor: bgColor,
           appBar: AppBar(
-            title: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(isClient ? "Revisa tu Lista Escolar" : "Validar Datos Extraídos", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  Text("${provider.items.length} productos identificados", style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[200] : Colors.blue[100], fontWeight: FontWeight.w500)),
-                ],
-              ),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: MarqueeText(
+                    text: isClient ? "Revisa tu Lista Escolar" : "Validar Datos Extraídos", 
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ),
+                Text("${provider.items.length} productos identificados", style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[200] : Colors.blue[100], fontWeight: FontWeight.w500)),
+              ],
             ),
             backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
             foregroundColor: Colors.white,

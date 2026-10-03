@@ -138,26 +138,58 @@ class QuotationCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Row(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    quotation.clientName ?? "Sin Cliente - #${quotation.id}",
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black87),
-                                    maxLines: 2, 
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        quotation.clientName ?? "Sin Cliente - #${quotation.displayId}",
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.blueGrey[900]),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (quotation.status == 'DRAFT')
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.orange.withValues(alpha: 0.5))),
+                                        child: const Text("Borrador", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange)),
+                                      ),
+                                  ],
                                 ),
-                                if (quotation.notas != null && quotation.notas!.isNotEmpty) ...[
-                                  const SizedBox(width: 4),
-                                  Icon(Icons.push_pin, size: 16, color: isDark ? Colors.orange[300] : Colors.orange[800]),
-                                ]
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                                      child: Text("#${quotation.displayId}", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                                    ),
+                                    if (quotation.notas != null && quotation.notas!.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      Icon(Icons.push_pin, size: 16, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                                    ]
+                                  ],
+                                ),
                               ],
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          _buildStatusBadge(statusText, stripColor, isCritical, isWarning, isDark),
+                          if (quotation.status != 'SOLD') ...[
+                            const SizedBox(width: 4),
+                            Tooltip(
+                              message: "Mantener presionado para opciones",
+                              child: InkWell(
+                                onTap: onLongPress,
+                                borderRadius: BorderRadius.circular(20),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Icon(Icons.more_vert, size: 20, color: isDark ? Colors.grey[500] : Colors.grey[600]),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -166,6 +198,8 @@ class QuotationCard extends StatelessWidget {
                         runSpacing: 8,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
+                          _buildStatusBadge(statusText, stripColor, isCritical, isWarning, isDark),
+                          
                           if (isFromApp) 
                             _buildTag("PEDIDO APP", isDark ? Colors.blue[300]! : Colors.blue[800]!, isDark),
                           
@@ -210,6 +244,8 @@ class QuotationCard extends StatelessWidget {
                                 _buildWarningTag("${validation!.priceChanges.length} Precio", Colors.orange),
                               if (validation!.nameChanges.isNotEmpty)
                                 _buildWarningTag("${validation!.nameChanges.length} Nombre", Colors.indigo),
+                              if (validation!.unitChanges.isNotEmpty)
+                                _buildWarningTag("${validation!.unitChanges.length} Unidad", Colors.cyan),
                             ],
                           ),
                         ),

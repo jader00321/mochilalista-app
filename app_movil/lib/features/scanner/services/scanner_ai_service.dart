@@ -15,7 +15,10 @@ class ScannerAIService {
   /// la respuesta estructurada con los items extraídos.
   ///
   /// Retorna `null` si hay error o la IA no devuelve datos.
-  Future<AIInvoiceResponse?> analyzeInvoiceImage(File imageFile, {Function(String)? onRetrying}) async {
+  Future<AIInvoiceResponse?> analyzeInvoiceImage(
+    File imageFile, {
+    Function(String)? onRetrying,
+  }) async {
     int maxRetries = 1;
     int currentTry = 0;
 
@@ -23,7 +26,9 @@ class ScannerAIService {
       try {
         final apiKey = ApiConstants.googleApiKey;
         if (apiKey.isEmpty) {
-          throw Exception("API Key de Google Gemini no configurada en el archivo .env");
+          throw Exception(
+            "API Key de Google Gemini no configurada en el archivo .env",
+          );
         }
 
         final model = GenerativeModel(
@@ -41,7 +46,7 @@ class ScannerAIService {
         final prompt = TextPart(_buildAnalysisPrompt());
 
         final response = await model.generateContent([
-          Content.multi([prompt, imagePart])
+          Content.multi([prompt, imagePart]),
         ]);
 
         if (response.text != null && response.text!.isNotEmpty) {
@@ -54,12 +59,13 @@ class ScannerAIService {
       } catch (e, stack) {
         if (e is ServerException) {
           final msg = e.message.toString().toLowerCase();
-          bool isRateLimit = msg.contains('503') || 
-                             msg.contains('429') || 
-                             msg.contains('exhausted') || 
-                             msg.contains('resource_exhausted') ||
-                             msg.contains('unavailable');
-          
+          bool isRateLimit =
+              msg.contains('503') ||
+              msg.contains('429') ||
+              msg.contains('exhausted') ||
+              msg.contains('resource_exhausted') ||
+              msg.contains('unavailable');
+
           if (isRateLimit) {
             if (currentTry < maxRetries) {
               currentTry++;
@@ -67,21 +73,29 @@ class ScannerAIService {
               await Future.delayed(const Duration(seconds: 2));
               continue;
             } else {
-              throw Exception("Los servidores de IA están muy concurridos en este momento. Por favor, intenta de nuevo en unos segundos.");
+              throw Exception(
+                "Los servidores de IA están muy concurridos en este momento. Por favor, intenta de nuevo en unos segundos.",
+              );
             }
           }
         }
-        
+
         if (e is SocketException || e is TimeoutException) {
-           throw Exception("Sin conexión a Internet. Verifica tu señal y reintenta.");
+          throw Exception(
+            "Sin conexión a Internet. Verifica tu señal y reintenta.",
+          );
         }
-        
-        if (e.toString().contains("Los servidores de IA") || e.toString().contains("Sin conexión a Internet") || e.toString().contains("API Key")) {
-           rethrow;
+
+        if (e.toString().contains("Los servidores de IA") ||
+            e.toString().contains("Sin conexión a Internet") ||
+            e.toString().contains("API Key")) {
+          rethrow;
         }
 
         AppLogger.error('ScannerAIService.analyzeInvoiceImage', e, stack);
-        throw Exception("Ocurrió un error inesperado al procesar la imagen. Intenta con otra foto o reintenta.");
+        throw Exception(
+          "Ocurrió un error inesperado al procesar la imagen. Intenta con otra foto o reintenta.",
+        );
       }
     }
     return null;

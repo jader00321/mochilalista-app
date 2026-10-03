@@ -1,3 +1,5 @@
+import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +14,7 @@ import 'package:app_movil/features/smart_quotation/screens/crm/client_tracking_s
 import 'package:app_movil/features/smart_quotation/screens/workbench_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/client_orders_screen.dart'; 
 import 'package:app_movil/features/scanner/screens/scan_screen.dart'; 
+import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
 import 'package:app_movil/features/auth/screens/onboarding/lock_screen.dart';
 
 import 'package:app_movil/core/widgets/home/dashboard_header.dart';
@@ -48,9 +51,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       _pausedTime = DateTime.now();
+      _checkImmediateLock();
     } else if (state == AppLifecycleState.resumed) {
       if (_pausedTime != null) {
         _checkPinDelay();
+      }
+    }
+  }
+
+  Future<void> _checkImmediateLock() async {
+    final prefs = await SharedPreferences.getInstance();
+    final delayMinutes = prefs.getInt('pin_delay_minutes') ?? 1;
+    
+    if (delayMinutes == 0 && mounted) {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      if (auth.hasPinCache && auth.user != null) {
+        _pausedTime = null; // Limpiar para evitar doble push en resumed
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => LockScreen(userId: auth.user!.id)),
+          (route) => false,
+        );
       }
     }
   }
@@ -158,8 +179,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 // =========================================================================
 // VISTA INTERNA DEL DASHBOARD (HOME)
 // =========================================================================
-class _HomeDashboardView extends StatelessWidget {
+class _HomeDashboardView extends StatefulWidget {
   const _HomeDashboardView();
+
+  @override
+  State<_HomeDashboardView> createState() => _HomeDashboardViewState();
+}
+
+class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTickerProviderStateMixin {
+  late AnimationController _bgAnimController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Animación lenta (12 segundos) para el fondo
+    _bgAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _bgAnimController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -167,11 +211,10 @@ class _HomeDashboardView extends StatelessWidget {
     final auth = Provider.of<AuthProvider>(context);
     final isGuest = !auth.hasActiveContext;
 
-    return RefreshIndicator(
+    final Widget mainContent = RefreshIndicator(
       color: Colors.blue[800],
       onRefresh: () async {
         final authProv = Provider.of<AuthProvider>(context, listen: false);
-        // 🔥 CORRECCIÓN 2: refreshActiveUser en lugar de checkInitialState completo
         await authProv.refreshActiveUser();
         if (authProv.hasActiveContext) {
           if (!context.mounted) return;
@@ -184,21 +227,24 @@ class _HomeDashboardView extends StatelessWidget {
         }
       },
       child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(), 
+        physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           children: [
             const DashboardHeader(),
             Transform.translate(
-              offset: const Offset(0, -30),
+              offset: const Offset(0, -40),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
+                      const RestockSmartBanner(),
+                      const SizedBox(height: 16),
+                    ],
                     if (isGuest)
                         _buildGuestBanner(context, isDark)
                     else if (auth.isOwner || auth.isWorker) ...[
-                      const RestockSmartBanner(),
                       const WeeklySalesChart(),
                       const SizedBox(height: 20),
                       QuotationBanner(
@@ -236,6 +282,53 @@ class _HomeDashboardView extends StatelessWidget {
           ],
         ),
       ),
+    );
+
+    return Stack(
+      children: [
+        // Fondo monocromático dinámico (Glassmorphism)
+        Positioned.fill(
+          child: Stack(
+            children: [
+              AnimatedBuilder(
+                animation: _bgAnimController,
+                builder: (context, child) {
+                  return Stack(
+                    children: [
+                      // Orbe gris claro / oscuro inferior izquierdo
+                      Positioned(
+                        bottom: -100 + math.sin(_bgAnimController.value * math.pi * 2) * 40,
+                        left: -100 + math.cos(_bgAnimController.value * math.pi * 2) * 30,
+                        child: Container(
+                          width: 400, height: 400,
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03)),
+                        ),
+                      ),
+                      // Orbe gris inferior derecho
+                      Positioned(
+                        bottom: 100 + math.cos(_bgAnimController.value * math.pi * 2) * 50,
+                        right: -150 + math.sin(_bgAnimController.value * math.pi * 2) * 40,
+                        child: Container(
+                          width: 500, height: 500,
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.02)),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              Positioned.fill(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+                  child: const SizedBox(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        mainContent,
+
+      ],
     );
   }
 

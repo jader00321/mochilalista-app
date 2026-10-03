@@ -15,7 +15,9 @@ class QuickSearchResultTile extends StatelessWidget {
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
     final String brandName = invProv.getBrandName(item.product.marcaId);
     
-    final int stock = item.presentation.stockActual;
+    int factor = item.presentation.unidadesPorVenta;
+    if (factor <= 0) factor = 1;
+    final int stock = item.presentation.stockActual ~/ factor;
     final bool isOut = stock <= 0;
     final bool isPublic = item.presentation.estado == 'publico';
     
@@ -34,7 +36,7 @@ class QuickSearchResultTile extends StatelessWidget {
       variantDisplay += " - ${item.presentation.nombreEspecifico}";
     }
     
-    bool showBrand = brandName.isNotEmpty && !item.product.nombre.toUpperCase().contains(brandName.toUpperCase());
+    bool showBrand = brandName.isNotEmpty;
 
     return Opacity(
       opacity: isOut ? 0.5 : 1.0,
@@ -75,16 +77,16 @@ class QuickSearchResultTile extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 2),
                         child: Text(
                           brandName.toUpperCase(), 
-                          style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.5),
+                          style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.w900, fontSize: 14),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    Text(item.product.nombre, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor, height: 1.2), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(item.product.nombre, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.2), maxLines: 2, overflow: TextOverflow.ellipsis),
                     if (variantDisplay.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: Text(variantDisplay, style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        child: Text(variantDisplay, style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontSize: 14, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                       ),
                   ],
                 ),
@@ -106,7 +108,10 @@ class QuickSearchResultTile extends StatelessWidget {
                       child: Text("AGOTADO", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red[800], fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                     )
                   else
-                    Text("$stock en stock", style: TextStyle(color: stock <= 5 ? (isDark ? Colors.orange[300] : Colors.orange) : (isDark ? Colors.green[400] : Colors.green[700]), fontWeight: FontWeight.bold, fontSize: 13)),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text("$stock ${item.presentation.unidadVenta ?? 'Unidad'} en stock", style: TextStyle(color: stock <= 5 ? (isDark ? Colors.orange[300] : Colors.orange) : (isDark ? Colors.green[400] : Colors.green[700]), fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
                 ],
               )
             ],

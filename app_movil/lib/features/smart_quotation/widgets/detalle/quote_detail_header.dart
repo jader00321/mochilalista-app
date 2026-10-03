@@ -57,7 +57,7 @@ class _QuoteDetailHeaderState extends State<QuoteDetailHeader> {
     final textColor = widget.isDark ? Colors.white : Colors.black87;
 
     return Container(
-      padding: EdgeInsets.only(top: 20 - (10 * widget.shrinkFactor), left: 20, right: 20, bottom: 12 - (6 * widget.shrinkFactor)),
+      padding: EdgeInsets.only(top: 20 - (10 * widget.shrinkFactor), left: 20, right: 20, bottom: 18 - (6 * widget.shrinkFactor)),
       decoration: BoxDecoration(color: surfaceColor, border: Border(bottom: BorderSide(color: widget.isDark ? Colors.white10 : Colors.grey.shade200))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,8 +109,6 @@ class _QuoteDetailHeaderState extends State<QuoteDetailHeader> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text("$itemsCount productos", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
@@ -126,16 +124,47 @@ class _QuoteDetailHeaderState extends State<QuoteDetailHeader> {
                     currency.format(total), 
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: widget.isDark ? Colors.blue[300] : Colors.blue[900])
                   ),
-                  if (savings > 0.05)
-                    Container(
-                      margin: const EdgeInsets.only(top: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50], borderRadius: BorderRadius.circular(6)),
-                      child: Text("Ahorro: ${currency.format(savings)}", style: TextStyle(color: widget.isDark ? Colors.green[300] : Colors.green[800], fontSize: 13, fontWeight: FontWeight.bold)),
-                    ),
                 ],
               )
             ],
+          ),
+          
+          Opacity(
+            opacity: 1.0 - (widget.shrinkFactor * 3).clamp(0.0, 1.0),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.inventory_2_outlined, size: 18, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                        const SizedBox(width: 6),
+                        Flexible(child: Text("$itemsCount productos", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+                      ]
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (savings > 0.05)
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[50], borderRadius: BorderRadius.circular(6)),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.savings_outlined, size: 16, color: widget.isDark ? Colors.green[300] : Colors.green[800]),
+                            const SizedBox(width: 6),
+                            Flexible(child: Text("Ahorro: ${currency.format(savings)}", style: TextStyle(color: widget.isDark ? Colors.green[300] : Colors.green[800], fontSize: 13, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+                          ]
+                        )
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
           
           if (notas != null && notas.isNotEmpty && widget.shrinkFactor < 0.2) ...[

@@ -25,13 +25,16 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = Provider.of<TrackingProvider>(context, listen: false);
+      provider.resetFiltersAndSearch();
+      _searchCtrl.clear();
       _onRefresh();
     });
 
     _scrollController.addListener(() {
-      if (_scrollController.offset > 200 && !_showScrollToTop) {
+      if (_scrollController.offset > 120 && !_showScrollToTop) {
         setState(() => _showScrollToTop = true);
-      } else if (_scrollController.offset <= 200 && _showScrollToTop) {
+      } else if (_scrollController.offset <= 120 && _showScrollToTop) {
         setState(() => _showScrollToTop = false);
       }
     });
@@ -285,28 +288,35 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
       body: RefreshIndicator(
         onRefresh: _onRefresh,
         color: Colors.blue[800],
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            SliverAppBar(
-              title: const Text("Directorio de Clientes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
-              elevation: 0,
-              floating: true,
-              snap: true,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.person_add, size: 28), 
-                  tooltip: "Nuevo Cliente", 
-                  onPressed: _openCreateClientEditor
-                ),
-                const SizedBox(width: 8)
-              ],
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(80),
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          behavior: HitTestBehavior.translucent,
+          child: SafeArea(
+            child: CustomScrollView(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                title: const Text("Directorio de Clientes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+                elevation: 0,
+                pinned: false,
+                floating: true,
+                snap: true,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.person_add, size: 28), 
+                    tooltip: "Nuevo Cliente", 
+                    onPressed: _openCreateClientEditor
+                  ),
+                  const SizedBox(width: 8)
+                ],
+              ),
+              
+              SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                   child: Container(
-                    height: 55,
+                    height: 48,
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF23232F) : Colors.white, 
                       borderRadius: BorderRadius.circular(16),
@@ -330,59 +340,76 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                   ),
                 ),
               ),
-            ),
             
-            SliverToBoxAdapter(
-              child: Column(
-                children: [
-                  if (!Provider.of<AuthProvider>(context).hasActiveContext)
-                     Container(
-                       width: double.infinity,
-                       color: Colors.orange.withValues(alpha: 0.15),
-                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                       child: const Row(
-                         children: [
-                           Icon(Icons.info_outline, color: Colors.orange),
-                           SizedBox(width: 12),
-                           Expanded(
-                             child: Text(
-                               "Modo Exploración. Para agregar clientes a tu Directorio, debes registrar tu negocio.",
-                               style: TextStyle(fontSize: 13),
-                             )
-                           )
-                         ]
-                       )
-                     ),
-
-                  const ClientFilterBar(),
-                  
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
-                      border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          "${clients.length} clientes", 
-                          style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 15)
-                        ),
-                        GestureDetector(
-                          onTap: () => _showSortOptions(context, provider, isDark, surfaceColor, textColor),
-                          child: Row(
-                            children: [
-                              Icon(Icons.sort, size: 22, color: isDark ? Colors.blue[300] : Colors.blue), 
-                              const SizedBox(width: 8), 
-                              Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 16))
-                            ]
-                          ),
+            if (!Provider.of<AuthProvider>(context).hasActiveContext)
+              SliverToBoxAdapter(
+                child: Container(
+                  width: double.infinity,
+                  color: Colors.orange.withValues(alpha: 0.15),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "Modo Exploración. Para agregar clientes a tu Directorio, debes registrar tu negocio.",
+                          style: TextStyle(fontSize: 13),
                         )
-                      ],
-                    ),
+                      )
+                    ]
+                  )
+                )
+              ),
+
+            SliverAppBar(
+              automaticallyImplyLeading: false,
+              toolbarHeight: 0,
+              pinned: false,
+              floating: true,
+              snap: true,
+              elevation: 0,
+              backgroundColor: bgColor,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(98.0), // Ajustado a la altura real del contenido (Filtros + Ordenar)
+                child: Container(
+                  color: bgColor,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4, bottom: 4),
+                        child: ClientFilterBar(),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: surfaceColor,
+                          border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "${clients.length} clientes", 
+                              style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 15)
+                            ),
+                            GestureDetector(
+                              onTap: () => _showSortOptions(context, provider, isDark, surfaceColor, textColor),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.sort, size: 22, color: isDark ? Colors.blue[300] : Colors.blue), 
+                                  const SizedBox(width: 8), 
+                                  Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 16))
+                                ]
+                              ),
+                            )
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
 
@@ -403,7 +430,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.only(top: 16, bottom: 120),
+                padding: const EdgeInsets.only(top: 12, bottom: 120),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) => ClientCard(
@@ -415,6 +442,8 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                 ),
               ),
           ],
+            ),
+          ),
         ),
       ),
       
@@ -465,3 +494,4 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
     );
   }
 }
+

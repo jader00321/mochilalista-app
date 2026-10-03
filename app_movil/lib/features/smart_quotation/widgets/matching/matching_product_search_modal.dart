@@ -42,7 +42,7 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
   bool _isLoadingMore = false;
   bool _hasMore = true;
   int _skip = 0;
-  final int _limit = 20;
+  final int _limit = 50;
   String _currentQuery = "";
 
   @override
@@ -269,8 +269,12 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
                       final catName = _getCategoryName(prod.categoriaId); 
                       
                       final hasOffer = pres.precioOferta != null && pres.precioOferta! > 0;
-                      Color stockColor = _getStockColor(pres.stockActual);
-                      String stockText = pres.stockActual > 0 ? "Stock: ${pres.stockActual}" : "AGOTADO";
+                      int factor = pres.unidadesPorVenta;
+                      if (factor <= 0) factor = 1;
+                      int realStock = pres.stockActual ~/ factor;
+                      String unitName = pres.unidadVenta ?? "Unidad";
+                      Color stockColor = _getStockColor(realStock);
+                      String stockText = realStock > 0 ? "Stock: $realStock $unitName" : "AGOTADO";
 
                       String cleanProd = _cleanName(prod.nombre);
                       String cleanSpec = _cleanName(pres.nombreEspecifico ?? "");
@@ -289,7 +293,7 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
                         brand: brandName, 
                         price: pres.precioVentaFinal, 
                         offerPrice: hasOffer ? pres.precioOferta : null, 
-                        stock: pres.stockActual, 
+                        stock: realStock, 
                         imageUrl: pres.imagenUrl ?? prod.imagenUrl, 
                         unit: pres.unidadVenta ?? "Unidad", 
                         conversionFactor: pres.unidadesPorVenta
@@ -357,7 +361,7 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
                           ),
                         ]),
                         onTap: () {
-                          if (isClient && pres.stockActual <= 0) {
+                          if (isClient && realStock <= 0) {
                               CustomSnackBar.show(context, message: "Este producto está agotado y no puede agregarse al pedido.", isError: true);
                               return;
                           }

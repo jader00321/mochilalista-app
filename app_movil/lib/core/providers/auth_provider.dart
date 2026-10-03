@@ -167,16 +167,16 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> deleteProfileAndData(int userId, String inputPin) async {
-    _setLoading(true);
+  Future<bool> deleteProfileAndDataWithProgress(int userId, String? inputPin, Function(String, double) onProgress) async {
+    // No usamos _setLoading(true) aquí porque el modal ya mostrará el progreso
     try {
       bool hasPin = await profileHasPin(userId);
       if (hasPin) {
-        bool isCorrect = await verifyPin(userId, inputPin);
+        bool isCorrect = await verifyPin(userId, inputPin ?? '');
         if (!isCorrect) throw Exception("El PIN ingresado es incorrecto.");
       }
 
-      bool deleted = await _authService.deleteLocalProfile(userId);
+      bool deleted = await _authService.deleteLocalProfileWithProgress(userId, onProgress);
       if (deleted) {
         await _secureStorage.delete(key: 'pin_$userId');
         _hasPinCache = false;
@@ -190,8 +190,6 @@ class AuthProvider with ChangeNotifier {
     } catch (e) {
       _errorMessage = e.toString().replaceAll("Exception:", "").trim();
       return false;
-    } finally {
-      _setLoading(false);
     }
   }
   

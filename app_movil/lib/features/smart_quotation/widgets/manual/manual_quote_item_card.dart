@@ -156,23 +156,26 @@ class ManualQuoteItemCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (hasCustomName) ...[
-                            Text(customName, style: textTheme.titleMedium?.copyWith(color: textColor), maxLines: 3, overflow: TextOverflow.ellipsis),
+                            Text(customName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textColor, height: 1.2), maxLines: 3, overflow: TextOverflow.ellipsis),
                           ] else ...[
                             if (brandName.isNotEmpty && brandName.toLowerCase() != "null" && !isBundle) 
-                              Text(brandName.toUpperCase(), style: textTheme.labelMedium?.copyWith(color: isDark ? Colors.indigo[300] : Colors.indigo[600], letterSpacing: 0.5)),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(brandName.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: isDark ? Colors.indigo[300] : Colors.indigo[600], letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
                             
-                            Text(item.productName, style: textTheme.titleMedium?.copyWith(color: textColor, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            Text(item.productName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textColor, height: 1.2), maxLines: 2, overflow: TextOverflow.ellipsis),
                             
                             if (item.specificName != null && item.specificName!.isNotEmpty && item.specificName != "Paquete")
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),
-                                child: Text(item.specificName!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
+                                child: Text(item.specificName!, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
                               ),
                               
                             if (item.description != null && item.description!.isNotEmpty && item.description != item.specificName)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
-                                child: Text(item.description!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
+                                child: Text(item.description!, style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
                               ),
                           ],
                           

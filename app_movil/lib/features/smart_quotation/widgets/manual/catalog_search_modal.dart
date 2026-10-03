@@ -72,17 +72,6 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
     final prod = wrapper.product;
     final pres = wrapper.presentation;
 
-    // Bloqueo de producto sin stock.
-    if (pres.stockActual <= 0) {
-      CustomSnackBar.show(
-        context, 
-        message: "Este producto está temporalmente agotado. Intenta con otra variante o marca.", 
-        isError: true,
-        icon: Icons.production_quantity_limits
-      );
-      return;
-    }
-    
     String cleanProd = _cleanName(prod.nombre);
     String cleanSpec = _cleanName(pres.nombreEspecifico ?? "");
     
@@ -100,7 +89,7 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
       brand: brandName,
       price: pres.precioVentaFinal, 
       offerPrice: pres.precioOferta,
-      stock: pres.stockActual,
+      stock: pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1),
       imageUrl: pres.imagenUrl ?? prod.imagenUrl,
       unit: pres.unidadVenta ?? "Unidad", 
       conversionFactor: pres.unidadesPorVenta, 
@@ -124,6 +113,37 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
         },
       )
     );
+  }
+
+  void _quickAdd(InventoryWrapper wrapper, String brandName, String catName) {
+    final prod = wrapper.product;
+    final pres = wrapper.presentation;
+
+    String cleanProd = _cleanName(prod.nombre);
+    String cleanSpec = _cleanName(pres.nombreEspecifico ?? "");
+    
+    String fullNameBuilder = cleanProd;
+    if (cleanSpec.isNotEmpty && !cleanProd.toLowerCase().contains(cleanSpec.toLowerCase())) {
+       fullNameBuilder += " $cleanSpec";
+    }
+
+    final matched = MatchedProduct(
+      productId: prod.id,
+      presentationId: pres.id ?? 0, 
+      fullName: fullNameBuilder,
+      productName: prod.nombre,
+      specificName: pres.nombreEspecifico,
+      brand: brandName,
+      price: pres.precioVentaFinal, 
+      offerPrice: pres.precioOferta,
+      stock: pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1),
+      imageUrl: pres.imagenUrl ?? prod.imagenUrl,
+      unit: pres.unidadVenta ?? "Unidad", 
+      conversionFactor: pres.unidadesPorVenta, 
+    );
+
+    widget.onAddProduct(matched, 1, matched.offerPrice ?? matched.price, matched.fullName);
+    CustomSnackBar.show(context, message: "Agregado: ${matched.fullName}");
   }
 
   @override
@@ -350,16 +370,18 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                     final catName = provider.getCategoryName(prod.categoriaId); 
                     
                     Color stockColor = isDark ? Colors.green[400]! : Colors.green;
-                    String stockText = "${pres.stockActual} disp.";
+                    int factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+                    int realStock = pres.stockActual ~/ factor;
+                    String stockText = "$realStock disp.";
                     bool isOutOfStock = false;
                     
-                    if (pres.stockActual <= 0) {
+                    if (realStock <= 0) {
                       stockColor = isDark ? Colors.red[400]! : Colors.red;
                       stockText = "Agotado";
                       isOutOfStock = true;
-                    } else if (pres.stockActual <= 5) {
+                    } else if (realStock <= 5) {
                       stockColor = isDark ? Colors.orange[400]! : Colors.orange;
-                      stockText = "¡Últimos ${pres.stockActual}!";
+                      stockText = "¡Últimos $realStock!";
                     }
 
                     String cleanProd = _cleanName(prod.nombre);
@@ -368,17 +390,13 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 16),
                       elevation: isDark ? 0 : 2,
-                      color: isDark 
-                        ? (isOutOfStock ? const Color(0xFF1A1A24).withValues(alpha: 0.5) : const Color(0xFF14141C)) 
-                        : (isOutOfStock ? Colors.grey.shade50 : Colors.white),
+                      color: isDark ? const Color(0xFF14141C) : Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.white10 : Colors.transparent)),
                       child: InkWell(
                         onTap: () => _openDetail(wrapper, brandName, catName),
                         borderRadius: BorderRadius.circular(16),
-                        child: Opacity(
-                          opacity: isOutOfStock ? 0.5 : 1.0, 
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -450,7 +468,12 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                                               ],
                                             ),
                                           ),
-                                          Icon(isOutOfStock ? Icons.cancel_outlined : Icons.add_circle_outline, color: isOutOfStock ? Colors.grey : (isDark ? Colors.blue[300] : Colors.blue[700]), size: 28)
+                                          IconButton(
+                                            onPressed: isOutOfStock ? null : () => _quickAdd(wrapper, brandName, catName),
+                                            icon: Icon(Icons.add_circle_outline, color: isOutOfStock ? Colors.grey : (isDark ? Colors.blue[300] : Colors.blue[700]), size: 28),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                          )
                                         ],
                                       )
                                     ],
@@ -460,7 +483,6 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                             ),
                           ),
                         ),
-                      ),
                     );
                   },
                 ),

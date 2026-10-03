@@ -31,11 +31,13 @@ class MasterDataCache {
     _providers = null;
   }
 
-  Future<void> load(bool forceRefresh) async {
+  Future<void> load(bool forceRefresh, {bool showAll = true}) async {
     if (_lastNegocioId == null) return;
     if (isLoaded && !forceRefresh) return;
     
-    final masters = await _service.fetchAllMasterData(false);
+    // 🔥 FORZAR a true para que la caché siempre tenga todo (incluyendo inactivos).
+    // Los filtros visuales se encargarán de ocultar los inactivos de la UI.
+    final masters = await _service.fetchAllMasterData(true);
     if (masters != null) {
       _categories = List<Category>.from(masters['categories']);
       _brands = List<Brand>.from(masters['brands']);

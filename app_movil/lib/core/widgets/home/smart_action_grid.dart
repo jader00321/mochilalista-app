@@ -10,9 +10,11 @@ import 'package:app_movil/features/smart_quotation/providers/smart_quotation_pro
 import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
 // Pantallas
 import 'package:app_movil/features/scanner/screens/scan_screen.dart'; 
+import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/crm/client_tracking_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/matching_screen.dart'; 
@@ -21,6 +23,7 @@ import 'package:app_movil/features/scanner/screens/invoice_staging_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/sales_history_screen.dart';
 import 'package:app_movil/features/analytics/screens/analytics_dashboard_screen.dart';
+import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
 import 'package:app_movil/core/screens/db_inspector_screen.dart';
 
 class SmartActionGrid extends StatelessWidget {
@@ -36,6 +39,7 @@ class SmartActionGrid extends StatelessWidget {
     final trackingProv = Provider.of<TrackingProvider>(context);
     final salesProv = Provider.of<SaleProvider>(context);
     final quickSaleProv = Provider.of<QuickSaleProvider>(context);
+    final invProv = Provider.of<InventoryProvider>(context);
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -44,108 +48,61 @@ class SmartActionGrid extends StatelessWidget {
     final int crossAxisCount = screenWidth > 600 ? 3 : 2;
     final double aspectRatio = screenWidth > 600 ? 1.1 : (screenWidth > 400 ? 1.05 : 0.92);
 
-    List<Widget> cards = [
-      _buildCard(
-        context,
-        index: 0,
-        screenWidth: screenWidth,
-        title: isClient ? "Crear Pedido" : "Cotizar Manual",
-        subtitle: isClient ? "Catálogo Virtual" : "Detallada",
-        icon: isClient ? Icons.add_shopping_cart_rounded : Icons.edit_note_rounded,
-        color: isDark ? Colors.blue[400]! : Colors.blue[700]!,
-        isDark: isDark,
-        badge: (!isClient && quotationScanner.hasManualDraft) 
-            ? _buildBadge("${quotationScanner.draftManualItems!.length}", Colors.blue) 
-            : null,
-        onTap: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualQuotationScreen()));
-        },
-      ),
+    List<Widget> cards = [];
 
-      if (!isClient) ...[
+    if (isClient) {
+      cards.add(
         _buildCard(
-          context,
-          index: 1,
-          screenWidth: screenWidth,
-          title: "Venta Rápida",
-          subtitle: "Caja al paso",
-          icon: Icons.flash_on_rounded, 
-          color: isDark ? Colors.pink[300]! : Colors.pink[600]!,
+          context, index: 0, screenWidth: screenWidth,
+          title: "Crear Pedido", subtitle: "Catálogo Virtual",
+          icon: Icons.add_shopping_cart_rounded, color: isDark ? Colors.blue[400]! : Colors.blue[700]!,
           isDark: isDark,
-          badge: quickSaleProv.cartItems.isNotEmpty 
-              ? _buildBadge("${quickSaleProv.cartItems.length}", Colors.red) 
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualQuotationScreen())),
+        )
+      );
+    } else {
+      int idx = 0;
+      cards.addAll([
+        _buildCard(
+          context, index: idx++, screenWidth: screenWidth,
+          title: "Venta Rápida", subtitle: "Caja al paso",
+          icon: Icons.flash_on_rounded, color: isDark ? Colors.pink[300]! : Colors.pink[600]!,
+          isDark: isDark,
+          badge: quickSaleProv.cartItems.isNotEmpty ? _buildBadge("${quickSaleProv.cartItems.length}", Colors.red) : null,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const QuickSaleScreen())),
+        ),
+        
+        _buildCard(
+          context, index: idx++, screenWidth: screenWidth,
+          title: "Crear Producto", subtitle: "Inventario",
+          icon: Icons.add_box_rounded, color: isDark ? Colors.green[400]! : Colors.green[600]!,
+          isDark: isDark,
+          badge: invProv.totalPresentationsCount > 0 
+              ? _buildBadge("${invProv.totalPresentationsCount}", Colors.green[800]!) 
               : null,
-          onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const QuickSaleScreen()));
+          onTap: () async {
+            await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductCreateScreen()));
           },
         ),
 
         _buildCard(
-          context,
-          index: 2,
-          screenWidth: screenWidth,
-          title: "Cargar Factura",
-          subtitle: "Reponer Stock",
-          icon: Icons.receipt_long_rounded,
-          color: isDark ? Colors.teal[400]! : Colors.teal[600]!, 
+          context, index: idx++, screenWidth: screenWidth,
+          title: "Cotizar Lista", subtitle: "Escaneo con IA",
+          icon: Icons.document_scanner_rounded, color: isDark ? Colors.orange[400]! : Colors.orange[700]!,
           isDark: isDark,
-          badge: inventoryScanner.aiRawData != null 
-              ? _buildBadge("${inventoryScanner.aiRawData!.items.length}", Colors.teal) 
-              : null,
-          onTap: () {
-            if (inventoryScanner.aiRawData != null) {
-              _showResumeDialog(
-                context, 
-                title: "Factura Pendiente",
-                msg: "Tienes una factura en proceso de revisión o vinculación. ¿Deseas retomarla?",
-                isDark: isDark,
-                onNew: () {
-                  inventoryScanner.clearData();
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.invoice))); 
-                },
-                onResume: () {
-                  if (inventoryScanner.hasSavedProgress && inventoryScanner.stagingData != null) {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoiceStagingScreen()));
-                  } else {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoiceReviewScreen()));
-                  }
-                }
-              );
-            } else {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.invoice)));
-            }
-          },
-        ),
-
-        _buildCard(
-          context,
-          index: 3,
-          screenWidth: screenWidth,
-          title: "Cotizar Lista",
-          subtitle: "Escaneo con IA",
-          icon: Icons.document_scanner_rounded,
-          color: isDark ? Colors.orange[400]! : Colors.orange[700]!,
-          isDark: isDark,
-          badge: quotationScanner.items.isNotEmpty 
-              ? _buildBadge("${quotationScanner.items.length}", Colors.orange) 
-              : null,
+          badge: quotationScanner.items.isNotEmpty ? _buildBadge("${quotationScanner.items.length}", Colors.orange) : null,
           onTap: () {
             if (quotationScanner.items.isNotEmpty) {
               _showResumeDialog(
-                context, 
-                title: "Lista Detectada",
-                msg: "Tienes una lista escolar procesada sin guardar.",
+                context, title: "Lista Detectada", msg: "Tienes una lista escolar procesada sin guardar.",
                 isDark: isDark,
                 onNew: () {
-                  quotationScanner.clearState(); 
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.quotation))); 
+                  quotationScanner.clearState();
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.quotation)));
                 },
-                onResume: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => MatchingScreen(
-                    extractedItems: quotationScanner.items,
-                    metadata: quotationScanner.metadata,
-                  )));
-                }
+                onResume: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MatchingScreen(
+                  extractedItems: quotationScanner.items, metadata: quotationScanner.metadata,
+                ))),
               );
             } else {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.quotation)));
@@ -154,71 +111,82 @@ class SmartActionGrid extends StatelessWidget {
         ),
 
         _buildCard(
-          context,
-          index: 4,
-          screenWidth: screenWidth,
-          title: "Clientes",
-          subtitle: "Deudas y Pagos",
-          icon: Icons.people_alt_rounded,
-          color: isDark ? Colors.purple[300]! : Colors.purple[600]!,
+          context, index: idx++, screenWidth: screenWidth,
+          title: "Cotizar Manual", subtitle: "Detallada",
+          icon: Icons.edit_note_rounded, color: isDark ? Colors.blue[400]! : Colors.blue[700]!,
           isDark: isDark,
-          badge: trackingProv.clientCount > 0 
-              ? _buildBadge("${trackingProv.clientCount}", Colors.purple) 
-              : null,
+          badge: quotationScanner.hasManualDraft ? _buildBadge("${quotationScanner.draftManualItems!.length}", Colors.blue) : null,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualQuotationScreen())),
+        ),
+
+        _buildCard(
+          context, index: idx++, screenWidth: screenWidth,
+          title: "Cargar Factura", subtitle: "Reponer Stock",
+          icon: Icons.receipt_long_rounded, color: isDark ? Colors.teal[400]! : Colors.teal[600]!,
+          isDark: isDark,
+          badge: inventoryScanner.aiRawData != null ? _buildBadge("${inventoryScanner.aiRawData!.items.length}", Colors.teal) : null,
           onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientTrackingScreen()));
+            if (inventoryScanner.aiRawData != null) {
+              _showResumeDialog(
+                context, title: "Factura Pendiente", msg: "Tienes una factura en proceso de revisión o vinculación. ¿Deseas retomarla?",
+                isDark: isDark,
+                onNew: () {
+                  inventoryScanner.clearData();
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.invoice)));
+                },
+                onResume: () {
+                  if (inventoryScanner.hasSavedProgress && inventoryScanner.stagingData != null) {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoiceStagingScreen()));
+                  } else {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoiceReviewScreen()));
+                  }
+                },
+              );
+            } else {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanScreen(mode: ScanMode.invoice)));
+            }
           },
         ),
 
         _buildCard(
-          context,
-          index: 5,
-          screenWidth: screenWidth,
-          title: "Actividad",
-          subtitle: salesProv.todaySalesCount > 0 ? "${salesProv.todaySalesCount} ventas hoy" : "Historial Ventas",
-          icon: Icons.history_edu_rounded,
-          color: isDark ? Colors.indigo[300]! : Colors.indigo[600]!,
+          context, index: idx++, screenWidth: screenWidth,
+          title: "Clientes", subtitle: "Deudas y Pagos",
+          icon: Icons.people_alt_rounded, color: isDark ? Colors.purple[300]! : Colors.purple[600]!,
           isDark: isDark,
-          badge: salesProv.todaySalesCount > 0 
-              ? _buildBadge("${salesProv.todaySalesCount}", Colors.indigo) 
-              : null,
-          onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesHistoryScreen()));
-          },
+          badge: trackingProv.clientCount > 0 ? _buildBadge("${trackingProv.clientCount}", Colors.purple) : null,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ClientTrackingScreen())),
         ),
-        if (kDebugMode)
-          _buildCard(
-            context,
-            index: 6,
-            screenWidth: screenWidth,
-            title: "DB Inspector",
-            subtitle: "Depuración BD",
-            icon: Icons.admin_panel_settings_rounded,
-            color: isDark ? Colors.grey[400]! : Colors.grey[700]!,
-            isDark: isDark,
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const DbInspectorScreen()));
-            },
-          ),
+
         _buildCard(
-          context,
-          index: 7,
-          screenWidth: screenWidth,
-          title: "Estadísticas",
-          subtitle: "Finanzas y Top",
-          icon: Icons.pie_chart_rounded,
-          color: isDark ? Colors.amber[500]! : Colors.amber[700]!,
+          context, index: idx++, screenWidth: screenWidth,
+          title: "Actividad", subtitle: salesProv.todaySalesCount > 0 ? "${salesProv.todaySalesCount} ventas hoy" : "Historial Ventas",
+          icon: Icons.history_edu_rounded, color: isDark ? Colors.indigo[300]! : Colors.indigo[600]!,
           isDark: isDark,
-          badge: salesProv.currentMonthMargin != null
-              ? _buildBadge("${salesProv.currentMonthMargin!.toStringAsFixed(1)}%", Colors.amber[800]!)
-              : null,
-          infoTooltip: "El margen de ganancia promedio de tus ventas este mes. Te indica el porcentaje de rentabilidad.",
-          onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsDashboardScreen()));
-          },
+          badge: salesProv.todaySalesCount > 0 ? _buildBadge("${salesProv.todaySalesCount}", Colors.indigo) : null,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesHistoryScreen())),
         ),
-      ]
-    ];
+        
+        _buildCard(
+          context, index: idx++, screenWidth: screenWidth,
+          title: "Estadísticas", subtitle: "Finanzas y Top",
+          icon: Icons.pie_chart_rounded, color: isDark ? Colors.amber[500]! : Colors.amber[700]!,
+          isDark: isDark,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsDashboardScreen())),
+        ),
+      ]);
+
+      if (kDebugMode) {
+        cards.add(
+          _buildCard(
+            context, index: idx++, screenWidth: screenWidth,
+            title: "DB Inspector", subtitle: "Depuración BD",
+            icon: Icons.admin_panel_settings_rounded, color: isDark ? Colors.grey[400]! : Colors.grey[700]!,
+            isDark: isDark,
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DbInspectorScreen())),
+          )
+        );
+      }
+    }
 
     return GridView.count(
       padding: EdgeInsets.zero,

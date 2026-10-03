@@ -29,7 +29,7 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
   @override
   void initState() {
     super.initState();
-    _maxStock = widget.item.presentation.stockActual;
+    _maxStock = widget.item.displayStock;
   }
 
   void _increment() {

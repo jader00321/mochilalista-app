@@ -42,7 +42,21 @@ class LedgerTimelineTab extends StatelessWidget {
         bool isCargo = item.tipo == "cargo"; 
         bool isLast = index == ledger.length - 1;
 
+        IconData iconData = isCargo ? Icons.arrow_upward : Icons.arrow_downward;
         Color highlightColor = isCargo ? (isDark ? Colors.red[400]! : Colors.red) : (isDark ? Colors.green[400]! : Colors.green);
+
+        if (item.subtipo == 'prestamo') {
+          iconData = Icons.account_balance;
+          highlightColor = isDark ? Colors.orange[400]! : Colors.orange[700]!;
+        } else if (item.subtipo == 'devolucion') {
+          iconData = Icons.undo;
+          highlightColor = isDark ? Colors.purple[300]! : Colors.purple[700]!;
+        } else if (item.subtipo == 'retiro_saldo') {
+          iconData = Icons.output;
+          highlightColor = isDark ? Colors.teal[300]! : Colors.teal[700]!;
+        } else if (item.subtipo == 'venta') {
+          iconData = Icons.receipt_long;
+        }
 
         return IntrinsicHeight(
           child: Row(
@@ -60,7 +74,7 @@ class LedgerTimelineTab extends StatelessWidget {
                         border: Border.all(color: highlightColor, width: 2)
                       ),
                       child: Icon(
-                        isCargo ? Icons.arrow_upward : Icons.arrow_downward,
+                        iconData,
                         size: 18,
                         color: highlightColor,
                       ),

@@ -3,11 +3,14 @@ import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/services/product_service.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/core/database/product_queries.dart';
+import 'package:app_movil/features/catalog/models/category_model.dart';
+import 'package:app_movil/core/services/master_data_service.dart';
 
 class QuickSearchProvider with ChangeNotifier {
   int? _negocioId;
   
   final ProductService _productService = ProductService();
+  final MasterDataService _masterDataService = MasterDataService();
   final dbHelper = LocalDatabase.instance;
 
   // --- ESTADO DE BÚSQUEDA ---
@@ -16,9 +19,12 @@ class QuickSearchProvider with ChangeNotifier {
   bool _isLoadingMore = false;
   String _errorMessage = '';
 
+  List<Category> _categories = [];
+  int? _selectedCategoryId;
+
   // --- PAGINACIÓN ---
   int _currentSkip = 0;
-  final int _limit = 20;
+  final int _limit = 50;
   bool _hasMoreData = true;
   String _currentQuery = "";
 
@@ -28,13 +34,37 @@ class QuickSearchProvider with ChangeNotifier {
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMoreData => _hasMoreData;
   String get errorMessage => _errorMessage;
+  List<Category> get categories => _categories.where((c) => c.activo).toList();
+  int? get selectedCategoryId => _selectedCategoryId;
 
   // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
   void updateContext(int? negocioId) {
     if (_negocioId != negocioId) {
       _negocioId = negocioId;
       _productService.updateContext(negocioId);
+      _masterDataService.updateContext(negocioId);
+      _loadCategories();
     }
+  }
+
+  Future<void> _loadCategories() async {
+    if (_categories.isNotEmpty || _negocioId == null) return;
+    try {
+      final masters = await _masterDataService.fetchAllMasterData(true);
+      if (masters != null) {
+        _categories = List<Category>.from(masters['categories']);
+        _categories.sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint("Error cargando categorias en quick sale: $e");
+    }
+  }
+
+  void selectCategory(int? categoryId) {
+    if (_selectedCategoryId == categoryId) return;
+    _selectedCategoryId = categoryId;
+    searchProducts(_currentQuery, reset: true);
   }
 
   // --- 1. BÚSQUEDA DE TEXTO (CON PAGINACIÓN LOCAL) ---
@@ -63,6 +93,10 @@ class QuickSearchProvider with ChangeNotifier {
       
       if (_currentQuery.isNotEmpty) {
         queryParams['q'] = _currentQuery;
+      }
+      
+      if (_selectedCategoryId != null) {
+        queryParams['category_ids'] = _selectedCategoryId.toString();
       }
 
       final List<InventoryWrapper>? newItems = await _productService.fetchInventory(queryParams);
@@ -132,6 +166,7 @@ class QuickSearchProvider with ChangeNotifier {
     _currentSkip = 0;
     _hasMoreData = true;
     _errorMessage = '';
+    _selectedCategoryId = null;
     notifyListeners();
   }
 

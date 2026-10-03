@@ -62,7 +62,10 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
     final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
     final saleProv = Provider.of<SaleProvider>(context, listen: false);
 
-    setState(() => _isProcessing = true);
+    setState(() {
+      _isProcessing = true;
+      _isSuccess = false;
+    });
 
     try {
       final promoProv = Provider.of<PromotionProvider>(context, listen: false);
@@ -120,6 +123,22 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
       );
 
       if (checkoutError == null && mounted) {
+        // Extraemos los providers ANTES de cualquier `await` para evitar avisos del analizador
+        final invProv = Provider.of<InventoryProvider>(context, listen: false);
+        final catProv = Provider.of<CatalogProvider>(context, listen: false);
+        final notifProv = Provider.of<NotificationProvider>(context, listen: false);
+        final promProv = Provider.of<PromotionProvider>(context, listen: false);
+
+        // Mantenemos _isProcessing = true y sincronizamos
+        try {
+          await invProv.refreshAfterSale();
+          await catProv.initCatalog();
+          notifProv.fetchNotifications();
+          promProv.refreshUI();
+        } catch (_) {}
+
+        if (!mounted) return;
+
         setState(() {
           _isProcessing = false;
           _isSuccess = true;
@@ -128,14 +147,6 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
         await Future.delayed(const Duration(milliseconds: 1500));
         quickProv.clearCart();
         
-        if (!mounted) return;
-        try {
-          Provider.of<InventoryProvider>(context, listen: false).refreshAfterSale();
-          Provider.of<CatalogProvider>(context, listen: false).initCatalog();
-          Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
-          Provider.of<PromotionProvider>(context, listen: false).refreshUI();
-        } catch (_) {}
-
         if (mounted) Navigator.pop(context, true); 
       } else {
         // Lanza el error capturado (ej. "Stock insuficiente para 'Cuaderno'")
@@ -310,7 +321,14 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
               child: _isProcessing 
-                ? const CircularProgressIndicator(color: Colors.white)
+                ? const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                      SizedBox(width: 12),
+                      Text("Sincronizando inventario...", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ],
+                  )
                 : const Text("PROCESAR VENTA", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1)),
             ),
           ),

@@ -25,7 +25,7 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
   bool _isLoadingMore = false;
   bool _hasMore = true;
   int _skip = 0;
-  final int _limit = 20;
+  final int _limit = 50;
   String _currentQuery = "";
   
   Timer? _debounce;
@@ -201,11 +201,6 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
     String marca = invProv.getBrandName(prod.marcaId);
     if (marca.isEmpty) marca = "Genérica";
 
-    String variantDisplay = pres.umpCompra ?? "Unidad";
-    if (pres.nombreEspecifico != null && pres.nombreEspecifico!.isNotEmpty) {
-        variantDisplay += " - ${pres.nombreEspecifico}";
-    }
-
     final String? imgUrl = pres.imagenUrl ?? prod.imagenUrl;
     final textColor = isDark ? Colors.white : Colors.black87;
 
@@ -240,32 +235,57 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // CAMBIO FASE 3: Separación visual de Marca y Categoría
+                  // CAMBIO FASE 1: Destacar la marca visualmente.
                   Wrap(
                     spacing: 8,
                     runSpacing: 6,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.blueGrey.withValues(alpha: 0.15) : Colors.blueGrey[50], borderRadius: BorderRadius.circular(6)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.branding_watermark, size: 10, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700]), const SizedBox(width: 4), Text(marca, style: TextStyle(fontSize: 11, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[800], fontWeight: FontWeight.w900, letterSpacing: 0.5))])),
                       Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[50], borderRadius: BorderRadius.circular(6)), child: Text(categoria.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.orange[300] : Colors.orange[800], letterSpacing: 0.5))),
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.blueGrey.withValues(alpha: 0.15) : Colors.blueGrey[50], borderRadius: BorderRadius.circular(6)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.branding_watermark, size: 10, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700]), const SizedBox(width: 4), Text(marca, style: TextStyle(fontSize: 10, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[800], fontWeight: FontWeight.w900, letterSpacing: 0.5))])),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(prod.nombre, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: textColor, height: 1.2), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  Text(variantDisplay, style: TextStyle(fontSize: 14, color: isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold)),
+                  
+                  // Nombres principal y específico seguidos
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: prod.nombre,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor, height: 1.2),
+                        ),
+                        if (pres.nombreEspecifico != null && pres.nombreEspecifico!.isNotEmpty) ...[
+                          TextSpan(
+                            text: ' - ',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor, height: 1.2),
+                          ),
+                          TextSpan(
+                            text: pres.nombreEspecifico,
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.blue[300] : Colors.blue[800], height: 1.2),
+                          ),
+                        ]
+                      ]
+                    )
+                  ),
                   const SizedBox(height: 8),
+                  
                   Wrap(
                     spacing: 12,
                     runSpacing: 6,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                        child: Text(pres.umpCompra ?? "Unidad", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[300] : Colors.grey[700])),
+                      ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.layers, size: 18, color: pres.stockActual > 0 ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.red[400] : Colors.red)),
-                          const SizedBox(width: 6),
-                          Text("Stock: ${pres.stockActual}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: pres.stockActual > 0 ? (isDark ? Colors.green[300] : Colors.green[700]) : (isDark ? Colors.red[300] : Colors.red[700]))),
+                          Icon(Icons.layers, size: 16, color: wrapper.displayStock > 0 ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.red[400] : Colors.red)),
+                          const SizedBox(width: 4),
+                          Text(wrapper.displayStock > 0 ? "Stock: ${wrapper.displayStockText}" : "Agotado", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: wrapper.displayStock > 0 ? (isDark ? Colors.green[300] : Colors.green[700]) : (isDark ? Colors.red[300] : Colors.red[700]))),
                         ],
                       ),
                       Text("P.Venta: S/${pres.precioVentaFinal.toStringAsFixed(2)}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey[600])),

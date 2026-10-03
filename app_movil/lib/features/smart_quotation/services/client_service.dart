@@ -115,45 +115,73 @@ class ClientService {
       List<LedgerItem> ledger = [];
 
       final sales = await db.rawQuery('''
-        SELECT id, fecha_venta, monto_total
+        SELECT id, numero_secuencial, origen_venta, fecha_venta, monto_total
         FROM ventas 
         WHERE cliente_id = ? AND is_archived = 0
       ''', [clientId]);
       
       final payments = await db.rawQuery('''
-        SELECT p.*, c.numero_cuota 
+        SELECT p.*, c.numero_cuota, v.origen_venta as pago_origen_venta, v.numero_secuencial as venta_numero_secuencial 
         FROM pagos p 
         LEFT JOIN cuotas c ON p.cuota_id = c.id 
-        WHERE p.cliente_id = ?
+        LEFT JOIN ventas v ON p.venta_id = v.id
+        WHERE p.cliente_id = ? AND (v.is_archived IS NULL OR v.is_archived = 0)
       ''', [clientId]);
 
       List<Map<String, dynamic>> combined = [];
       for (var s in sales) {
-        combined.add({'id_ref': s['id'], 'tipo': 'cargo', 'fecha': s['fecha_venta'], 'monto': s['monto_total'], 'detalle': 'Venta #${s['id']}'});
+        final displayId = s['numero_secuencial'] ?? s['id'];
+        String label = s['origen_venta'] == 'prestamo_personal' 
+            ? 'Préstamo #$displayId' 
+            : 'Venta #$displayId';
+        String subtipo = s['origen_venta'] == 'prestamo_personal' ? 'prestamo' : 'venta';
+        combined.add({'id_ref': s['id'], 'tipo': 'cargo', 'subtipo': subtipo, 'fecha': s['fecha_venta'], 'monto': s['monto_total'], 'detalle': label, 'affects_debt': true});
       }
       for (var p in payments) {
         String detail = 'Pago en ${p['metodo_pago']}';
-        if (p['metodo_pago'] == 'saldo_a_favor') detail = 'Pago con Saldo a Favor';
+        String subtipo = 'pago';
+        bool affectsDebt = true;
         
-        if (p['nota'] != null && p['nota'].toString().isNotEmpty) {
+        // Si el pago no está vinculado a una venta (ej. Saldo a favor, abono desvinculado, retiro), no afecta la deuda histórica.
+        if (p['venta_id'] == null || p['nota'] == 'Conversión a Saldo a favor' || p['metodo_pago'] == 'devolucion' || p['metodo_pago'] == 'retiro_saldo') {
+          affectsDebt = false;
+        }
+
+        if (p['metodo_pago'] == 'saldo_a_favor') {
+          detail = 'Pago con Saldo a Favor';
+        } else if (p['metodo_pago'] == 'devolucion') {
+          detail = p['nota']?.toString() ?? 'Devolución';
+          subtipo = 'devolucion';
+        } else if (p['metodo_pago'] == 'retiro_saldo') {
+          detail = p['nota']?.toString() ?? 'Retiro de Saldo a favor';
+          subtipo = 'retiro_saldo';
+        }
+        
+        bool isLoan = p['pago_origen_venta'] == 'prestamo_personal';
+        String entityName = isLoan ? 'Préstamo' : 'Venta';
+        final displayVentaId = p['venta_numero_secuencial'] ?? p['venta_id'];
+        
+        if (p['nota'] != null && p['nota'].toString().isNotEmpty && p['metodo_pago'] != 'devolucion' && p['metodo_pago'] != 'retiro_saldo') {
            detail = '${p['nota']} (${p['metodo_pago']})';
            
            // 🔥 FASE 3: Identificar de qué venta es el Abono Inicial
            String notaLower = p['nota'].toString().toLowerCase();
-           if (notaLower.contains('abono inicial') || notaLower.contains('pago adelantado')) {
-             if (p['venta_id'] != null) {
-               detail += ' de Venta #${p['venta_id']}';
+           if (notaLower.contains('abono inicial') || notaLower.contains('pago adelantado') || notaLower.contains('conversión a saldo a favor')) {
+             if (p['venta_id'] != null && !notaLower.contains('conversión a saldo a favor')) {
+               detail += ' de $entityName #$displayVentaId';
+             } else if (notaLower.contains('conversión a saldo a favor')) {
+               detail = 'Conversión a Saldo a favor';
              }
            }
-        } else if (p['numero_cuota'] != null) {
-           detail += ' (Cuota ${p['numero_cuota']} de Venta #${p['venta_id']})';
-        } else if (p['cuota_id'] != null) {
-           detail += ' (Cuota, Venta #${p['venta_id']})';
-        } else if (p['venta_id'] != null) {
-           detail += ' (Venta #${p['venta_id']})';
+        } else if (p['numero_cuota'] != null && p['metodo_pago'] != 'devolucion' && p['metodo_pago'] != 'retiro_saldo') {
+           detail += ' (Cuota ${p['numero_cuota']} de $entityName #$displayVentaId)';
+        } else if (p['cuota_id'] != null && p['metodo_pago'] != 'devolucion' && p['metodo_pago'] != 'retiro_saldo') {
+           detail += ' (Cuota, $entityName #$displayVentaId)';
+        } else if (p['venta_id'] != null && p['metodo_pago'] != 'devolucion' && p['metodo_pago'] != 'retiro_saldo') {
+           detail += ' ($entityName #$displayVentaId)';
         }
 
-        combined.add({'id_ref': p['id'], 'tipo': 'abono', 'fecha': p['fecha_pago'], 'monto': p['monto'], 'detalle': detail});
+        combined.add({'id_ref': p['id'], 'tipo': 'abono', 'subtipo': subtipo, 'fecha': p['fecha_pago'], 'monto': p['monto'], 'detalle': detail, 'affects_debt': affectsDebt});
       }
 
       combined.sort((a, b) {
@@ -165,9 +193,17 @@ class ClientService {
       double runningBalance = 0.0;
       for (var item in combined) {
         double monto = (item['monto'] as num).toDouble();
-        if (item['tipo'] == 'cargo') { runningBalance += monto; } else { runningBalance -= monto; }
+        if (item['affects_debt'] == true) {
+          if (item['tipo'] == 'cargo') { 
+            runningBalance += monto; 
+          } else { 
+            runningBalance -= monto; 
+          }
+        }
+        if (runningBalance < 0.01) runningBalance = 0.0;
+
         ledger.add(LedgerItem(
-          idRef: item['id_ref'], tipo: item['tipo'], fecha: DateTime.parse(item['fecha']),
+          idRef: item['id_ref'], tipo: item['tipo'], subtipo: item['subtipo'], fecha: DateTime.parse(item['fecha']),
           monto: monto, detalle: item['detalle'], saldoResultante: runningBalance
         ));
       }
@@ -178,7 +214,7 @@ class ClientService {
   Future<List<SmartQuotationModel>> getPendingQuotations(int clientId) async {
     try {
       final db = await dbHelper.database;
-      final rows = await db.query('smart_quotations', where: 'client_id = ? AND status != ? AND status != ?', whereArgs: [clientId, 'SOLD', 'ARCHIVED'], orderBy: 'created_at DESC');
+      final rows = await db.query('smart_quotations', where: 'client_id = ? AND status != ? AND status != ? AND status != ?', whereArgs: [clientId, 'SOLD', 'ARCHIVED', 'ANNULLED'], orderBy: 'created_at DESC');
       return rows.map((e) => SmartQuotationModel.fromJson(e)).toList();
     } catch (e) { return []; }
   }
@@ -202,6 +238,59 @@ class ClientService {
   Future<void> recalculateClientDebt(int clientId) async {
     try {
       final db = await dbHelper.database;
+      
+      // --- DATA HEALING: Reconstruir monto_pagado y abono_inicial desde la fuente de verdad (tabla pagos) ---
+      await db.transaction((txn) async {
+         final ventas = await txn.query('ventas', where: 'cliente_id = ? AND (is_archived IS NULL OR is_archived = 0)', whereArgs: [clientId]);
+         for (var v in ventas) {
+            int vId = v['id'] as int;
+            double montoTotal = (v['monto_total'] as num).toDouble();
+            
+            // 1. Sanar cuotas
+            final cuotas = await txn.query('cuotas', where: 'venta_id = ?', whereArgs: [vId]);
+            double totalCuotasPagado = 0.0;
+            for (var c in cuotas) {
+               int cId = c['id'] as int;
+               final pagosCuota = await txn.rawQuery('SELECT SUM(monto) as total FROM pagos WHERE cuota_id = ? AND venta_id = ? AND metodo_pago != ? AND metodo_pago != ?', [cId, vId, 'devolucion', 'retiro_saldo']);
+               double pCuota = (pagosCuota.first['total'] as num?)?.toDouble() ?? 0.0;
+               double cMonto = (c['monto'] as num).toDouble();
+               
+               int cMontoCents = (cMonto * 100).round();
+               int pCuotaCents = (pCuota * 100).round();
+               
+               String cStatus = (cMontoCents - pCuotaCents) <= 10 ? 'pagado' : 'parcial';
+               if (pCuotaCents == 0) cStatus = 'pendiente';
+               
+               await txn.update('cuotas', {'monto_pagado': pCuota, 'estado': cStatus}, where: 'id = ?', whereArgs: [cId]);
+               totalCuotasPagado += pCuota;
+            }
+            
+            // 2. Sanar pagos directos a la venta (abono inicial o ventas al contado)
+            final pagosAbono = await txn.rawQuery('SELECT SUM(monto) as total FROM pagos WHERE venta_id = ? AND cuota_id IS NULL AND metodo_pago != ? AND metodo_pago != ?', [vId, 'devolucion', 'retiro_saldo']);
+            double pAbono = (pagosAbono.first['total'] as num?)?.toDouble() ?? 0.0;
+            
+            double nuevoMontoPagado = totalCuotasPagado + pAbono;
+            
+            int vTotalCents = (montoTotal * 100).round();
+            int vPagadoCents = (nuevoMontoPagado * 100).round();
+            
+            String vStatus = (vTotalCents - vPagadoCents) <= 10 ? 'pagado' : 'parcial';
+            if (vPagadoCents == 0) vStatus = 'pendiente';
+            
+            String vEntrega = v['estado_entrega'] as String? ?? 'entregado';
+            if (vStatus == 'pagado' && vEntrega == 'retenido_por_pago') {
+               vEntrega = 'pendiente_recojo';
+            }
+            
+            if (cuotas.isNotEmpty) {
+               await txn.update('ventas', {'monto_pagado': nuevoMontoPagado, 'abono_inicial': pAbono, 'estado_pago': vStatus, 'estado_entrega': vEntrega}, where: 'id = ?', whereArgs: [vId]);
+            } else {
+               await txn.update('ventas', {'monto_pagado': nuevoMontoPagado, 'estado_pago': vStatus, 'estado_entrega': vEntrega}, where: 'id = ?', whereArgs: [vId]);
+            }
+         }
+      });
+      // ------------------------------------------------------------------------------------------------------
+
       final debtsRows = await db.rawQuery('''
         SELECT SUM(monto_total - monto_pagado) as debt 
         FROM ventas 
@@ -213,6 +302,36 @@ class ClientService {
       }
       if (totalDeuda < 0.02) totalDeuda = 0.0;
       await _repository.updateClient(clientId, {'deuda_total': totalDeuda});
+    } catch (e) {
+      // Ignorar en caso de error
+    }
+  }
+
+  Future<void> recalculateClientSaldoAFavor(int clientId) async {
+    try {
+      final db = await dbHelper.database;
+      final result = await db.rawQuery('''
+        SELECT 
+          SUM(CASE WHEN p.nota = 'Conversión a Saldo a favor' THEN p.monto ELSE 0 END) as excedentes,
+          SUM(CASE WHEN p.metodo_pago = 'devolucion' THEN p.monto ELSE 0 END) as devoluciones,
+          SUM(CASE WHEN p.metodo_pago = 'saldo_a_favor' AND (v.is_archived IS NULL OR v.is_archived = 0) THEN p.monto ELSE 0 END) as gastado,
+          SUM(CASE WHEN p.metodo_pago = 'retiro_saldo' THEN p.monto ELSE 0 END) as retirado
+        FROM pagos p
+        LEFT JOIN ventas v ON p.venta_id = v.id
+        WHERE p.cliente_id = ?
+      ''', [clientId]);
+      
+      double nuevoSaldo = 0.0;
+      if (result.isNotEmpty) {
+         double excedentes = (result.first['excedentes'] as num?)?.toDouble() ?? 0.0;
+         double devoluciones = (result.first['devoluciones'] as num?)?.toDouble() ?? 0.0;
+         double gastado = (result.first['gastado'] as num?)?.toDouble() ?? 0.0;
+         double retirado = (result.first['retirado'] as num?)?.toDouble() ?? 0.0;
+         nuevoSaldo = excedentes + devoluciones - gastado - retirado;
+         if (nuevoSaldo < 0) nuevoSaldo = 0.0;
+      }
+      
+      await _repository.updateClient(clientId, {'saldo_a_favor': nuevoSaldo});
     } catch (e) {
       // Ignorar en caso de error
     }
@@ -411,5 +530,106 @@ class ClientService {
       await recalculateClientDebt(clientId);
       return true;
     } catch (e) { throw Exception("Error registrando pago localmente: $e"); }
+  }
+
+  Future<void> recalculateClientReputation(int clientId) async {
+    try {
+      final db = await dbHelper.database;
+      
+      final clientStats = await _repository.getClientCancellationStats(clientId);
+      int totalVentas = clientStats['totalVentas'] ?? 0;
+      double cancellationRate = clientStats['cancellationRate'] ?? 0.0;
+      
+      // Regla: Mínimo 3 ventas (historicas) para poder juzgar la reputación.
+      if (totalVentas >= 3) {
+        String newReputation = 'bueno';
+        if (cancellationRate > 30.0) {
+          newReputation = 'malo';
+        } else if (cancellationRate > 15.0) {
+          newReputation = 'regular';
+        }
+        
+        await db.update(
+          'clientes', 
+          {'nivel_confianza': newReputation},
+          where: 'id = ?',
+          whereArgs: [clientId]
+        );
+      }
+    } catch (e, stack) {
+      AppLogger.error('ClientService.recalculateClientReputation', e, stack);
+    }
+  }
+
+  Future<void> withdrawClientBalance(int clientId, int negocioId, int usuarioId, double amount, String method) async {
+    final db = await dbHelper.database;
+    await db.transaction((txn) async {
+      await txn.insert('pagos', {
+        'negocio_id': negocioId,
+        'creado_por_usuario_id': usuarioId,
+        'cliente_id': clientId,
+        'venta_id': null,
+        'monto': amount,
+        'metodo_pago': 'retiro_saldo',
+        'nota': 'Retiro de Saldo a favor ($method)',
+        'fecha_pago': DateTime.now().toIso8601String(),
+      });
+    });
+    await recalculateClientSaldoAFavor(clientId);
+  }
+
+  Future<void> registerLoan(int clientId, int negocioId, int usuarioId, {
+    required double amount,
+    required String motivo,
+    double? interestRate,
+    String? metodoPago,
+    List<InstallmentModel>? installments,
+  }) async {
+    final db = await dbHelper.database;
+    
+    await db.transaction((txn) async {
+      final nextSeqResult = await txn.rawQuery('SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM ventas WHERE negocio_id = ?', [negocioId]);
+      int sequentialId = (nextSeqResult.first['next_val'] as int?) ?? 1;
+
+      // Monto total incluye interés. Si hay cuotas, priorizamos su suma exacta.
+      double finalDebt = amount + (amount * (interestRate ?? 0) / 100);
+      if (installments != null && installments.isNotEmpty) {
+        finalDebt = installments.fold(0.0, (sum, cuota) => sum + cuota.amount);
+      }
+
+      // 1. Insertar "venta virtual" como préstamo
+      int loanId = await txn.insert('ventas', {
+        'numero_secuencial': sequentialId,
+        'negocio_id': negocioId,
+        'creado_por_usuario_id': usuarioId,
+        'cliente_id': clientId,
+        'origen_venta': 'prestamo_personal',
+        'metodo_pago': metodoPago ?? 'Efectivo',
+        'estado_pago': 'pendiente',
+        'estado_entrega': 'entregado', // No hay entrega física
+        'monto_total': finalDebt,
+        'monto_pagado': 0.0,
+        'nota_prestamo': motivo,
+        'porcentaje_interes': interestRate ?? 0.0,
+        'fecha_venta': DateTime.now().toIso8601String(),
+      });
+
+      // 2. Insertar cuotas generadas por el modal
+      if (installments != null && installments.isNotEmpty) {
+        for (var cuota in installments) {
+          await txn.insert('cuotas', {
+            'venta_id': loanId,
+            'numero_cuota': cuota.installmentNumber,
+            'monto': cuota.amount,
+            'monto_pagado': 0.0,
+            'fecha_vencimiento': cuota.dueDate,
+            'estado': 'pendiente',
+          });
+        }
+      }
+    });
+
+    // 3. Recalcular deuda
+    await recalculateClientDebt(clientId);
   }
 }

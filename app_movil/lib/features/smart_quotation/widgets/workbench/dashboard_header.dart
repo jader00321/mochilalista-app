@@ -5,8 +5,14 @@ import 'package:app_movil/features/smart_quotation/providers/workbench_provider.
 class DashboardHeader extends StatefulWidget {
   final WorkbenchProvider provider;
   final bool isDark;
+  final TabController tabController;
 
-  const DashboardHeader({super.key, required this.provider, required this.isDark});
+  const DashboardHeader({
+    super.key, 
+    required this.provider, 
+    required this.isDark,
+    required this.tabController,
+  });
 
   @override
   State<DashboardHeader> createState() => _DashboardHeaderState();
@@ -31,45 +37,105 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    int prepCount = widget.provider.inProcessList.length;
-    int readyCount = widget.provider.readyAndPacksList.length;
-    int alertCount = widget.provider.criticalAlertsCount; 
-    double totalSales = widget.provider.totalDaySales;
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
+    return AnimatedBuilder(
+      animation: widget.tabController,
+      builder: (context, _) {
+        final isSoldTab = widget.tabController.index == 2;
+        final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.only(bottom: 12, top: 12, left: 16, right: 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: widget.isDark 
-            ? [const Color(0xFF0D47A1), const Color(0xFF001633)] 
-            : [const Color(0xFF1565C0), const Color(0xFF0D47A1)], 
-          begin: Alignment.topCenter, end: Alignment.bottomCenter 
-        ),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: 94,
-            child: Row(
-              children: [
-                Expanded(child: _buildKpiCard("En Revisión", "$prepCount", Icons.pending_actions, Colors.orange)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildKpiCard("Preparadas", "$readyCount", Icons.check_circle_outline, Colors.greenAccent)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildAlertKpiCard(alertCount)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildKpiCard("Acumulado", currency.format(totalSales), Icons.monetization_on, Colors.blueAccent)),
-              ],
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.only(bottom: 4, top: 6, left: 16, right: 16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: widget.isDark 
+                ? [const Color(0xFF0D47A1), const Color(0xFF001633)] 
+                : [const Color(0xFF1565C0), const Color(0xFF0D47A1)], 
+              begin: Alignment.topCenter, end: Alignment.bottomCenter 
             ),
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))
           ),
-          const SizedBox(height: 12),
-          _buildTimeFilterSelector(context),
-        ],
-      ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 94,
+                child: isSoldTab 
+                  ? _buildSoldKPIs(currency)
+                  : (widget.tabController.index == 1 
+                      ? _buildTab1KPIs(currency) 
+                      : _buildActiveKPIs(currency)),
+              ),
+              const SizedBox(height: 6),
+              _buildTimeFilterSelector(context),
+            ],
+          ),
+        );
+      }
+    );
+  }
+
+  Widget _buildActiveKPIs(NumberFormat currency) {
+    int prepCount = widget.provider.filteredInProcessList.length;
+    int readyCount = widget.provider.filteredReadyAndPacksList.length;
+    int alertCount = widget.provider.totalAlertsCount; 
+    double projectedTotal = widget.provider.filteredInProcessList.fold(0.0, (s, q) => s + q.totalAmount) + 
+                            widget.provider.filteredReadyAndPacksList.fold(0.0, (s, q) => s + q.totalAmount);
+                            
+    return Row(
+      children: [
+        Expanded(child: _buildKpiCard("En Revisión", "$prepCount", Icons.pending_actions, Colors.orange)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildKpiCard("Preparadas", "$readyCount", Icons.check_circle_outline, Colors.greenAccent)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildAlertKpiCard(alertCount)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildKpiCard("Proyectado", currency.format(projectedTotal), Icons.monetization_on, Colors.blueAccent)),
+      ],
+    );
+  }
+
+  Widget _buildTab1KPIs(NumberFormat currency) {
+    int readyCount = widget.provider.filteredReadyAndPacksList.where((q) => q.type != 'pack').length;
+    int packsCount = widget.provider.filteredReadyAndPacksList.where((q) => q.type == 'pack').length;
+    
+    int alertCount = 0;
+    for (var q in widget.provider.filteredReadyAndPacksList) {
+      final val = widget.provider.getValidationFor(q.id);
+      if (val != null && val.hasIssues) alertCount++;
+    }
+
+    double projectedTotal = widget.provider.filteredReadyAndPacksList.fold(0.0, (s, q) => s + q.totalAmount);
+                            
+    return Row(
+      children: [
+        Expanded(child: _buildKpiCard("Preparadas", "$readyCount", Icons.check_circle_outline, Colors.greenAccent)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildKpiCard("Packs", "$packsCount", Icons.inventory, Colors.purpleAccent)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildAlertKpiCard(alertCount)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildKpiCard("Proyectado", currency.format(projectedTotal), Icons.monetization_on, Colors.blueAccent)),
+      ],
+    );
+  }
+
+  Widget _buildSoldKPIs(NumberFormat currency) {
+    int soldCount = widget.provider.filteredSoldList.length;
+    double totalIncome = widget.provider.totalDaySales;
+    int productsSold = widget.provider.productsSoldCount;
+    double avgTicket = widget.provider.avgTicket;
+
+    return Row(
+      children: [
+        Expanded(child: _buildKpiCard("Ventas", "$soldCount", Icons.shopping_cart_checkout, Colors.greenAccent)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildKpiCard("Ingresos", currency.format(totalIncome), Icons.account_balance_wallet, Colors.amber)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildKpiCard("Prods. Vend.", "$productsSold", Icons.inventory_2, Colors.purpleAccent)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildKpiCard("Ticket Prom.", currency.format(avgTicket), Icons.receipt_long, Colors.blueAccent)),
+      ],
     );
   }
 
@@ -119,6 +185,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
               _buildFilterOption(ctx, "Esta Semana", TimeFilter.thisWeek),
               _buildFilterOption(ctx, "Este Mes", TimeFilter.thisMonth),
               _buildFilterOption(ctx, "Últimos 6 Meses", TimeFilter.sixMonths),
+              _buildFilterOption(ctx, "Todo", TimeFilter.allTime),
               _buildFilterOption(ctx, "Rango Personalizado...", TimeFilter.custom),
               const SizedBox(height: 16),
             ],

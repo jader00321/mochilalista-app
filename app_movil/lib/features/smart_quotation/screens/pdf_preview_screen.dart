@@ -48,8 +48,10 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         
         if (_saleData != null && _saleData!['cotizacion'] != null) {
           _quotation = SmartQuotationModel.fromJson(_saleData!['cotizacion']);
-          _config.documentTitle = "COMPROBANTE DE PAGO"; 
-          _config.showTransactionDetails = true;
+          final bool isLoan = _saleData!['origen_venta'] == 'prestamo_personal';
+          _config.documentTitle = isLoan ? "COMPROBANTE DE PRÉSTAMO" : "COMPROBANTE DE PAGO"; 
+          _config.showTransactionDetails = !isLoan;
+          _config.showInstallments = isLoan;
         }
       } 
       else if (widget.quotationId != null) {
@@ -205,8 +207,9 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
           }
 
           final bool isQuickSale = _saleData != null && _saleData!['origen_venta'] == 'pos_rapido';
+          final bool isLoan = _saleData != null && _saleData!['origen_venta'] == 'prestamo_personal';
           final bool hasNotes = _saleData != null && _saleData!['cliente_notas'] != null && _saleData!['cliente_notas'].toString().isNotEmpty;
-          final bool hasInst = !isQuickSale && ((_quotation!.institutionName?.isNotEmpty ?? false) || (_quotation!.gradeLevel?.isNotEmpty ?? false));
+          final bool hasInst = !isQuickSale && !isLoan && ((_quotation!.institutionName?.isNotEmpty ?? false) || (_quotation!.gradeLevel?.isNotEmpty ?? false));
           final bool canToggleExtraInfo = hasInst || hasNotes;
 
           return Container(
@@ -272,16 +275,16 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // 🔥 DATOS DE LOS PRODUCTOS (SISTEMA CASCADA / SUBNIVELES)
-                      Container(
-                        decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.05) : Colors.green[50], borderRadius: BorderRadius.circular(16)),
-                        child: Theme(
-                          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                          child: ExpansionTile(
-                            title: Text("Datos de los Productos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.green[300] : Colors.green[900])),
-                            leading: Icon(Icons.list_alt, color: isDark ? Colors.green[400] : Colors.green[700]),
-                            initiallyExpanded: true,
-                            children: [
+                      if (!isLoan)
+                        Container(
+                          decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.05) : Colors.green[50], borderRadius: BorderRadius.circular(16)),
+                          child: Theme(
+                            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                            child: ExpansionTile(
+                              title: Text("Datos de los Productos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.green[300] : Colors.green[900])),
+                              leading: Icon(Icons.list_alt, color: isDark ? Colors.green[400] : Colors.green[700]),
+                              initiallyExpanded: true,
+                              children: [
                               SwitchListTile(title: Text("Mostrar Columna: Unidad", style: TextStyle(color: textColor)), subtitle: Text("Ej: Docena, Empaque", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])), value: _config.showProductUnit, activeThumbColor: Colors.green, onChanged: (v) => updateConfig(() => _config.showProductUnit = v)),
                               
                               // Nivel principal: Precio Unitario
@@ -315,7 +318,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      if (!isLoan)
+                        const SizedBox(height: 16),
 
                       // 🔥 TOTALES FINANCIEROS (SISTEMA CASCADA / SUBNIVELES)
                       Container(

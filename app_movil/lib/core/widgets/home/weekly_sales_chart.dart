@@ -33,6 +33,7 @@ class _WeeklySalesChartState extends State<WeeklySalesChart> {
     };
 
     for (var sale in salesProv.salesHistory) {
+      if (sale.isArchived || sale.origenVenta == 'prestamo_personal') continue;
       try {
         final date = DateTime.parse(sale.saleDate);
         if (now.difference(date).inDays < 7) {

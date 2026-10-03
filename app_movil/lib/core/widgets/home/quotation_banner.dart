@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:app_movil/features/scanner/screens/scan_screen.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
 import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
 import 'package:app_movil/features/smart_quotation/screens/matching_screen.dart'; 
 

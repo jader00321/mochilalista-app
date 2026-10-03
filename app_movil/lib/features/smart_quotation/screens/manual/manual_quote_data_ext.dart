@@ -105,6 +105,7 @@ extension _ManualQuoteDataExt on _ManualQuotationScreenState {
           String realBrandName = qItem.brandName ?? "";
           String realSpecificName = qItem.specificName ?? "";
           double currentPrice = qItem.originalUnitPrice;
+          double? currentOffer;
           
           if (qItem.bundleId != null) {
             try {
@@ -136,9 +137,10 @@ extension _ManualQuoteDataExt on _ManualQuotationScreenState {
                    realBrandName = realProduct.marcaNombre ?? qItem.brandName ?? "";
                    realSpecificName = pres.nombreEspecifico ?? "";
                    
-                   currentPrice = (pres.precioOferta != null && pres.precioOferta! > 0) 
-                       ? pres.precioOferta! 
-                       : pres.precioVentaFinal;
+                   currentPrice = pres.precioVentaFinal;
+                   currentOffer = (pres.precioOferta != null && pres.precioOferta! > 0) 
+                       ? pres.precioOferta 
+                       : null;
                  }
               }
             } catch(e) { debugPrint("Producto no encontrado: $e"); }
@@ -147,7 +149,9 @@ extension _ManualQuoteDataExt on _ManualQuotationScreenState {
           bool isOutdated = false;
           if (realProductName != (qItem.productName ?? "")) isOutdated = true;
           if (realSpecificName != (qItem.specificName ?? "")) isOutdated = true;
-          if (!qItem.isManualPrice && (qItem.unitPriceApplied - currentPrice).abs() > 0.01) isOutdated = true;
+          
+          final effectivePrice = currentOffer ?? currentPrice;
+          if (!qItem.isManualPrice && (qItem.unitPriceApplied - effectivePrice).abs() > 0.01) isOutdated = true;
           
           // Detección especial para bundles si su composición interna hizo que el maxStock cayera
           if (qItem.bundleId != null && realStock < qItem.quantity) isOutdated = true;
@@ -161,7 +165,8 @@ extension _ManualQuoteDataExt on _ManualQuotationScreenState {
             productName: realProductName,
             specificName: realSpecificName,
             brand: realBrandName,
-            price: currentPrice, 
+            price: currentPrice,
+            offerPrice: currentOffer, 
             stock: realStock, 
             imageUrl: realImageUrl, 
             unit: currentUnit,
@@ -175,8 +180,10 @@ extension _ManualQuoteDataExt on _ManualQuotationScreenState {
           
           if (qItem.isManualPrice) {
              _overriddenPrices[matched.presentationId] = qItem.unitPriceApplied;
-          } else if (!qItem.isManualPrice && qItem.bundleId == null && (qItem.unitPriceApplied - qItem.originalUnitPrice).abs() > 0.01) {
-             _overriddenPrices[matched.presentationId] = qItem.unitPriceApplied;
+          } else if (!qItem.isManualPrice && qItem.bundleId == null) {
+             if ((qItem.unitPriceApplied - effectivePrice).abs() > 0.01) {
+                 _overriddenPrices[matched.presentationId] = qItem.unitPriceApplied;
+             }
           }
           
           if (qItem.productName == null || qItem.productName!.isEmpty) {

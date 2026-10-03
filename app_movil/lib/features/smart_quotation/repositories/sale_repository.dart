@@ -4,6 +4,12 @@ import 'package:app_movil/core/utils/app_logger.dart';
 class SaleRepository {
   final _dbHelper = LocalDatabase.instance;
 
+  Future<int> getNextSequentialNumber(int negocioId) async {
+    final db = await _dbHelper.database;
+    final result = await db.rawQuery('SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM ventas WHERE negocio_id = ?', [negocioId]);
+    return (result.first['next_val'] as int?) ?? 1;
+  }
+
   Future<List<Map<String, dynamic>>> getHistoryRaw(
     int negocioId, {
     int skip = 0,
@@ -38,10 +44,32 @@ class SaleRepository {
         query += " AND v.origen_venta = ?";
         args.add(origenVenta);
       }
-      if (searchQuery != null && searchQuery.isNotEmpty) {
-        query += " AND (c.nombre_completo LIKE ? OR CAST(v.id AS TEXT) LIKE ? OR c.documento LIKE ? OR v.metodo_pago LIKE ?)";
-        final fuzzyTerm = '%$searchQuery%';
-        args.addAll([fuzzyTerm, fuzzyTerm, fuzzyTerm, fuzzyTerm]);
+      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+        if (searchQuery.trim().startsWith('#')) {
+          final cleanQuery = searchQuery.replaceAll('#', '').trim();
+          final idNum = int.tryParse(cleanQuery);
+          if (idNum != null) {
+            query += " AND v.id = ?";
+            args.add(idNum);
+          } else {
+            query += " AND v.id = -1";
+          }
+        } else {
+          final cleanQuery = searchQuery.trim().toLowerCase();
+          final words = cleanQuery.split(RegExp(r'\s+'));
+          for (final word in words) {
+            final idNum = int.tryParse(word);
+            if (idNum != null) {
+              final fuzzyTerm = '%$word%';
+              query += " AND (LOWER(c.nombre_completo) LIKE ? OR v.id = ? OR LOWER(c.dni_ruc) LIKE ? OR LOWER(v.metodo_pago) LIKE ?)";
+              args.addAll([fuzzyTerm, idNum, fuzzyTerm, fuzzyTerm]);
+            } else {
+              final fuzzyTerm = '%$word%';
+              query += " AND (LOWER(c.nombre_completo) LIKE ? OR CAST(v.id AS TEXT) LIKE ? OR LOWER(c.dni_ruc) LIKE ? OR LOWER(v.metodo_pago) LIKE ?)";
+              args.addAll([fuzzyTerm, fuzzyTerm, fuzzyTerm, fuzzyTerm]);
+            }
+          }
+        }
       }
 
       final validSortColumns = [
@@ -98,6 +126,8 @@ class SaleRepository {
       if (origenVenta != null && origenVenta != "todas") {
         query += " AND origen_venta = ?";
         args.add(origenVenta);
+      } else {
+        query += " AND origen_venta != 'prestamo_personal'";
       }
 
       final List<Map<String, dynamic>> rows = await db.rawQuery(query, args);
@@ -136,6 +166,8 @@ class SaleRepository {
       if (origenVenta != null && origenVenta != "todas") {
         query += " AND v.origen_venta = ?";
         args.add(origenVenta);
+      } else {
+        query += " AND v.origen_venta != 'prestamo_personal'";
       }
 
       final result = await db.rawQuery(query, args);

@@ -56,9 +56,12 @@ class InventoryIntelligenceService {
     Future<Map<String, dynamic>> getSalesData(int daysWindow) async {
       final dateThreshold = DateTime.now().subtract(Duration(days: daysWindow)).toIso8601String();
       final result = await db.rawQuery('''
-        SELECT SUM(ABS(cantidad)) as total_sold, MIN(fecha_registro) as first_sale
+        SELECT 
+          IFNULL(SUM(CASE WHEN tipo_transaccion = 'VENTA' THEN ABS(cantidad) ELSE 0 END), 0) - 
+          IFNULL(SUM(CASE WHEN tipo_transaccion = 'ANULACION' THEN ABS(cantidad) ELSE 0 END), 0) as total_sold, 
+          MIN(CASE WHEN tipo_transaccion = 'VENTA' THEN fecha_registro ELSE NULL END) as first_sale
         FROM stock_ledger
-        WHERE presentation_id = ? AND tipo_transaccion = 'VENTA' AND fecha_registro >= ?
+        WHERE presentation_id = ? AND tipo_transaccion IN ('VENTA', 'ANULACION') AND fecha_registro >= ?
       ''', [presentationId, dateThreshold]);
       
       int totalSold = (result.first['total_sold'] as num?)?.toInt() ?? 0;
@@ -93,9 +96,12 @@ class InventoryIntelligenceService {
     final dateThreshold = DateTime.now().subtract(Duration(days: days)).toIso8601String();
     
     final result = await db.rawQuery('''
-      SELECT substr(fecha_registro, 1, 10) as dia, SUM(ABS(cantidad)) as daily_sold
+      SELECT 
+        substr(fecha_registro, 1, 10) as dia, 
+        IFNULL(SUM(CASE WHEN tipo_transaccion = 'VENTA' THEN ABS(cantidad) ELSE 0 END), 0) - 
+        IFNULL(SUM(CASE WHEN tipo_transaccion = 'ANULACION' THEN ABS(cantidad) ELSE 0 END), 0) as daily_sold
       FROM stock_ledger
-      WHERE presentation_id = ? AND tipo_transaccion = 'VENTA' AND fecha_registro >= ?
+      WHERE presentation_id = ? AND tipo_transaccion IN ('VENTA', 'ANULACION') AND fecha_registro >= ?
       GROUP BY substr(fecha_registro, 1, 10)
     ''', [presentationId, dateThreshold]);
     

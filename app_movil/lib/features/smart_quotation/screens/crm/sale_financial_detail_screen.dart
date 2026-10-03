@@ -210,11 +210,12 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
 
     final List<dynamic> cuotas = _saleData!['cuotas'] ?? [];
     final items = _saleData!['items'] as List<dynamic>? ?? [];
+    final bool isLoan = _saleData!['origen_venta'] == 'prestamo_personal';
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text("Detalle de Venta #${widget.saleId}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        title: Text(isLoan ? "Detalle del Préstamo #${_saleData?['numero_secuencial'] ?? widget.saleId}" : "Detalle de Venta #${_saleData?['numero_secuencial'] ?? widget.saleId}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -239,7 +240,8 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                 ),
               ),
 
-              _buildLogisticsCard(isDark, cardColor),
+              if (!isLoan)
+                _buildLogisticsCard(isDark, cardColor),
 
               Container(
                 margin: const EdgeInsets.all(16),
@@ -252,7 +254,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                 ),
                 child: Column(
                   children: [
-                    const Text("Saldo Pendiente de esta Venta", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                    Text(isLoan ? "Saldo Pendiente de este Préstamo" : "Saldo Pendiente de esta Venta", style: const TextStyle(color: Colors.white70, fontSize: 14)),
                     const SizedBox(height: 8),
                     if (interes > 0)
                       Container(
@@ -269,7 +271,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("Costo Total", style: TextStyle(color: Colors.white54, fontSize: 13)),
+                            Text(isLoan ? "Monto Total" : "Costo Total", style: const TextStyle(color: Colors.white54, fontSize: 13)),
                             Text(currency.format(total), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                           ],
                         ),
@@ -429,16 +431,17 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                  Center(child: Padding(padding: const EdgeInsets.all(24), child: Text("Esta venta se realizó al contado (Sin cuotas)", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 15, fontStyle: FontStyle.italic))))
               ],
 
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-                child: Text("Productos Adquiridos (${items.length})", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey)),
-              ),
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: items.length,
-                itemBuilder: (ctx, i) {
+              if (!isLoan) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                  child: Text("Productos Adquiridos (${items.length})", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey)),
+                ),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: items.length,
+                  itemBuilder: (ctx, i) {
                   final item = items[i];
                   String brand = item['brand_name']?.toString() ?? "";
                   String prodName = item['product_name']?.toString() ?? "Producto";
@@ -512,6 +515,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                   );
                 }
               ),
+              ],
               const SizedBox(height: 80),
             ],
           ),

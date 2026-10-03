@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/client_stats_export_service.dart';
+import 'package:app_movil/features/smart_quotation/repositories/client_repository.dart';
 
 enum TimeFilter {
   allTime,
@@ -33,6 +34,39 @@ class _ClientFullStatsModalState extends State<ClientFullStatsModal> {
   DateTime? _customStartDate;
   DateTime? _customEndDate;
 
+  Map<String, dynamic>? _cancellationStats;
+  List<SaleSummary> _allSales = [];
+  bool _isLoadingSales = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _allSales = widget.client.lastSales;
+    _loadAllSales();
+    _loadCancellationStats();
+  }
+
+  Future<void> _loadAllSales() async {
+    final repo = ClientRepository();
+    final rows = await repo.getClientSales(widget.client.id, limit: 10000); 
+    if (mounted) {
+      setState(() {
+        _allSales = rows.map((e) => SaleSummary.fromJson(e)).toList();
+        _isLoadingSales = false;
+      });
+    }
+  }
+
+  Future<void> _loadCancellationStats() async {
+    final repo = ClientRepository();
+    final stats = await repo.getClientCancellationStats(widget.client.id);
+    if (mounted) {
+      setState(() {
+        _cancellationStats = stats;
+      });
+    }
+  }
+
   List<SaleSummary> get _filteredSales {
     DateTime now = DateTime.now();
     DateTime start = DateTime(2000);
@@ -60,7 +94,42 @@ class _ClientFullStatsModalState extends State<ClientFullStatsModal> {
     final cleanStart = DateTime(start.year, start.month, start.day);
     final cleanEnd = DateTime(end.year, end.month, end.day, 23, 59, 59);
 
-    return widget.client.lastSales.where((sale) {
+    return _allSales.where((sale) {
+      if (sale.origenVenta == 'prestamo_personal') return false;
+      DateTime saleDate = DateTime.tryParse(sale.date) ?? now;
+      return saleDate.isAfter(cleanStart.subtract(const Duration(seconds: 1))) && 
+             saleDate.isBefore(cleanEnd.add(const Duration(seconds: 1)));
+    }).toList();
+  }
+
+  List<SaleSummary> get _filteredLoans {
+    DateTime now = DateTime.now();
+    DateTime start = DateTime(2000);
+    DateTime end = now;
+
+    switch (_currentFilter) {
+      case TimeFilter.oneWeek:
+        start = now.subtract(const Duration(days: 7));
+        break;
+      case TimeFilter.oneMonth:
+        start = now.subtract(const Duration(days: 30));
+        break;
+      case TimeFilter.sixMonths:
+        start = now.subtract(const Duration(days: 180));
+        break;
+      case TimeFilter.custom:
+        start = _customStartDate ?? DateTime(2000);
+        end = _customEndDate ?? now;
+        break;
+      case TimeFilter.allTime:
+        break;
+    }
+
+    final cleanStart = DateTime(start.year, start.month, start.day);
+    final cleanEnd = DateTime(end.year, end.month, end.day, 23, 59, 59);
+
+    return _allSales.where((sale) {
+      if (sale.origenVenta != 'prestamo_personal') return false;
       DateTime saleDate = DateTime.tryParse(sale.date) ?? now;
       return saleDate.isAfter(cleanStart.subtract(const Duration(seconds: 1))) && 
              saleDate.isBefore(cleanEnd.add(const Duration(seconds: 1)));
@@ -260,21 +329,40 @@ class _ClientFullStatsModalState extends State<ClientFullStatsModal> {
   @override
   Widget build(BuildContext context) {
     // Calculos Globales (Estado Actual)
-    final double deudaActual = widget.client.totalDebt;
+    final double deudaGlobal = widget.client.totalDebt;
+    
+    // Calcular deuda de préstamos vs deuda de compras
+    double deudaPrestamos = 0.0;
+    int prestamosActivos = 0;
+    for (var sale in _allSales) {
+      if (sale.origenVenta == 'prestamo_personal' && !sale.isArchived) {
+        double deudaVenta = sale.trueTotal - sale.montoPagado;
+        if (deudaVenta > 0) {
+          deudaPrestamos += deudaVenta;
+          prestamosActivos++;
+        }
+      }
+    }
+    double deudaCompras = deudaGlobal - deudaPrestamos;
+    if (deudaCompras < 0) deudaCompras = 0;
+
     final double saldoFavor = widget.client.saldoAFavor;
     final int porEntregar = widget.client.pendingDeliveryCount;
 
     String ultimaCompra = "N/A";
-    if (widget.client.lastSales.isNotEmpty) {
-      DateTime? dt = DateTime.tryParse(widget.client.lastSales.first.date);
-      if (dt != null) {
-        int diff = DateTime.now().difference(dt).inDays;
-        if (diff == 0) {
-          ultimaCompra = "Hoy";
-        } else if (diff == 1) {
-          ultimaCompra = "Ayer";
-        } else {
-          ultimaCompra = "Hace $diff días";
+    if (_allSales.isNotEmpty) {
+      final salesOnly = _allSales.where((s) => s.origenVenta != 'prestamo_personal').toList();
+      if (salesOnly.isNotEmpty) {
+        DateTime? dt = DateTime.tryParse(salesOnly.first.date);
+        if (dt != null) {
+          int diff = DateTime.now().difference(dt).inDays;
+          if (diff == 0) {
+            ultimaCompra = "Hoy";
+          } else if (diff == 1) {
+            ultimaCompra = "Ayer";
+          } else {
+            ultimaCompra = "Hace $diff días";
+          }
         }
       }
     }
@@ -285,6 +373,9 @@ class _ClientFullStatsModalState extends State<ClientFullStatsModal> {
     final double totalPagado = sales.fold(0.0, (sum, sale) => sum + sale.montoPagado);
     final int numCompras = sales.length;
     final double ticketPromedio = numCompras > 0 ? (totalComprado / numCompras) : 0;
+
+    final loans = _filteredLoans;
+    final double totalPrestado = loans.fold(0.0, (sum, loan) => sum + loan.total);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.90,
@@ -382,7 +473,9 @@ class _ClientFullStatsModalState extends State<ClientFullStatsModal> {
               const SizedBox(height: 24),
 
               Expanded(
-                child: ListView(
+                child: _isLoadingSales 
+                ? const Center(child: CircularProgressIndicator())
+                : ListView(
                   controller: controller,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   physics: const BouncingScrollPhysics(),
@@ -411,22 +504,99 @@ class _ClientFullStatsModalState extends State<ClientFullStatsModal> {
                     const SizedBox(height: 16),
 
                     // SECCION 2: Estado Actual (Global, no afectado por el filtro)
-                    Text("Estado de Cuenta Actual (Global)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white70 : Colors.black54)),
-                    const SizedBox(height: 16),
-                    GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
-                      childAspectRatio: 1.4,
-                      children: [
-                        _buildStatCard("Deuda Actual", deudaActual, Icons.account_balance_wallet, deudaActual > 0 ? (widget.isDark ? Colors.red[400]! : Colors.red) : (widget.isDark ? Colors.green[400]! : Colors.green)),
-                        _buildStatCard("Saldo a Favor", saldoFavor, Icons.savings, widget.isDark ? Colors.amber[400]! : Colors.amber[800]!),
-                        _buildStatCard("Por Entregar", porEntregar.toDouble(), Icons.local_shipping, widget.isDark ? Colors.orange[400]! : Colors.orange[800]!, isInt: true),
-                        _buildStatCard("Última Compra", 0, Icons.event_available, widget.isDark ? Colors.indigo[300]! : Colors.indigo[800]!, textValue: ultimaCompra),
-                      ],
-                    ),
+    Text("Estado de Cuenta Actual (Global)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white70 : Colors.black54)),
+    const SizedBox(height: 16),
+    GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 16,
+      crossAxisSpacing: 16,
+      childAspectRatio: 1.4,
+      children: [
+        _buildStatCard("Deuda Total", deudaGlobal, Icons.account_balance_wallet, deudaGlobal > 0 ? (widget.isDark ? Colors.red[400]! : Colors.red) : (widget.isDark ? Colors.green[400]! : Colors.green)),
+        _buildStatCard("Deuda (Solo Compras)", deudaCompras, Icons.shopping_cart, deudaCompras > 0 ? (widget.isDark ? Colors.red[300]! : Colors.red[600]!) : (widget.isDark ? Colors.green[300]! : Colors.green[600]!)),
+        _buildStatCard("Saldo a Favor", saldoFavor, Icons.savings, widget.isDark ? Colors.amber[400]! : Colors.amber[800]!),
+        _buildStatCard("Por Entregar", porEntregar.toDouble(), Icons.local_shipping, widget.isDark ? Colors.orange[400]! : Colors.orange[800]!, isInt: true),
+        _buildStatCard("Última Compra", 0, Icons.event_available, widget.isDark ? Colors.indigo[300]! : Colors.indigo[800]!, textValue: ultimaCompra),
+      ],
+    ),
+
+    const SizedBox(height: 32),
+    const Divider(),
+    const SizedBox(height: 16),
+
+    // SECCION 3: Préstamos
+    Text("Préstamos Personales", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[300] : Colors.orange[800])),
+    const SizedBox(height: 16),
+    GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 16,
+      crossAxisSpacing: 16,
+      childAspectRatio: 1.4,
+      children: [
+        _buildStatCard("Deuda por Préstamos", deudaPrestamos, Icons.account_balance, deudaPrestamos > 0 ? (widget.isDark ? Colors.orange[400]! : Colors.orange[700]!) : (widget.isDark ? Colors.green[400]! : Colors.green[700]!)),
+        _buildStatCard("Préstamos Activos", prestamosActivos.toDouble(), Icons.list_alt, widget.isDark ? Colors.amber[300]! : Colors.amber[800]!, isInt: true),
+        _buildStatCard("Total Histórico Prestado", totalPrestado, Icons.monetization_on, widget.isDark ? Colors.deepOrange[300]! : Colors.deepOrange[700]!),
+      ],
+    ),
+
+    // SECCION 4: Análisis de Cancelaciones (Solo si hay anuladas)
+                    if (_cancellationStats != null && (_cancellationStats!['anuladas'] ?? 0) > 0) ...[
+                      const SizedBox(height: 32),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      Text("Análisis de Cancelaciones", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.red[300] : Colors.red[800])),
+                      const SizedBox(height: 16),
+                      GridView.count(
+                        crossAxisCount: 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 16,
+                        crossAxisSpacing: 16,
+                        childAspectRatio: 1.4,
+                        children: [
+                          _buildStatCard("Ventas Anuladas", (_cancellationStats!['anuladas'] as num).toDouble(), Icons.cancel_presentation, widget.isDark ? Colors.red[400]! : Colors.red[700]!, isInt: true),
+                          _buildStatCard("Monto Perdido", (_cancellationStats!['montoPerdido'] as num).toDouble(), Icons.money_off, widget.isDark ? Colors.deepOrange[400]! : Colors.deepOrange[700]!),
+                          _buildStatCard("Tasa de Cancelación", (_cancellationStats!['cancellationRate'] as num).toDouble(), Icons.pie_chart, widget.isDark ? Colors.pink[400]! : Colors.pink[700]!, textValue: "${(_cancellationStats!['cancellationRate'] as num).toStringAsFixed(1)}%"),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: widget.isDark ? const Color(0xFF23232F) : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.red.withValues(alpha: widget.isDark ? 0.2 : 0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("Motivos Frecuentes", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.grey[300] : Colors.grey[700])),
+                            const SizedBox(height: 12),
+                            ...(_cancellationStats!['motivos'] as Map<String, int>).entries.map((e) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(e.key, style: TextStyle(fontSize: 14, color: widget.isDark ? Colors.white70 : Colors.black87)),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                                      child: Text("${e.value} veces", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.red[300] : Colors.red)),
+                                    )
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 40),
                   ],
                 ),

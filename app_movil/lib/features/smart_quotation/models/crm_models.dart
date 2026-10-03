@@ -158,6 +158,7 @@ class PaymentModel {
 
 class SaleSummary {
   final int id;
+  final int? sequentialNumber;
   final double total;
   final double montoPagado; 
   final String date;
@@ -167,9 +168,12 @@ class SaleSummary {
   final double abonoInicial;
   final double porcentajeInteres;
   final String estadoPago;
+  final bool isArchived;
+  final String? motivoAnulacion;
 
   SaleSummary({
     required this.id, 
+    this.sequentialNumber,
     required this.total, 
     this.montoPagado = 0.0, 
     required this.date, 
@@ -178,8 +182,12 @@ class SaleSummary {
     this.itemsCount = 0,
     this.abonoInicial = 0.0,
     this.porcentajeInteres = 0.0,
-    this.estadoPago = "pagado"
+    this.estadoPago = "pagado",
+    this.isArchived = false,
+    this.motivoAnulacion,
   });
+
+  String get displayId => sequentialNumber != null ? "$sequentialNumber" : "$id";
 
   double get trueTotal {
     // El monto_total (total) ahora ya incluye el interés desde la base de datos
@@ -190,6 +198,7 @@ class SaleSummary {
   factory SaleSummary.fromJson(Map<String, dynamic> json) {
     return SaleSummary(
       id: json['id'] ?? 0,
+      sequentialNumber: json['numero_secuencial'],
       total: _parseDouble(json['monto_total']),
       montoPagado: _parseDouble(json['monto_pagado']), 
       date: json['fecha_venta'] ?? "",
@@ -199,6 +208,8 @@ class SaleSummary {
       abonoInicial: _parseDouble(json['abono_inicial']),
       porcentajeInteres: _parseDouble(json['porcentaje_interes']),
       estadoPago: json['estado_pago'] ?? "pagado",
+      isArchived: json['is_archived'] == 1 || json['is_archived'] == true,
+      motivoAnulacion: json['motivo_anulacion'],
     );
   }
 }
@@ -254,6 +265,7 @@ class InstallmentModel {
 
 class SaleModel {
   final int id;
+  final int? sequentialNumber;
   final int negocioId; 
   final int creadoPorUsuarioId; 
   final int? quotationId; 
@@ -271,6 +283,8 @@ class SaleModel {
   final double abonoInicial;
   final double porcentajeInteres;
   final String saleDate;
+  final String? motivoAnulacion;
+  final String? notes; // Add notes field
   final List<InstallmentModel> installments; 
   
   double get trueTotalAmount {
@@ -278,8 +292,11 @@ class SaleModel {
     return totalAmount;
   }
 
+  String get displayId => sequentialNumber != null ? sequentialNumber.toString() : id.toString();
+
   SaleModel({
     required this.id,
+    this.sequentialNumber,
     required this.negocioId,
     required this.creadoPorUsuarioId,
     this.quotationId,
@@ -297,12 +314,15 @@ class SaleModel {
     this.abonoInicial = 0.0,
     this.porcentajeInteres = 0.0,
     required this.saleDate,
+    this.motivoAnulacion,
+    this.notes,
     this.installments = const [],
   });
 
   factory SaleModel.fromJson(Map<String, dynamic> json) {
     return SaleModel(
       id: json['id'] ?? 0,
+      sequentialNumber: json['numero_secuencial'],
       negocioId: json['negocio_id'] ?? 0,
       creadoPorUsuarioId: json['creado_por_usuario_id'] ?? 0,
       quotationId: json['cotizacion_id'],
@@ -320,6 +340,8 @@ class SaleModel {
       abonoInicial: _parseDouble(json['abono_inicial']),
       porcentajeInteres: _parseDouble(json['porcentaje_interes']),
       saleDate: json['fecha_venta'] ?? "",
+      motivoAnulacion: json['motivo_anulacion'],
+      notes: json['notas'],
       installments: (json['cuotas'] as List?)?.map((e) => InstallmentModel.fromJson(e)).toList() ?? [],
     );
   }
@@ -327,6 +349,7 @@ class SaleModel {
   Map<String, dynamic> toSqlite() {
     return {
       'id': id == 0 ? null : id,
+      'numero_secuencial': sequentialNumber,
       'negocio_id': negocioId,
       'creado_por_usuario_id': creadoPorUsuarioId,
       'cotizacion_id': quotationId,
@@ -424,6 +447,7 @@ class ValidationResult {
   final List<PriceChange> priceChanges;
   final List<NameChange> nameChanges;
   final List<BundleChange> bundleChanges;
+  final List<UnitChange> unitChanges;
 
   ValidationResult({
     required this.hasIssues,
@@ -432,6 +456,7 @@ class ValidationResult {
     required this.priceChanges,
     this.nameChanges = const [],
     this.bundleChanges = const [],
+    this.unitChanges = const [],
   });
 
   factory ValidationResult.fromJson(Map<String, dynamic> json) {
@@ -442,6 +467,39 @@ class ValidationResult {
       priceChanges: (json['price_changes'] as List?)?.map((e) => PriceChange.fromJson(e)).toList() ?? [],
       nameChanges: (json['name_changes'] as List?)?.map((e) => NameChange.fromJson(e)).toList() ?? [],
       bundleChanges: (json['bundle_changes'] as List?)?.map((e) => BundleChange.fromJson(e)).toList() ?? [],
+      unitChanges: (json['unit_changes'] as List?)?.map((e) => UnitChange.fromJson(e)).toList() ?? [],
+    );
+  }
+}
+
+class UnitChange {
+  final int itemId;
+  final String productName;
+  final String oldUnit;
+  final String newUnit;
+  final int oldFactor;
+  final int newFactor;
+  final String message;
+
+  UnitChange({
+    required this.itemId,
+    required this.productName,
+    required this.oldUnit,
+    required this.newUnit,
+    this.oldFactor = 1,
+    this.newFactor = 1,
+    this.message = "",
+  });
+
+  factory UnitChange.fromJson(Map<String, dynamic> json) {
+    return UnitChange(
+      itemId: json['item_id'] ?? -1,
+      productName: json['product_name'] ?? 'Desconocido',
+      oldUnit: json['old_unit'] ?? 'Unidad',
+      newUnit: json['new_unit'] ?? 'Unidad',
+      oldFactor: json['old_factor'] ?? 1,
+      newFactor: json['new_factor'] ?? 1,
+      message: json['message'] ?? "",
     );
   }
 }
@@ -517,6 +575,7 @@ class StockWarning {
 class LedgerItem {
   final int idRef;
   final String tipo; 
+  final String? subtipo;
   final DateTime fecha;
   final double monto;
   final String detalle;
@@ -525,6 +584,7 @@ class LedgerItem {
   LedgerItem({
     required this.idRef,
     required this.tipo,
+    this.subtipo,
     required this.fecha,
     required this.monto,
     required this.detalle,
@@ -535,6 +595,7 @@ class LedgerItem {
     return LedgerItem(
       idRef: json['id_ref'] ?? 0,
       tipo: json['tipo'] ?? 'cargo',
+      subtipo: json['subtipo'],
       fecha: DateTime.tryParse(json['fecha'] ?? "") ?? DateTime.now(),
       monto: _parseDouble(json['monto']),
       detalle: json['detalle'] ?? '',

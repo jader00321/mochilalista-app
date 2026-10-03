@@ -13,25 +13,29 @@ enum SortType { id, alpha }
 
 class InventoryProvider with ChangeNotifier {
   int? _negocioId;
-  
+
   final MasterDataCache _masterDataCache = MasterDataCache();
   final ProductService _productService = ProductService();
 
-  List<InventoryWrapper> _inventoryItems = []; 
-  
+  List<InventoryWrapper> _inventoryItems = [];
+
   bool _isLoading = false;
-  bool _isLoadingMore = false; 
+  bool _isLoadingMore = false;
   String _errorMessage = '';
   String? _lastActionError;
 
   int _currentSkip = 0;
-  final int _limit = 20; 
+  final int _limit = 50;
   bool _hasMoreData = true;
 
-  SortType _prodSort = SortType.id; bool _prodAsc = false;
-  SortType _catSort = SortType.alpha; bool _catAsc = true;
-  SortType _brandSort = SortType.alpha; bool _brandAsc = true;
-  SortType _provSort = SortType.alpha; bool _provAsc = true;
+  SortType _prodSort = SortType.id;
+  bool _prodAsc = false;
+  SortType _catSort = SortType.alpha;
+  bool _catAsc = true;
+  SortType _brandSort = SortType.alpha;
+  bool _brandAsc = true;
+  SortType _provSort = SortType.alpha;
+  bool _provAsc = true;
 
   String? _lastQuery;
   List<int>? _lastCategoryIds;
@@ -58,12 +62,12 @@ class InventoryProvider with ChangeNotifier {
   int? get activeMaxStock => _lastMaxStock;
   bool get activeHasOffer => _lastHasOffer;
   bool get activeOnlyDefaults => _lastOnlyDefaults;
-  
-  int get totalPresentationsCount => _inventoryItems.length;
-  int get totalProductsCount {
-    final uniqueIds = _inventoryItems.map((e) => e.product.id).toSet();
-    return uniqueIds.length;
-  }
+
+  int _realTotalProductsCount = 0;
+  int _realTotalPresentationsCount = 0;
+
+  int get totalPresentationsCount => _realTotalPresentationsCount;
+  int get totalProductsCount => _realTotalProductsCount;
 
   Map<String, dynamic> get advancedFilters => {
     'min_price': _lastMinPrice,
@@ -73,21 +77,23 @@ class InventoryProvider with ChangeNotifier {
     'has_offer': _lastHasOffer,
     'only_defaults': _lastOnlyDefaults,
     'category_ids': _lastCategoryIds,
-    'brand_ids': _lastBrandIds
+    'brand_ids': _lastBrandIds,
   };
 
-  SortType get prodSort => _prodSort; 
+  SortType get prodSort => _prodSort;
   bool get prodAsc => _prodAsc;
-  SortType get catSort => _catSort; 
+  SortType get catSort => _catSort;
   bool get catAsc => _catAsc;
-  SortType get brandSort => _brandSort; 
+  SortType get brandSort => _brandSort;
   bool get brandAsc => _brandAsc;
-  SortType get provSort => _provSort; 
+  SortType get provSort => _provSort;
   bool get provAsc => _provAsc;
 
   // Elimina símbolos al principio para un ordenamiento más natural
   String _normalizeForSort(String text) {
-    return text.replaceAll(RegExp(r'^[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+'), '').toLowerCase();
+    return text
+        .replaceAll(RegExp(r'^[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+'), '')
+        .toLowerCase();
   }
 
   List<InventoryWrapper> get items {
@@ -95,8 +101,14 @@ class InventoryProvider with ChangeNotifier {
     list.sort((a, b) {
       int cmp;
       switch (_prodSort) {
-        case SortType.alpha: cmp = _normalizeForSort(a.product.nombre).compareTo(_normalizeForSort(b.product.nombre)); break;
-        case SortType.id: cmp = a.product.id.compareTo(b.product.id); break;
+        case SortType.alpha:
+          cmp = _normalizeForSort(
+            a.product.nombre,
+          ).compareTo(_normalizeForSort(b.product.nombre));
+          break;
+        case SortType.id:
+          cmp = a.product.id.compareTo(b.product.id);
+          break;
       }
       return _prodAsc ? cmp : -cmp;
     });
@@ -106,10 +118,17 @@ class InventoryProvider with ChangeNotifier {
   List<Category> get categories {
     final list = List<Category>.from(_masterDataCache.categories);
     list.sort((a, b) {
+      if (a.activo != b.activo) return a.activo ? -1 : 1;
       int cmp;
       switch (_catSort) {
-        case SortType.alpha: cmp = _normalizeForSort(a.nombre).compareTo(_normalizeForSort(b.nombre)); break;
-        case SortType.id: cmp = a.id.compareTo(b.id); break;
+        case SortType.alpha:
+          cmp = _normalizeForSort(
+            a.nombre,
+          ).compareTo(_normalizeForSort(b.nombre));
+          break;
+        case SortType.id:
+          cmp = a.id.compareTo(b.id);
+          break;
       }
       return _catAsc ? cmp : -cmp;
     });
@@ -119,10 +138,17 @@ class InventoryProvider with ChangeNotifier {
   List<Brand> get brands {
     final list = List<Brand>.from(_masterDataCache.brands);
     list.sort((a, b) {
+      if (a.activo != b.activo) return a.activo ? -1 : 1;
       int cmp;
       switch (_brandSort) {
-        case SortType.alpha: cmp = _normalizeForSort(a.nombre).compareTo(_normalizeForSort(b.nombre)); break;
-        case SortType.id: cmp = a.id.compareTo(b.id); break;
+        case SortType.alpha:
+          cmp = _normalizeForSort(
+            a.nombre,
+          ).compareTo(_normalizeForSort(b.nombre));
+          break;
+        case SortType.id:
+          cmp = a.id.compareTo(b.id);
+          break;
       }
       return _brandAsc ? cmp : -cmp;
     });
@@ -132,18 +158,33 @@ class InventoryProvider with ChangeNotifier {
   List<ProviderModel> get providers {
     final list = List<ProviderModel>.from(_masterDataCache.providers);
     list.sort((a, b) {
+      if (a.activo != b.activo) return a.activo ? -1 : 1;
       int cmp;
       switch (_provSort) {
-        case SortType.alpha: cmp = _normalizeForSort(a.nombreEmpresa).compareTo(_normalizeForSort(b.nombreEmpresa)); break;
-        case SortType.id: cmp = a.id.compareTo(b.id); break;
+        case SortType.alpha:
+          cmp = _normalizeForSort(
+            a.nombreEmpresa,
+          ).compareTo(_normalizeForSort(b.nombreEmpresa));
+          break;
+        case SortType.id:
+          cmp = a.id.compareTo(b.id);
+          break;
       }
       return _provAsc ? cmp : -cmp;
     });
     return list;
   }
 
-  List<Product> get products => _inventoryItems.map((e) => e.product).toSet().toList();
-  
+  List<Category> get activeCategories =>
+      _masterDataCache.categories.where((c) => c.activo).toList();
+  List<Brand> get activeBrands =>
+      _masterDataCache.brands.where((b) => b.activo).toList();
+  List<ProviderModel> get activeProviders =>
+      _masterDataCache.providers.where((p) => p.activo).toList();
+
+  List<Product> get products =>
+      _inventoryItems.map((e) => e.product).toSet().toList();
+
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMoreData => _hasMoreData;
@@ -155,9 +196,9 @@ class InventoryProvider with ChangeNotifier {
       _negocioId = negocioId;
       _masterDataCache.updateContext(negocioId);
       _productService.updateContext(negocioId);
-      
+
       _inventoryItems.clear();
-      
+
       _currentSkip = 0;
       _hasMoreData = true;
       _lastQuery = null;
@@ -167,41 +208,78 @@ class InventoryProvider with ChangeNotifier {
     }
   }
 
-  void sortProducts(SortType type) { _prodSort = type; _prodAsc = _prodSort == type ? !_prodAsc : true; notifyListeners(); }
-  void sortCategories(SortType type) { _catSort = type; _catAsc = _catSort == type ? !_catAsc : true; notifyListeners(); }
-  void sortBrands(SortType type) { _brandSort = type; _brandAsc = _brandSort == type ? !_brandAsc : true; notifyListeners(); }
-  void sortProviders(SortType type) { _provSort = type; _provAsc = _provSort == type ? !_provAsc : true; notifyListeners(); }
+  void sortProducts(SortType type) {
+    _prodSort = type;
+    _prodAsc = _prodSort == type ? !_prodAsc : true;
+    notifyListeners();
+  }
 
-  String getBrandName(int? id) => id == null ? "" : _masterDataCache.brands.where((b) => b.id == id).firstOrNull?.nombre ?? "";
-  String getProviderName(int? id) => id == null ? "" : _masterDataCache.providers.where((p) => p.id == id).firstOrNull?.nombreEmpresa ?? "";
-  
+  void sortCategories(SortType type) {
+    _catSort = type;
+    _catAsc = _catSort == type ? !_catAsc : true;
+    notifyListeners();
+  }
+
+  void sortBrands(SortType type) {
+    _brandSort = type;
+    _brandAsc = _brandSort == type ? !_brandAsc : true;
+    notifyListeners();
+  }
+
+  void sortProviders(SortType type) {
+    _provSort = type;
+    _provAsc = _provSort == type ? !_provAsc : true;
+    notifyListeners();
+  }
+
+  String getBrandName(int? id) => id == null
+      ? ""
+      : _masterDataCache.brands.where((b) => b.id == id).firstOrNull?.nombre ??
+            "";
+  String getProviderName(int? id) => id == null
+      ? ""
+      : _masterDataCache.providers
+                .where((p) => p.id == id)
+                .firstOrNull
+                ?.nombreEmpresa ??
+            "";
+
   String getCategoryName(int? categoryId) {
     if (categoryId == null || _masterDataCache.categories.isEmpty) return "";
     try {
-      final cat = _masterDataCache.categories.firstWhere((c) => c.id == categoryId);
+      final cat = _masterDataCache.categories.firstWhere(
+        (c) => c.id == categoryId,
+      );
       return cat.nombre;
     } catch (_) {
       return "";
     }
   }
-  
-  Future<Product?> fetchProductById(int productId) async => await _productService.fetchProductById(productId);
+
+  Future<Product?> fetchProductById(int productId) async =>
+      await _productService.fetchProductById(productId);
 
   /// 🔥 FASE 1 FIX: Construye un Product con TODAS sus presentaciones
   /// recopiladas de la lista en memoria (_inventoryItems).
   /// Si no se encuentran en memoria, hace un fetch directo a la DB.
   Product getFullProduct(int productId) {
     // Recopilar todas las presentaciones de este producto desde el inventario en memoria
-    final matchingWrappers = _inventoryItems.where((w) => w.product.id == productId).toList();
-    
+    final matchingWrappers = _inventoryItems
+        .where((w) => w.product.id == productId)
+        .toList();
+
     if (matchingWrappers.isEmpty) {
       // Fallback: devolver un producto vacío (no debería ocurrir)
-      return Product(id: productId, nombre: "Producto #$productId", categoriaId: 0);
+      return Product(
+        id: productId,
+        nombre: "Producto #$productId",
+        categoriaId: 0,
+      );
     }
 
     // Tomar el primer wrapper como base del producto
     final baseProduct = matchingWrappers.first.product;
-    
+
     // Recopilar todas las presentaciones únicas (por ID) de los wrappers
     final Map<int, ProductPresentation> uniquePresentations = {};
     for (var wrapper in matchingWrappers) {
@@ -216,6 +294,7 @@ class InventoryProvider with ChangeNotifier {
       id: baseProduct.id,
       nombre: baseProduct.nombre,
       marcaId: baseProduct.marcaId,
+      marcaNombre: baseProduct.marcaNombre,
       descripcion: baseProduct.descripcion,
       categoriaId: baseProduct.categoriaId,
       imagenUrl: baseProduct.imagenUrl,
@@ -238,7 +317,7 @@ class InventoryProvider with ChangeNotifier {
 
   Future<void> loadMasterData({bool showAll = true}) async {
     try {
-      await _masterDataCache.load(true);
+      await _masterDataCache.load(true, showAll: showAll);
       notifyListeners();
     } catch (e) {
       debugPrint("Error loading master data: $e");
@@ -254,14 +333,29 @@ class InventoryProvider with ChangeNotifier {
     if (id != null) await loadMasterData();
     return id;
   }
-  Future<bool> updateCategory(int id, String nombre, {String? descripcion, bool? activo}) async {
-    bool ok = await _masterDataCache.updateCategory(id, nombre, descripcion, activo);
+
+  Future<bool> updateCategory(
+    int id,
+    String nombre, {
+    String? descripcion,
+    bool? activo,
+  }) async {
+    bool ok = await _masterDataCache.updateCategory(
+      id,
+      nombre,
+      descripcion,
+      activo,
+    );
     if (ok) await loadMasterData();
     return ok;
   }
+
   Future<bool> deleteCategory(int id) async {
     _lastActionError = await _masterDataCache.deleteCategory(id);
-    if (_lastActionError == null) { await loadMasterData(); return true; }
+    if (_lastActionError == null) {
+      await loadMasterData();
+      return true;
+    }
     return false;
   }
 
@@ -270,73 +364,155 @@ class InventoryProvider with ChangeNotifier {
     if (id != null) await loadMasterData();
     return id;
   }
-  Future<bool> updateBrand(int id, String nombre, {String? urlImagen, bool? activo}) async {
+
+  Future<bool> updateBrand(
+    int id,
+    String nombre, {
+    String? urlImagen,
+    bool? activo,
+  }) async {
     bool ok = await _masterDataCache.updateBrand(id, nombre, urlImagen, activo);
     if (ok) await loadMasterData();
     return ok;
   }
+
   Future<bool> deleteBrand(int id) async {
     _lastActionError = await _masterDataCache.deleteBrand(id);
-    if (_lastActionError == null) { await loadMasterData(); return true; }
+    if (_lastActionError == null) {
+      await loadMasterData();
+      return true;
+    }
     return false;
   }
 
-  Future<int?> createProvider(String nombre, {String? ruc, String? contacto, String? telefono, String? correo}) async {
-    int? id = await _masterDataCache.createProvider(nombre, ruc, contacto, telefono, correo);
+  Future<int?> createProvider(
+    String nombre, {
+    String? ruc,
+    String? contacto,
+    String? telefono,
+    String? correo,
+  }) async {
+    int? id = await _masterDataCache.createProvider(
+      nombre,
+      ruc,
+      contacto,
+      telefono,
+      correo,
+    );
     if (id != null) await loadMasterData();
     return id;
   }
-  Future<bool> updateProvider(int id, String nombre, {String? ruc, String? contacto, String? telefono, String? correo, bool? activo}) async {
-    bool ok = await _masterDataCache.updateProvider(id, nombre, ruc, contacto, telefono, correo, activo);
+
+  Future<bool> updateProvider(
+    int id,
+    String nombre, {
+    String? ruc,
+    String? contacto,
+    String? telefono,
+    String? correo,
+    bool? activo,
+  }) async {
+    bool ok = await _masterDataCache.updateProvider(
+      id,
+      nombre,
+      ruc,
+      contacto,
+      telefono,
+      correo,
+      activo,
+    );
     if (ok) await loadMasterData();
     return ok;
   }
+
   Future<bool> deleteProvider(int id) async {
     _lastActionError = await _masterDataCache.deleteProvider(id);
-    if (_lastActionError == null) { await loadMasterData(); return true; }
+    if (_lastActionError == null) {
+      await loadMasterData();
+      return true;
+    }
     return false;
   }
 
   // 🔥 SOLUCIÓN A LA CARGA INFINITA
   Future<void> loadInventory({
-    bool reset = false, String? searchQuery, List<int>? categoryIds, List<int>? brandIds, List<int>? providerIds,
-    String? filterState, double? minPrice, double? maxPrice, int? minStock, int? maxStock, bool? hasOffer, bool? onlyDefaults,
+    bool reset = false,
+    String? searchQuery,
+    List<int>? categoryIds,
+    List<int>? brandIds,
+    List<int>? providerIds,
+    String? filterState,
+    double? minPrice,
+    double? maxPrice,
+    int? minStock,
+    int? maxStock,
+    bool? hasOffer,
+    bool? onlyDefaults,
   }) async {
     if (_negocioId == null) return;
 
     if (reset) {
-      _isLoading = true; _currentSkip = 0; _inventoryItems = []; _hasMoreData = true;
-      _lastQuery = searchQuery; _lastCategoryIds = categoryIds; _lastBrandIds = brandIds; _lastProviderIds = providerIds;
-      _lastEstado = filterState; _lastMinPrice = minPrice; _lastMaxPrice = maxPrice; _lastMinStock = minStock;
-      _lastMaxStock = maxStock; _lastHasOffer = hasOffer ?? false; _lastOnlyDefaults = onlyDefaults ?? false;
+      _isLoading = true;
+      _currentSkip = 0;
+      _inventoryItems = [];
+      _hasMoreData = true;
+      _lastQuery = searchQuery;
+      _lastCategoryIds = categoryIds;
+      _lastBrandIds = brandIds;
+      _lastProviderIds = providerIds;
+      _lastEstado = filterState;
+      _lastMinPrice = minPrice;
+      _lastMaxPrice = maxPrice;
+      _lastMinStock = minStock;
+      _lastMaxStock = maxStock;
+      _lastHasOffer = hasOffer ?? false;
+      _lastOnlyDefaults = onlyDefaults ?? false;
       notifyListeners();
     } else {
       if (_isLoadingMore || !_hasMoreData) return;
-      _isLoadingMore = true; notifyListeners();
+      _isLoadingMore = true;
+      notifyListeners();
     }
 
     if (_masterDataCache.brands.isEmpty) await loadMasterData();
 
     try {
       Map<String, String> queryParams = {
-        'skip': _currentSkip.toString(), 
-        'limit': _limit.toString()
+        'skip': _currentSkip.toString(),
+        'limit': _limit.toString(),
       };
-      
-      void addIfNotNull(String key, dynamic value) { if (value != null) queryParams[key] = value.toString(); }
-      
-      addIfNotNull('q', _lastQuery); addIfNotNull('estado', _lastEstado);
-      addIfNotNull('min_price', _lastMinPrice); addIfNotNull('max_price', _lastMaxPrice);
-      addIfNotNull('min_stock', _lastMinStock); addIfNotNull('max_stock', _lastMaxStock);
+
+      void addIfNotNull(String key, dynamic value) {
+        if (value != null) queryParams[key] = value.toString();
+      }
+
+      addIfNotNull('q', _lastQuery);
+      addIfNotNull('estado', _lastEstado);
+      addIfNotNull('min_price', _lastMinPrice);
+      addIfNotNull('max_price', _lastMaxPrice);
+      addIfNotNull('min_stock', _lastMinStock);
+      addIfNotNull('max_stock', _lastMaxStock);
       if (_lastHasOffer) queryParams['has_offer'] = 'true';
       if (_lastOnlyDefaults) queryParams['only_defaults'] = 'true';
-      
-      if (_lastCategoryIds != null && _lastCategoryIds!.isNotEmpty) queryParams['category_ids'] = _lastCategoryIds!.join(",");
-      if (_lastBrandIds != null && _lastBrandIds!.isNotEmpty) queryParams['brand_ids'] = _lastBrandIds!.join(",");
-      if (_lastProviderIds != null && _lastProviderIds!.isNotEmpty) queryParams['provider_ids'] = _lastProviderIds!.join(",");
+
+      if (_lastCategoryIds != null && _lastCategoryIds!.isNotEmpty) {
+        queryParams['category_ids'] = _lastCategoryIds!.join(",");
+      }
+      if (_lastBrandIds != null && _lastBrandIds!.isNotEmpty) {
+        queryParams['brand_ids'] = _lastBrandIds!.join(",");
+      }
+      if (_lastProviderIds != null && _lastProviderIds!.isNotEmpty) {
+        queryParams['provider_ids'] = _lastProviderIds!.join(",");
+      }
 
       final newItems = await _productService.fetchInventory(queryParams);
-      
+
+      if (reset) {
+        final totals = await _productService.countInventory(queryParams);
+        _realTotalProductsCount = totals['products'] ?? 0;
+        _realTotalPresentationsCount = totals['presentations'] ?? 0;
+      }
+
       if (newItems != null) {
         if (newItems.length < _limit) _hasMoreData = false;
         if (reset) {
@@ -352,7 +528,7 @@ class InventoryProvider with ChangeNotifier {
       _errorMessage = "Error inesperado al cargar inventario: $e";
     } finally {
       // 🔥 ESTO ASEGURA QUE LA CARGA INFINITA NO OCURRA NUNCA MÁS
-      _isLoading = false; 
+      _isLoading = false;
       _isLoadingMore = false;
       notifyListeners();
     }
@@ -381,123 +557,212 @@ class InventoryProvider with ChangeNotifier {
   Future<void> loadMore() async => await loadInventory(reset: false);
 
   Future<bool> deleteProduct(int id) async {
-    _isLoading = true; notifyListeners();
+    _isLoading = true;
+    notifyListeners();
     try {
       bool ok = await _productService.deleteProduct(id);
-      if (ok) { _inventoryItems.removeWhere((w) => w.product.id == id); }
+      if (ok) {
+        _inventoryItems.removeWhere((w) => w.product.id == id);
+      }
       return ok;
     } finally {
-      _isLoading = false; notifyListeners();
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
   Future<bool> createFullProduct({
-    required String nombre, int? marcaId, int? categoriaId, int? proveedorId, required String estado, 
-    String? descripcion, String? imagenUrl, String? codigoBarras, required List<ProductPresentation> presentaciones
+    required String nombre,
+    int? marcaId,
+    int? categoriaId,
+    int? proveedorId,
+    required String estado,
+    String? descripcion,
+    String? imagenUrl,
+    String? codigoBarras,
+    required List<ProductPresentation> presentaciones,
   }) async {
-    _isLoading = true; notifyListeners();
+    _isLoading = true;
+    notifyListeners();
     try {
       bool ok = await _productService.createFullProduct(
-        nombre: nombre, marcaId: marcaId, categoriaId: categoriaId, proveedorId: proveedorId, estado: estado, 
-        descripcion: descripcion, imagenUrl: imagenUrl, codigoBarras: codigoBarras, presentaciones: presentaciones
+        nombre: nombre,
+        marcaId: marcaId,
+        categoriaId: categoriaId,
+        proveedorId: proveedorId,
+        estado: estado,
+        descripcion: descripcion,
+        imagenUrl: imagenUrl,
+        codigoBarras: codigoBarras,
+        presentaciones: presentaciones,
       );
       if (ok) await loadInventory(reset: true);
       return ok;
     } finally {
-      _isLoading = false; notifyListeners();
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
   Future<bool> editFullProduct({
-    required int productId, required String nombre, int? marcaId, int? categoriaId, int? proveedorId, 
-    required String estado, String? descripcion, String? imagenUrl, String? codigoBarras, 
-    required List<ProductPresentation> presentaciones, required List<int> idsToDelete
+    required int productId,
+    required String nombre,
+    int? marcaId,
+    int? categoriaId,
+    int? proveedorId,
+    required String estado,
+    String? descripcion,
+    String? imagenUrl,
+    String? codigoBarras,
+    required List<ProductPresentation> presentaciones,
+    required List<int> idsToDelete,
   }) async {
-    _isLoading = true; notifyListeners();
+    _isLoading = true;
+    notifyListeners();
     try {
       bool ok = await _productService.editFullProduct(
-        productId: productId, nombre: nombre, marcaId: marcaId, categoriaId: categoriaId, proveedorId: proveedorId, 
-        estado: estado, descripcion: descripcion, imagenUrl: imagenUrl, codigoBarras: codigoBarras, 
-        presentaciones: presentaciones, idsToDelete: idsToDelete
+        productId: productId,
+        nombre: nombre,
+        marcaId: marcaId,
+        categoriaId: categoriaId,
+        proveedorId: proveedorId,
+        estado: estado,
+        descripcion: descripcion,
+        imagenUrl: imagenUrl,
+        codigoBarras: codigoBarras,
+        presentaciones: presentaciones,
+        idsToDelete: idsToDelete,
       );
       if (ok) await loadInventory(reset: true);
       return ok;
     } finally {
-      _isLoading = false; notifyListeners();
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
-  Future<bool> updatePresentation(int presentationId, {
-    String? umpCompra, double? precioUmpProveedor, double? cantidadUmpComprada, double? totalPagoLote, int? unidadesPorLote, 
-    String? unidadVenta, int? unidadesPorVenta, 
+  Future<bool> updatePresentation(
+    int presentationId, {
+    String? umpCompra,
+    double? precioUmpProveedor,
+    double? cantidadUmpComprada,
+    double? totalPagoLote,
+    int? unidadesPorLote,
+    String? unidadVenta,
+    int? unidadesPorVenta,
     double? costoUnitarioCalculado,
-    double? factorGananciaVenta, double? precioVentaFinal, double? oferta, String? tipoDesc, double? valorDesc, int? stock, String? estado, String? imagenUrl
+    double? factorGananciaVenta,
+    double? precioVentaFinal,
+    double? oferta,
+    String? tipoDesc,
+    double? valorDesc,
+    int? stock,
+    String? estado,
+    String? imagenUrl,
   }) async {
     Map<String, dynamic> body = {};
     if (umpCompra != null) body['ump_compra'] = umpCompra;
-    if (precioUmpProveedor != null) body['precio_ump_proveedor'] = precioUmpProveedor;
-    if (cantidadUmpComprada != null) body['cantidad_ump_comprada'] = cantidadUmpComprada;
+    if (precioUmpProveedor != null) {
+      body['precio_ump_proveedor'] = precioUmpProveedor;
+    }
+    if (cantidadUmpComprada != null) {
+      body['cantidad_ump_comprada'] = cantidadUmpComprada;
+    }
     if (totalPagoLote != null) body['total_pago_lote'] = totalPagoLote;
     if (unidadesPorLote != null) body['unidades_por_lote'] = unidadesPorLote;
-    
+
     if (unidadVenta != null) body['unidad_venta'] = unidadVenta;
     if (unidadesPorVenta != null) body['unidades_por_venta'] = unidadesPorVenta;
 
-    if (costoUnitarioCalculado != null) body['costo_unitario_calculado'] = costoUnitarioCalculado;
-    if (factorGananciaVenta != null) body['factor_ganancia_venta'] = factorGananciaVenta;
+    if (costoUnitarioCalculado != null) {
+      body['costo_unitario_calculado'] = costoUnitarioCalculado;
+    }
+    if (factorGananciaVenta != null) {
+      body['factor_ganancia_venta'] = factorGananciaVenta;
+    }
     if (precioVentaFinal != null) body['precio_venta_final'] = precioVentaFinal;
-    
-    if (oferta != null) { 
+
+    if (oferta != null) {
       if (oferta == -1) {
         body['precio_oferta'] = null;
         body['tipo_descuento'] = null;
         body['valor_descuento'] = null;
       } else {
         body['precio_oferta'] = oferta;
-        if (oferta > 0) { 
-          body['tipo_descuento'] = tipoDesc; 
-          body['valor_descuento'] = valorDesc; 
+        if (oferta > 0) {
+          body['tipo_descuento'] = tipoDesc;
+          body['valor_descuento'] = valorDesc;
         }
       }
     }
     if (stock != null) body['stock_actual'] = stock;
     if (estado != null) body['estado'] = estado;
-    
+
     if (imagenUrl != null) {
-      final oldIndex = _inventoryItems.indexWhere((wrapper) => wrapper.presentation.id == presentationId);
-      String? oldPath = oldIndex != -1 ? _inventoryItems[oldIndex].presentation.imagenUrl : null;
-      body['imagen_url'] = await ImageService.processAndSaveImage(imagenUrl, oldImagePath: oldPath);
+      final oldIndex = _inventoryItems.indexWhere(
+        (wrapper) => wrapper.presentation.id == presentationId,
+      );
+      String? oldPath = oldIndex != -1
+          ? _inventoryItems[oldIndex].presentation.imagenUrl
+          : null;
+      body['imagen_url'] = await ImageService.processAndSaveImage(
+        imagenUrl,
+        oldImagePath: oldPath,
+      );
     }
 
     bool ok = await _productService.updatePresentation(presentationId, body);
     if (ok) {
-      final index = _inventoryItems.indexWhere((wrapper) => wrapper.presentation.id == presentationId);
+      final index = _inventoryItems.indexWhere(
+        (wrapper) => wrapper.presentation.id == presentationId,
+      );
       if (index != -1) {
         final oldPres = _inventoryItems[index].presentation;
         final updatedPres = ProductPresentation(
-          id: oldPres.id, nombreEspecifico: oldPres.nombreEspecifico, codigoBarras: oldPres.codigoBarras, descripcion: oldPres.descripcion, 
-          proveedorId: oldPres.proveedorId, esDefault: oldPres.esDefault, imagenUrl: body.containsKey('imagen_url') ? body['imagen_url'] : oldPres.imagenUrl,
-          
-          umpCompra: umpCompra ?? oldPres.umpCompra, precioUmpProveedor: precioUmpProveedor ?? oldPres.precioUmpProveedor, 
-          cantidadUmpComprada: cantidadUmpComprada ?? oldPres.cantidadUmpComprada, totalPagoLote: totalPagoLote ?? oldPres.totalPagoLote, 
-          unidadesPorLote: unidadesPorLote ?? oldPres.unidadesPorLote, 
-          
+          id: oldPres.id,
+          nombreEspecifico: oldPres.nombreEspecifico,
+          codigoBarras: oldPres.codigoBarras,
+          descripcion: oldPres.descripcion,
+          proveedorId: oldPres.proveedorId,
+          esDefault: oldPres.esDefault,
+          imagenUrl: body.containsKey('imagen_url')
+              ? body['imagen_url']
+              : oldPres.imagenUrl,
+
+          umpCompra: umpCompra ?? oldPres.umpCompra,
+          precioUmpProveedor: precioUmpProveedor ?? oldPres.precioUmpProveedor,
+          cantidadUmpComprada:
+              cantidadUmpComprada ?? oldPres.cantidadUmpComprada,
+          totalPagoLote: totalPagoLote ?? oldPres.totalPagoLote,
+          unidadesPorLote: unidadesPorLote ?? oldPres.unidadesPorLote,
+
           unidadVenta: unidadVenta ?? oldPres.unidadVenta,
           unidadesPorVenta: unidadesPorVenta ?? oldPres.unidadesPorVenta,
 
-          costoUnitarioCalculado: costoUnitarioCalculado ?? oldPres.costoUnitarioCalculado, 
-          factorGananciaVenta: factorGananciaVenta ?? oldPres.factorGananciaVenta, 
+          costoUnitarioCalculado:
+              costoUnitarioCalculado ?? oldPres.costoUnitarioCalculado,
+          factorGananciaVenta:
+              factorGananciaVenta ?? oldPres.factorGananciaVenta,
           precioVentaFinal: precioVentaFinal ?? oldPres.precioVentaFinal,
-          
-          stockActual: stock ?? oldPres.stockActual, precioOferta: oferta ?? oldPres.precioOferta, tipoDescuento: tipoDesc ?? oldPres.tipoDescuento, 
-          valorDescuento: valorDesc ?? oldPres.valorDescuento, estado: estado ?? oldPres.estado, activo: oldPres.activo
+
+          stockActual: stock ?? oldPres.stockActual,
+          precioOferta: oferta ?? oldPres.precioOferta,
+          tipoDescuento: tipoDesc ?? oldPres.tipoDescuento,
+          valorDescuento: valorDesc ?? oldPres.valorDescuento,
+          estado: estado ?? oldPres.estado,
+          activo: oldPres.activo,
         );
 
-        _inventoryItems[index] = InventoryWrapper(product: _inventoryItems[index].product, presentation: updatedPres);
+        _inventoryItems[index] = InventoryWrapper(
+          product: _inventoryItems[index].product,
+          presentation: updatedPres,
+        );
         final productRef = _inventoryItems[index].product;
-        final presIndex = productRef.presentaciones.indexWhere((p) => p.id == presentationId);
+        final presIndex = productRef.presentaciones.indexWhere(
+          (p) => p.id == presentationId,
+        );
         if (presIndex != -1) productRef.presentaciones[presIndex] = updatedPres;
-        notifyListeners(); 
+        notifyListeners();
       }
     } else {
       _lastActionError = "Error al actualizar presentación";

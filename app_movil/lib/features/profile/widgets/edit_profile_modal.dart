@@ -26,6 +26,13 @@ class _EditProfileModalState extends State<EditProfileModal> {
   }
 
   @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
@@ -34,7 +41,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
     final textStyle = TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16);
 
     return Container(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+      padding: EdgeInsets.fromLTRB(24, 12, 24, bottomInset + 24),
       decoration: BoxDecoration(
         color: isDark ? Theme.of(context).colorScheme.surface : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -45,6 +52,14 @@ class _EditProfileModalState extends State<EditProfileModal> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 5,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
             Text("Editar Perfil", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
             const SizedBox(height: 25),
             
@@ -72,27 +87,44 @@ class _EditProfileModalState extends State<EditProfileModal> {
             
             const SizedBox(height: 30),
             
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                onPressed: auth.isLoading ? null : () async {
-                  if (!_formKey.currentState!.validate()) return;
-                  final success = await auth.updateUserProfile(_nameCtrl.text.trim(), _phoneCtrl.text.trim());
-                  if (context.mounted) {
-                    if (success) {
-                      CustomSnackBar.show(context, message: "Perfil actualizado con éxito", isError: false);
-                      Navigator.pop(context);
-                    } else {
-                      CustomSnackBar.show(context, message: auth.errorMessage, isError: true);
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                child: auth.isLoading 
-                    ? const SizedBox(width: 150, child: LinearProgressIndicator(color: Colors.white, backgroundColor: Colors.white24)) 
-                    : const Text("GUARDAR CAMBIOS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1)),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: auth.isLoading ? null : () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: Text("CANCELAR", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: SizedBox(
+                    height: 55,
+                    child: ElevatedButton(
+                      onPressed: auth.isLoading ? null : () async {
+                        if (!_formKey.currentState!.validate()) return;
+                        final success = await auth.updateUserProfile(_nameCtrl.text.trim(), _phoneCtrl.text.trim());
+                        if (context.mounted) {
+                          if (success) {
+                            CustomSnackBar.show(context, message: "Perfil actualizado con éxito", isError: false);
+                            Navigator.pop(context);
+                          } else {
+                            CustomSnackBar.show(context, message: auth.errorMessage, isError: true);
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                      child: auth.isLoading 
+                          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                          : const Text("GUARDAR CAMBIOS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    ),
+                  ),
+                ),
+              ],
             )
           ],
         ),

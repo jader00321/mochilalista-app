@@ -27,8 +27,6 @@ class ManualPriceModifier extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
     final textColor = isDark ? Colors.white : Colors.black87;
 
     return Container(
@@ -40,8 +38,8 @@ class ManualPriceModifier extends StatelessWidget {
       child: Column(
         children: [
           SwitchListTile(
-            title: Text("Aplicar Descuento", style: textTheme.titleMedium?.copyWith(color: isManualPrice ? (isDark ? Colors.orange[300] : Colors.orange[900]) : textColor)),
-            subtitle: Text("Precio Base: ${currency.format(systemPrice)}", style: textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+            title: Text("Aplicar Descuento", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isManualPrice ? (isDark ? Colors.orange[300] : Colors.orange[900]) : textColor)),
+            subtitle: Text("Precio Base: ${currency.format(systemPrice)}", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[700])),
             value: isManualPrice,
             activeThumbColor: Colors.orange,
             onChanged: onToggle,
@@ -56,12 +54,12 @@ class ManualPriceModifier extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("S/ a Descontar", style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900])),
+                        Text("S/ a Descontar", style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange[900], fontWeight: FontWeight.bold, fontSize: 14)),
                         TextField(
                           controller: discountCtrl, 
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          style: textTheme.displayMedium?.copyWith(color: textColor),
-                          decoration: InputDecoration(prefixText: "- ", prefixStyle: textTheme.displayMedium?.copyWith(color: isDark ? Colors.orange[300] : Colors.orange[900]), isDense: true, border: InputBorder.none),
+                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor),
+                          decoration: InputDecoration(prefixText: "- ", prefixStyle: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange[900], fontSize: 24, fontWeight: FontWeight.bold), isDense: true, border: InputBorder.none),
                           onChanged: onDiscountChanged,
                         ),
                       ],
@@ -73,12 +71,12 @@ class ManualPriceModifier extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Precio Final Unit.", style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[900])),
+                        Text("Precio Final Unit.", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[900], fontWeight: FontWeight.bold, fontSize: 14)),
                         TextField(
                           controller: priceCtrl, 
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          style: textTheme.displayMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue),
-                          decoration: InputDecoration(prefixText: "S/ ", prefixStyle: textTheme.displayMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue), isDense: true, border: InputBorder.none),
+                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue),
+                          decoration: InputDecoration(prefixText: "S/ ", prefixStyle: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontSize: 24, fontWeight: FontWeight.bold), isDense: true, border: InputBorder.none),
                           onChanged: onPriceChanged,
                         ),
                       ],

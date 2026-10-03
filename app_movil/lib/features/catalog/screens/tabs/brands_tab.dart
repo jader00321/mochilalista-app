@@ -17,7 +17,6 @@ class BrandsTab extends StatefulWidget {
 }
 
 class _BrandsTabState extends State<BrandsTab> {
-  
   // 🔥 NUEVO: Explicación de Exploración
   void _showExplorationModal(BuildContext context, bool isDark) {
     showDialog(
@@ -29,25 +28,40 @@ class _BrandsTabState extends State<BrandsTab> {
           children: [
             Icon(Icons.explore, color: Colors.orange[400]),
             const SizedBox(width: 10),
-            const Text("Modo Exploración", style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              "Modo Exploración",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: Text(
           "Para crear o editar marcas reales en tu base de datos, necesitas registrar tu propio negocio.\n\n"
           "Ve a tu Perfil cuando estés listo.",
-          style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16, height: 1.4),
+          style: TextStyle(
+            color: isDark ? Colors.grey[300] : Colors.grey[700],
+            fontSize: 16,
+            height: 1.4,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Entendido", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          )
+            child: const Text(
+              "Entendido",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
         ],
-      )
+      ),
     );
   }
 
-  void _showFormDialog(BuildContext context, {Brand? brand, required bool isDark, required bool isGuest}) {
+  void _showFormDialog(
+    BuildContext context, {
+    Brand? brand,
+    required bool isDark,
+    required bool isGuest,
+  }) {
     if (isGuest) {
       _showExplorationModal(context, isDark);
       return;
@@ -55,7 +69,7 @@ class _BrandsTabState extends State<BrandsTab> {
 
     showDialog(
       context: context,
-      barrierDismissible: false, 
+      barrierDismissible: false,
       builder: (ctx) => _BrandFormDialog(brand: brand, isDark: isDark),
     );
   }
@@ -68,15 +82,19 @@ class _BrandsTabState extends State<BrandsTab> {
 
     final provider = Provider.of<InventoryProvider>(context, listen: false);
     bool success = await provider.deleteBrand(id);
-    
+
     if (context.mounted) {
       if (success) {
-        CustomSnackBar.show(context, message: "Marca eliminada", isError: false);
+        CustomSnackBar.show(
+          context,
+          message: "Marca eliminada",
+          isError: false,
+        );
       } else {
         CustomSnackBar.show(
-          context, 
-          message: provider.lastActionError ?? "No se pudo eliminar", 
-          isError: true
+          context,
+          message: provider.lastActionError ?? "No se pudo eliminar",
+          isError: true,
         );
       }
     }
@@ -93,15 +111,25 @@ class _BrandsTabState extends State<BrandsTab> {
         final brands = provider.brands;
 
         return Scaffold(
-          backgroundColor: Colors.transparent, 
-          
+          backgroundColor: Colors.transparent,
+
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => _showFormDialog(context, isDark: isDark, isGuest: isGuest),
-            label: Text("Nueva Marca", style: TextStyle(color: isDark ? Colors.black87 : Colors.white, fontWeight: FontWeight.bold)),
-            icon: Icon(Icons.add, color: isDark ? Colors.black87 : Colors.white),
+            onPressed: () =>
+                _showFormDialog(context, isDark: isDark, isGuest: isGuest),
+            label: Text(
+              "Nueva Marca",
+              style: TextStyle(
+                color: isDark ? Colors.black87 : Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            icon: Icon(
+              Icons.add,
+              color: isDark ? Colors.black87 : Colors.white,
+            ),
             backgroundColor: isDark ? Colors.orange[300] : Colors.orange[800],
           ),
-          
+
           body: Column(
             children: [
               SortableToolbar(
@@ -116,79 +144,140 @@ class _BrandsTabState extends State<BrandsTab> {
                   onRefresh: () async => await provider.loadMasterData(),
                   color: Colors.orange[800],
                   child: brands.isEmpty
-                    ? SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        child: Container(
-                          height: MediaQuery.of(context).size.height * 0.7,
-                          alignment: Alignment.center,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.branding_watermark_outlined, size: 80, color: isDark ? Colors.white10 : Colors.grey[300]),
-                              const SizedBox(height: 16),
-                              Text("No hay marcas registradas.", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 18, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 8),
-                              TextButton(
-                                onPressed: () => _showFormDialog(context, isDark: isDark, isGuest: isGuest),
-                                child: Text("Registrar Marca", style: TextStyle(fontSize: 16, color: isDark ? Colors.orange[300] : Colors.orange[800])),
-                              )
-                            ],
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                        itemCount: brands.length,
-                        itemBuilder: (ctx, i) {
-                          final brand = brands[i];
-                          return MasterItemTile(
-                            title: brand.nombre,
-                            subtitle: "${brand.productsCount} productos asociados",
-                            icon: Icons.branding_watermark,
-                            color: isDark ? Colors.orange[300]! : Colors.orange,
-                            isActive: brand.activo,
-                            onTap: () {
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (_) => MasterDetailModal(
-                                  title: brand.nombre,
-                                  subtitle: "ID Sistema: ${brand.id}",
-                                  icon: Icons.branding_watermark,
-                                  color: isDark ? Colors.orange[300]! : Colors.orange,
-                                  isActive: brand.activo,
-                                  usageCount: brand.productsCount, 
-                                  dataRows: [
-                                    {
-                                      "label": "Logo URL", 
-                                      "value": (brand.urlImagen != null && brand.urlImagen!.isNotEmpty) ? "Configurado" : "Sin logo"
-                                    },
-                                    {
-                                      "label": "Uso", 
-                                      "value": "${brand.productsCount} productos vinculados"
-                                    },
-                                  ],
-                                  onEdit: () {
-                                    _showFormDialog(context, brand: brand, isDark: isDark, isGuest: isGuest);
-                                  },
-                                  onDelete: () {
-                                    _delete(context, brand.id, isDark, isGuest);
-                                  },
-                                  onToggleActive: (val) async {
-                                    if (isGuest) {
-                                      _showExplorationModal(context, isDark);
-                                      return;
-                                    }
-                                    await provider.updateBrand(brand.id, brand.nombre, activo: val);
-                                    if(context.mounted) CustomSnackBar.show(context, message: val ? "Activada" : "Suspendida", backgroundColor: val ? Colors.green[800]! : Colors.orange[800]!);
-                                  },
+                      ? SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: Container(
+                            height: MediaQuery.of(context).size.height * 0.7,
+                            alignment: Alignment.center,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.branding_watermark_outlined,
+                                  size: 80,
+                                  color: isDark
+                                      ? Colors.white10
+                                      : Colors.grey[300],
                                 ),
-                              );
-                            },
-                          );
-                        },
-                      ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  "No hay marcas registradas.",
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.grey[500]
+                                        : Colors.grey[600],
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton(
+                                  onPressed: () => _showFormDialog(
+                                    context,
+                                    isDark: isDark,
+                                    isGuest: isGuest,
+                                  ),
+                                  child: Text(
+                                    "Registrar Marca",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: isDark
+                                          ? Colors.orange[300]
+                                          : Colors.orange[800],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                          itemCount: brands.length,
+                          itemBuilder: (ctx, i) {
+                            final brand = brands[i];
+                            return MasterItemTile(
+                              title: brand.nombre,
+                              subtitle:
+                                  "${brand.productsCount} productos asociados",
+                              icon: Icons.branding_watermark,
+                              color: isDark
+                                  ? Colors.orange[300]!
+                                  : Colors.orange,
+                              isActive: brand.activo,
+                              onTap: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (_) => MasterDetailModal(
+                                    title: brand.nombre,
+                                    subtitle: "ID Sistema: ${brand.id}",
+                                    icon: Icons.branding_watermark,
+                                    color: isDark
+                                        ? Colors.orange[300]!
+                                        : Colors.orange,
+                                    isActive: brand.activo,
+                                    usageCount: brand.productsCount,
+                                    dataRows: [
+                                      {
+                                        "label": "Logo URL",
+                                        "value":
+                                            (brand.urlImagen != null &&
+                                                brand.urlImagen!.isNotEmpty)
+                                            ? "Configurado"
+                                            : "Sin logo",
+                                      },
+                                      {
+                                        "label": "Uso",
+                                        "value":
+                                            "${brand.productsCount} productos vinculados",
+                                      },
+                                    ],
+                                    onEdit: () {
+                                      _showFormDialog(
+                                        context,
+                                        brand: brand,
+                                        isDark: isDark,
+                                        isGuest: isGuest,
+                                      );
+                                    },
+                                    onDelete: () {
+                                      _delete(
+                                        context,
+                                        brand.id,
+                                        isDark,
+                                        isGuest,
+                                      );
+                                    },
+                                    onToggleActive: (val) async {
+                                      if (isGuest) {
+                                        _showExplorationModal(context, isDark);
+                                        return;
+                                      }
+                                      await provider.updateBrand(
+                                        brand.id,
+                                        brand.nombre,
+                                        activo: val,
+                                      );
+                                      if (context.mounted) {
+                                        CustomSnackBar.show(
+                                          context,
+                                          message: val
+                                              ? "Activada"
+                                              : "Suspendida",
+                                          backgroundColor: val
+                                              ? Colors.green[800]!
+                                              : Colors.orange[800]!,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
                 ),
               ),
             ],
@@ -231,7 +320,11 @@ class _BrandFormDialogState extends State<_BrandFormDialog> {
 
   void _saveData() async {
     if (_nameCtrl.text.trim().isEmpty) {
-      CustomSnackBar.show(context, message: "El nombre es obligatorio", isError: true);
+      CustomSnackBar.show(
+        context,
+        message: "El nombre es obligatorio",
+        isError: true,
+      );
       return;
     }
 
@@ -243,26 +336,33 @@ class _BrandFormDialogState extends State<_BrandFormDialog> {
 
     if (isEditing) {
       success = await provider.updateBrand(
-        widget.brand!.id, 
-        _nameCtrl.text.trim(), 
-        urlImagen: _imgCtrl.text.trim()
+        widget.brand!.id,
+        _nameCtrl.text.trim(),
+        urlImagen: _imgCtrl.text.trim(),
       );
     } else {
       final id = await provider.createBrand(
-        _nameCtrl.text.trim(), 
-        urlImagen: _imgCtrl.text.trim()
+        _nameCtrl.text.trim(),
+        urlImagen: _imgCtrl.text.trim(),
       );
       success = id != null;
     }
 
     if (mounted) {
       setState(() => _isLoading = false);
-      Navigator.pop(context); 
-      
+      Navigator.pop(context);
+
       if (success) {
-        CustomSnackBar.show(context, message: isEditing ? "Marca actualizada" : "Marca creada");
+        CustomSnackBar.show(
+          context,
+          message: isEditing ? "Marca actualizada" : "Marca creada",
+        );
       } else {
-        CustomSnackBar.show(context, message: "Error al procesar la marca", isError: true);
+        CustomSnackBar.show(
+          context,
+          message: "Error al procesar la marca",
+          isError: true,
+        );
       }
     }
   }
@@ -285,27 +385,52 @@ class _BrandFormDialogState extends State<_BrandFormDialog> {
           children: [
             Text(
               "Registra las marcas comerciales para estandarizar tus productos.",
-              style: TextStyle(fontSize: 14, color: widget.isDark ? Colors.grey[400] : Colors.grey),
+              style: TextStyle(
+                fontSize: 14,
+                color: widget.isDark ? Colors.grey[400] : Colors.grey,
+              ),
             ),
             const SizedBox(height: 20),
-            
+
             TextField(
               controller: _nameCtrl,
               textCapitalization: TextCapitalization.words,
               style: TextStyle(color: textColor, fontSize: 16),
               decoration: InputDecoration(
                 labelText: "Nombre Marca *",
-                labelStyle: TextStyle(color: widget.isDark ? Colors.grey[500] : Colors.grey[700]),
+                labelStyle: TextStyle(
+                  color: widget.isDark ? Colors.grey[500] : Colors.grey[700],
+                ),
                 filled: true,
-                fillColor: widget.isDark ? const Color(0xFF14141C) : Colors.grey[50],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: widget.isDark ? Colors.white10 : Colors.transparent)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: widget.isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange)),
-                prefixIcon: Icon(Icons.branding_watermark, color: widget.isDark ? Colors.blueGrey[300] : Colors.grey),
+                fillColor: widget.isDark
+                    ? const Color(0xFF14141C)
+                    : Colors.grey[50],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: widget.isDark ? Colors.white10 : Colors.transparent,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: widget.isDark
+                        ? Colors.orange.withValues(alpha: 0.5)
+                        : Colors.orange,
+                  ),
+                ),
+                prefixIcon: Icon(
+                  Icons.branding_watermark,
+                  color: widget.isDark ? Colors.blueGrey[300] : Colors.grey,
+                ),
               ),
             ),
             const SizedBox(height: 20),
-            
+
             ImagePickerField(
               controller: _imgCtrl,
               label: "Logo de la Marca",
@@ -317,19 +442,42 @@ class _BrandFormDialogState extends State<_BrandFormDialog> {
       actions: [
         TextButton(
           onPressed: _isLoading ? null : () => Navigator.pop(context),
-          child: Text("Cancelar", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey, fontSize: 16)),
+          child: Text(
+            "Cancelar",
+            style: TextStyle(
+              color: widget.isDark ? Colors.grey[400] : Colors.grey,
+              fontSize: 16,
+            ),
+          ),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: widget.isDark ? Colors.orange[300] : Colors.orange[800],
+            backgroundColor: widget.isDark
+                ? Colors.orange[300]
+                : Colors.orange[800],
             foregroundColor: widget.isDark ? Colors.black87 : Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
-          onPressed: _isLoading ? null : _saveData, 
-          child: _isLoading 
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Text(isEditing ? "Guardar" : "Crear", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        )
+          onPressed: _isLoading ? null : _saveData,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : Text(
+                  isEditing ? "Guardar" : "Crear",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+        ),
       ],
     );
   }

@@ -6,13 +6,13 @@ class InvoiceProvider with ChangeNotifier {
   int? _negocioId;
   bool _isLoading = false;
   String _errorMessage = "";
-  
+
   final dbHelper = LocalDatabase.instance;
 
   List<InvoiceModel> _invoices = [];
   bool _hasMoreData = true;
   int _currentSkip = 0;
-  final int _limit = 20;
+  final int _limit = 50;
 
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
@@ -24,7 +24,11 @@ class InvoiceProvider with ChangeNotifier {
   }
 
   Future<void> fetchInvoices({bool reset = false}) async {
-    if (_negocioId == null) return;
+    if (_negocioId == null) {
+      // Retry once after a small delay for ProxyProvider initialization
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (_negocioId == null) return;
+    }
 
     if (reset) {
       _isLoading = true;
@@ -47,10 +51,12 @@ class InvoiceProvider with ChangeNotifier {
         whereArgs: [_negocioId],
         limit: _limit,
         offset: _currentSkip,
-        orderBy: 'fecha_carga DESC'
+        orderBy: 'fecha_carga DESC',
       );
 
-      final List<InvoiceModel> newInvoices = rows.map((json) => InvoiceModel.fromJson(json)).toList();
+      final List<InvoiceModel> newInvoices = rows
+          .map((json) => InvoiceModel.fromJson(json))
+          .toList();
 
       if (newInvoices.length < _limit) {
         _hasMoreData = false;
@@ -61,7 +67,7 @@ class InvoiceProvider with ChangeNotifier {
       } else {
         _invoices.addAll(newInvoices);
       }
-      
+
       _currentSkip += newInvoices.length;
     } catch (e) {
       _errorMessage = "Error cargando facturas: $e";
@@ -78,7 +84,7 @@ class InvoiceProvider with ChangeNotifier {
         'facturas_carga',
         where: 'id = ?',
         whereArgs: [invoiceId],
-        limit: 1
+        limit: 1,
       );
 
       if (rows.isNotEmpty) {
@@ -90,11 +96,16 @@ class InvoiceProvider with ChangeNotifier {
     return null;
   }
 
-  Future<bool> updateInvoice(int invoiceId, {String? estado, int? proveedorId, String? imagenUrl}) async {
+  Future<bool> updateInvoice(
+    int invoiceId, {
+    String? estado,
+    int? proveedorId,
+    String? imagenUrl,
+  }) async {
     try {
       final db = await dbHelper.database;
       final Map<String, dynamic> body = {};
-      
+
       if (estado != null) body['estado'] = estado;
       if (proveedorId != null) body['proveedor_id'] = proveedorId;
       if (imagenUrl != null) body['imagen_url'] = imagenUrl;
@@ -103,13 +114,17 @@ class InvoiceProvider with ChangeNotifier {
         'facturas_carga',
         body,
         where: 'id = ?',
-        whereArgs: [invoiceId]
+        whereArgs: [invoiceId],
       );
 
       if (rowsUpdated > 0) {
         final index = _invoices.indexWhere((inv) => inv.id == invoiceId);
         if (index != -1) {
-          final updatedRow = await db.query('facturas_carga', where: 'id = ?', whereArgs: [invoiceId]);
+          final updatedRow = await db.query(
+            'facturas_carga',
+            where: 'id = ?',
+            whereArgs: [invoiceId],
+          );
           _invoices[index] = InvoiceModel.fromJson(updatedRow.first);
           notifyListeners();
         }

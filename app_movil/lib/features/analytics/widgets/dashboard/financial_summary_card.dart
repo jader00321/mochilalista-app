@@ -97,6 +97,7 @@ class _FinancialSummaryCardState extends State<FinancialSummaryCard> with Single
                             maxY: widget.data.totalSales > 0 ? widget.data.totalSales * 1.2 : 100,
                             barTouchData: BarTouchData(
                               touchTooltipData: BarTouchTooltipData(
+                                getTooltipColor: (group) => Colors.black.withValues(alpha: 0.8),
                                 getTooltipItem: (group, groupIndex, rod, rodIndex) {
                                   return BarTooltipItem(
                                     widget.formatCurrency(rod.toY),
@@ -130,11 +131,13 @@ class _FinancialSummaryCardState extends State<FinancialSummaryCard> with Single
                             gridData: const FlGridData(show: false),
                             borderData: FlBorderData(show: false),
                             barGroups: [
-                              BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: widget.data.totalSales, color: Colors.blueAccent, width: 24, borderRadius: BorderRadius.circular(6))]),
-                              BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: costoMercancia, color: Colors.redAccent, width: 24, borderRadius: BorderRadius.circular(6))]),
-                              BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: widget.data.netProfit, color: Colors.greenAccent, width: 24, borderRadius: BorderRadius.circular(6))]),
+                              BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: widget.data.totalSales, gradient: LinearGradient(colors: [Colors.blue[400]!, Colors.blue[700]!], begin: Alignment.bottomCenter, end: Alignment.topCenter), width: 24, borderRadius: const BorderRadius.vertical(top: Radius.circular(8)))]),
+                              BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: costoMercancia, gradient: LinearGradient(colors: [Colors.red[300]!, Colors.red[600]!], begin: Alignment.bottomCenter, end: Alignment.topCenter), width: 24, borderRadius: const BorderRadius.vertical(top: Radius.circular(8)))]),
+                              BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: widget.data.netProfit, gradient: LinearGradient(colors: [Colors.green[300]!, Colors.green[600]!], begin: Alignment.bottomCenter, end: Alignment.topCenter), width: 24, borderRadius: const BorderRadius.vertical(top: Radius.circular(8)))]),
                             ],
                           ),
+                          duration: const Duration(milliseconds: 600),
+                          curve: Curves.easeOutQuart,
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -168,21 +171,27 @@ class _FinancialSummaryCardState extends State<FinancialSummaryCard> with Single
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: widget.data.estimatedMarginPercentage >= 20 ? Colors.green.withValues(alpha: 0.1) : 
-                                 (widget.data.estimatedMarginPercentage >= 10 ? Colors.orange.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1)),
+                          color: widget.data.totalSales == 0
+                              ? (widget.isDark ? Colors.blueGrey.withValues(alpha: 0.1) : Colors.blueGrey[50])
+                              : (widget.data.estimatedMarginPercentage >= 20 ? Colors.green.withValues(alpha: 0.1) : 
+                                 (widget.data.estimatedMarginPercentage >= 10 ? Colors.orange.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1))),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: widget.data.estimatedMarginPercentage >= 20 ? Colors.green.withValues(alpha: 0.3) : 
-                                   (widget.data.estimatedMarginPercentage >= 10 ? Colors.orange.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3))
+                            color: widget.data.totalSales == 0
+                                ? (widget.isDark ? Colors.blueGrey.withValues(alpha: 0.3) : Colors.blueGrey.withValues(alpha: 0.3))
+                                : (widget.data.estimatedMarginPercentage >= 20 ? Colors.green.withValues(alpha: 0.3) : 
+                                   (widget.data.estimatedMarginPercentage >= 10 ? Colors.orange.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3)))
                           ),
                         ),
                         child: Row(
                           children: [
                             Icon(
-                              widget.data.estimatedMarginPercentage >= 20 ? Icons.health_and_safety : 
-                              (widget.data.estimatedMarginPercentage >= 10 ? Icons.warning_amber_rounded : Icons.dangerous),
-                              color: widget.data.estimatedMarginPercentage >= 20 ? Colors.green : 
-                                     (widget.data.estimatedMarginPercentage >= 10 ? Colors.orange : Colors.red),
+                              widget.data.totalSales == 0 ? Icons.info_outline :
+                              (widget.data.estimatedMarginPercentage >= 20 ? Icons.health_and_safety : 
+                              (widget.data.estimatedMarginPercentage >= 10 ? Icons.warning_amber_rounded : Icons.dangerous)),
+                              color: widget.data.totalSales == 0 ? (widget.isDark ? Colors.blueGrey[300] : Colors.blueGrey) :
+                                     (widget.data.estimatedMarginPercentage >= 20 ? Colors.green : 
+                                     (widget.data.estimatedMarginPercentage >= 10 ? Colors.orange : Colors.red)),
                               size: 32,
                             ),
                             const SizedBox(width: 16),
@@ -190,13 +199,16 @@ class _FinancialSummaryCardState extends State<FinancialSummaryCard> with Single
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("Diagnóstico de Salud", style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
+                                  Text(
+                                    widget.data.totalSales == 0 ? "Diagnóstico Pendiente" : "Diagnóstico de Salud", 
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)
+                                  ),
                                   const SizedBox(height: 4),
                                   Text(
                                     widget.data.financialHealth?.healthDiagnosis ?? "",
                                     style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
                                   ),
-                                  if (widget.data.financialHealth?.marginContext != null) ...[
+                                  if (widget.data.financialHealth != null && widget.data.financialHealth!.marginContext.isNotEmpty) ...[
                                     const SizedBox(height: 8),
                                     Text(
                                       widget.data.financialHealth!.marginContext,
@@ -298,22 +310,18 @@ class _FinancialSummaryCardState extends State<FinancialSummaryCard> with Single
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.account_balance_wallet, color: Colors.white70, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        widget.data.financialHealth?.balanceHeadline ?? "Balance Total",
-                        style: const TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w500),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                const Icon(Icons.account_balance_wallet, color: Colors.white70, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.data.financialHealth?.balanceHeadline ?? "Balance Total",
+                    style: const TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.w500, height: 1.2),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(8)),
@@ -357,7 +365,12 @@ class _FinancialSummaryCardState extends State<FinancialSummaryCard> with Single
                   ),
                 ),
               ],
-            )
+            ),
+            if (widget.data.totalSales == 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text("Sin ventas en este periodo", style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12, fontStyle: FontStyle.italic)),
+              ),
           ],
         ),
       ),

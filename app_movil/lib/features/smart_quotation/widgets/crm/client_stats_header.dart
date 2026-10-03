@@ -3,13 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_full_stats_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_finance_actions_modal.dart';
 
-class ClientStatsHeader extends StatelessWidget {
+class ClientStatsHeader extends StatefulWidget {
   final ClientModel client;
   final bool isDark;
   final VoidCallback onWhatsAppTap;
   final VoidCallback onCallTap;
   final VoidCallback onGoToQuickSale;
+  final VoidCallback onFinanceActionCompleted;
 
   const ClientStatsHeader({
     super.key,
@@ -18,47 +20,119 @@ class ClientStatsHeader extends StatelessWidget {
     required this.onWhatsAppTap,
     required this.onCallTap,
     required this.onGoToQuickSale,
+    required this.onFinanceActionCompleted,
   });
+
+  @override
+  State<ClientStatsHeader> createState() => _ClientStatsHeaderState();
+}
+
+class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+  
+  late AnimationController _bounceControllerWpp;
+  late Animation<double> _bounceAnimationWpp;
+
+  late AnimationController _bounceControllerCall;
+  late Animation<double> _bounceAnimationCall;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+    
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _bounceControllerWpp = AnimationController(vsync: this, duration: const Duration(milliseconds: 150));
+    _bounceAnimationWpp = Tween<double>(begin: 1.0, end: 0.9).animate(CurvedAnimation(parent: _bounceControllerWpp, curve: Curves.easeIn));
+
+    _bounceControllerCall = AnimationController(vsync: this, duration: const Duration(milliseconds: 150));
+    _bounceAnimationCall = Tween<double>(begin: 1.0, end: 0.9).animate(CurvedAnimation(parent: _bounceControllerCall, curve: Curves.easeIn));
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _bounceControllerWpp.dispose();
+    _bounceControllerCall.dispose();
+    super.dispose();
+  }
+
+  void _onWppTap() async {
+    try {
+      await _bounceControllerWpp.forward().orCancel;
+      await _bounceControllerWpp.reverse().orCancel;
+    } catch (e) {
+      // Ignorar si el componente se desmonta
+    }
+    if (mounted) widget.onWhatsAppTap();
+  }
+
+  void _onCallTap() async {
+    try {
+      await _bounceControllerCall.forward().orCancel;
+      await _bounceControllerCall.reverse().orCancel;
+    } catch (e) {
+      // Ignorar si el componente se desmonta
+    }
+    if (mounted) widget.onCallTap();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         _buildProfileHeader(context),
-        _buildFullStatsButton(context),
       ],
     );
   }
 
   Widget _buildProfileHeader(BuildContext context) {
     return Container(
-      color: isDark ? const Color(0xFF1A1A24) : const Color(0xFF1565C0),
-      padding: const EdgeInsets.fromLTRB(24, 10, 24, 16),
+      color: widget.isDark ? const Color(0xFF1A1A24) : const Color(0xFF1565C0),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
-                radius: 38, 
+                radius: 28, 
                 backgroundColor: Colors.white24,
                 child: Text(
-                  client.fullName.isNotEmpty ? client.fullName[0].toUpperCase() : "?",
-                  style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
+                  widget.client.fullName.isNotEmpty ? widget.client.fullName[0].toUpperCase() : "?",
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(client.fullName, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 0.5), maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 8),
+                    Text(widget.client.fullName, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 0.5), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.phone, color: Colors.white70, size: 18),
-                        const SizedBox(width: 6),
-                        Text(client.phone, style: const TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.w500)),
+                        const Icon(Icons.phone, color: Colors.white70, size: 16),
+                        const SizedBox(width: 4),
+                        Text(widget.client.phone, style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500)),
+                        const Spacer(),
+                        ScaleTransition(
+                          scale: _bounceAnimationWpp,
+                          child: _buildSmallActionButton(Icons.chat, const Color(0xFF25D366), _onWppTap),
+                        ),
+                        const SizedBox(width: 8),
+                        ScaleTransition(
+                          scale: _bounceAnimationCall,
+                          child: _buildSmallActionButton(Icons.call, widget.isDark ? Colors.blue[600]! : Colors.blue[800]!, _onCallTap),
+                        ),
                       ],
                     ),
                   ],
@@ -67,63 +141,73 @@ class ClientStatsHeader extends StatelessWidget {
             ],
           ),
           
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _buildTrustBadge(),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildTrustBadge(),
+              const Spacer(),
+              ScaleTransition(
+                scale: _pulseAnimation,
+                child: _buildFullStatsButton(context),
+              )
+            ],
           ),
           
-          if (client.etiquetas.isNotEmpty) ...[
-            const SizedBox(height: 20),
+          if (widget.client.etiquetas.isNotEmpty) ...[
+            const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               child: Row(
-                children: client.etiquetas.map((tag) => Container(
+                children: widget.client.etiquetas.map((tag) => Container(
                   margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
-                  child: Text(tag, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
+                  child: Text(tag, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                 )).toList(),
               ),
             )
           ],
           
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              IconButton(
-                onPressed: onWhatsAppTap,
-                icon: const Icon(Icons.chat, size: 24),
-                color: Colors.white,
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFF25D366),
-                  padding: const EdgeInsets.all(12),
-                ),
-                tooltip: "WhatsApp",
-              ),
-              const SizedBox(width: 12),
-              IconButton(
-                onPressed: onCallTap,
-                icon: const Icon(Icons.call, size: 24),
-                color: Colors.white,
-                style: IconButton.styleFrom(
-                  backgroundColor: isDark ? Colors.blue[600] : Colors.blue[800],
-                  padding: const EdgeInsets.all(12),
-                ),
-                tooltip: "Llamar",
-              ),
-              const SizedBox(width: 12),
               Expanded(
+                flex: 5,
                 child: ElevatedButton.icon(
-                  onPressed: onGoToQuickSale,
-                  icon: const Icon(Icons.point_of_sale, size: 22),
-                  label: const Text("Ir a Caja", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  onPressed: widget.onGoToQuickSale,
+                  icon: const Icon(Icons.point_of_sale, size: 18),
+                  label: const Text("Caja Rápida", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.pinkAccent,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 5,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (ctx) => ClientFinanceActionsModal(client: widget.client, isDark: widget.isDark),
+                    ).then((_) {
+                      widget.onFinanceActionCompleted();
+                    });
+                  },
+                  icon: const Icon(Icons.account_balance_wallet, size: 18),
+                  label: const Text("Operaciones", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: widget.isDark ? Colors.blueGrey[800] : Colors.blueGrey[700],
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     elevation: 0
                   ),
                 ),
@@ -137,54 +221,41 @@ class ClientStatsHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildFullStatsButton(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: isDark ? const Color(0xFF14141C) : Theme.of(context).scaffoldBackgroundColor,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-      child: InkWell(
-        onTap: () {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (ctx) => ClientFullStatsModal(client: client, isDark: isDark),
-          );
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isDark 
-                ? [const Color(0xFF23232F), const Color(0xFF2A2A38)]
-                : [Colors.blue.shade50, Colors.blue.shade100],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isDark ? Colors.blueAccent.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.4), width: 1.5),
-            boxShadow: [
-              if (!isDark) BoxShadow(color: Colors.blue.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.analytics_rounded, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 24),
-              const SizedBox(width: 10),
-              Text(
-                "Ver Analítica Completa", 
-                style: TextStyle(
-                  fontWeight: FontWeight.bold, 
-                  fontSize: 16, 
-                  color: isDark ? Colors.blue[300] : Colors.blue[900],
-                  letterSpacing: 0.5
-                )
-              ),
-              const SizedBox(width: 8),
-              Icon(Icons.arrow_forward_ios_rounded, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 14),
-            ],
-          ),
+  Widget _buildSmallActionButton(IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
         ),
+        child: Icon(icon, size: 16, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildFullStatsButton(BuildContext context) {
+    return TextButton.icon(
+      onPressed: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (ctx) => ClientFullStatsModal(client: widget.client, isDark: widget.isDark),
+        );
+      },
+      icon: const Icon(Icons.analytics_rounded, color: Colors.white, size: 16),
+      label: const Text(
+        "Ver Analítica", 
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)
+      ),
+      style: TextButton.styleFrom(
+        backgroundColor: Colors.white.withAlpha(38),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        minimumSize: Size.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
     );
   }
@@ -192,8 +263,8 @@ class ClientStatsHeader extends StatelessWidget {
   Widget _buildTrustBadge() {
     Color color;
     IconData icon;
-    String label = client.nivelConfianza.toUpperCase();
-    switch (client.nivelConfianza.toLowerCase()) {
+    String label = widget.client.nivelConfianza.toUpperCase();
+    switch (widget.client.nivelConfianza.toLowerCase()) {
       case 'excelente': color = Colors.greenAccent; icon = Icons.star; break;
       case 'regular': color = Colors.orangeAccent; icon = Icons.warning; break;
       case 'moroso': color = Colors.redAccent; icon = Icons.block; break;
@@ -201,19 +272,17 @@ class ClientStatsHeader extends StatelessWidget {
       default: color = Colors.blueAccent; icon = Icons.thumb_up; break;
     }
     return Container(
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-        borderRadius: BorderRadius.circular(20)
+        color: color.withAlpha(204),
+        borderRadius: BorderRadius.circular(16)
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5)),
+          Icon(icon, color: Colors.white, size: 14),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
         ],
       ),
     );
@@ -243,11 +312,11 @@ class ClientStatsHeader extends StatelessWidget {
       }
     }
 
-    if (overdueCount == 0 && client.totalDebt > 0) {
+    if (overdueCount == 0 && widget.client.totalDebt > 0) {
       return Container(
         margin: const EdgeInsets.only(top: 24),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(color: Colors.greenAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3))),
+        decoration: BoxDecoration(color: Colors.greenAccent.withAlpha(38), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.greenAccent.withAlpha(76))),
         child: Row(
           children: [
             const Icon(Icons.check_circle, color: Colors.greenAccent),
@@ -262,7 +331,7 @@ class ClientStatsHeader extends StatelessWidget {
       return Container(
         margin: const EdgeInsets.only(top: 24),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3))),
+        decoration: BoxDecoration(color: Colors.redAccent.withAlpha(38), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.redAccent.withAlpha(76))),
         child: Row(
           children: [
             const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 32),
@@ -283,5 +352,4 @@ class ClientStatsHeader extends StatelessWidget {
     
     return const SizedBox.shrink();
   }
-
 }

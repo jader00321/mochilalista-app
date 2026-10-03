@@ -6,7 +6,7 @@ import 'package:app_movil/features/smart_quotation/services/quotation_service.da
 import 'package:app_movil/core/database/local_db.dart';
 
 enum WorkbenchSort { time, alpha }
-enum TimeFilter { today, thisWeek, thisMonth, sixMonths, custom }
+enum TimeFilter { today, thisWeek, thisMonth, sixMonths, allTime, custom }
 
 class WorkbenchProvider with ChangeNotifier {
   int? _negocioId;
@@ -26,13 +26,15 @@ class WorkbenchProvider with ChangeNotifier {
   List<SmartQuotationModel> _soldList = []; 
   List<SmartQuotationModel> _archivedList = []; 
 
+  Set<int> _annulledQuotationIds = {}; 
+
   final Map<int, ValidationResult> _trafficLights = {};
 
   WorkbenchSort _sortType = WorkbenchSort.time;
   bool _sortAsc = false; 
   String _selectedFilter = "Todo";
 
-  TimeFilter _timeFilter = TimeFilter.thisMonth;
+  TimeFilter _timeFilter = TimeFilter.sixMonths;
   DateTimeRange? _customRange;
 
   // Listas pre-procesadas para la UI actual (filtradas y ordenadas)
@@ -65,6 +67,7 @@ class WorkbenchProvider with ChangeNotifier {
       case TimeFilter.thisWeek: return "Esta Semana";
       case TimeFilter.thisMonth: return "Este Mes";
       case TimeFilter.sixMonths: return "Últimos 6 Meses";
+      case TimeFilter.allTime: return "Todo";
       case TimeFilter.custom: return "Personalizado";
     }
   }
@@ -81,6 +84,8 @@ class WorkbenchProvider with ChangeNotifier {
         return DateTimeRange(start: DateTime(now.year, now.month, 1), end: now);
       case TimeFilter.sixMonths:
         return DateTimeRange(start: DateTime(now.year, now.month - 6, now.day), end: now);
+      case TimeFilter.allTime:
+        return DateTimeRange(start: DateTime.fromMillisecondsSinceEpoch(0), end: DateTime(now.year + 10, now.month, now.day));
       case TimeFilter.custom:
         return _customRange ?? DateTimeRange(start: DateTime(now.year, now.month, 1), end: now);
     }
@@ -88,15 +93,33 @@ class WorkbenchProvider with ChangeNotifier {
 
   int get criticalAlertsCount {
     int count = 0;
-    for (var q in [..._inProcessList, ..._readyAndPacksList]) {
+    for (var q in [..._filteredInProcessList, ..._filteredReadyAndPacksList]) {
       final val = _trafficLights[q.id];
       if (val != null && !val.canSell) count++;
     }
     return count;
   }
 
+  int get totalAlertsCount {
+    int count = 0;
+    for (var q in [..._filteredInProcessList, ..._filteredReadyAndPacksList]) {
+      final val = _trafficLights[q.id];
+      if (val != null && val.hasIssues) count++;
+    }
+    return count;
+  }
+
   double get totalDaySales {
-    return _soldList.fold(0.0, (sum, q) => sum + q.totalAmount);
+    return _filteredSoldList.fold(0.0, (sum, q) => sum + q.totalAmount);
+  }
+
+  int get productsSoldCount {
+    return _filteredSoldList.fold(0, (sum, q) => sum + q.items.fold(0, (sumI, i) => sumI + i.quantity));
+  }
+
+  double get avgTicket {
+    if (_filteredSoldList.isEmpty) return 0.0;
+    return totalDaySales / _filteredSoldList.length;
   }
 
   void updateContext(int? negocioId, int? usuarioId) {
@@ -104,13 +127,21 @@ class WorkbenchProvider with ChangeNotifier {
       _negocioId = negocioId;
       _usuarioId = usuarioId;
       
-      _allQuotations.clear();
-      _inProcessList.clear();
-      _readyAndPacksList.clear();
-      _soldList.clear();
-      _archivedList.clear();
-      _trafficLights.clear();
-      _errorMessage = "";
+      Future.microtask(() {
+        _allQuotations.clear();
+        _inProcessList.clear();
+        _readyAndPacksList.clear();
+        _soldList.clear();
+        _archivedList.clear();
+        _trafficLights.clear();
+        _errorMessage = "";
+        
+        if (_negocioId != null) {
+          loadDashboard();
+        } else {
+          notifyListeners();
+        }
+      });
     }
   }
 
@@ -220,6 +251,11 @@ class WorkbenchProvider with ChangeNotifier {
           allQs.add(SmartQuotationModel.fromJson(map));
       }
       _allQuotations = allQs;
+      
+      // Fetch annulled sales to cross-reference
+      final annulledSales = await db.query('ventas', columns: ['cotizacion_id'], where: 'is_archived = 1 AND cotizacion_id IS NOT NULL');
+      _annulledQuotationIds = annulledSales.map((e) => e['cotizacion_id'] as int).toSet();
+
       _applyTimeFilter();
       _organizeLists();
       await _evaluateHealthAndAutoDowngrade();
@@ -243,6 +279,7 @@ class WorkbenchProvider with ChangeNotifier {
 
     _soldList = _timeFilteredQuotations.where((q) {
         if (q.status != 'SOLD') return false; 
+        if (_annulledQuotationIds.contains(q.id)) return false;
         return _isRealQuotation(q);
     }).toList();
 

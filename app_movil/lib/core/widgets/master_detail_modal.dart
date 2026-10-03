@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class MasterDetailModal extends StatelessWidget {
+class MasterDetailModal extends StatefulWidget {
   final String title;
   final String subtitle;
   final IconData icon;
@@ -29,8 +29,21 @@ class MasterDetailModal extends StatelessWidget {
   });
 
   @override
+  State<MasterDetailModal> createState() => _MasterDetailModalState();
+}
+
+class _MasterDetailModalState extends State<MasterDetailModal> {
+  late bool _isActive;
+
+  @override
+  void initState() {
+    super.initState();
+    _isActive = widget.isActive;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bool canDelete = usageCount == 0;
+    final bool canDelete = widget.usageCount == 0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
@@ -59,17 +72,17 @@ class MasterDetailModal extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(color: (isActive ? color : Colors.grey).withValues(alpha: 0.15), shape: BoxShape.circle),
-                child: Icon(icon, color: isActive ? color : (isDark ? Colors.grey[400] : Colors.grey), size: 36),
+                decoration: BoxDecoration(color: (_isActive ? widget.color : Colors.grey).withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: Icon(widget.icon, color: _isActive ? widget.color : (isDark ? Colors.grey[400] : Colors.grey), size: 36),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor)),
+                    Text(widget.title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor)),
                     const SizedBox(height: 4),
-                    Text(subtitle, style: TextStyle(fontSize: 15, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                    Text(widget.subtitle, style: TextStyle(fontSize: 15, color: isDark ? Colors.grey[400] : Colors.grey[600])),
                   ],
                 ),
               ),
@@ -81,28 +94,31 @@ class MasterDetailModal extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isActive ? (isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.05)) : (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.05)),
+              color: _isActive ? (isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.05)) : (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.05)),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isActive ? (isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.withValues(alpha: 0.2)) : (isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.withValues(alpha: 0.2))),
+              border: Border.all(color: _isActive ? (isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.withValues(alpha: 0.2)) : (isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.withValues(alpha: 0.2))),
             ),
             child: Row(
               children: [
-                Icon(isActive ? Icons.check_circle : Icons.pause_circle_filled, color: isActive ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.orange[400] : Colors.orange), size: 28),
+                Icon(_isActive ? Icons.check_circle : Icons.pause_circle_filled, color: _isActive ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.orange[400] : Colors.orange), size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(isActive ? "Estado: ACTIVO" : "Estado: SUSPENDIDO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isActive ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.orange[300] : Colors.orange[800]))),
+                      Text(_isActive ? "Estado: ACTIVO" : "Estado: SUSPENDIDO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _isActive ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.orange[300] : Colors.orange[800]))),
                       const SizedBox(height: 2),
-                      Text(isActive ? "Visible para usar en el inventario." : "Oculto en las listas desplegables.", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.black54)),
+                      Text(_isActive ? "Visible para usar en el inventario." : "Oculto en las listas desplegables.", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.black54)),
                     ],
                   ),
                 ),
                 Switch(
-                  value: isActive,
+                  value: _isActive,
                   activeThumbColor: isDark ? Colors.green[400] : Colors.green,
-                  onChanged: (val) { Navigator.pop(context); onToggleActive(val); },
+                  onChanged: (val) { 
+                    setState(() => _isActive = val);
+                    widget.onToggleActive(val); 
+                  },
                 ),
               ],
             ),
@@ -110,10 +126,10 @@ class MasterDetailModal extends StatelessWidget {
           const SizedBox(height: 30),
 
           // Datos
-          if (dataRows.isNotEmpty) ...[
+          if (widget.dataRows.isNotEmpty) ...[
             Text("INFORMACIÓN DETALLADA", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[500] : Colors.grey, letterSpacing: 1)),
             const SizedBox(height: 16),
-            ...dataRows.map((row) => Padding(
+            ...widget.dataRows.map((row) => Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,7 +149,7 @@ class MasterDetailModal extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () { 
                     Navigator.pop(context); // Cierra el bottomsheet
-                    onEdit(); // Llama a la lógica principal de manera segura
+                    widget.onEdit(); // Llama a la lógica principal de manera segura
                   },
                   icon: const Icon(Icons.edit, size: 20),
                   label: const Text("EDITAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
@@ -148,7 +164,7 @@ class MasterDetailModal extends StatelessWidget {
                 ? OutlinedButton.icon(
                     onPressed: () { 
                       Navigator.pop(context); // Cierra el bottomsheet
-                      onDelete(); // Llama a la lógica principal de manera segura
+                      widget.onDelete(); // Llama a la lógica principal de manera segura
                     },
                     icon: const Icon(Icons.delete_outline, size: 20),
                     label: const Text("ELIMINAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
@@ -161,7 +177,7 @@ class MasterDetailModal extends StatelessWidget {
                       children: [
                         Icon(Icons.lock_outline, size: 20, color: isDark ? Colors.grey[400] : Colors.grey),
                         const SizedBox(height: 2),
-                        Text("En uso ($usageCount)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey)),
+                        Text("En uso (${widget.usageCount})", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey)),
                       ],
                     ),
                   ),
@@ -172,7 +188,7 @@ class MasterDetailModal extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 12.0),
               child: Text(
-                "No se puede eliminar porque está asignado a $usageCount productos. Suspéndalo para dejar de usarlo.",
+                "No se puede eliminar porque está asignado a ${widget.usageCount} productos. Suspéndalo para dejar de usarlo.",
                 style: TextStyle(fontSize: 13, color: isDark ? Colors.red[300] : Colors.red, fontStyle: FontStyle.italic),
                 textAlign: TextAlign.center,
               ),

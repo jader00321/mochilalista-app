@@ -11,7 +11,7 @@ class QuickSaleDetailModal extends StatefulWidget {
   final MatchedProduct product;
   final int initialQty;
   final double? initialOverridePrice;
-  final Function(MatchedProduct product, int qty, double? overridePrice) onConfirm;
+  final Function(int oldPresentationId, MatchedProduct product, int qty, double? overridePrice) onConfirm;
 
   const QuickSaleDetailModal({
     super.key,
@@ -52,9 +52,9 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     _priceCtrl.text = effectivePrice.toStringAsFixed(2);
     double initialDiscount = _systemPrice - effectivePrice;
     
-    if (initialDiscount > 0) {
+    if (initialDiscount > 0.01 || (widget.initialOverridePrice != null && (widget.initialOverridePrice! - _systemPrice).abs() > 0.01)) {
       _isManualPrice = true;
-      _discountCtrl.text = initialDiscount.toStringAsFixed(2);
+      _discountCtrl.text = initialDiscount > 0 ? initialDiscount.toStringAsFixed(2) : "0.00";
     } else {
       _isManualPrice = false;
       _discountCtrl.text = "";
@@ -143,21 +143,28 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
         brand: _currentSelection.brand,
         price: pres.precioVentaFinal, 
         offerPrice: (pres.precioOferta != null && pres.precioOferta! > 0) ? pres.precioOferta : null,
-        stock: pres.stockActual,
+        stock: pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1),
         imageUrl: pres.imagenUrl ?? _fullProduct!.imagenUrl,
         unit: pres.unidadVenta ?? "Unidad", 
-        conversionFactor: pres.unidadesPorLote, 
+        conversionFactor: pres.unidadesPorVenta, 
       );
       
       _systemPrice = _currentSelection.price;
       
-      _isManualPrice = false;
-      _priceCtrl.text = _systemPrice.toStringAsFixed(2);
-      _discountCtrl.text = "";
+      if (_currentSelection.offerPrice != null && _currentSelection.offerPrice! > 0) {
+        _isManualPrice = true;
+        _priceCtrl.text = _currentSelection.offerPrice!.toStringAsFixed(2);
+        double disc = _systemPrice - _currentSelection.offerPrice!;
+        _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
+      } else {
+        _isManualPrice = false;
+        _priceCtrl.text = _systemPrice.toStringAsFixed(2);
+        _discountCtrl.text = "";
+      }
       
       int currentQty = int.tryParse(_qtyCtrl.text) ?? 1;
-      if (currentQty > pres.stockActual && pres.stockActual > 0) {
-        _qtyCtrl.text = pres.stockActual.toString();
+      if (currentQty > _currentSelection.stock && _currentSelection.stock > 0) {
+        _qtyCtrl.text = _currentSelection.stock.toString();
       }
     });
   }
@@ -178,7 +185,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
       overridePrice = finalPrice;
     }
     
-    widget.onConfirm(_currentSelection, finalQty, overridePrice);
+    widget.onConfirm(widget.product.presentationId, _currentSelection, finalQty, overridePrice);
     Navigator.pop(context);
   }
 
@@ -190,7 +197,6 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
-    final textTheme = Theme.of(context).textTheme;
 
     String brandName = "";
     if (_currentSelection.brand != null && _currentSelection.brand != "null") {
@@ -243,14 +249,14 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                       children: [
 
                         if (showBrand)
-                          Text(brandName.toUpperCase(), style: TextStyle(fontSize: 14, color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                          Text(brandName.toUpperCase(), style: TextStyle(fontSize: 12, color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w800, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
                         
-                        Text("${_currentSelection.productName} ", style: textTheme.titleLarge?.copyWith(color: textColor), maxLines: 3, overflow: TextOverflow.ellipsis),
+                        Text("${_currentSelection.productName} ", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor, height: 1.2), maxLines: 3, overflow: TextOverflow.ellipsis),
                         
                         if (_currentSelection.specificName != null && _currentSelection.specificName!.isNotEmpty && _currentSelection.specificName != "Paquete")
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
-                            child: Text(_currentSelection.specificName!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
+                            child: Text(_currentSelection.specificName!, style: TextStyle(fontSize: 18, color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
                           ),
                         
                         const SizedBox(height: 8),
@@ -260,7 +266,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                           child: Text("Se vende por: ${_currentSelection.unit}  (Factor: ${_currentSelection.conversionFactor})", style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.grey[800], fontWeight: FontWeight.bold)),
                         ),
                         const SizedBox(height: 8),
-                        Text(isStockEmpty ? "Agotado" : "Stock disponible: ${_currentSelection.stock}", style: TextStyle(color: isStockEmpty ? (isDark ? Colors.red[300] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), fontWeight: FontWeight.bold, fontSize: 15)),
+                        Text(isStockEmpty ? "Agotado" : "Stock disponible: ${_currentSelection.stock} ${_currentSelection.unit}", style: TextStyle(color: isStockEmpty ? (isDark ? Colors.red[300] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), fontWeight: FontWeight.bold, fontSize: 15)),
                       ],
                     ),
                   )
@@ -307,7 +313,16 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                       activeThumbColor: Colors.orange,
                       onChanged: (v) => setState(() {
                         _isManualPrice = v;
-                        if (!v) { _priceCtrl.text = _systemPrice.toStringAsFixed(2); _discountCtrl.text = ""; }
+                        if (!v) { 
+                          _priceCtrl.text = _systemPrice.toStringAsFixed(2); 
+                          _discountCtrl.text = ""; 
+                        } else {
+                          if (_currentSelection.offerPrice != null && _currentSelection.offerPrice! > 0) {
+                            _priceCtrl.text = _currentSelection.offerPrice!.toStringAsFixed(2);
+                            double disc = _systemPrice - _currentSelection.offerPrice!;
+                            _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
+                          }
+                        }
                       }),
                     ),
                     if (_isManualPrice) ...[

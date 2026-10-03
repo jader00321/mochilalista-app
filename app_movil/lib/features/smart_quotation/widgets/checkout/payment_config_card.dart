@@ -423,7 +423,7 @@ class _PaymentConfigCardState extends State<PaymentConfigCard> {
                 if (interestAmount > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 8, left: 4),
-                    child: Text("Surcharge de Interés: ${currency.format(interestAmount)}", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red[700], fontSize: 13, fontWeight: FontWeight.bold)),
+                    child: Text("Monto por Interés (${_interestCtrl.text}%): ${currency.format(interestAmount)}", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red[700], fontSize: 13, fontWeight: FontWeight.bold)),
                   ),
                 const SizedBox(height: 16),
                 Row(

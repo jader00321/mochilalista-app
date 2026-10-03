@@ -23,16 +23,12 @@ class InventoryGridCard extends StatelessWidget {
     final bool isPublic = presentation.estado == 'publico';
     final Color statusColor = isPublic ? (isDark ? Colors.green[400]! : Colors.green) : (isDark ? Colors.orange[400]! : Colors.orange); 
     
-    final int stock = presentation.stockActual;
+    final int stock = item.displayStock;
     final bool isOut = stock <= 0;
     final Color stockColor = isOut ? (isDark ? Colors.red[400]! : Colors.red) : (stock <= 5 ? (isDark ? Colors.orange[300]! : Colors.orange) : (isDark ? Colors.teal[300]! : Colors.green[700]!));
     final bool hasOffer = item.hasOffer;
 
-    // 🔥 ACTUALIZADO: Corregido para usar unidadVenta (estaba erróneamente usando umpCompra)
-    String variantDisplay = presentation.unidadVenta ?? "Unidad";
-    if (presentation.nombreEspecifico != null && presentation.nombreEspecifico!.isNotEmpty) {
-      variantDisplay += " - ${presentation.nombreEspecifico}";
-    }
+    final String unidadVentaText = presentation.unidadVenta ?? presentation.umpCompra ?? "Unidad";
 
     return Card(
       elevation: isDark ? 0 : 2,
@@ -104,17 +100,33 @@ class InventoryGridCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(product.nombre, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, height: 1.2, color: isDark ? Colors.white : Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis),
                   
-                  // 🔥 TEXTO ADAPTADO
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(variantDisplay, style: TextStyle(fontSize: 12, color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  // 🔥 Nombre de Variante
+                  if (presentation.nombreEspecifico != null && presentation.nombreEspecifico!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, bottom: 2),
+                      child: Text(presentation.nombreEspecifico!, style: TextStyle(fontSize: 13, color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w700), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ),
+                  
+                  // 🔥 Unidad de Venta como Badge
+                  Container(
+                    margin: const EdgeInsets.only(top: 4, bottom: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.blueGrey.withValues(alpha: 0.3) : Colors.blueGrey.shade50,
+                      borderRadius: BorderRadius.circular(6)
+                    ),
+                    child: Text(
+                      unidadVentaText.toUpperCase(),
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700], letterSpacing: 0.5)
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text("S/ ${item.effectivePrice.toStringAsFixed(2)}", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: hasOffer ? (isDark ? Colors.red[300] : Colors.red) : (isDark ? Colors.blue[300] : Colors.black87))),
-                      Text(isOut ? "0" : "$stock", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: stockColor)),
+                      Flexible(child: Text("S/ ${item.effectivePrice.toStringAsFixed(2)}", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: hasOffer ? (isDark ? Colors.red[300] : Colors.red) : (isDark ? Colors.blue[300] : Colors.black87)), overflow: TextOverflow.ellipsis)),
+                      const SizedBox(width: 4),
+                      Flexible(child: Text(isOut ? "Agotado" : item.displayStockText, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: stockColor), overflow: TextOverflow.ellipsis, textAlign: TextAlign.right)),
                     ],
                   )
                 ],

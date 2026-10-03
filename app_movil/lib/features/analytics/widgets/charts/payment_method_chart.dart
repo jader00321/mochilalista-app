@@ -118,26 +118,37 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
                     var val = e.value;
                     bool isTouched = idx == _selectedSegmentIndex;
                     
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
-                      decoration: BoxDecoration(
-                        color: isTouched ? colors[idx % colors.length].withValues(alpha: 0.1) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: colors[idx % colors.length])),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(val['name'].toString().toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: isTouched ? FontWeight.bold : FontWeight.normal), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          Row(
-                            children: [
-                              Text(widget.formatCurrency(val['amount']), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                              const SizedBox(width: 8),
-                              Text("${((val['amount'] / total) * 100).toStringAsFixed(1)}%", style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
-                            ],
-                          )
-                        ],
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (_selectedSegmentIndex == idx) {
+                            _selectedSegmentIndex = -1;
+                          } else {
+                            _selectedSegmentIndex = idx;
+                          }
+                        });
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
+                        decoration: BoxDecoration(
+                          color: isTouched ? colors[idx % colors.length].withValues(alpha: 0.1) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: colors[idx % colors.length])),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(val['name'].toString().toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: isTouched ? FontWeight.bold : FontWeight.normal), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            Row(
+                              children: [
+                                Text(widget.formatCurrency(val['amount']), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                const SizedBox(width: 8),
+                                Text("${((val['amount'] / total) * 100).toStringAsFixed(1)}%", style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
+                              ],
+                            )
+                          ],
+                        ),
                       ),
                     );
                   }).toList(),

@@ -40,6 +40,8 @@ class GeneralPreviewTab extends StatelessWidget {
     for (var sale in debts) {
       if (remaining <= 0.01) break;
 
+      String entityName = sale.origenVenta == 'prestamo_personal' ? 'Préstamo' : 'Venta';
+
       if (sale.installments.isNotEmpty) {
         for (var cuota in sale.installments) {
           if (remaining <= 0.01) break;
@@ -51,7 +53,7 @@ class GeneralPreviewTab extends StatelessWidget {
 
             impactPreview.add(_buildImpactRow(
               saldado, 
-              saldado ? "Cancela Cuota ${cuota.installmentNumber} (Venta #${sale.id})" : "Abono parcial a Cuota ${cuota.installmentNumber} (Venta #${sale.id})", 
+              saldado ? "Cancela Cuota ${cuota.installmentNumber} ($entityName #${sale.displayId})" : "Abono parcial a Cuota ${cuota.installmentNumber} ($entityName #${sale.displayId})", 
               aplicado, currency, isDark
             ));
           }
@@ -64,7 +66,7 @@ class GeneralPreviewTab extends StatelessWidget {
 
         impactPreview.add(_buildImpactRow(
           saldado, 
-          saldado ? "Cancela Venta #${sale.id} al contado" : "Abono parcial a Venta #${sale.id}", 
+          saldado ? "Cancela $entityName #${sale.displayId} al contado" : "Abono parcial a $entityName #${sale.displayId}", 
           aplicado, currency, isDark
         ));
       }

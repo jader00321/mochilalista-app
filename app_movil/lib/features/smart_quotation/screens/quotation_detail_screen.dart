@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:gal/gal.dart'; 
 import 'package:permission_handler/permission_handler.dart';
+import 'package:app_movil/core/widgets/marquee_text.dart';
 
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
@@ -119,6 +120,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         
         onUpdateNames: () => _executeRefresh(prices: false, stock: false, names: true, bundles: false),
         onSyncBundles: () => _executeRefresh(prices: false, stock: false, names: false, bundles: true),
+        onSyncUnits: () => _executeRefresh(prices: false, stock: false, names: true, bundles: false),
         onFixSingleStock: (itemId, newQty) => _handleIndividualFix(itemId: itemId, newQty: newQty),
         onRemoveSingleItem: (itemId) => _handleIndividualFix(itemId: itemId, remove: true),
         onAcceptSinglePrice: (itemId, newPrice, newBase) => _handleIndividualFix(itemId: itemId, newAppliedPrice: newPrice, newOriginalPrice: newBase),
@@ -368,37 +370,66 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   Widget _buildSmartAlertBanner(ValidationResult validation, bool isDark) {
     bool isCritical = !validation.canSell; 
-    Color bgColor = isCritical ? (isDark ? Colors.red[900]! : Colors.red) : (isDark ? Colors.orange[900]! : Colors.orange[800]!);
-    Color iconColor = Colors.white;
-    String title = isCritical ? "¡Atención! Stock Insuficiente" : "Precios Desactualizados";
-    String actionLabel = "VER SOLUCIONES";
 
-    return Container(
-      width: double.infinity,
-      color: bgColor,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Icon(isCritical ? Icons.error : Icons.warning_rounded, color: iconColor, size: 32),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, 
-              children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: iconColor, fontSize: 16)), 
-                const SizedBox(height: 4),
-                Text(isCritical ? "Productos agotados detectados." : "Detectamos cambios de precio.", style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.9)))
-              ]
+    if (isCritical) {
+      // ═══════════════════════════════════════════════════════════════
+      // 🔴 BANNER CRÍTICO: Stock insuficiente / Bundle eliminado
+      // Tamaño grande, rojo, icono de error. Impide la venta.
+      // ═══════════════════════════════════════════════════════════════
+      Color bgColor = isDark ? Colors.red[900]! : Colors.red;
+      return Container(
+        width: double.infinity,
+        color: bgColor,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            const Icon(Icons.error, color: Colors.white, size: 32),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, 
+                children: [
+                  const Text("¡Atención! Stock Insuficiente", style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16)), 
+                  const SizedBox(height: 4),
+                  Text("Productos agotados detectados.", style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.9)))
+                ]
+              )
+            ),
+            ElevatedButton(
+              onPressed: () => _handleUpdateAnalysis(validation), 
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: bgColor, elevation: 4, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), 
+              child: const Text("VER SOLUCIONES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))
             )
-          ),
-          ElevatedButton(
-            onPressed: () => _handleUpdateAnalysis(validation), 
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: bgColor, elevation: 4, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), 
-            child: Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))
-          )
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    } else {
+      // ═══════════════════════════════════════════════════════════════
+      // 🟡 BANNER INFORMATIVO: Precios desactualizados
+      // Más compacto, discreto, no impide la venta.
+      // ═══════════════════════════════════════════════════════════════
+      Color bgColor = isDark ? Colors.amber[900]!.withValues(alpha: 0.6) : Colors.amber[100]!;
+      Color textColor = isDark ? Colors.amber[200]! : Colors.amber[900]!;
+      return Container(
+        width: double.infinity,
+        color: bgColor,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, color: textColor, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text("Hay cambios de precio en algunos productos.", style: TextStyle(fontWeight: FontWeight.w600, color: textColor, fontSize: 13)),
+            ),
+            TextButton(
+              onPressed: () => _handleUpdateAnalysis(validation), 
+              style: TextButton.styleFrom(foregroundColor: textColor, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
+              child: const Text("REVISAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))
+            )
+          ],
+        ),
+      );
+    }
   }
   
 
@@ -476,7 +507,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_fullQuotation?.clientName ?? widget.clientName ?? "Detalle", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            SizedBox(
+              width: double.infinity,
+              height: 24,
+              child: MarqueeText(
+                text: _fullQuotation?.clientName ?? widget.clientName ?? "Detalle",
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
             const SizedBox(height: 2),
             Row(
               children: [
@@ -646,15 +684,23 @@ class _QuoteHeaderDelegate extends SliverPersistentHeaderDelegate {
   });
 
   @override
-  double get minExtent => 75.0;
+  double get minExtent => 85.0;
 
   @override
   double get maxExtent {
-    double baseHeight = 110.0;
-    if (quotation?.institutionName != null && quotation!.institutionName!.isNotEmpty) baseHeight += 25.0;
-    if (quotation?.gradeLevel != null && quotation!.gradeLevel!.isNotEmpty) baseHeight += 25.0;
-    if (quotation?.notas != null && quotation!.notas!.isNotEmpty) baseHeight += 60.0;
-    return baseHeight;
+    double baseHeight = 125.0; 
+    if (quotation?.institutionName != null && quotation!.institutionName!.isNotEmpty) {
+      baseHeight += 45.0; 
+    }
+    if (quotation?.gradeLevel != null && quotation!.gradeLevel!.isNotEmpty) {
+      baseHeight += 25.0;
+    }
+    
+    if (quotation?.notas != null && quotation!.notas!.isNotEmpty) {
+      baseHeight += 60.0;
+    }
+    
+    return baseHeight < 135.0 ? 135.0 : baseHeight;
   }
 
   @override
@@ -664,11 +710,18 @@ class _QuoteHeaderDelegate extends SliverPersistentHeaderDelegate {
 
     return SizedBox(
       height: currentExtent.clamp(minExtent, maxExtent),
-      child: QuoteDetailHeader(
-        quotation: quotation,
-        fallbackClientName: fallbackClientName,
-        isDark: isDark,
-        shrinkFactor: shrinkFactor,
+      child: ClipRect(
+        child: OverflowBox(
+          minHeight: minExtent,
+          maxHeight: maxExtent,
+          alignment: Alignment.topCenter,
+          child: QuoteDetailHeader(
+            quotation: quotation,
+            fallbackClientName: fallbackClientName,
+            isDark: isDark,
+            shrinkFactor: shrinkFactor,
+          ),
+        ),
       ),
     );
   }

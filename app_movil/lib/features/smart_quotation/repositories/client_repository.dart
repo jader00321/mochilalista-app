@@ -21,7 +21,7 @@ class ClientRepository {
       return await db.rawQuery('''
         SELECT v.*, (SELECT COUNT(id) FROM venta_items WHERE venta_id = v.id) as items_count 
         FROM ventas v 
-        WHERE v.cliente_id = ? 
+        WHERE v.cliente_id = ? AND v.is_archived = 0
         ORDER BY v.fecha_venta DESC 
         LIMIT ?
       ''', [clientId, limit]);
@@ -44,10 +44,23 @@ class ClientRepository {
   Future<List<Map<String, dynamic>>> searchClientsRaw(String query, int negocioId) async {
     try {
       final db = await _dbHelper.database;
+      
+      String whereClause = 'negocio_id = ?';
+      List<dynamic> args = [negocioId];
+
+      if (query.trim().isNotEmpty) {
+        final words = query.trim().split(RegExp(r'\s+'));
+        for (final word in words) {
+          final term = '%$word%';
+          whereClause += ' AND (nombre_completo LIKE ? OR dni_ruc LIKE ? OR telefono LIKE ?)';
+          args.addAll([term, term, term]);
+        }
+      }
+
       return await db.query(
         'clientes', 
-        where: 'negocio_id = ? AND (nombre_completo LIKE ? OR dni_ruc LIKE ? OR telefono LIKE ?)', 
-        whereArgs: [negocioId, '%$query%', '%$query%', '%$query%'],
+        where: whereClause, 
+        whereArgs: args,
         limit: 20
       );
     } catch (e, stack) {
@@ -111,6 +124,53 @@ class ClientRepository {
     } catch (e, stack) {
       AppLogger.error('ClientRepository.deleteClient', e, stack);
       throw Exception("No se puede eliminar el cliente porque tiene historial de operaciones o deudas.");
+    }
+  }
+
+  Future<Map<String, dynamic>> getClientCancellationStats(int clientId) async {
+    try {
+      final db = await _dbHelper.database;
+      
+      // Obtener el total de ventas (completadas + anuladas)
+      final allSales = await db.rawQuery('''
+        SELECT is_archived, monto_total, motivo_anulacion 
+        FROM ventas 
+        WHERE cliente_id = ?
+      ''', [clientId]);
+
+      int totalVentas = allSales.length;
+      int anuladas = 0;
+      double montoPerdido = 0.0;
+      Map<String, int> motivos = {};
+
+      for (var s in allSales) {
+        bool isArchived = s['is_archived'] == 1;
+        if (isArchived) {
+          anuladas++;
+          montoPerdido += (s['monto_total'] as num?)?.toDouble() ?? 0.0;
+          String motivo = (s['motivo_anulacion'] as String?) ?? 'No especificado';
+          motivos[motivo] = (motivos[motivo] ?? 0) + 1;
+        }
+      }
+
+      double cancellationRate = totalVentas > 0 ? (anuladas / totalVentas) * 100 : 0.0;
+
+      return {
+        'totalVentas': totalVentas,
+        'anuladas': anuladas,
+        'montoPerdido': montoPerdido,
+        'cancellationRate': cancellationRate,
+        'motivos': motivos,
+      };
+    } catch (e, stack) {
+      AppLogger.error('ClientRepository.getClientCancellationStats', e, stack);
+      return {
+        'totalVentas': 0,
+        'anuladas': 0,
+        'montoPerdido': 0.0,
+        'cancellationRate': 0.0,
+        'motivos': <String, int>{},
+      };
     }
   }
 }

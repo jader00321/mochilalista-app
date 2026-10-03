@@ -18,15 +18,15 @@ class ManualQuoteProvider with ChangeNotifier {
   bool _isLoading = false;
   String _errorMessage = ''; 
   int _page = 0;
-  final int _limit = 20; 
+  final int _limit = 50; 
   bool _hasMoreData = true;
 
   String _searchQuery = '';
   int? _selectedCategoryId;
   
   List<InventoryWrapper> get searchResults => _searchResults;
-  List<Category> get categories => _categories;
-  List<Brand> get brands => _brands;
+  List<Category> get categories => _categories.where((c) => c.activo).toList();
+  List<Brand> get brands => _brands.where((b) => b.activo).toList();
   bool get isLoading => _isLoading;
   bool get hasMoreData => _hasMoreData;
   int? get selectedCategoryId => _selectedCategoryId;
@@ -57,7 +57,7 @@ class ManualQuoteProvider with ChangeNotifier {
   Future<void> _fetchMasters() async {
     if (_categories.isNotEmpty && _brands.isNotEmpty) return;
     try {
-      final masters = await _masterDataService.fetchAllMasterData(false);
+      final masters = await _masterDataService.fetchAllMasterData(true);
       if (masters != null) {
         _categories = List<Category>.from(masters['categories']);
         _categories.sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));

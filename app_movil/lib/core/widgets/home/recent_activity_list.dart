@@ -14,11 +14,11 @@ class RecentActivityList extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Solo muestra loader si está cargando Y no hay datos previos
-    if (salesProv.isLoading && salesProv.salesHistory.isEmpty) {
+    if (salesProv.isLoading && salesProv.recentHomeSales.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final recentSales = salesProv.salesHistory.take(5).toList();
+    final recentSales = salesProv.recentHomeSales;
 
     if (recentSales.isEmpty) return const SizedBox.shrink();
 
@@ -94,13 +94,27 @@ class RecentActivityList extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              isQuotation ? "Venta por Cotización" : "Venta Directa",
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87),
+                              sale.clientName ?? "Sin cliente",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold, 
+                                fontSize: 15, 
+                                color: sale.clientName == null 
+                                    ? (isDark ? Colors.grey[500] : Colors.grey[600]) 
+                                    : (isDark ? Colors.white : Colors.black87),
+                                fontStyle: sale.clientName == null ? FontStyle.italic : FontStyle.normal,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              "${isQuotation ? "Cotización" : "Venta Directa"} (#${sale.displayId})",
+                              style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               "${sale.paymentMethod} • $dateStr",
-                              style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                              style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[500]),
                             ),
                           ],
                         ),

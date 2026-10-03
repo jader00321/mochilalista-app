@@ -209,7 +209,7 @@ class ClientStatsExportService {
     buffer.writeln("--- CRONOLOGÍA DE COMPRAS ---");
     buffer.writeln("ID,Fecha,Origen,Estado,Items,Monto Pagado,Total");
     for (var sale in filteredSales) {
-      buffer.writeln("${sale.id},${sale.date},${sale.origenVenta},${sale.status},${sale.itemsCount},${sale.montoPagado},${sale.trueTotal}");
+      buffer.writeln("${sale.displayId},${sale.date},${sale.origenVenta},${sale.status},${sale.itemsCount},${sale.montoPagado},${sale.trueTotal}");
     }
 
     await file.writeAsString(buffer.toString());

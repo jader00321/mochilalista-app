@@ -30,7 +30,9 @@ class _ClientSearchModalState extends State<ClientSearchModal> {
     final authProv = Provider.of<AuthProvider>(context, listen: false);
     if (authProv.activeBusinessId != null) {
       setState(() {
-        _searchFuture = _clientService.getRecentClients(authProv.activeBusinessId!);
+        _searchFuture = _clientService.getRecentClients(authProv.activeBusinessId!).then(
+          (clients) => clients.where((c) => !c.fullName.startsWith("Caja Rápida -")).toList()
+        );
       });
     }
   }

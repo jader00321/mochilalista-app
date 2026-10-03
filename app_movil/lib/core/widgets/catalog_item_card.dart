@@ -55,7 +55,7 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
 
     // 🔥 Consultamos la marca al provider del catálogo
     final brandName = catalogProv.getBrandName(prod.marcaId);
-    final bool isOutOfStock = pres.stockActual <= 0;
+    final bool isOutOfStock = widget.item.isOutOfStock;
 
     String salesUnitBadge = pres.unidadVenta ?? pres.umpCompra ?? "Unidad";
 

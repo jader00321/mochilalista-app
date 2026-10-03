@@ -63,6 +63,7 @@ class AnalyticsData {
   final List<Map<String, dynamic>> deadStockList;
   final List<BusinessInsight> insights;
   final FinancialHealthSummary? financialHealth;
+  final String? categoryInsight;
 
   AnalyticsData({
     this.totalSales = 0.0,
@@ -89,6 +90,7 @@ class AnalyticsData {
     this.deadStockList = const [],
     this.insights = const [],
     this.financialHealth,
+    this.categoryInsight,
   });
 }
 
@@ -99,6 +101,7 @@ class AnalyticsProvider with ChangeNotifier {
   String _statusMessage = "Listo para iniciar";
   double _progress = 0.0;
   AnalyticsPeriod _selectedPeriod = AnalyticsPeriod.sixMonths;
+  int _deadStockThresholdDays = 30;
   
   AnalyticsData? _data;
   String? _lastErrorMsg;
@@ -111,6 +114,7 @@ class AnalyticsProvider with ChangeNotifier {
   String? get lastErrorMsg => _lastErrorMsg;
   String? get lastStackTrace => _lastStackTrace;
   AnalyticsPeriod get selectedPeriod => _selectedPeriod;
+  int get deadStockThresholdDays => _deadStockThresholdDays;
 
   final dbHelper = LocalDatabase.instance;
   int? _negocioId;
@@ -118,6 +122,13 @@ class AnalyticsProvider with ChangeNotifier {
   void changePeriod(AnalyticsPeriod newPeriod) {
     if (_selectedPeriod != newPeriod) {
       _selectedPeriod = newPeriod;
+      runStaggeredAnalysis();
+    }
+  }
+
+  void setDeadStockThresholdDays(int days) {
+    if (_deadStockThresholdDays != days) {
+      _deadStockThresholdDays = days;
       runStaggeredAnalysis();
     }
   }
@@ -161,8 +172,8 @@ class AnalyticsProvider with ChangeNotifier {
       _statusMessage = "Calculando ingresos brutos y rentabilidad...";
       notifyListeners();
       
-      // Obtener todas las ventas del negocio (ignorando las archivadas)
-      final ventasRows = await db.query('ventas', where: 'negocio_id = ? AND is_archived = 0', whereArgs: [_negocioId]);
+      // Obtener todas las ventas del negocio (ignorando las archivadas y los préstamos)
+      final ventasRows = await db.query('ventas', where: 'negocio_id = ? AND is_archived = 0 AND IFNULL(origen_venta, "") != "prestamo_personal"', whereArgs: [_negocioId]);
       int totalTransactions = ventasRows.length;
       double totalVentas = 0.0;
       double totalGananciaNeta = 0.0;
@@ -186,7 +197,7 @@ class AnalyticsProvider with ChangeNotifier {
         FROM venta_items vi
         JOIN ventas v ON vi.venta_id = v.id
         LEFT JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
-        WHERE v.negocio_id = ? AND v.is_archived = 0
+        WHERE v.negocio_id = ? AND v.is_archived = 0 AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
       ''', [_negocioId]);
       
       if (gananciaQuery.isNotEmpty && gananciaQuery.first['ganancia_neta'] != null) {
@@ -282,7 +293,7 @@ class AnalyticsProvider with ChangeNotifier {
         JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
         JOIN productos p ON pp.producto_id = p.id
         LEFT JOIN marcas m ON p.marca_id = m.id
-        WHERE v.negocio_id = ? AND v.is_archived = 0
+        WHERE v.negocio_id = ? AND v.is_archived = 0 AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
         GROUP BY p.id
         ORDER BY total_vendido DESC
         LIMIT 5
@@ -293,7 +304,7 @@ class AnalyticsProvider with ChangeNotifier {
         SELECT c.nombre_completo, SUM(v.monto_total) as total_comprado, COUNT(v.id) as num_compras
         FROM ventas v
         JOIN clientes c ON v.cliente_id = c.id
-        WHERE v.negocio_id = ? AND v.is_archived = 0
+        WHERE v.negocio_id = ? AND v.is_archived = 0 AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
         GROUP BY c.id
         ORDER BY total_comprado DESC
         LIMIT 5
@@ -301,13 +312,15 @@ class AnalyticsProvider with ChangeNotifier {
 
       // Top Categorías
       final topCategoriesQuery = await db.rawQuery('''
-        SELECT c.nombre, SUM(vi.cantidad) as total_vendido
+        SELECT c.nombre, 
+               SUM(vi.cantidad) as total_vendido,
+               SUM(vi.cantidad * vi.precio_unitario) as total_ingresos
         FROM venta_items vi
         JOIN ventas v ON vi.venta_id = v.id
         JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
         JOIN productos p ON pp.producto_id = p.id
         JOIN categorias c ON p.categoria_id = c.id
-        WHERE v.negocio_id = ? AND v.is_archived = 0
+        WHERE v.negocio_id = ? AND v.is_archived = 0 AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
         GROUP BY c.id
         ORDER BY total_vendido DESC
         LIMIT 5
@@ -319,7 +332,7 @@ class AnalyticsProvider with ChangeNotifier {
         FROM venta_items vi
         JOIN ventas v ON vi.venta_id = v.id
         JOIN paquetes p ON vi.bundle_id = p.id
-        WHERE v.negocio_id = ? AND v.is_archived = 0 AND p.tipo_promocion = 'liquidez_costo'
+        WHERE v.negocio_id = ? AND v.is_archived = 0 AND p.tipo_promocion = 'liquidez_costo' AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
       ''', [_negocioId]);
       
       double recoveredLiquidity = 0.0;
@@ -338,22 +351,53 @@ class AnalyticsProvider with ChangeNotifier {
 
       // Inventario Muerto y Capital Inmovilizado
       final deadStockQuery = await db.rawQuery('''
-        SELECT pp.id, pp.nombre_especifico, p.nombre as producto_nombre, pp.stock_actual, pp.costo_unitario_calculado
+        SELECT pp.id, p.id as producto_id, pp.nombre_especifico, p.nombre as producto_nombre, m.nombre as marca_nombre, pp.stock_actual, pp.costo_unitario_calculado,
+               MAX(IFNULL(v.fecha_venta, '1900-01-01')) as ultima_venta,
+               (SELECT MIN(fecha_cambio) FROM product_history WHERE entidad_tipo='producto' AND entidad_id=p.id) as fecha_creacion_historial,
+               p.fecha_actualizacion
         FROM presentaciones_producto pp
         JOIN productos p ON pp.producto_id = p.id
+        LEFT JOIN marcas m ON p.marca_id = m.id
         LEFT JOIN venta_items vi ON vi.presentation_id = pp.id
-        LEFT JOIN ventas v ON vi.venta_id = v.id AND v.fecha_venta >= date('now', '-90 days')
-        WHERE p.negocio_id = ? AND pp.stock_actual > 0 AND pp.activo = 1 AND v.id IS NULL
+        LEFT JOIN ventas v ON vi.venta_id = v.id AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
+        WHERE p.negocio_id = ? AND pp.stock_actual > 0 AND pp.activo = 1
+        GROUP BY pp.id
       ''', [_negocioId]);
       
       List<Map<String, dynamic>> deadStockList = [];
       double immobilizedCapital = 0.0;
+
       for (var row in deadStockQuery) {
-        deadStockList.add(row);
-        int stock = (row['stock_actual'] as num?)?.toInt() ?? 0;
-        double cost = (row['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
-        immobilizedCapital += stock * cost;
+        String lastSaleStr = row['ultima_venta'] as String;
+        String? historyCreationStr = row['fecha_creacion_historial'] as String?;
+        String? updateStr = row['fecha_actualizacion'] as String?;
+
+        DateTime lastSaleDate = lastSaleStr != '1900-01-01' ? DateTime.tryParse(lastSaleStr) ?? now : DateTime(1900);
+        DateTime historyDate = historyCreationStr != null ? DateTime.tryParse(historyCreationStr) ?? now : DateTime(1900);
+        DateTime updateDate = updateStr != null ? DateTime.tryParse(updateStr) ?? now : DateTime(1900);
+
+        DateTime referenceDate = lastSaleDate;
+        if (historyDate.isAfter(referenceDate)) referenceDate = historyDate;
+        if (updateDate.isAfter(referenceDate)) referenceDate = updateDate;
+
+        if (referenceDate.year == 1900) referenceDate = now;
+
+        int daysDormant = now.difference(referenceDate).inDays;
+
+        if (daysDormant > _deadStockThresholdDays) {
+          Map<String, dynamic> item = Map<String, dynamic>.from(row);
+          item['dias_estancado'] = daysDormant;
+          deadStockList.add(item);
+
+          int stock = (row['stock_actual'] as num?)?.toInt() ?? 0;
+          double cost = (row['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
+          immobilizedCapital += stock * cost;
+        }
       }
+
+      // Ordenar: primero los de menor inactividad, al último los de mayor inactividad
+      deadStockList.sort((a, b) => (a['dias_estancado'] as int).compareTo(b['dias_estancado'] as int));
+
       int deadStockCount = deadStockList.length;
 
       // Índice de Rotación (Proxy: COGS total del periodo / Valor actual del inventario)
@@ -551,7 +595,17 @@ class AnalyticsProvider with ChangeNotifier {
       String netProfitFmt = currencyFmt.format(totalGananciaNeta);
       String totalSalesFmt = currencyFmt.format(totalVentas);
 
-      if (margin >= 25) {
+      // ═══════════════════════════════════════════════════════════════
+      // PRIORIDAD MÁXIMA: Detectar si no hay ventas antes de evaluar margen
+      // ═══════════════════════════════════════════════════════════════
+      if (totalVentas == 0 || totalTransactions == 0) {
+        balanceHeadline = "Balance Total";
+        balanceDescription = "Aún no se han registrado ventas en el periodo seleccionado. "
+            "Una vez que realices tu primera venta, aquí verás un análisis completo de "
+            "rentabilidad, márgenes y recomendaciones personalizadas para tu negocio.";
+        healthLevel = 'noData';
+        marginContext = "";
+      } else if (margin >= 25) {
         balanceHeadline = "¡Tu negocio es una máquina de generar! 🚀";
         balanceDescription = "Tu margen de $marginFmt% supera el promedio. Has generado $netProfitFmt de ganancia neta sobre $totalSalesFmt en ingresos.";
         healthLevel = 'excellent';
@@ -569,21 +623,47 @@ class AnalyticsProvider with ChangeNotifier {
         healthLevel = 'critical';
       }
 
-      if (growthRate > 10 && margin >= 15) {
-        marginContext = "Estás en el escenario ideal: vendes más y con buen margen.";
-      } else if (growthRate > 10 && margin < 15) {
-        marginContext = "Cuidado: tus ventas crecen pero tu margen es delgado. Estás vendiendo más pero ganando poco por cada venta.";
-      } else if (growthRate < -10) {
-        marginContext = "Tus ventas están cayendo. Te sugerimos armar un paquete de ofertas con tu stock estancado para reactivar el flujo.";
-      } else {
-        marginContext = "Mantienes un ritmo estable. Busca oportunidades de optimizar costos para mejorar tu margen neto.";
+      // Contexto de margen — Solo mostrar cuando hay ventas reales
+      if (totalVentas > 0 && totalTransactions > 0) {
+        if (growthRate > 10 && margin >= 15) {
+          marginContext = "Estás en el escenario ideal: vendes más y con buen margen.";
+        } else if (growthRate > 10 && margin < 15) {
+          marginContext = "Cuidado: tus ventas crecen pero tu margen es delgado. Estás vendiendo más pero ganando poco por cada venta.";
+        } else if (growthRate < -10) {
+          marginContext = "Tus ventas están cayendo. Te sugerimos armar un paquete de ofertas con tu stock estancado para reactivar el flujo.";
+        } else {
+          marginContext = "Mantienes un ritmo estable. Busca oportunidades de optimizar costos para mejorar tu margen neto.";
+        }
+      }
+
+      // Smart Insight: Volumen vs. Valor
+      String? categoryInsight;
+      if (topCategoriesQuery.length >= 2) {
+        String topByVolume = topCategoriesQuery.first['nombre'].toString();
+        
+        var sortedByRevenue = List<Map<String, dynamic>>.from(topCategoriesQuery)
+          ..sort((a, b) => ((b['total_ingresos'] as num?) ?? 0)
+              .compareTo((a['total_ingresos'] as num?) ?? 0));
+        String topByRevenue = sortedByRevenue.first['nombre'].toString();
+        
+        if (topByVolume != topByRevenue) {
+          categoryInsight = "💡 Tu categoría '$topByVolume' atrae más clientes "
+              "(mayor volumen), pero '$topByRevenue' es la que más "
+              "ingresos genera. ¡Asegura siempre el stock de ambas!";
+        } else {
+          categoryInsight = "⭐ Tu categoría '$topByVolume' lidera tanto en "
+              "volumen como en ingresos. Es tu pilar financiero. "
+              "Expande su catálogo para maximizar resultados.";
+        }
       }
 
       final financialHealth = FinancialHealthSummary(
         balanceHeadline: balanceHeadline,
         balanceDescription: balanceDescription,
-        healthDiagnosis: margin >= 20 ? "Excelente margen de ganancia. Tu modelo de negocio es altamente rentable." : 
-                          (margin >= 10 ? "Margen aceptable. Podrías optimizar costos de proveedores para mejorar tu rentabilidad." : "Margen crítico. Revisa tu estructura de precios de venta y costos de adquisición urgentemente."),
+        healthDiagnosis: (totalVentas == 0 || totalTransactions == 0)
+            ? "Sin datos suficientes para diagnosticar. Registra ventas para obtener un análisis completo."
+            : (margin >= 20 ? "Excelente margen de ganancia. Tu modelo de negocio es altamente rentable." : 
+              (margin >= 10 ? "Margen aceptable. Podrías optimizar costos de proveedores para mejorar tu rentabilidad." : "Margen crítico. Revisa tu estructura de precios de venta y costos de adquisición urgentemente.")),
         healthLevel: healthLevel,
         marginContext: marginContext,
       );
@@ -613,6 +693,7 @@ class AnalyticsProvider with ChangeNotifier {
         deadStockList: deadStockList,
         insights: generatedInsights,
         financialHealth: financialHealth,
+        categoryInsight: categoryInsight,
       );
 
       _progress = 1.0;

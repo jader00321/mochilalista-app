@@ -17,7 +17,11 @@ extension _ManualQuoteOffersExt on _ManualQuotationScreenState {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
-      color: isDark ? const Color(0xFF1A1A24) : Colors.pink[50],
+      margin: const EdgeInsets.only(top: 16, bottom: 24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A24) : Colors.pink[50],
+        borderRadius: BorderRadius.circular(16),
+      ),
       padding: const EdgeInsets.only(bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -28,7 +32,14 @@ extension _ManualQuoteOffersExt on _ManualQuotationScreenState {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
                 children: [
-                  Text("ðŸ”¥ Paquetes Especiales (${validBundles.length})", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.local_fire_department, color: Colors.orange[600], size: 20),
+                      const SizedBox(width: 6),
+                      Text("Paquetes Especiales (${validBundles.length})", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
+                    ],
+                  ),
                   const Spacer(),
                   Icon(_isOffersExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: isDark ? Colors.white : Colors.black87, size: 22),
                 ],

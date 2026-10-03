@@ -29,6 +29,9 @@ class QuotationService {
 
       int newId = 0;
       await db.transaction((txn) async {
+        final nextSeqResult = await txn.rawQuery('SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM smart_quotations WHERE negocio_id = ?', [cloneData['negocio_id']]);
+        cloneData['numero_secuencial'] = (nextSeqResult.first['next_val'] as int?) ?? 1;
+
         newId = await txn.insert('smart_quotations', cloneData);
         for (var item in iRows) {
           Map<String, dynamic> itemClone = Map.from(item);
@@ -59,6 +62,7 @@ class QuotationService {
       List<PriceChange> prices = [];
       List<NameChange> nameChanges = [];
       List<BundleChange> bundleChanges = [];
+      List<UnitChange> unitChanges = [];
 
       for (var item in iRows) {
         if (item['bundle_id'] != null) {
@@ -296,9 +300,27 @@ class QuotationService {
             available: currentStock
           ));
         }
+
+        // --- Validación de Unidad de Venta ---
+        String? savedUnit = item['sales_unit'] as String?;
+        String? currentUnit = pres['unidad_venta'] as String?;
+        int currentFactor = (pres['unidades_por_venta'] as int?) ?? 1;
+        // Comparar unidad de venta guardada vs actual en catálogo
+        if (savedUnit != null && currentUnit != null && savedUnit.toLowerCase() != currentUnit.toLowerCase()) {
+          hasIssues = true;
+          canSell = false;
+          unitChanges.add(UnitChange(
+            itemId: item['id'] as int,
+            productName: itemName ?? "Desconocido",
+            oldUnit: savedUnit,
+            newUnit: currentUnit,
+            newFactor: currentFactor,
+            message: "La unidad de venta cambió de \"$savedUnit\" a \"$currentUnit\". Se debe sincronizar antes de vender.",
+          ));
+        }
       }
 
-      return ValidationResult(hasIssues: hasIssues, canSell: canSell, stockWarnings: warnings, priceChanges: prices, nameChanges: nameChanges, bundleChanges: bundleChanges);
+      return ValidationResult(hasIssues: hasIssues, canSell: canSell, stockWarnings: warnings, priceChanges: prices, nameChanges: nameChanges, bundleChanges: bundleChanges, unitChanges: unitChanges);
     } catch (e) {
       throw Exception("Error local al validar integridad: $e");
     }
@@ -324,6 +346,9 @@ class QuotationService {
 
         if (id == null) {
           qData['created_at'] = DateTime.now().toIso8601String();
+          final nextSeqResult = await txn.rawQuery('SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM smart_quotations WHERE negocio_id = ?', [negocioId]);
+          qData['numero_secuencial'] = (nextSeqResult.first['next_val'] as int?) ?? 1;
+          
           targetId = await txn.insert('smart_quotations', qData);
         } else {
           await txn.update('smart_quotations', qData, where: 'id = ?', whereArgs: [id]);
@@ -534,6 +559,18 @@ class QuotationService {
       return true;
     } catch (e) {
       throw Exception("Error local al refrescar cotización: $e");
+    }
+  }
+
+  Future<void> hardDeleteQuotation(int id) async {
+    try {
+      final db = await dbHelper.database;
+      await db.transaction((txn) async {
+        await txn.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
+        await txn.delete('smart_quotations', where: 'id = ?', whereArgs: [id]);
+      });
+    } catch (e) {
+      throw Exception("Error al eliminar la cotización de la base de datos: $e");
     }
   }
 }

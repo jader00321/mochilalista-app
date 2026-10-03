@@ -4,9 +4,9 @@
 /// y la lógica de frontend (widgets interactivos).
 class ScannerCostEngine {
   /// Calcula el costo unitario individual real basado en el pago total.
-  /// 
+  ///
   /// Fórmula: total_pago / (cantidad_comprada * unidades_por_lote)
-  /// 
+  ///
   /// Ejemplo: Compro 0.25 MLL (1 MLL = 1000) a S/ 45.00
   /// costoUnitario = 45.00 / (0.25 * 1000) = 45.00 / 250 = S/ 0.18
   static double calculateUnitCost({
@@ -24,13 +24,13 @@ class ScannerCostEngine {
     required double cantidadUmp,
     required int unidadesPorLote,
   }) => calculateUnitCost(
-    totalPago: totalPago, 
-    cantidadUmp: cantidadUmp, 
-    unidadesPorLote: unidadesPorLote
+    totalPago: totalPago,
+    cantidadUmp: cantidadUmp,
+    unidadesPorLote: unidadesPorLote,
   );
 
   /// Calcula el costo por presentación (ej. Caja x 12, Docena).
-  /// 
+  ///
   /// Fórmula: costo_unitario_individual * unidades_por_venta
   static double calculatePresentationCost({
     required double unitCost,
@@ -41,7 +41,7 @@ class ScannerCostEngine {
   }
 
   /// Sugiere un precio de venta basado en el costo y un factor de margen.
-  /// 
+  ///
   /// Fórmula: costo_presentacion * factor_margen
   static double suggestSalePrice({
     required double presentationCost,
@@ -51,7 +51,7 @@ class ScannerCostEngine {
   }
 
   /// Calcula el factor de margen inverso basado en precio y costo.
-  /// 
+  ///
   /// Fórmula: precio_venta / costo_presentacion
   static double calculateMargin({
     required double salePrice,

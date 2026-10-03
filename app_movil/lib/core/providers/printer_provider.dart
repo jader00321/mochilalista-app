@@ -5,17 +5,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 class PrinterProvider extends ChangeNotifier {
   final BlueThermalPrinter _bluetooth = BlueThermalPrinter.instance;
   
-  List<BluetoothDevice> _devices = [];
+  final List<BluetoothDevice> _printers = [];
+  final List<BluetoothDevice> _otherDevices = [];
   BluetoothDevice? _selectedDevice;
   bool _isConnected = false;
   bool _isScanning = false;
+  bool _isBluetoothOff = false;
   int _paperWidth = 58; // Por defecto 58mm
   String _statusMessage = "Desconectado";
 
-  List<BluetoothDevice> get devices => _devices;
+  List<BluetoothDevice> get printers => _printers;
+  List<BluetoothDevice> get otherDevices => _otherDevices;
   BluetoothDevice? get selectedDevice => _selectedDevice;
   bool get isConnected => _isConnected;
   bool get isScanning => _isScanning;
+  bool get isBluetoothOff => _isBluetoothOff;
   int get paperWidth => _paperWidth;
   String get statusMessage => _statusMessage;
 
@@ -28,6 +32,18 @@ class PrinterProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      bool? isAvailable = await _bluetooth.isAvailable;
+      bool? isOn = await _bluetooth.isOn;
+      
+      if (isAvailable == false || isOn == false) {
+        _isBluetoothOff = true;
+        _statusMessage = "Bluetooth apagado";
+        _isScanning = false;
+        notifyListeners();
+        return;
+      }
+      _isBluetoothOff = false;
+
       bool? isConnected = await _bluetooth.isConnected;
       _isConnected = isConnected ?? false;
 
@@ -36,12 +52,13 @@ class PrinterProvider extends ChangeNotifier {
       _paperWidth = prefs.getInt('printer_paper_width') ?? 58;
       String? savedMac = prefs.getString('printer_mac_address');
 
-      _devices = await _bluetooth.getBondedDevices();
+      final allDevices = await _bluetooth.getBondedDevices();
+      _categorizeDevices(allDevices);
       
       // Intentar reconectar si hay un dispositivo guardado
-      if (savedMac != null && _devices.isNotEmpty) {
+      if (savedMac != null && allDevices.isNotEmpty) {
         try {
-          _selectedDevice = _devices.firstWhere((d) => d.address == savedMac);
+          _selectedDevice = allDevices.firstWhere((d) => d.address == savedMac);
           if (!_isConnected && _selectedDevice != null) {
             _statusMessage = "Conectando a impresora guardada...";
             notifyListeners();
@@ -61,14 +78,45 @@ class PrinterProvider extends ChangeNotifier {
     }
   }
 
+  void _categorizeDevices(List<BluetoothDevice> devices) {
+    _printers.clear();
+    _otherDevices.clear();
+    
+    // Palabras clave comunes en impresoras térmicas
+    final printerKeywords = ['printer', 'pos', 'thermal', 'print', '58mm', '80mm', 'esc', 'pt-', 'mpt', 'sp-', 'hoin'];
+    
+    for (var device in devices) {
+      final name = (device.name ?? "").toLowerCase();
+      bool isPrinter = printerKeywords.any((kw) => name.contains(kw));
+      
+      if (isPrinter) {
+        _printers.add(device);
+      } else {
+        _otherDevices.add(device);
+      }
+    }
+  }
+
   Future<void> scanDevices() async {
     _isScanning = true;
     _statusMessage = "Buscando dispositivos...";
     notifyListeners();
     try {
-      _devices = await _bluetooth.getBondedDevices();
-      _statusMessage = _devices.isEmpty ? "No hay dispositivos vinculados" : "Dispositivos encontrados";
+      bool? isOn = await _bluetooth.isOn;
+      if (isOn == false) {
+        _isBluetoothOff = true;
+        _statusMessage = "Enciende tu Bluetooth";
+        _isScanning = false;
+        notifyListeners();
+        return;
+      }
+      _isBluetoothOff = false;
+
+      final allDevices = await _bluetooth.getBondedDevices();
+      _categorizeDevices(allDevices);
+      _statusMessage = allDevices.isEmpty ? "No hay dispositivos vinculados" : "Dispositivos encontrados";
     } catch (e) {
+      _isBluetoothOff = true;
       _statusMessage = "Asegúrate de encender el Bluetooth";
     }
     _isScanning = false;
@@ -100,10 +148,25 @@ class PrinterProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       _isConnected = false;
-      _statusMessage = "Error al conectar: ${e.toString()}";
+      _statusMessage = _parseBluetoothError(e);
       _isScanning = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  String _parseBluetoothError(dynamic error) {
+    final str = error.toString().toLowerCase();
+    if (str.contains("connect_error")) {
+      return "No se pudo conectar. Verifica que la impresora esté encendida.";
+    } else if (str.contains("socket might closed") || str.contains("timeout")) {
+      return "La conexión tardó mucho. Intenta reiniciar la impresora.";
+    } else if (str.contains("ioexception")) {
+      return "Error de comunicación. Asegúrate de que sea una impresora.";
+    } else if (str.contains("not supported")) {
+      return "Dispositivo no compatible con esta conexión.";
+    } else {
+      return "Error inesperado al conectar. Intenta de nuevo.";
     }
   }
 

@@ -1,0 +1,24 @@
+MochilaLista v7.2.0 - Changelog
+
+[Módulo de Respaldos y Seguridad]
+
+1. Optimización Completa de Exportación e Importación de Negocios (.mlb)
+   - Corrección crítica en la selección de archivos para Android 13+. Ahora el sistema utiliza un selector universal con validación manual para asegurar que los archivos .mlb puedan ser seleccionados e importados correctamente en cualquier dispositivo.
+   - Auditoría de exportación: El archivo de backup de negocio (.mlb) ahora garantiza la exportación e importación de "codigos_acceso_negocio", evitando pérdida de contraseñas de vendedores.
+
+2. Rediseño de la Experiencia Visual
+   - La pantalla de "Respaldos y Seguridad" ha sido rediseñada completamente con una jerarquía de colores moderna y clara: Backup Inteligente (Morado), Exportación Global (Azul), Protección Automática (Índigo), Seguridad (Teal) y Zona de Peligro (Rojo).
+   - Se ha mejorado significativamente el dinamismo con micro-animaciones y botones estéticos.
+   - Textos descriptivos corregidos y mejorados para ayudar a los usuarios nuevos y recurrentes.
+   
+3. Mejoras en Seguridad y Bloqueos
+   - Se implementó un bloqueo inmediato real. Si el tiempo de inactividad se configura en "Inmediato" (0 minutos), la app solicitará el PIN apenas la aplicación pase a segundo plano, bloqueando cualquier captura visual de datos sensibles en la multitarea.
+   - Ahora, el "Backup Inteligente por Negocio" advierte expresamente sobre la inclusión de PINs de seguridad.
+   - Se desactivó la persistencia de Android (allowBackup="false") en el sistema base, asegurando que si desinstalas la aplicación por seguridad, los datos no regresen mágicamente a través de Google Cloud de forma insegura.
+   
+4. Protección Automática
+   - Añadidas opciones para la ruta de protección automática: Ahora se puede seleccionar una "Carpeta Personalizada" en el propio dispositivo para almacenar los backups silenciosos.
+   - Añadida la opción de respaldar "Ambos" formatos en segundo plano (el .db Global y el .mlb de perfil) de manera automática y transparente.
+
+5. Mejoras en Restauración
+   - La opción de "Restaurar Backup" en la ventana principal de perfiles fue unificada en un solo botón con detección inteligente. Selecciona cualquier archivo (.db o .mlb) y el sistema identificará de manera inteligente cuál es el motor de restauración adecuado a invocar.

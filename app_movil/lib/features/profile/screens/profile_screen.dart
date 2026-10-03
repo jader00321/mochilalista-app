@@ -11,14 +11,17 @@ import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
 import 'package:app_movil/features/profile/widgets/business_info_card.dart';
 import 'package:app_movil/features/profile/widgets/profile_menu_item.dart';
 import 'package:app_movil/features/profile/widgets/edit_profile_modal.dart';
 import 'package:app_movil/features/profile/widgets/edit_business_modal.dart';
+import 'package:app_movil/features/profile/widgets/delete_business_modal.dart';
 import 'package:app_movil/features/profile/widgets/change_pin_modal.dart'; 
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
-import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart'; 
+import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
+import 'package:app_movil/core/screens/home_screen.dart'; 
 import 'package:app_movil/features/profile/screens/printer_config_screen.dart';
 import 'package:app_movil/features/profile/screens/notifications_screen.dart';
 import 'package:app_movil/features/profile/screens/backup_screen.dart'; 
@@ -99,11 +102,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionHeader("Administración del Negocio", textColor, 
+                      _buildSectionHeader(
+                        "Administración del Negocio", textColor, 
                         actionLabel: "Editar Datos", 
+                        iconData: Icons.edit_note_rounded,
                         onAction: () => _showEditBusiness(context)
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       BusinessInfoCard(business: auth.currentBusiness), 
                       const SizedBox(height: 35),
 
@@ -150,6 +155,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         ),
                         _buildDivider(isDark),
                         ProfileMenuItem(title: "Cambiar de Negocio / Cerrar Sesión", icon: Icons.logout, isDark: isDark, isDestructive: true, onTap: () => _confirmLogout(context, auth, isDark)),
+                        _buildDivider(isDark),
+                        ProfileMenuItem(title: "Eliminar Perfil Definitivamente", icon: Icons.delete_forever, isDark: isDark, isDestructive: true, onTap: () => _showDeleteBusinessModal(context, auth, isDark)),
                       ]),
                       const SizedBox(height: 40),
                     ],
@@ -163,13 +170,38 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildSectionHeader(String title, Color? color, {String? actionLabel, VoidCallback? onAction}) {
+  Widget _buildSectionHeader(String title, Color? color, {String? actionLabel, IconData? iconData, VoidCallback? onAction}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color, letterSpacing: 0.5)),
-        if (actionLabel != null && onAction != null)
-          TextButton(onPressed: onAction, style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30), tapTargetSize: MaterialTapTargetSize.shrinkWrap), child: Text(actionLabel, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.blue)))
+        Expanded(
+          child: Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color, letterSpacing: 0.5), overflow: TextOverflow.ellipsis),
+        ),
+        if (actionLabel != null && onAction != null) ...[
+          const SizedBox(width: 12),
+          InkWell(
+            onTap: onAction,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (iconData != null) ...[
+                    Icon(iconData, size: 16, color: Colors.blue),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(actionLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blue)),
+                ],
+              ),
+            ),
+          )
+        ]
       ],
     );
   }
@@ -178,16 +210,38 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   
   Widget _buildDivider(bool isDark) => Divider(height: 1, indent: 65, endIndent: 20, color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[200]);
 
+  void _showDeleteBusinessModal(BuildContext context, AuthProvider auth, bool isDark) async {
+    final bool? deleted = await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => DeleteBusinessModal(
+        userId: auth.activeUserId!,
+        hasPin: auth.hasPinCache,
+      ),
+    );
+
+    if (deleted == true) {
+      if (!context.mounted) return;
+      _clearVolatileMemory(context);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()), 
+        (route) => false
+      );
+    }
+  }
+
   Widget _buildHeader(BuildContext context, AuthProvider auth, bool isDark) {
     final String? validLogoPath = _getValidLocalImagePath(auth.currentBusiness?.logoUrl);
     
-    final catalog = Provider.of<CatalogProvider>(context);
+    final invProv = Provider.of<InventoryProvider>(context);
     final workbench = Provider.of<WorkbenchProvider>(context);
     final salesProv = Provider.of<SaleProvider>(context);
 
-    final int productsCount = catalog.totalLoadedCount;
+    final int productsCount = invProv.totalProductsCount;
     final int draftsCount = workbench.inProcessList.length;
-    final String salesTotal = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ').format(salesProv.todaySalesTotal);
+    
+    final double salesDouble = salesProv.todaySalesTotal;
+    final String salesTotal = salesDouble == 0 ? "Sin ventas" : NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ').format(salesDouble);
 
     return Container(
       width: double.infinity,
@@ -223,7 +277,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           radius: 52, 
                           backgroundColor: Colors.white,
                           backgroundImage: (validLogoPath != null && !validLogoPath.startsWith('http')) ? FileImage(File(validLogoPath)) : null,
-                          child: validLogoPath == null ? const Icon(Icons.store, size: 55, color: Color(0xFF1565C0)) : null,
+                          child: validLogoPath == null ? _buildBusinessAvatarFallback(auth.businessName) : null,
                         ),
                       ),
                       InkWell(
@@ -407,12 +461,40 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildMicroKpi(String label, String value) {
+    bool isEmpty = value == "Sin ventas" || value == "0";
     return Column(
       children: [
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(value, style: TextStyle(color: isEmpty ? Colors.white.withValues(alpha: 0.6) : Colors.white, fontSize: isEmpty ? 16 : 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.w500)),
       ],
+    );
+  }
+
+  Widget _buildBusinessAvatarFallback(String name) {
+    String initials = "NG";
+    final cleanName = name.trim();
+    if (cleanName.isNotEmpty) {
+      final parts = cleanName.split(RegExp(r'\s+'));
+      if (parts.length > 1 && parts[1].isNotEmpty) {
+        initials = (parts[0][0] + parts[1][0]).toUpperCase();
+      } else {
+        initials = cleanName.substring(0, cleanName.length > 1 ? 2 : 1).toUpperCase();
+      }
+    }
+    
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [Colors.blue[400]!, Colors.blue[800]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold, letterSpacing: 1)),
+      ),
     );
   }
 }

@@ -44,11 +44,9 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
   @override
   void didUpdateWidget(MatchingItemRow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.pair.selectedProduct != null && widget.pair.selectedProduct == null) {
+    if (widget.pair.selectedProduct == null && _isExpanded) {
       // Force collapse when product is unlinked
-      if (_isExpanded) {
-        _isExpanded = false;
-      }
+      _isExpanded = false;
     }
   }
 
@@ -310,12 +308,12 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                 const SizedBox(width: 8),
 
                 // CONTROLES DE CANTIDAD
-                ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 100, maxWidth: 120),
-                  child: AnimatedCrossFade(
-                    duration: const Duration(milliseconds: 250),
-                    crossFadeState: _isExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-                    firstChild: Column(
+                AnimatedCrossFade(
+                  duration: const Duration(milliseconds: 250),
+                  crossFadeState: _isExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                  firstChild: ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 100, maxWidth: 120),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Container(
@@ -353,11 +351,11 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                         ]
                       ],
                     ),
-                    secondChild: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50], borderRadius: BorderRadius.circular(8)),
-                      child: Text("${widget.pair.selectedQuantity} uds.", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[800])),
-                    ),
+                  ),
+                  secondChild: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50], borderRadius: BorderRadius.circular(8)),
+                    child: Text("${widget.pair.selectedQuantity} uds.", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[800])),
                   ),
                 ),
               ],

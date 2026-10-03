@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -88,6 +89,8 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
   Map<String, dynamic> _getOrigenStyles(String? origen, bool isDark) {
     if (origen == 'pos_rapido') {
       return {'label': "Venta en Caja Rápida", 'color': isDark ? Colors.pink[300] : Colors.pinkAccent, 'icon': Icons.point_of_sale};
+    } else if (origen == 'prestamo_personal') {
+      return {'label': "Préstamo Personal", 'color': isDark ? Colors.amber[300] : Colors.amber[800], 'icon': Icons.account_balance_wallet};
     } else if (origen == 'ai_scan') {
       return {'label': "Lista Escaneada con IA", 'color': isDark ? Colors.purple[300] : Colors.purple, 'icon': Icons.auto_awesome};
     } else if (origen == 'client_web') {
@@ -101,56 +104,100 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     final dialogBgColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: dialogBgColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(_saleData!['is_archived'] == 1 ? "¿Restaurar Venta?" : "¿Anular Venta?", style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-        content: Text(_saleData!['is_archived'] == 1
-            ? "Esta venta volverá a aparecer en el historial principal y sumará a tus ingresos." 
-            : "Esta venta se marcará como anulada y restará de tus ingresos diarios. ¿Continuar?",
-            style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey, fontSize: 16))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _saleData!['is_archived'] == 1 ? Colors.green : Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              setState(() => _isProcessingAction = true);
-              final saleProv = Provider.of<SaleProvider>(context, listen: false);
-              
-              try {
-                if (widget.saleId != null) {
-                   if (_saleData!['is_archived'] == 1) {
-                      await saleProv.restoreSale(widget.saleId!);
-                   } else {
-                      await saleProv.voidSale(widget.saleId!);
-                   }
-                } else if (_saleData!['id'] != null) {
-                   if (_saleData!['is_archived'] == 1) {
-                      await saleProv.restoreSale(_saleData!['id']);
-                   } else {
-                      await saleProv.voidSale(_saleData!['id']);
-                   }
-                }
-                
-                if (mounted) {
-                  _showSnack(_saleData!['is_archived'] == 1 ? "Venta restaurada exitosamente." : "Venta anulada y stock devuelto.");
-                  Navigator.pop(context); 
-                }
-              } catch (e) {
-                if (mounted) {
-                  setState(() => _isProcessingAction = false);
-                  _showSnack(e.toString().replaceAll("Exception: ", ""), isError: true);
-                }
-              }
-            },
-            child: Text(_saleData!['is_archived'] == 1 ? "Restaurar" : "Anular", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-          )
-        ],
-      )
-    );
+    String? selectedReason;
+    if (_saleData!['is_archived'] != 1) {
+      final List<String> motivos = [
+        "Error de digitación",
+        "Falta de stock",
+        "Precio muy alto",
+        "Cliente arrepentido",
+        "Mala atención",
+        "Otro"
+      ];
+      selectedReason = await showDialog<String>(
+        context: context,
+        builder: (ctx) {
+          String? currentVal;
+          return StatefulBuilder(
+            builder: (context, setModalState) {
+              return AlertDialog(
+                backgroundColor: dialogBgColor,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: Text("¿Anular Venta?", style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Selecciona el motivo de la anulación:", style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700])),
+                    ...motivos.map((m) => ListTile(
+                      title: Text(m, style: TextStyle(fontSize: 14, color: textColor)),
+                      leading: Radio<String>(
+                        value: m,
+                        groupValue: currentVal,
+                        onChanged: (val) => setModalState(() => currentVal = val),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () => setModalState(() => currentVal = m),
+                    )),
+                  ],
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text("Cancelar", style: TextStyle(color: Colors.grey, fontSize: 16))),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    onPressed: currentVal == null ? null : () => Navigator.pop(ctx, currentVal), 
+                    child: const Text("Anular", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  )
+                ],
+              );
+            }
+          );
+        }
+      );
+      if (selectedReason == null) return;
+    } else {
+      // It is archived, confirm restore
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: dialogBgColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(_saleData!['origen_venta'] == 'prestamo_personal' ? "¿Restaurar Préstamo?" : "¿Restaurar Venta?", style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+          content: Text(_saleData!['origen_venta'] == 'prestamo_personal' ? "Este préstamo volverá a estar activo." : "Esta venta volverá a aparecer en el historial principal y sumará a tus ingresos.", style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar", style: TextStyle(color: Colors.grey, fontSize: 16))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Restaurar", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            )
+          ],
+        )
+      );
+      if (confirm != true) return;
+    }
+
+    setState(() => _isProcessingAction = true);
+    
+    try {
+      int idTarget = widget.saleId ?? _saleData!['id'];
+      if (_saleData!['is_archived'] == 1) {
+         if (mounted) await Provider.of<SaleProvider>(context, listen: false).restoreSale(idTarget);
+      } else {
+         if (mounted) await Provider.of<SaleProvider>(context, listen: false).voidSale(idTarget, selectedReason!);
+      }
+      
+      if (mounted) {
+        final isLoan = _saleData!['origen_venta'] == 'prestamo_personal';
+        _showSnack(_saleData!['is_archived'] == 1 ? (isLoan ? "Préstamo restaurado exitosamente." : "Venta restaurada exitosamente.") : (isLoan ? "Préstamo anulado exitosamente." : "Venta anulada y stock devuelto."));
+        Navigator.pop(context); 
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessingAction = false);
+        _showSnack(e.toString().replaceAll("Exception: ", ""), isError: true);
+      }
+    }
   }
 
   void _handleSellAgainQuickSale(bool isDark) {
@@ -470,6 +517,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     final String dateString = _saleData!['fecha_venta'] != null ? dateFormat.format(DateTime.parse(_saleData!['fecha_venta'])) : "";
 
     final bool isQuickSale = origenVenta == 'pos_rapido';
+    final bool isLoan = origenVenta == 'prestamo_personal';
     final int cotizacionId = _saleData!['cotizacion_id'] ?? 0;
     final int? clientId = _saleData!['cliente_id'];
 
@@ -495,7 +543,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
         Scaffold(
           backgroundColor: bgColor,
           appBar: AppBar(
-            title: Text("Recibo #${_saleData!['id'].toString().padLeft(5, '0')}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 20)),
+            title: Text(isLoan ? "Préstamo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}" : "Recibo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 20)),
             backgroundColor: Colors.transparent,
             iconTheme: IconThemeData(color: textColor),
             elevation: 0,
@@ -515,7 +563,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                     child: Row(children: [
                       Icon(_saleData!['is_archived'] == 1 ? Icons.unarchive : Icons.auto_delete, color: _saleData!['is_archived'] == 1 ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.red[400] : Colors.red), size: 24), 
                       const SizedBox(width: 12), 
-                      Text(_saleData!['is_archived'] == 1 ? "Restaurar Venta" : "Anular Venta", style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))
+                      Text(_saleData!['is_archived'] == 1 ? (isLoan ? "Restaurar Préstamo" : "Restaurar Venta") : (isLoan ? "Anular Préstamo" : "Anular Venta"), style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))
                     ])
                   )
                 ],
@@ -581,18 +629,19 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                     ),
                   ),
 
-                SaleItemsList(
-                  items: items,
-                  isDark: isDark,
-                  cardColor: cardColor,
-                  textColor: textColor,
-                ),
+                if (!isLoan)
+                  SaleItemsList(
+                    items: items,
+                    isDark: isDark,
+                    cardColor: cardColor,
+                    textColor: textColor,
+                  ),
                 const SizedBox(height: 100),
               ],
             ),
           ),
 
-          bottomNavigationBar: SaleActionFooter(
+          bottomNavigationBar: isLoan ? null : SaleActionFooter(
             isDark: isDark,
             cardColor: cardColor,
             cotizacionId: cotizacionId,

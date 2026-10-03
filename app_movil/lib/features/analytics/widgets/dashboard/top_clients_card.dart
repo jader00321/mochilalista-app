@@ -23,8 +23,6 @@ class _TopClientsCardState extends State<TopClientsCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.data.topClients.isEmpty) return const SizedBox.shrink();
-
     return GlassCard(
       isDark: widget.isDark,
       padding: const EdgeInsets.all(16),
@@ -33,7 +31,25 @@ class _TopClientsCardState extends State<TopClientsCard> {
         children: [
           const Text("Mejores Clientes", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-          ...widget.data.topClients.asMap().entries.map((e) {
+          if (widget.data.topClients.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24.0),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.people_outline, size: 48, color: widget.isDark ? Colors.grey[700] : Colors.grey[400]),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Aún no hay clientes frecuentes o datos de ventas suficientes para este cálculo.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: widget.isDark ? Colors.grey[500] : Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ...widget.data.topClients.asMap().entries.map((e) {
             int idx = e.key;
             var c = e.value;
             bool isSelected = idx == _selectedClientIndex;

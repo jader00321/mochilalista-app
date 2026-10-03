@@ -153,7 +153,7 @@ class _SaleClientDetailScreenState extends State<SaleClientDetailScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text("Mi Recibo #${_saleData!['id'].toString().padLeft(5, '0')}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 20)),
+        title: Text("Mi Recibo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 20)),
         backgroundColor: Colors.transparent,
         iconTheme: IconThemeData(color: textColor),
         elevation: 0,

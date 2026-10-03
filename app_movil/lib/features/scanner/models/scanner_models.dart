@@ -6,15 +6,15 @@ String generateFrontendUuid() {
 }
 
 class AIItemExtracted {
-  String uuidTemporal; 
+  String uuidTemporal;
   String descripcion;
-  
+
   String? productoPadreEstimado;
   String? varianteDetectada;
   String? marcaDetectada;
   String? codigo;
 
-  String umpCompra; 
+  String umpCompra;
   int unidadesPorLote;
   double cantidadUmpComprada;
   double precioUmpProveedor;
@@ -45,13 +45,13 @@ class AIItemExtracted {
       varianteDetectada: json['variante_detectada'],
       marcaDetectada: json['marca_detectada'],
       codigo: json['codigo_detectado'],
-      
+
       umpCompra: json['ump_compra'] ?? 'UND',
       unidadesPorLote: json['unidades_por_lote'] ?? 1,
       cantidadUmpComprada: (json['cantidad_ump_comprada'] ?? 0).toDouble(),
       precioUmpProveedor: (json['precio_ump_proveedor'] ?? 0).toDouble(),
       totalPagoLote: (json['total_pago_lote'] ?? 0).toDouble(),
-      
+
       unidadVenta: json['unidad_venta'] ?? json['ump_compra'] ?? 'Unidad',
     );
   }
@@ -73,7 +73,7 @@ class AIItemExtracted {
 }
 
 class AIInvoiceResponse {
-  int? invoiceId; 
+  int? invoiceId;
   String proveedorDetectado;
   String? rucDetectado;
   String? fechaDetectada;
@@ -86,22 +86,26 @@ class AIInvoiceResponse {
     this.rucDetectado,
     this.fechaDetectada,
     this.montoTotalFactura,
-    required this.items
+    required this.items,
   });
 
   factory AIInvoiceResponse.fromJson(Map<String, dynamic> json) {
     return AIInvoiceResponse(
-      invoiceId: json['invoice_id'], 
+      invoiceId: json['invoice_id'],
       proveedorDetectado: json['proveedor_detectado'] ?? 'Desconocido',
-      rucDetectado: json['ruc_detectado'],     
-      fechaDetectada: json['fecha_detectada'], 
+      rucDetectado: json['ruc_detectado'],
+      fechaDetectada: json['fecha_detectada'],
       montoTotalFactura: (json['monto_total_factura'] as num?)?.toDouble(),
-      items: (json['items'] as List?)?.map((x) => AIItemExtracted.fromJson(x)).toList() ?? [],
+      items:
+          (json['items'] as List?)
+              ?.map((x) => AIItemExtracted.fromJson(x))
+              .toList() ??
+          [],
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'invoice_id': invoiceId, 
+    'invoice_id': invoiceId,
     'proveedor_detectado': proveedorDetectado,
     'ruc_detectado': rucDetectado,
     'fecha_detectada': fechaDetectada,
@@ -120,14 +124,14 @@ class MatchData {
 
   double precioVentaFinal;
   double costoUnitarioCalculado;
-  
+
   String umpCompra;
   int unidadesPorLote;
   String unidadVenta;
   int unidadesPorVenta;
 
   MatchData({
-    required this.id, 
+    required this.id,
     required this.nombre,
     this.stockActual = 0,
     this.precioVentaFinal = 0.0,
@@ -145,18 +149,18 @@ class MatchData {
     return MatchData(
       id: json['id'],
       nombre: json['nombre'],
-      marcaNombre: json['marca_nombre'], 
+      marcaNombre: json['marca_nombre'],
       categoriaNombre: json['categoria_nombre'],
       stockActual: json['stock_actual'] ?? 0,
-      precioVentaFinal: (json['precio_venta_actual'] ?? 0).toDouble(), 
+      precioVentaFinal: (json['precio_venta_actual'] ?? 0).toDouble(),
       costoUnitarioCalculado: (json['costo_unitario_actual'] ?? 0).toDouble(),
-      
+
       umpCompra: json['ump_compra'] ?? json['unidad'] ?? "Unidad",
       unidadesPorLote: json['unidades_por_lote'] ?? json['factor'] ?? 1,
       unidadVenta: json['unidad_venta'] ?? json['unidad'] ?? "Unidad",
       unidadesPorVenta: json['unidades_por_venta'] ?? json['factor'] ?? 1,
-      
-      availablePresentations: json['available_presentations'] != null 
+
+      availablePresentations: json['available_presentations'] != null
           ? List<Map<String, dynamic>>.from(json['available_presentations'])
           : [],
     );
@@ -164,7 +168,7 @@ class MatchData {
 }
 
 class MatchResult {
-  String estado; 
+  String estado;
   int confianza;
   MatchData? datos;
 
@@ -180,10 +184,11 @@ class MatchResult {
 }
 
 class StagingVariant {
-  String uuidTemporal; 
+  String uuidTemporal;
   String nombreEspecifico;
   String? codigoBarra;
-  
+  String? editedMarca;
+
   String umpCompra;
   double cantidadUmpComprada;
   double precioUmpProveedor;
@@ -195,17 +200,52 @@ class StagingVariant {
   double costoUnitarioSugerido;
   double factorGananciaVentaSugerido;
   double precioVentaSugerido;
-  
-  MatchResult matchPresentacion;
+
+  MatchResult _matchPresentacion;
+  MatchResult get matchPresentacion => _matchPresentacion;
+  set matchPresentacion(MatchResult value) {
+    _matchPresentacion = value;
+    if (value.datos != null && unidadesPorVenta == value.datos!.unidadesPorVenta) {
+      updateUnidadVenta = false;
+    }
+  }
+
   bool isConfirmed;
 
   bool updateCosto = true;
-  bool updatePrecio = false;
-  bool updateNombre = false; 
-  bool updateUnidadVenta = false; 
-  
+  bool updatePrecio = true;
+  bool updateNombre = true;
+  bool updateUnidadVenta = true;
+  bool updateMarca = true;
+  bool updateCodigoBarra = true;
+  bool updateUmpCompra = true;
+  bool updateCantidadUmp = true;
+  bool updatePrecioUmp = true;
+  bool updatePagoTotal = true;
+  bool updateUnidLote = true;
+
+  bool get updateDatosCompra =>
+      updateUmpCompra ||
+      updateCantidadUmp ||
+      updatePrecioUmp ||
+      updatePagoTotal ||
+      updateUnidLote;
+  set updateDatosCompra(bool v) {
+    updateUmpCompra = v;
+    updateCantidadUmp = v;
+    updatePrecioUmp = v;
+    updatePagoTotal = v;
+    updateUnidLote = v;
+  }
+
   bool keepDescuento = true;
+  String? discountMode; // 'keep', 'remove', 'edit'
+  double? discountManualValue;
+
   String stockOperation = 'sumar'; // 'sumar' o 'reemplazar'
+  int? stockIngresanteOverride;
+  String? sourceVariantUuid; // UUID de la variante padre que originó este sobrante
+
 
   // Backup de valores originales de factura
   late final double _originalCostoSugerido;
@@ -214,7 +254,36 @@ class StagingVariant {
   late final String _originalNombreEspecifico;
   late final String _originalUnidadVenta;
   late final int _originalUnidadesPorVenta;
+
+  late final String? _originalCodigoBarra;
+  late final String _originalUmpCompra;
+  late final double _originalCantidadUmpComprada;
+  late final double _originalPrecioUmpProveedor;
+  late final double _originalTotalPagoLote;
+  late final int _originalUnidadesPorLote;
+
+  double get originalCantidadUmpComprada => _originalCantidadUmpComprada;
+  double get originalTotalPagoLote => _originalTotalPagoLote;
+  int get originalUnidadesPorLote => _originalUnidadesPorLote;
+  String? get originalCodigoBarra => _originalCodigoBarra;
+  String get originalUmpCompra => _originalUmpCompra;
+  double get originalPrecioUmpProveedor => _originalPrecioUmpProveedor;
+  double get originalCostoSugerido => _originalCostoSugerido;
+  double get originalMargen => _originalMargen;
+  double get originalPrecioVenta => _originalPrecioVenta;
+  String get originalUnidadVenta => _originalUnidadVenta;
+  int get originalUnidadesPorVenta => _originalUnidadesPorVenta;
   
+  double get originalCostoUnitario {
+    if (sourceVariantUuid != null) {
+      return _originalCostoSugerido; // Para variantes sobrantes, su costo original es el que heredaron sugerido
+    }
+    if (_originalCantidadUmpComprada > 0 && _originalUnidadesPorLote > 0) {
+      return _originalTotalPagoLote / (_originalCantidadUmpComprada * _originalUnidadesPorLote);
+    }
+    return 0.0;
+  }
+
   // Backup intermedio de BD (Snapshot antes de edición del modal)
   double? _snapshotCosto;
   double? _snapshotMargen;
@@ -222,6 +291,25 @@ class StagingVariant {
   String? _snapshotNombreEspecifico;
   String? _snapshotUnidadVenta;
   int? _snapshotUnidadesPorVenta;
+  
+  String? _snapshotCodigoBarra;
+  String? _snapshotEditedMarca;
+  
+  bool? _snapshotUpdateNombre;
+  bool? _snapshotUpdateUnidadVenta;
+  bool? _snapshotUpdateMarca;
+  bool? _snapshotUpdateDatosCompra;
+  bool? _snapshotUpdateCodigoBarra;
+  
+  int? _snapshotStockOverride;
+  String? _snapshotDiscountMode;
+  double? _snapshotDiscountManual;
+
+  String? _snapshotUmpCompra;
+  double? _snapshotPrecioUmpProveedor;
+  double? _snapshotCantidadUmpComprada;
+  double? _snapshotTotalPagoLote;
+  int? _snapshotUnidadesPorLote;
 
   StagingVariant({
     String? uuidTemporal,
@@ -236,16 +324,26 @@ class StagingVariant {
     required this.costoUnitarioSugerido,
     required this.factorGananciaVentaSugerido,
     required this.precioVentaSugerido,
-    required this.matchPresentacion,
+    required MatchResult matchPresentacion,
     this.codigoBarra,
     this.isConfirmed = true,
-  }) : uuidTemporal = uuidTemporal ?? generateFrontendUuid() {
+  }) : uuidTemporal = uuidTemporal ?? generateFrontendUuid(),
+       _matchPresentacion = matchPresentacion {
+    if (matchPresentacion.datos != null && unidadesPorVenta == matchPresentacion.datos!.unidadesPorVenta) {
+      updateUnidadVenta = false;
+    }
     _originalCostoSugerido = costoUnitarioSugerido;
     _originalMargen = factorGananciaVentaSugerido;
     _originalPrecioVenta = precioVentaSugerido;
     _originalNombreEspecifico = nombreEspecifico;
     _originalUnidadVenta = unidadVenta;
     _originalUnidadesPorVenta = unidadesPorVenta;
+    _originalUmpCompra = umpCompra;
+    _originalCantidadUmpComprada = cantidadUmpComprada;
+    _originalPrecioUmpProveedor = precioUmpProveedor;
+    _originalTotalPagoLote = totalPagoLote;
+    _originalUnidadesPorLote = unidadesPorLote;
+    _originalCodigoBarra = codigoBarra;
   }
 
   factory StagingVariant.fromJson(Map<String, dynamic> json) {
@@ -260,12 +358,16 @@ class StagingVariant {
       unidadVenta: json['unidad_venta'] ?? 'Unidad',
       unidadesPorVenta: json['unidades_por_venta'] ?? 1,
       costoUnitarioSugerido: (json['costo_unitario_sugerido'] ?? 0).toDouble(),
-      factorGananciaVentaSugerido: (json['factor_ganancia_venta_sugerido'] ?? 1.35).toDouble(),
+      factorGananciaVentaSugerido:
+          (json['factor_ganancia_venta_sugerido'] ?? 1.35).toDouble(),
       precioVentaSugerido: (json['precio_venta_sugerido'] ?? 0).toDouble(),
       codigoBarra: json['codigo_barras'],
       matchPresentacion: MatchResult.fromJson(json['match_presentacion']),
-      isConfirmed: json['confirmado'] == 1 || json['confirmado'] == true || json['confirmado'] == null
-    );
+      isConfirmed:
+          json['confirmado'] == 1 ||
+          json['confirmado'] == true ||
+          json['confirmado'] == null,
+    )..sourceVariantUuid = json['sourceVariantUuid'];
   }
 
   void takeSnapshot() {
@@ -275,6 +377,24 @@ class StagingVariant {
     _snapshotNombreEspecifico = nombreEspecifico;
     _snapshotUnidadVenta = unidadVenta;
     _snapshotUnidadesPorVenta = unidadesPorVenta;
+    _snapshotCodigoBarra = codigoBarra;
+    _snapshotEditedMarca = editedMarca;
+    
+    _snapshotUpdateNombre = updateNombre;
+    _snapshotUpdateUnidadVenta = updateUnidadVenta;
+    _snapshotUpdateMarca = updateMarca;
+    _snapshotUpdateCodigoBarra = updateCodigoBarra;
+    _snapshotUpdateDatosCompra = updateDatosCompra;
+    
+    _snapshotStockOverride = stockIngresanteOverride;
+    _snapshotDiscountMode = discountMode;
+    _snapshotDiscountManual = discountManualValue;
+
+    _snapshotUmpCompra = umpCompra;
+    _snapshotPrecioUmpProveedor = precioUmpProveedor;
+    _snapshotCantidadUmpComprada = cantidadUmpComprada;
+    _snapshotTotalPagoLote = totalPagoLote;
+    _snapshotUnidadesPorLote = unidadesPorLote;
   }
 
   void restoreFromSnapshot() {
@@ -285,17 +405,49 @@ class StagingVariant {
       nombreEspecifico = _snapshotNombreEspecifico!;
       unidadVenta = _snapshotUnidadVenta!;
       unidadesPorVenta = _snapshotUnidadesPorVenta!;
+      codigoBarra = _snapshotCodigoBarra;
+      editedMarca = _snapshotEditedMarca;
+      
+      if (_snapshotUpdateNombre != null) updateNombre = _snapshotUpdateNombre!;
+      if (_snapshotUpdateUnidadVenta != null) updateUnidadVenta = _snapshotUpdateUnidadVenta!;
+      if (_snapshotUpdateMarca != null) updateMarca = _snapshotUpdateMarca!;
+      if (_snapshotUpdateCodigoBarra != null) updateCodigoBarra = _snapshotUpdateCodigoBarra!;
+      if (_snapshotUpdateDatosCompra != null) {
+        updateDatosCompra = _snapshotUpdateDatosCompra!;
+      }
+      
+      stockIngresanteOverride = _snapshotStockOverride;
+      discountMode = _snapshotDiscountMode;
+      discountManualValue = _snapshotDiscountManual;
+
+      umpCompra = _snapshotUmpCompra!;
+      precioUmpProveedor = _snapshotPrecioUmpProveedor!;
+      cantidadUmpComprada = _snapshotCantidadUmpComprada!;
+      totalPagoLote = _snapshotTotalPagoLote!;
+      unidadesPorLote = _snapshotUnidadesPorLote!;
     }
   }
 
   bool get hasSnapshotBeenModified =>
       _snapshotCosto != null &&
       (costoUnitarioSugerido != _snapshotCosto ||
-       factorGananciaVentaSugerido != _snapshotMargen ||
-       precioVentaSugerido != _snapshotPrecioVenta ||
-       nombreEspecifico != _snapshotNombreEspecifico ||
-       unidadVenta != _snapshotUnidadVenta ||
-       unidadesPorVenta != _snapshotUnidadesPorVenta);
+          factorGananciaVentaSugerido != _snapshotMargen ||
+          precioVentaSugerido != _snapshotPrecioVenta ||
+          nombreEspecifico != _snapshotNombreEspecifico ||
+          unidadVenta != _snapshotUnidadVenta ||
+          unidadesPorVenta != _snapshotUnidadesPorVenta ||
+          codigoBarra != _snapshotCodigoBarra ||
+          editedMarca != _snapshotEditedMarca ||
+          umpCompra != _snapshotUmpCompra ||
+          precioUmpProveedor != _snapshotPrecioUmpProveedor ||
+          cantidadUmpComprada != _snapshotCantidadUmpComprada ||
+          totalPagoLote != _snapshotTotalPagoLote ||
+          unidadesPorLote != _snapshotUnidadesPorLote ||
+          updateNombre != _snapshotUpdateNombre ||
+          updateUnidadVenta != _snapshotUpdateUnidadVenta ||
+          updateMarca != _snapshotUpdateMarca ||
+          updateCodigoBarra != _snapshotUpdateCodigoBarra ||
+          updateDatosCompra != _snapshotUpdateDatosCompra);
 
   void restoreOriginals() {
     costoUnitarioSugerido = _originalCostoSugerido;
@@ -304,31 +456,48 @@ class StagingVariant {
     nombreEspecifico = _originalNombreEspecifico;
     unidadVenta = _originalUnidadVenta;
     unidadesPorVenta = _originalUnidadesPorVenta;
+    umpCompra = _originalUmpCompra;
+    cantidadUmpComprada = _originalCantidadUmpComprada;
+    precioUmpProveedor = _originalPrecioUmpProveedor;
+    totalPagoLote = _originalTotalPagoLote;
+    unidadesPorLote = _originalUnidadesPorLote;
+
     updateCosto = true;
     updatePrecio = false;
     updateNombre = false;
     updateUnidadVenta = false;
+    updateMarca = false;
+    updateDatosCompra = false;
+    stockIngresanteOverride = null;
+    discountMode = null;
+    discountManualValue = null;
     _snapshotCosto = null; // Clear snapshot when reverting to absolute original
   }
 
-  bool get hasBeenModified => 
-    costoUnitarioSugerido != _originalCostoSugerido || 
-    factorGananciaVentaSugerido != _originalMargen || 
-    precioVentaSugerido != _originalPrecioVenta || 
-    nombreEspecifico != _originalNombreEspecifico ||
-    unidadVenta != _originalUnidadVenta ||
-    unidadesPorVenta != _originalUnidadesPorVenta;
+  bool get hasBeenModified =>
+      costoUnitarioSugerido != _originalCostoSugerido ||
+      factorGananciaVentaSugerido != _originalMargen ||
+      precioVentaSugerido != _originalPrecioVenta ||
+      nombreEspecifico != _originalNombreEspecifico ||
+      unidadVenta != _originalUnidadVenta ||
+      unidadesPorVenta != _originalUnidadesPorVenta ||
+      umpCompra != _originalUmpCompra ||
+      cantidadUmpComprada != _originalCantidadUmpComprada ||
+      precioUmpProveedor != _originalPrecioUmpProveedor ||
+      totalPagoLote != _originalTotalPagoLote ||
+      unidadesPorLote != _originalUnidadesPorLote;
 }
 
 class StagingProductGroup {
-  String uuidTemporal; 
+  String uuidTemporal;
   String nombrePadre;
   String? nombreOriginalFactura;
+  String? marcaOriginalFactura;
   String marcaTexto;
-  
+
   MatchResult matchProducto;
   MatchResult matchMarca;
-  
+
   int? categoriaSugeridaId;
   List<StagingVariant> variantes;
 
@@ -336,29 +505,33 @@ class StagingProductGroup {
     String? uuidTemporal,
     required this.nombrePadre,
     this.nombreOriginalFactura,
+    this.marcaOriginalFactura,
     required this.marcaTexto,
     required this.matchProducto,
     required this.matchMarca,
     this.categoriaSugeridaId,
-    required this.variantes
+    required this.variantes,
   }) : uuidTemporal = uuidTemporal ?? generateFrontendUuid();
 
   factory StagingProductGroup.fromJson(Map<String, dynamic> json) {
     return StagingProductGroup(
       uuidTemporal: json['uuid_temporal'] ?? generateFrontendUuid(),
       nombrePadre: json['nombre_padre'],
-      nombreOriginalFactura: json['nombre_padre'], 
+      nombreOriginalFactura: json['nombre_padre'],
+      marcaOriginalFactura: json['marca_detectada'],
       marcaTexto: json['marca_texto'],
       matchProducto: MatchResult.fromJson(json['match_producto']),
       matchMarca: MatchResult.fromJson(json['match_marca']),
       categoriaSugeridaId: json['categoria_sugerida_id'],
-      variantes: (json['variantes'] as List).map((x) => StagingVariant.fromJson(x)).toList()
+      variantes: (json['variantes'] as List)
+          .map((x) => StagingVariant.fromJson(x))
+          .toList(),
     );
   }
 }
 
 class StagingResponse {
-  int? invoiceId; 
+  int? invoiceId;
   MatchResult proveedorMatch;
   String proveedorTexto;
   String? rucProveedor;
@@ -368,17 +541,17 @@ class StagingResponse {
 
   StagingResponse({
     this.invoiceId,
-    required this.proveedorMatch, 
+    required this.proveedorMatch,
     required this.proveedorTexto,
     this.rucProveedor,
     this.fechaFactura,
     this.montoTotalFactura,
-    required this.productosAgrupados
+    required this.productosAgrupados,
   });
 
   factory StagingResponse.fromJson(Map<String, dynamic> json) {
     return StagingResponse(
-      invoiceId: json['invoice_id'], 
+      invoiceId: json['invoice_id'],
       proveedorMatch: MatchResult.fromJson(json['proveedor_match']),
       proveedorTexto: json['proveedor_texto'],
       rucProveedor: json['ruc_detectado'],

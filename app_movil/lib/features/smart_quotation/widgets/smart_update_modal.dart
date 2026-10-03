@@ -14,6 +14,7 @@ class SmartUpdateModal extends StatelessWidget {
   final Function(int itemId, String newName)? onAcceptSingleName;
   final VoidCallback? onUpdateNames;
   final VoidCallback? onSyncBundles;
+  final VoidCallback? onSyncUnits;
 
   const SmartUpdateModal({
     super.key,
@@ -27,6 +28,7 @@ class SmartUpdateModal extends StatelessWidget {
     this.onAcceptSingleName,
     this.onUpdateNames,
     this.onSyncBundles,
+    this.onSyncUnits,
   });
 
   @override
@@ -36,12 +38,13 @@ class SmartUpdateModal extends StatelessWidget {
     final priceIssues = validation.priceChanges;
     final nameIssues = validation.nameChanges;
     final bundleIssues = validation.bundleChanges;
+    final unitIssues = validation.unitChanges;
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    bool hasNoRealIssues = stockIssues.isEmpty && priceIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty;
+    bool hasNoRealIssues = stockIssues.isEmpty && priceIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty && unitIssues.isEmpty;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -218,6 +221,37 @@ class SmartUpdateModal extends StatelessWidget {
                               icon: const Icon(Icons.sync, size: 20),
                               label: const Text("Sincronizar Ofertas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                               style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.deepPurple[300] : Colors.deepPurple[800], side: BorderSide(color: isDark ? Colors.deepPurple.withValues(alpha: 0.5) : Colors.deepPurple[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            ),
+                          ),
+                        Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),
+                      ],
+
+                      // 5. BLOQUE DE UNIDAD DE VENTA (Cambio de unidad — BLOQUEANTE)
+                      if (unitIssues.isNotEmpty) ...[
+                        _buildSectionHeader("Cambio de Unidad de Venta", Icons.straighten, isDark ? Colors.cyan[300]! : Colors.cyan[800]!),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(color: isDark ? Colors.cyan.withValues(alpha: 0.1) : Colors.cyan[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.cyan.withValues(alpha: 0.3) : Colors.cyan.shade200)),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.warning_amber, color: isDark ? Colors.cyan[300] : Colors.cyan[800], size: 24),
+                              const SizedBox(width: 12),
+                              Expanded(child: Text("La unidad de venta de algunos productos cambió en el catálogo. Debes sincronizar antes de vender para evitar descuentos de stock incorrectos.", style: TextStyle(fontSize: 14, color: isDark ? Colors.cyan[100] : Colors.cyan[900]))),
+                            ],
+                          ),
+                        ),
+                        ...unitIssues.map((u) => _buildUnitRow(u, isDark)),
+                        const SizedBox(height: 12),
+                        if (onSyncUnits != null)
+                          SizedBox(
+                            width: double.infinity, height: 50,
+                            child: OutlinedButton.icon(
+                              onPressed: () { Navigator.pop(context); onSyncUnits!(); },
+                              icon: const Icon(Icons.sync, size: 20),
+                              label: const Text("Sincronizar Unidades de Venta", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.cyan[300] : Colors.cyan[800], side: BorderSide(color: isDark ? Colors.cyan.withValues(alpha: 0.5) : Colors.cyan[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                             ),
                           ),
                         Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),
@@ -446,6 +480,56 @@ class SmartUpdateModal extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Text(b.isDeleted ? "Esta oferta ya no existe en el sistema." : "Esta oferta está desactivada.", style: TextStyle(fontSize: 13, color: isDark ? Colors.red[300] : Colors.red[600], fontWeight: FontWeight.bold)),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnitRow(UnitChange u, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.white10 : Colors.cyan.shade200)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(u.productName, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Cotizado como:", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 12)),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: isDark ? Colors.grey[800] : Colors.grey[200], borderRadius: BorderRadius.circular(6)),
+                      child: Text(u.oldUnit, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.grey[300] : Colors.black87)),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward, size: 20, color: isDark ? Colors.cyan[300] : Colors.cyan[700]),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text("Ahora en tienda:", style: TextStyle(color: isDark ? Colors.cyan[300] : Colors.cyan[800], fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: isDark ? Colors.cyan.withValues(alpha: 0.2) : Colors.cyan[50], borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? Colors.cyan.withValues(alpha: 0.4) : Colors.cyan.shade300)),
+                      child: Text(u.newUnit, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: isDark ? Colors.cyan[300] : Colors.cyan[900])),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (u.message.isNotEmpty)
+            Padding(padding: const EdgeInsets.only(top: 10), child: Text(u.message, style: TextStyle(fontSize: 13, color: isDark ? Colors.cyan[200] : Colors.cyan[700], fontStyle: FontStyle.italic))),
         ],
       ),
     );

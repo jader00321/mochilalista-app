@@ -122,19 +122,21 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
                     x: e.key,
                     barRods: [
                       BarChartRodData(
-                        toY: e.value['amount'],
-                        color: isTouched ? Colors.deepPurpleAccent : (isToday 
-                            ? Colors.amberAccent[400] 
-                            : (maxVal > 0 
-                                ? Color.lerp(Colors.blue[300], Colors.greenAccent[400], e.value['amount'] / maxVal)
-                                : Colors.blue[300])),
+                        toY: maxVal > 0 ? maxVal * 1.2 : 10,
+                        color: widget.isDark ? Colors.white10 : Colors.grey[200],
                         width: isTouched ? 20 : 16,
                         borderRadius: BorderRadius.circular(16),
-                        backDrawRodData: BackgroundBarChartRodData(
-                          show: true,
-                          toY: maxVal * 1.2,
-                          color: widget.isDark ? Colors.white10 : Colors.grey[200],
-                        ),
+                        rodStackItems: e.value['amount'] > 0 ? [
+                          BarChartRodStackItem(
+                            0,
+                            e.value['amount'],
+                            isTouched ? Colors.deepPurpleAccent : (isToday 
+                                ? Colors.amberAccent[400]! 
+                                : (maxVal > 0 
+                                    ? Color.lerp(Colors.blue[300], Colors.greenAccent[400], e.value['amount'] / maxVal)!
+                                    : Colors.blue[300]!)),
+                          )
+                        ] : [],
                       ),
                     ],
                   );

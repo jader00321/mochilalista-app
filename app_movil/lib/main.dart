@@ -36,6 +36,8 @@ import 'package:app_movil/core/screens/home_screen.dart';
 import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
 import 'package:app_movil/features/auth/screens/onboarding/lock_screen.dart';
 
+import 'package:app_movil/features/profile/services/business_backup_service.dart';
+
 // =========================================================================
 // 🔥 TAREA EN SEGUNDO PLANO (WORKMANAGER) PARA BACKUPS AUTOMÁTICOS
 // Esta función debe estar obligatoriamente fuera de cualquier clase.
@@ -52,13 +54,33 @@ void callbackDispatcher() {
         
         if (isEnabled) {
           final String location = prefs.getString('auto_backup_location') ?? 'Local';
+          final String type = prefs.getString('auto_backup_type') ?? 'global';
+          final String? customPath = prefs.getString('auto_backup_custom_path');
           
-          if (location == 'Drive') {
-            await BackupManager.exportToCloud();
-          } else {
-            await BackupManager.exportToDownloads();
+          bool doGlobal = type == 'global' || type == 'ambos';
+          bool doPerfil = type == 'perfil' || type == 'ambos';
+          
+          if (doGlobal) {
+            if (location == 'custom' && customPath != null) {
+              await BackupManager.exportToDirectory(customPath);
+            } else {
+              await BackupManager.exportToDownloads();
+            }
+          }
+          
+          if (doPerfil) {
+             final int? negocioId = prefs.getInt('auto_backup_negocio_id');
+             final String? negocioNombre = prefs.getString('auto_backup_negocio_nombre');
+             if (negocioId != null && negocioNombre != null) {
+                String? targetDir = (location == 'custom') ? customPath : null;
+                await BusinessBackupService.exportBusinessToFile(negocioId, negocioNombre, targetDirectory: targetDir);
+             }
           }
         }
+        
+        // Registrar éxito
+        await prefs.setInt('last_auto_backup_run_time', DateTime.now().millisecondsSinceEpoch);
+        
       } catch (e) {
         debugPrint("Error en tarea de backup automático: $e");
       }
@@ -71,20 +93,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized(); 
   await dotenv.load(fileName: ".env"); 
 
-  // 🔥 INICIALIZAR WORKMANAGER Y PROGRAMAR TAREA
+  // 🔥 INICIALIZAR WORKMANAGER
+  // La tarea solo se registra mediante el BackupProvider cuando el usuario activa la opción
   Workmanager().initialize(
     callbackDispatcher
-  );
-
-  Workmanager().registerPeriodicTask(
-    "backup_periodico_app", // ID único de la tarea
-    backupTask,
-    frequency: const Duration(days: 30), // Por defecto, luego el provider lo sobreescribe
-    initialDelay: const Duration(minutes: 10), // Empieza 10 min después del primer inicio
-    constraints: Constraints(
-      networkType: NetworkType.connected, // Asegura que haya internet por si es en Drive
-      requiresBatteryNotLow: true, // No molestará si el dueño tiene poca batería
-    ),
   );
 
   runApp(const MochilaListaApp());

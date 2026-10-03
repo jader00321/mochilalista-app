@@ -238,7 +238,7 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
           const SizedBox(height: 24),
           TopProductsChart(data: data, isDark: isDark),
           const SizedBox(height: 24),
-          TopCategoriesCard(data: data, isDark: isDark),
+          TopCategoriesCard(data: data, isDark: isDark, formatCurrency: _formatCurrency),
           const SizedBox(height: 24),
           LayoutBuilder(
             builder: (context, constraints) {

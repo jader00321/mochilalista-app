@@ -6,18 +6,19 @@ class SpanishLemmatizer {
   /// acentos y diminutivos comunes.
   static String lemmatize(String word) {
     if (word.isEmpty) return word;
-    
+
     String w = word.toLowerCase().trim();
-    
+
     // Normalizar acentos
-    w = w.replaceAll('á', 'a')
-         .replaceAll('é', 'e')
-         .replaceAll('í', 'i')
-         .replaceAll('ó', 'o')
-         .replaceAll('ú', 'u');
-         
+    w = w
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u');
+
     if (w.length <= 3) return w; // Palabras muy cortas no se procesan
-    
+
     // Reglas de plurales y diminutivos
     if (w.endsWith('ces')) {
       return '${w.substring(0, w.length - 3)}z'; // lápices -> lápiz, luces -> luz
@@ -35,10 +36,10 @@ class SpanishLemmatizer {
       // Regla general para 's' (cuadernos -> cuaderno)
       // Cuidado con palabras que terminan en s singular (paraguas, abrelatas)
       if (w.length > 3) {
-         return w.substring(0, w.length - 1);
+        return w.substring(0, w.length - 1);
       }
     }
-    
+
     return w;
   }
 
@@ -47,13 +48,13 @@ class SpanishLemmatizer {
   static double calculateSimilarity(String s1, String s2) {
     if (s1 == s2) return 1.0;
     if (s1.isEmpty || s2.isEmpty) return 0.0;
-    
+
     int len1 = s1.length;
     int len2 = s2.length;
-    
+
     List<List<int>> d = List.generate(
-      len1 + 1, 
-      (i) => List.filled(len2 + 1, 0)
+      len1 + 1,
+      (i) => List.filled(len2 + 1, 0),
     );
 
     for (int i = 0; i <= len1; i++) {
@@ -67,16 +68,16 @@ class SpanishLemmatizer {
       for (int j = 1; j <= len2; j++) {
         int cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
         d[i][j] = [
-          d[i - 1][j] + 1,      // deletion
-          d[i][j - 1] + 1,      // insertion
-          d[i - 1][j - 1] + cost // substitution
+          d[i - 1][j] + 1, // deletion
+          d[i][j - 1] + 1, // insertion
+          d[i - 1][j - 1] + cost, // substitution
         ].reduce(min);
       }
     }
 
     int distance = d[len1][len2];
     int maxLen = max(len1, len2);
-    
+
     return 1.0 - (distance / maxLen);
   }
 }

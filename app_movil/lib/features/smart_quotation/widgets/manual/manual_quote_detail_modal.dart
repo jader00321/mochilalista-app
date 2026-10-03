@@ -70,7 +70,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
     _priceCtrl.text = effectivePrice.toStringAsFixed(2);
     double initialDiscount = _systemPrice - effectivePrice;
     
-    if (initialDiscount > 0.01 || widget.initialOverridePrice != null) {
+    if (initialDiscount > 0.01 || (widget.initialOverridePrice != null && (widget.initialOverridePrice! - _systemPrice).abs() > 0.01)) {
       _isManualPrice = true;
       _discountCtrl.text = initialDiscount > 0 ? initialDiscount.toStringAsFixed(2) : "0.00";
     } else {
@@ -174,35 +174,49 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
         brand: _fullProduct!.marcaNombre ?? _currentSelection.brand,
         price: pres.precioVentaFinal, 
         offerPrice: (pres.precioOferta != null && pres.precioOferta! > 0) ? pres.precioOferta : null,
-        stock: pres.stockActual,
+        stock: pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1),
         imageUrl: pres.imagenUrl ?? _fullProduct!.imagenUrl,
         unit: pres.unidadVenta ?? "Unidad", 
         conversionFactor: pres.unidadesPorVenta, 
       );
       
       _systemPrice = _currentSelection.price;
-      _isManualPrice = false;
-      _priceCtrl.text = _systemPrice.toStringAsFixed(2);
-      _discountCtrl.text = "";
+      
+      if (_currentSelection.offerPrice != null && _currentSelection.offerPrice! > 0) {
+        _isManualPrice = true;
+        _priceCtrl.text = _currentSelection.offerPrice!.toStringAsFixed(2);
+        double disc = _systemPrice - _currentSelection.offerPrice!;
+        _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
+      } else {
+        _isManualPrice = false;
+        _priceCtrl.text = _systemPrice.toStringAsFixed(2);
+        _discountCtrl.text = "";
+      }
       
       _currentCustomName = null; // Reseteamos el custom name al cambiar de variante
       
       int currentQty = int.tryParse(_qtyCtrl.text) ?? 1;
       
       final isClient = Provider.of<AuthProvider>(context, listen: false).isCommunityClient;
-      if (isClient && currentQty > pres.stockActual && pres.stockActual > 0) {
-        _qtyCtrl.text = pres.stockActual.toString();
+      if (isClient && currentQty > _currentSelection.stock && _currentSelection.stock > 0) {
+        _qtyCtrl.text = _currentSelection.stock.toString();
       }
     });
   }
 
   void _confirm() {
     int finalQty = int.tryParse(_qtyCtrl.text) ?? 1;
+    if (finalQty <= 0) {
+      CustomSnackBar.show(context, message: "La cantidad debe ser mayor a 0.", isError: true);
+      return;
+    }
     double finalPrice = double.tryParse(_priceCtrl.text) ?? _systemPrice;
     
     double? overridePrice;
-    if (finalPrice == _systemPrice && widget.product.offerPrice == null) {
-      overridePrice = null;
+    if (!_isManualPrice) {
+      // Si el usuario apaga el toggle, forzamos el precio de sistema original
+      // para sobrescribir cualquier precio de oferta (offerPrice) que tenga la variante.
+      overridePrice = _systemPrice;
     } else {
       overridePrice = finalPrice;
     }
@@ -256,19 +270,50 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
     bool exceedsStock = currentQty > _currentSelection.stock && !isStockEmpty;
 
     String originalName = widget.product.fullName.trim(); 
-    String currentBuiltName = _currentSelection.displayNameForComparison.trim();
     bool hasCustomName = widget.initialCustomName != null && widget.initialCustomName!.isNotEmpty;
     
-    // Nueva lógica refinada
-    bool isSameVariant = _currentSelection.presentationId == widget.product.presentationId;
-    
+    // Lógica refinada (2 Capas: Cambio de usuario o Cambio de Inventario)
+    bool isVariantChanged = _currentSelection.presentationId != widget.product.presentationId;
+    bool isInventoryChanged = false;
+
+    if (_fullProduct != null && !isVariantChanged) {
+      try {
+        final pres = _fullProduct!.presentaciones.firstWhere(
+          (p) => p.id == _currentSelection.presentationId,
+        );
+
+        String cleanProductName = _cleanName(_fullProduct!.nombre);
+        String cleanSpecificName = _cleanName(pres.nombreEspecifico ?? "");
+        String liveFullName = cleanProductName;
+        if (cleanSpecificName.isNotEmpty && !cleanProductName.toLowerCase().contains(cleanSpecificName.toLowerCase())) {
+          liveFullName += " $cleanSpecificName";
+        }
+
+        String liveBrand = _fullProduct!.marcaNombre ?? "";
+        String originalBrand = widget.product.brand ?? "";
+        String liveUnit = pres.unidadVenta ?? "Unidad";
+        String originalUnit = widget.product.unit;
+        int liveFactor = pres.unidadesPorVenta;
+        int originalFactor = widget.product.conversionFactor;
+
+        if (liveFullName.toLowerCase() != originalName.toLowerCase() ||
+            liveBrand.toLowerCase() != originalBrand.toLowerCase() ||
+            liveUnit.toLowerCase() != originalUnit.toLowerCase() ||
+            liveFactor != originalFactor) {
+          isInventoryChanged = true;
+        }
+      } catch (e) {
+        // Si no se encuentra la presentación en vivo, asumimos que hubo un cambio mayor (ej. borrada)
+        isInventoryChanged = true;
+      }
+    }
+
     bool isNameChanged = widget.isEditingSavedQuote && 
-                         isSameVariant &&
                          !widget.isNewAddition && 
                          originalName.isNotEmpty && 
-                         currentBuiltName.toLowerCase() != originalName.toLowerCase() &&
                          !originalName.toLowerCase().contains("nuevo ítem") &&
-                         !hasCustomName;
+                         !hasCustomName &&
+                         (isVariantChanged || isInventoryChanged);
 
     return SafeArea(
       child: Container(
@@ -353,10 +398,19 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                     },
                     child: Hero(
                       tag: "modal_cot_${_currentSelection.presentationId}",
-                      child: Container(
-                        width: 90, height: 90, 
-                        decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300), borderRadius: BorderRadius.circular(16)), 
-                        child: ClipRRect(borderRadius: BorderRadius.circular(16), child: UniversalImage(path: _currentSelection.imageUrl, fit: BoxFit.cover))
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            width: 90, height: 90, 
+                            decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300), borderRadius: BorderRadius.circular(16)), 
+                            child: ClipRRect(borderRadius: BorderRadius.circular(16), child: UniversalImage(path: _currentSelection.imageUrl, fit: BoxFit.cover))
+                          ),
+                          if (_currentSelection.imageUrl != null && _currentSelection.imageUrl!.isNotEmpty) ...[
+                            Container(width: 90, height: 90, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.black.withValues(alpha: 0.3))),
+                            const Icon(Icons.zoom_in, color: Colors.white, size: 30)
+                          ]
+                        ]
                       ),
                     ),
                   ),
@@ -366,22 +420,22 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (brandName.isNotEmpty && brandName != "null") 
-                          Text(brandName.toUpperCase(), style: textTheme.labelMedium?.copyWith(color: isDark ? Colors.indigo[300] : Colors.indigo[800])),
+                          Text(brandName.toUpperCase(), style: TextStyle(fontSize: 12, color: isDark ? Colors.indigo[300] : Colors.indigo[800], fontWeight: FontWeight.w800, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
                         
                         const SizedBox(height: 2),
 
-                        Text("${_currentSelection.productName} ", style: textTheme.titleLarge?.copyWith(color: textColor), maxLines: 3, overflow: TextOverflow.ellipsis),
+                        Text("${_currentSelection.productName} ", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor, height: 1.2), maxLines: 3, overflow: TextOverflow.ellipsis),
                         
                         if (_currentSelection.specificName != null && _currentSelection.specificName!.isNotEmpty && _currentSelection.specificName != "Paquete")
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
-                            child: Text(_currentSelection.specificName!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
+                            child: Text(_currentSelection.specificName!, style: TextStyle(fontSize: 18, color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
                           ),
                         
                         if (_currentSelection.description != null && _currentSelection.description!.isNotEmpty && _currentSelection.description != _currentSelection.specificName)
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
-                            child: Text(_currentSelection.description!, style: textTheme.bodySmall?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
+                            child: Text(_currentSelection.description!, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[500] : Colors.grey[600]), maxLines: 3, overflow: TextOverflow.ellipsis),
                           ),
                         
                         const SizedBox(height: 10),
@@ -391,22 +445,22 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                           runSpacing: 8,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
-                              child: Text("${_currentSelection.unit} (x${_currentSelection.conversionFactor})", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[700])),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
+                              child: Text("${_currentSelection.unit} (x${_currentSelection.conversionFactor})", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
                             ),
                             if (widget.categoryName != null && widget.categoryName!.isNotEmpty)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(color: isDark ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
-                                child: Text(widget.categoryName!, style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[700])),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(color: isDark ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+                                child: Text(widget.categoryName!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[300] : Colors.grey[800])),
                               ),
                           ],
                         ),
                         
                         const SizedBox(height: 8),
                         Text(
-                          isStockEmpty ? "Agotado (0)" : "Stock disponible: ${_currentSelection.stock}", 
+                          isStockEmpty ? "Agotado (0)" : "Stock disponible: ${_currentSelection.stock} ${_currentSelection.unit}", 
                           style: textTheme.bodySmall?.copyWith(color: isStockEmpty ? (isDark ? Colors.red[400] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), fontWeight: FontWeight.bold)
                         ),
                       ],
@@ -454,7 +508,16 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                   onToggle: (v) {
                     setState(() {
                       _isManualPrice = v;
-                      if (!v) { _priceCtrl.text = _systemPrice.toStringAsFixed(2); _discountCtrl.text = ""; }
+                      if (!v) { 
+                        _priceCtrl.text = _systemPrice.toStringAsFixed(2); 
+                        _discountCtrl.text = ""; 
+                      } else {
+                        if (_currentSelection.offerPrice != null && _currentSelection.offerPrice! > 0) {
+                          _priceCtrl.text = _currentSelection.offerPrice!.toStringAsFixed(2);
+                          double disc = _systemPrice - _currentSelection.offerPrice!;
+                          _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
+                        }
+                      }
                     });
                   },
                   onDiscountChanged: _onDiscountChanged,
@@ -471,20 +534,20 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("Cantidad", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey)),
+                      Text("Cantidad", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontWeight: FontWeight.bold, fontSize: 14)),
                       const SizedBox(height: 8),
                       Container(
-                        height: 60, 
+                        height: 55, 
                         decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.white, border: Border.all(color: (exceedsStock || isStockEmpty) ? (isDark ? Colors.orange[400]! : Colors.orange) : (isDark ? Colors.white24 : Colors.grey.shade300), width: 1.5), borderRadius: BorderRadius.circular(16)),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(icon: Icon(Icons.remove, color: isDark ? Colors.red[400] : Colors.red, size: 28), onPressed: () => _qtyAction(-1, isClient)),
+                            IconButton(icon: Icon(Icons.remove, color: isDark ? Colors.red[300] : Colors.red, size: 24), onPressed: () => _qtyAction(-1, isClient)),
                             SizedBox(
-                              width: 60,
+                              width: 50,
                               child: TextField(
                                 controller: _qtyCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center,
-                                style: textTheme.displayMedium?.copyWith(color: textColor),
+                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
                                 decoration: const InputDecoration(border: InputBorder.none, isDense: true),
                                 onChanged: (v) {
                                   // 🔥 BLOQUEO DE STOCK AL CLIENTE AL ESCRIBIR
@@ -499,7 +562,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                                 },
                               ),
                             ),
-                            IconButton(icon: Icon(Icons.add, color: isDark ? Colors.green[400] : Colors.green, size: 28), onPressed: () => _qtyAction(1, isClient)),
+                            IconButton(icon: Icon(Icons.add, color: isDark ? Colors.green[400] : Colors.green, size: 24), onPressed: () => _qtyAction(1, isClient)),
                           ],
                         ),
                       ),
@@ -511,12 +574,12 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        if (totalSavings > 0) Text("Ahorro: ${currency.format(totalSavings)}", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.green[400] : Colors.green)),
-                        Text("Subtotal", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey)),
+                        if (totalSavings > 0) Text("Ahorro: ${currency.format(totalSavings)}", style: TextStyle(color: isDark ? Colors.green[300] : Colors.green, fontWeight: FontWeight.bold, fontSize: 14)),
+                        Text("Subtotal", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 14)),
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerRight,
-                          child: Text(currency.format(subtotal), style: textTheme.displayLarge?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue)),
+                          child: Text(currency.format(subtotal), style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue)),
                         ),
                       ],
                     ),

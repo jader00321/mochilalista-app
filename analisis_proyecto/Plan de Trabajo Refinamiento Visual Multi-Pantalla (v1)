@@ -1,0 +1,114 @@
+# Plan de Trabajo: Refinamiento Visual Multi-Pantalla (v1)
+
+He analizado profundamente las 4 capturas proporcionadas junto con el código fuente de cada pantalla involucrada. A continuación, presento los hallazgos, sugerencias y plan de acción.
+
+---
+
+## 🎨 1. Caja Rápida — Paleta de Colores Demasiado Intensa
+
+### Problema Detectado
+El color `Color(0xFFD81B60)` (rosa/magenta intenso) se usa en modo claro para:
+- AppBar, barra de búsqueda, sección desplegable de ofertas y cabecera de cliente.
+- El resultado es un bloque masivo de **rosa saturado** que provoca fatiga visual rápida y dificulta la lectura del texto blanco sobre fondos brillantes.
+
+### Mi Recomendación (Basada en tendencias actuales)
+En las apps de punto de venta modernas (Square, SumUp, Zettle), la tendencia es usar colores de marca solo como **acento**, no como fondo dominante. Propongo:
+
+| Elemento | Color Actual | Color Propuesto |
+|---|---|---|
+| **AppBar** | `0xFFD81B60` (Magenta puro) | `Color(0xFF2D3748)` (Gris-azul oscuro elegante) |
+| **Barra de búsqueda** (SliverAppBar) | Mismo magenta | `Color(0xFF2D3748)` (Consistente con AppBar) |
+| **Cabecera Cliente (ExpansionTile)** | `0xFFAD1457` / `0xFFD81B60` | `Color(0xFF374151)` (Gris cálido) con borde izquierdo de acento `0xFFD81B60` |
+| **Sección Ofertas** | Magenta sólido | Fondo blanco/gris claro con badge de fuego 🔥 |
+| **Botón COBRAR** | `0xFFD81B60` | **Mantener el rosa**, aquí sí funciona como CTA (call to action) y se distingue del fondo neutro |
+| **Botón "Ir a Caja" (Perfil Cliente)** | `pinkAccent` | Mantener, es un buen acento |
+
+> [!TIP]
+> El resultado sería una ventana con fondo neutro profesional, donde el rosa aparece **solo** en el botón de cobrar y acentos mínimos, haciéndolo el foco visual natural sin cansar la vista.
+
+### Archivos a Modificar
+- [quick_sale_screen.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/screens/quick_sale_screen.dart) — `appBarColor` (L254), secciones de ofertas (L369-L372)
+- [quick_sale_header.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/quick_sale/quick_sale_header.dart) — `headerColor` y `bodyColor` (L82-L83)
+
+---
+
+## 👤 2. Perfil del Cliente — Header Demasiado Alto y Badge Ilegible
+
+### Problemas Detectados
+1. **El header ocupa ~60% de la pantalla:** Avatar (38px radio), nombre grande (26px), teléfono, badge de confianza, etiquetas, botones WhatsApp/Llamar/"Ir a Caja", banner de deuda, y LUEGO el botón de "Analítica Completa" — todo antes de llegar a las pestañas.
+2. **Badge "BUENO"** (`blueAccent` sobre fondo `0xFF1565C0`): Azul sobre azul = ilegible.
+
+### Mi Recomendación
+Compactaré el header significativamente sin perder funcionalidad:
+
+| Cambio | Detalle |
+|---|---|
+| **Avatar** | Reducir de radio 38 a 28 |
+| **Nombre** | De `fontSize: 26` a `22` |
+| **Teléfono** | De `fontSize: 18` a `15` |
+| **Badge de Confianza** | Usar texto **blanco** con fondo semitransparente del color del badge (en vez de texto del mismo color que se pierde en azul) |
+| **Botones de Acción** | Comprimir los botones WhatsApp + Llamar como íconos más pequeños al lado del nombre, no en una fila separada |
+| **Botón "Ir a Caja"** | Moverlo como un FAB o integrar en el AppBar para liberar espacio vertical |
+| **"Ver Analítica Completa"** | Convertirlo de botón grande a un simple `TextButton` en la sección de tabs para ahorrar 60px de alto |
+
+### Archivos a Modificar
+- [client_stats_header.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/crm/client_stats_header.dart) — Compactar layout, corregir badge
+
+---
+
+## 📋 3. Modal de Opciones de Venta — Rediseño con Animaciones
+
+### Problemas Detectados
+1. El modal es funcional pero visualmente plano (sin animaciones de entrada).
+2. El botón de "Anular Venta" abre un `AlertDialog` genérico sin diseño profesional.
+3. "Restaurar Venta" no tiene confirmación ni indicador de carga.
+
+### Mi Recomendación
+| Mejora | Detalle |
+|---|---|
+| **Modal Principal** | Agregar animación de entrada (`SlideTransition` o `AnimatedContainer`), separar la opción destructiva (Anular/Restaurar) visualmente con espaciado y color de fondo diferente |
+| **Modal de Anulación** | Rediseñar como `showModalBottomSheet` con diseño de tarjeta profesional, radio buttons con mejor estilo, y spinner de carga con texto animado |
+| **Modal de Restauración** | Crear confirmación con ícono, descripción clara de qué pasará, y spinner de carga durante la operación |
+| **Responsividad** | Envolver los modales en `SafeArea` + limitar `maxHeight` con `ConstrainedBox` para evitar desbordamientos en pantallas pequeñas |
+
+### Archivos a Modificar
+- [sale_action_bottom_sheet.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/history/sale_action_bottom_sheet.dart) — Rediseñar completamente
+
+---
+
+## 📦 4. Mesa de Trabajo — Nombre Cortado en Tarjeta de Cotización
+
+### Problemas Detectados
+En la captura se ve `"LUZ ELEN..."` — el nombre se corta (`maxLines: 2, overflow: TextOverflow.ellipsis`) cuando la tarjeta tiene badges y el menú contextual al lado.
+
+### Mi Recomendación
+| Cambio | Detalle |
+|---|---|
+| **Layout del nombre** | Mover el `_buildStatusBadge` a una fila **debajo** del nombre en vez de al lado, para que el nombre tenga todo el ancho disponible |
+| **ID visible** | Agregar `#${quotation.id}` en una esquina superior derecha como un chip pequeño y discreto, para servir de referencia rápida cuando el nombre es largo |
+| **Nombre completo** | Aumentar `maxLines` de 2 a 3, o mejor: la primera línea muestra el nombre, y debajo el badge de estado + ID |
+
+### Archivos a Modificar
+- [quotation_card.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/quotation_card.dart) — Reorganizar layout del header de la tarjeta
+
+---
+
+## 🛠 Resumen de Archivos a Modificar
+
+| # | Archivo | Cambios |
+|---|---|---|
+| 1 | [quick_sale_screen.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/screens/quick_sale_screen.dart) | Paleta de colores neutral en modo claro |
+| 2 | [quick_sale_header.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/quick_sale/quick_sale_header.dart) | Colores del ExpansionTile |
+| 3 | [client_stats_header.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/crm/client_stats_header.dart) | Compactar header, corregir badge |
+| 4 | [sale_action_bottom_sheet.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/history/sale_action_bottom_sheet.dart) | Rediseño completo con animaciones y modales mejorados |
+| 5 | [quotation_card.dart](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/features/smart_quotation/widgets/quotation_card.dart) | Reorganizar layout, agregar ID visible |
+
+---
+
+## ✅ Plan de Verificación
+
+### Verificación Manual
+- Abrir Caja Rápida en modo **claro** y verificar que los colores son profesionales y legibles.
+- Abrir Perfil del Cliente y verificar que las pestañas de contenido sean visibles sin mucho scroll.
+- Abrir Historial de Ventas, presionar una venta, verificar que el modal tiene animación de entrada y que Anular/Restaurar muestran sus propios modales profesionales con indicador de carga.
+- Abrir Mesa de Trabajo y verificar que el nombre de la lista cotizada se lee completo, con ID visible en la esquina.

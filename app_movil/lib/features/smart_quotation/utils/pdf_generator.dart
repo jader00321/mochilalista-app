@@ -99,7 +99,8 @@ class PdfGenerator {
           return [
             _buildHeader(quotation, ownerInfo, config, logoImage, dateFormat, colors, saleData),
             pw.SizedBox(height: 20),
-            _buildDynamicTable(quotation.items, config, currency, productImages, colors),
+            if (saleData?['origen_venta'] != 'prestamo_personal')
+              _buildDynamicTable(quotation.items, config, currency, productImages, colors),
             pw.SizedBox(height: 15),
             _buildTotalsSection(quotation, config, currency, colors, saleData),
             pw.Spacer(),
@@ -125,7 +126,9 @@ class PdfGenerator {
     final bool isSale = saleData != null;
     final bool isQuickSale = isSale && saleData['origen_venta'] == 'pos_rapido';
     
-    final String docTitle = config.documentTitle ?? (isSale ? "COMPROBANTE DE VENTA" : "COTIZACIÓN");
+    final bool isLoan = isSale && saleData['origen_venta'] == 'prestamo_personal';
+    final String defaultTitle = isLoan ? "COMPROBANTE DE PRÉSTAMO" : (isSale ? "COMPROBANTE DE VENTA" : "COTIZACIÓN");
+    final String docTitle = config.documentTitle ?? defaultTitle;
     final String docNumber = isSale ? saleData['id'].toString().padLeft(6, '0') : q.id.toString().padLeft(6, '0');
     final String docDate = isSale && saleData['fecha_venta'] != null ? fmt.format(DateTime.parse(saleData['fecha_venta'])) : fmt.format(DateTime.parse(q.createdAt));
     
@@ -380,7 +383,7 @@ class PdfGenerator {
     
     if (isSale) {
        finalTotal = (saleData['monto_total'] ?? 0.0).toDouble();
-       if (saleData['estado_pago'] == 'pendiente' && (saleData['porcentaje_interes'] ?? 0) > 0) {
+       if ((saleData['porcentaje_interes'] ?? 0) > 0) {
           interestPct = (saleData['porcentaje_interes']).toDouble();
           double abono = (saleData['abono_inicial'] ?? 0.0).toDouble();
           double debtWithInterest = finalTotal - abono;

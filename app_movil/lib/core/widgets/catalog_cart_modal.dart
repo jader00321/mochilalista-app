@@ -93,7 +93,7 @@ class CatalogCartModal extends StatelessWidget {
                         final prod = item.product;
                         
                         final brandName = prov.getBrandName(prod.marcaId);
-                        final bool exceedsStock = cartItem.quantity > pres.stockActual;
+                        final bool exceedsStock = cartItem.quantity > item.displayStock;
 
                         return Card(
                           key: ValueKey(pres.id), 
@@ -158,8 +158,8 @@ class CatalogCartModal extends StatelessWidget {
                                                 ),
                                                 _QtyBtn(icon: Icons.add, isDark: isDark, onTap: () {
                                                   // 🔥 BLOQUEO DE STOCK PARA EL CLIENTE
-                                                  if (isClient && cartItem.quantity >= pres.stockActual) {
-                                                      CustomSnackBar.show(context, message: "Límite de stock alcanzado (${pres.stockActual} disp.)", isError: true);
+                                                  if (isClient && cartItem.quantity >= item.displayStock) {
+                                                      CustomSnackBar.show(context, message: "Límite de stock alcanzado (${item.displayStockText} disp.)", isError: true);
                                                       return;
                                                   }
                                                   isCart ? prov.updateCartItemQuantity(cartItem, cartItem.quantity + 1) : prov.updateUtilityItemQuantity(cartItem, cartItem.quantity + 1);
@@ -175,7 +175,7 @@ class CatalogCartModal extends StatelessWidget {
                                               child: Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                 decoration: BoxDecoration(color: isDark ? Colors.orange[800] : Colors.orange, borderRadius: BorderRadius.circular(6)),
-                                                child: Text("Máx Stock: ${pres.stockActual}", style: textTheme.labelSmall?.copyWith(color: Colors.white)),
+                                                child: Text("Máx Stock: ${item.displayStockText}", style: textTheme.labelSmall?.copyWith(color: Colors.white)),
                                               ),
                                             ),
                                         ],

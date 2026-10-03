@@ -52,8 +52,16 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
               onTap: () => setState(() => _isExpanded = !_isExpanded),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Icon(_isExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                alignment: Alignment.center,
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: widget.isDark ? Colors.grey[600] : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
               ),
             ),
             

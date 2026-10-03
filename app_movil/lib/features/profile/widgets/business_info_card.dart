@@ -130,9 +130,19 @@ class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepA
                         interactionOptions: const InteractionOptions(flags: InteractiveFlag.none), 
                       ),
                       children: [
-                        TileLayer(
-                          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'com.example.app_movil',
+                        ColorFiltered(
+                          colorFilter: isDark 
+                            ? const ColorFilter.matrix([
+                                -1,  0,  0, 0, 255, 
+                                 0, -1,  0, 0, 255,
+                                 0,  0, -1, 0, 255,
+                                 0,  0,  0, 1, 0,
+                              ])
+                            : const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
+                          child: TileLayer(
+                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'com.example.app_movil',
+                          ),
                         ),
                         MarkerLayer(
                           markers: [

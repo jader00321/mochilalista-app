@@ -9,15 +9,23 @@ class BackupProvider with ChangeNotifier {
   String _statusMessage = "";
 
   bool _isAutoBackupEnabled = false;
-  String _autoBackupLocation = 'Local'; // 'Local' o 'Drive'
-  int _autoBackupIntervalDays = 30; // Opciones: 7, 15, 30
+  String _autoBackupType = 'global'; // 'global', 'perfil', 'ambos'
+  String _autoBackupLocation = 'Local'; // 'Local', 'Drive', 'custom'
+  String? _autoBackupCustomPath;
+  int _autoBackupIntervalDays = 7; // Opciones: 1, 7, 15, 30
+  int _lastRegisterTime = 0;
+  int _lastRunTime = 0;
 
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
   String get statusMessage => _statusMessage;
   bool get isAutoBackupEnabled => _isAutoBackupEnabled;
+  String get autoBackupType => _autoBackupType;
   String get autoBackupLocation => _autoBackupLocation;
+  String? get autoBackupCustomPath => _autoBackupCustomPath;
   int get autoBackupIntervalDays => _autoBackupIntervalDays;
+  int get lastRegisterTime => _lastRegisterTime;
+  int get lastRunTime => _lastRunTime;
 
   BackupProvider() {
     _loadPreferences();
@@ -26,17 +34,33 @@ class BackupProvider with ChangeNotifier {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     _isAutoBackupEnabled = prefs.getBool('auto_backup_enabled') ?? false;
+    _autoBackupType = prefs.getString('auto_backup_type') ?? 'global';
     _autoBackupLocation = prefs.getString('auto_backup_location') ?? 'Local';
-    _autoBackupIntervalDays = prefs.getInt('auto_backup_interval') ?? 30;
+    _autoBackupCustomPath = prefs.getString('auto_backup_custom_path');
+    _autoBackupIntervalDays = prefs.getInt('auto_backup_interval') ?? 7;
+    _lastRegisterTime = prefs.getInt('last_auto_backup_register_time') ?? 0;
+    _lastRunTime = prefs.getInt('last_auto_backup_run_time') ?? 0;
     notifyListeners();
   }
 
-  void _reconfigureWorkmanager() {
+  Future<void> reloadTimestamps() async {
+    final prefs = await SharedPreferences.getInstance();
+    _lastRegisterTime = prefs.getInt('last_auto_backup_register_time') ?? 0;
+    _lastRunTime = prefs.getInt('last_auto_backup_run_time') ?? 0;
+    notifyListeners();
+  }
+
+  Future<void> _reconfigureWorkmanager() async {
     final String taskName = "monthlyBackupTask"; 
     
     Workmanager().cancelByUniqueName("backup_periodico_app");
 
     if (_isAutoBackupEnabled) {
+      final prefs = await SharedPreferences.getInstance();
+      _lastRegisterTime = DateTime.now().millisecondsSinceEpoch;
+      await prefs.setInt('last_auto_backup_register_time', _lastRegisterTime);
+      notifyListeners();
+
       Workmanager().registerPeriodicTask(
         "backup_periodico_app",
         taskName,
@@ -54,14 +78,31 @@ class BackupProvider with ChangeNotifier {
     _isAutoBackupEnabled = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('auto_backup_enabled', value);
-    _reconfigureWorkmanager();
+    await _reconfigureWorkmanager();
     notifyListeners();
   }
 
-  Future<void> setAutoBackupLocation(String location) async {
+  Future<void> setAutoBackupType(String value, {int? negocioId, String? negocioNombre}) async {
+    _autoBackupType = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('auto_backup_type', value);
+    if (value == 'perfil' && negocioId != null && negocioNombre != null) {
+      await prefs.setInt('auto_backup_negocio_id', negocioId);
+      await prefs.setString('auto_backup_negocio_nombre', negocioNombre);
+    }
+    notifyListeners();
+  }
+
+  Future<void> setAutoBackupLocation(String location, {String? customPath}) async {
     _autoBackupLocation = location;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('auto_backup_location', location);
+    
+    if (location == 'custom' && customPath != null) {
+      _autoBackupCustomPath = customPath;
+      await prefs.setString('auto_backup_custom_path', customPath);
+    }
+    
     notifyListeners();
   }
 
@@ -69,7 +110,7 @@ class BackupProvider with ChangeNotifier {
     _autoBackupIntervalDays = days;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('auto_backup_interval', days);
-    _reconfigureWorkmanager();
+    await _reconfigureWorkmanager();
     notifyListeners();
   }
 
@@ -102,21 +143,7 @@ class BackupProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> backupToCloud() async {
-    _statusMessage = "Preparando archivo para la Nube...";
-    _setLoading(true);
-    try {
-      bool success = await BackupManager.exportToCloud();
-      if (success) await Future.delayed(const Duration(milliseconds: 800)); // UX Delay
-      return success;
-    } catch (e) {
-      _errorMessage = e.toString();
-      return false;
-    } finally {
-      _setLoading(false);
-      _statusMessage = "";
-    }
-  }
+
 
   Future<bool> restoreDatabase() async {
     _statusMessage = "Inyectando datos en la base de datos...";

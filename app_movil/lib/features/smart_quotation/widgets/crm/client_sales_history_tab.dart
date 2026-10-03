@@ -48,9 +48,11 @@ class ClientSalesHistoryTab extends StatelessWidget {
           final date = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.tryParse(sale.date) ?? DateTime.now());
           
           bool isQuick = sale.origenVenta == 'pos_rapido';
-          String title = isQuick ? "Caja Rápida (Al Contado)" : "Lista Cotizada";
-          IconData icon = isQuick ? Icons.point_of_sale : Icons.list_alt;
-          Color color = isQuick ? Colors.pinkAccent : (isDark ? Colors.purple[300]! : Colors.purple);
+          bool isLoan = sale.origenVenta == 'prestamo_personal';
+          
+          String title = isLoan ? "Préstamo Personal" : (isQuick ? "Caja Rápida (Al Contado)" : "Lista Cotizada");
+          IconData icon = isLoan ? Icons.account_balance : (isQuick ? Icons.point_of_sale : Icons.list_alt);
+          Color color = isLoan ? Colors.orange : (isQuick ? Colors.pinkAccent : (isDark ? Colors.purple[300]! : Colors.purple));
 
           double deudaVenta = sale.trueTotal - sale.montoPagado;
           if (deudaVenta < 0) deudaVenta = 0;
@@ -83,7 +85,7 @@ class ClientSalesHistoryTab extends StatelessWidget {
                         children: [
                           Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                           const SizedBox(height: 6),
-                          Text("Venta #${sale.id} • ${sale.itemsCount} ítems", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[800], fontWeight: FontWeight.w600, fontSize: 14)),
+                          Text(isLoan ? "Préstamo #${sale.displayId}" : "Venta #${sale.displayId} • ${sale.itemsCount} ítems", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[800], fontWeight: FontWeight.w600, fontSize: 14)),
                           const SizedBox(height: 4),
                           Text(date, style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey)),
                           

@@ -18,7 +18,11 @@ class SalesService {
 
       await db.transaction((txn) async {
         try {
+          final nextSeqResult = await txn.rawQuery('SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM ventas WHERE negocio_id = ?', [negocioId]);
+          int sequentialId = (nextSeqResult.first['next_val'] as int?) ?? 1;
+
           saleId = await txn.insert('ventas', {
+            'numero_secuencial': sequentialId,
             'negocio_id': negocioId,
             'creado_por_usuario_id': usuarioId,
             'cotizacion_id': saleData['cotizacion_id'],
@@ -82,18 +86,22 @@ class SalesService {
               int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
               int totalDeduct = qtyReq * quantity;
 
-              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final'], where: 'id = ?', whereArgs: [presId]);
+              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
               if (presCheck.isNotEmpty) {
                 int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-                if (currentStock < totalDeduct) throw Exception("Stock insuficiente para un componente del paquete.");
-                await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - totalDeduct, presId]);
+                int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+                if (factor <= 0) factor = 1;
+                
+                int baseUnitsToDeduct = totalDeduct * factor;
+                if (currentStock < baseUnitsToDeduct) throw Exception("Stock insuficiente para un componente del paquete.");
+                await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - baseUnitsToDeduct, presId]);
                 
                 // Registro en Trazabilidad Histórica (Audit Log)
                 await txn.insert('stock_ledger', {
                   'presentation_id': presId,
                   'negocio_id': negocioId,
                   'tipo_transaccion': 'VENTA',
-                  'cantidad': -totalDeduct,
+                  'cantidad': -baseUnitsToDeduct,
                   'costo_unitario': presCheck.first['costo_unitario_calculado'],
                   'precio_venta': presCheck.first['precio_venta_final'],
                   'origen_id': saleId,
@@ -106,7 +114,7 @@ class SalesService {
 
             final presCheck = await txn.query(
               'presentaciones_producto',
-              columns: ['stock_actual', 'stock_alerta', 'costo_unitario_calculado', 'precio_venta_final'],
+              columns: ['stock_actual', 'stock_alerta', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta'],
               where: 'id = ?',
               whereArgs: [presId],
             );
@@ -115,12 +123,15 @@ class SalesService {
             }
             int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
             int stockAlerta = (presCheck.first['stock_alerta'] as int?) ?? 5;
+            int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+            if (factor <= 0) factor = 1;
             
-            if (currentStock < quantity) {
+            int baseUnitsToDeduct = quantity * factor;
+            if (currentStock < baseUnitsToDeduct) {
               throw Exception("Stock insuficiente para uno de los productos.");
             }
             
-            int newStock = currentStock - quantity;
+            int newStock = currentStock - baseUnitsToDeduct;
 
             await txn.rawUpdate(
               'UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?',
@@ -132,7 +143,7 @@ class SalesService {
               'presentation_id': presId,
               'negocio_id': negocioId,
               'tipo_transaccion': 'VENTA',
-              'cantidad': -quantity,
+              'cantidad': -baseUnitsToDeduct,
               'costo_unitario': presCheck.first['costo_unitario_calculado'],
               'precio_venta': item['unit_price'] ?? item['precio_unitario'] ?? presCheck.first['precio_venta_final'],
               'origen_id': saleId,
@@ -343,7 +354,7 @@ class SalesService {
     }
   }
 
-  Future<void> voidSale(int saleId, int negocioId) async {
+  Future<void> voidSale(int saleId, int negocioId, String motivoAnulacion) async {
     try {
       final db = await dbHelper.database;
       final saleRows = await _repository.getSaleByIdRaw(saleId);
@@ -352,11 +363,14 @@ class SalesService {
 
       await db.transaction((txn) async {
         // 1. Marcar como anulada
-        await txn.update('ventas', {'is_archived': 1}, where: 'id = ?', whereArgs: [saleId]);
+        await txn.update('ventas', {
+          'is_archived': 1,
+          'motivo_anulacion': motivoAnulacion
+        }, where: 'id = ?', whereArgs: [saleId]);
         
-        // 2. Restablecer la cotización si existe
+        // 2. Restablecer la cotización si existe (Marcamos como ANNULLED para que no estorbe en Workbench)
         if (saleRows.first['cotizacion_id'] != null) {
-          await txn.update('smart_quotations', {'status': 'READY'}, where: 'id = ?', whereArgs: [saleRows.first['cotizacion_id']]);
+          await txn.update('smart_quotations', {'status': 'ANNULLED'}, where: 'id = ?', whereArgs: [saleRows.first['cotizacion_id']]);
         }
 
         // 3. Devolver stock
@@ -419,12 +433,59 @@ class SalesService {
         if (saleRows.first['cliente_id'] != null && saleRows.first['estado_entrega'] != 'entregado') {
            await txn.rawUpdate('UPDATE clientes SET entregas_pendientes = MAX(0, entregas_pendientes - 1) WHERE id = ?', [saleRows.first['cliente_id']]);
         }
+        
+        // 5. Registrar devolución financiera si hubo pagos
+        final pagosVenta = await txn.query('pagos', 
+          where: 'venta_id = ? AND metodo_pago != ?', 
+          whereArgs: [saleId, 'saldo_a_favor']
+        );
+        double totalPagadoReal = 0.0;
+        for (var p in pagosVenta) {
+          String? nota = p['nota'] as String?;
+          if (nota != 'Conversión a Saldo a favor') {
+            totalPagadoReal += (p['monto'] as num).toDouble();
+          }
+        }
+
+        if (totalPagadoReal > 0) {
+          await txn.insert('pagos', {
+            'negocio_id': negocioId,
+            'creado_por_usuario_id': saleRows.first['creado_por_usuario_id'],
+            'cliente_id': saleRows.first['cliente_id'],
+            'venta_id': null,  // No pertenece a ninguna venta activa
+            'monto': totalPagadoReal,
+            'metodo_pago': 'devolucion',
+            'nota': 'Devolución por anulación de Venta #$saleId',
+            'fecha_pago': DateTime.now().toIso8601String(),
+          });
+        }
+        
+        // 6. Desvincular pagos originales para evitar que se sumen si la venta es restaurada
+        await txn.rawUpdate(
+          "UPDATE pagos SET venta_id = NULL, nota = COALESCE(nota, '') || ' (Desvinculado por Anulación Venta #$saleId)' WHERE venta_id = ?", 
+          [saleId]
+        );
+        
+        // 7. Resetear la deuda de la venta y sus cuotas (si se restaura, nacerá como pendiente)
+        await txn.update('ventas', {
+          'monto_pagado': 0,
+          'abono_inicial': 0,
+          'estado_pago': 'pendiente'
+        }, where: 'id = ?', whereArgs: [saleId]);
+        
+        await txn.update('cuotas', {
+          'monto_pagado': 0,
+          'estado': 'pendiente'
+        }, where: 'venta_id = ?', whereArgs: [saleId]);
       });
       
-      // Fuera de transacción: recalcular deuda
+      // Fuera de transacción: recalcular deuda y reputación
       if (saleRows.first['cliente_id'] != null) {
         final clientService = ClientService();
-        await clientService.recalculateClientDebt(saleRows.first['cliente_id'] as int);
+        int clientId = saleRows.first['cliente_id'] as int;
+        await clientService.recalculateClientDebt(clientId);
+        await clientService.recalculateClientSaldoAFavor(clientId);
+        await clientService.recalculateClientReputation(clientId);
       }
     } catch (e) {
       throw Exception("Error local al anular venta: $e");
@@ -540,7 +601,10 @@ class SalesService {
       // Fuera de transacción: recalcular deuda
       if (saleRows.first['cliente_id'] != null) {
         final clientService = ClientService();
-        await clientService.recalculateClientDebt(saleRows.first['cliente_id'] as int);
+        int clientId = saleRows.first['cliente_id'] as int;
+        await clientService.recalculateClientDebt(clientId);
+        await clientService.recalculateClientSaldoAFavor(clientId);
+        await clientService.recalculateClientReputation(clientId);
       }
     } catch (e) {
       throw Exception("Error local al restaurar venta: $e");

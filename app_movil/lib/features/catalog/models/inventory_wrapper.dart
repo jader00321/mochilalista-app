@@ -1,13 +1,10 @@
 import 'package:app_movil/features/catalog/models/product_model.dart';
 
 class InventoryWrapper {
-  final Product product; 
-  final ProductPresentation presentation; 
+  final Product product;
+  final ProductPresentation presentation;
 
-  InventoryWrapper({
-    required this.product,
-    required this.presentation,
-  });
+  InventoryWrapper({required this.product, required this.presentation});
 
   factory InventoryWrapper.fromJson(Map<String, dynamic> json) {
     return InventoryWrapper(
@@ -20,31 +17,50 @@ class InventoryWrapper {
     String unidad = presentation.unidadVenta ?? "Unidad";
     return "${product.nombre} - $unidad";
   }
-  
+
   String get displayNameDetail {
     String name = product.nombre;
-    if (presentation.nombreEspecifico != null && presentation.nombreEspecifico!.isNotEmpty) {
+    if (presentation.nombreEspecifico != null &&
+        presentation.nombreEspecifico!.isNotEmpty) {
       name += " ${presentation.nombreEspecifico}";
     }
     return name;
   }
-  
-  double get effectivePrice => (presentation.precioOferta != null && presentation.precioOferta! > 0) 
-      ? presentation.precioOferta! 
+
+  double get effectivePrice =>
+      (presentation.precioOferta != null && presentation.precioOferta! > 0)
+      ? presentation.precioOferta!
       : presentation.precioVentaFinal;
-      
-  bool get hasOffer => presentation.precioOferta != null && presentation.precioOferta! > 0;
+
+  bool get hasOffer =>
+      presentation.precioOferta != null && presentation.precioOferta! > 0;
 
   String get marginProfitInfo {
     if (presentation.factorGananciaVenta != null) {
-      int porcentaje = ((presentation.factorGananciaVenta! - 1.0) * 100).round();
+      int porcentaje = ((presentation.factorGananciaVenta! - 1.0) * 100)
+          .round();
       return "+$porcentaje% Margen";
     }
     return "Margen No Definido";
   }
 
-  bool get isOutOfStock => presentation.stockActual <= 0;
-  
-  bool get isLowStock => presentation.stockActual > 0 && 
-                         presentation.stockActual <= (presentation.stockAlerta ?? 5);
+  bool get isOutOfStock => displayStock <= 0;
+
+  bool get isLowStock =>
+      displayStock > 0 &&
+      displayStock <= (presentation.stockAlerta ?? 5);
+
+  /// Stock real para validaciones de carrito (en unidades de venta)
+  int get displayStockForValidation => displayStock;
+
+  int get displayStock {
+    int factor = presentation.unidadesPorVenta;
+    if (factor <= 0) factor = 1;
+    return presentation.stockActual ~/ factor;
+  }
+
+  String get displayStockText {
+    String unidad = presentation.unidadVenta ?? presentation.umpCompra ?? "Unidad";
+    return "$displayStock $unidad";
+  }
 }

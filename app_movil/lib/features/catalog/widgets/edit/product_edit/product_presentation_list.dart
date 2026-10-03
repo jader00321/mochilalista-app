@@ -33,12 +33,12 @@ class ProductPresentationList extends StatelessWidget {
         var ctrlMap = entry.value;
 
         return ProductPresentationCard(
-          key: ValueKey(ctrlMap['id']), 
+          key: ValueKey(ctrlMap['id']),
           controllerMap: ctrlMap,
           onDelete: () => deletePresentation(index, isDark),
           onStateChange: (val) {
-             ctrlMap['estado'] = val ? 'publico' : 'privado';
-             onStateChange();
+            ctrlMap['estado'] = val ? 'publico' : 'privado';
+            onStateChange();
           },
           onCreateLeftover: (leftoverStock, costoBaseIndiv) {
             handleCreateLeftover(ctrlMap['id'], leftoverStock, costoBaseIndiv);
@@ -47,27 +47,27 @@ class ProductPresentationList extends StatelessWidget {
             invalidateLeftover(ctrlMap['id']);
           },
           providerDropdown: SafeDropdown<ProviderModel>(
-            label: "Proveedor Específico", 
-            icon: null, 
-            value: ctrlMap['providerId'], 
+            label: "Proveedor Específico",
+            icon: null,
+            value: ctrlMap['providerId'],
             items: providerListForDropdown,
-            getId: (p) => p.id, 
-            getName: (p) => p.nombreEmpresa, 
-            isActive: (p) => p.activo == true, 
+            getId: (p) => p.id,
+            getName: (p) => p.nombreEmpresa,
+            isActive: (p) => p.activo == true,
             allowNull: true,
-            onChanged: (v) { 
-              if (v == -1) { 
-                handleCreateProvider(isDark).then((id) { 
+            onChanged: (v) {
+              if (v == -1) {
+                handleCreateProvider(isDark).then((id) {
                   if (id != null) {
                     ctrlMap['providerId'] = id;
                     onStateChange();
                   }
-                }); 
-              } else { 
+                });
+              } else {
                 ctrlMap['providerId'] = v == 0 ? null : v;
                 onStateChange();
-              } 
-            }
+              }
+            },
           ),
         );
       }).toList(),
