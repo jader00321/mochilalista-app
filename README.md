@@ -2,10 +2,10 @@
   <img src="app_movil/assets/logo.png" alt="Mochilalista Logo" width="200">
 </p>
 
-<h1 align="center">Mochilalista App v4.0 (Offline-First)</h1>
+<h1 align="center">Mochilalista App v8.6 — Versión Offline Funcional</h1>
 
 <p align="center">
-  <strong>Plataforma Inteligente para la Gestión de Ventas, CRM y Automatización de Inventarios.</strong>
+  <strong>🔒 Rama de Respaldo — Versión base estable y funcional</strong>
 </p>
 
 <p align="center">
@@ -13,8 +13,28 @@
   <img src="https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white" alt="Dart">
   <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite">
   <img src="https://img.shields.io/badge/Gemini_AI-8E75B2?style=for-the-badge&logo=google&logoColor=white" alt="Gemini">
-  <img src="https://img.shields.io/badge/Version-4.0.0-success?style=for-the-badge" alt="Version 4.0">
+  <img src="https://img.shields.io/badge/Version-8.6.0_Offline-success?style=for-the-badge" alt="Version 8.6">
+  <img src="https://img.shields.io/badge/Estado-Funcional_✅-brightgreen?style=for-the-badge" alt="Funcional">
 </p>
+
+---
+
+> ### ⚠️ INFORMACIÓN DE ESTA RAMA
+>
+> | Campo | Detalle |
+> |-------|---------|
+> | **Versión** | v8.6 Offline Funcional |
+> | **Fecha de esta versión** | 12 de Octubre de 2026 |
+> | **Estado** | ✅ Funcional y estable — Lista para uso en producción |
+> | **Propósito de esta rama** | Preservar la versión base original ANTES de implementar las modificaciones planificadas |
+> | **Qué viene después** | Las mejoras se implementarán en la rama `dev/mejoras-v9.0-comercializacion-seguridad` |
+>
+> **Esta rama NO debe recibir modificaciones.** Sirve como respaldo de la versión funcional y estable de la app antes de:
+> - Implementar las mejoras del Plan de Trabajo Maestro (correcciones de bugs, mejoras de UX, nuevas funciones)
+> - Implementar el futuro modelo de comercialización y venta
+> - Implementar el nuevo sistema de seguridad planificado
+>
+> Si necesitas la versión en desarrollo con las mejoras, cambia a la rama `dev/mejoras-v9.0-comercializacion-seguridad`.
 
 ---
 
