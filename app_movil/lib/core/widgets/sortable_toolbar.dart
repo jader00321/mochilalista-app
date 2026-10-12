@@ -6,6 +6,7 @@ class SortableToolbar extends StatelessWidget {
   final SortType currentSort;
   final bool isAscending;
   final Function(SortType) onSortChanged;
+  final Widget? trailing; // 🔧 TAREA 2.4: Widget opcional extra en la toolbar
 
   const SortableToolbar({
     super.key,
@@ -13,6 +14,7 @@ class SortableToolbar extends StatelessWidget {
     required this.currentSort,
     required this.isAscending,
     required this.onSortChanged,
+    this.trailing,
   });
 
   @override
@@ -37,9 +39,13 @@ class SortableToolbar extends StatelessWidget {
             ),
           ),
 
-          // 2. Botones de Ordenamiento 
+          // 2. Botones de Ordenamiento + trailing
           Row(
             children: [
+              if (trailing != null) ...[
+                trailing!,
+                const SizedBox(width: 8),
+              ],
               Text("Ordenar:", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey)),
               const SizedBox(width: 8),
               

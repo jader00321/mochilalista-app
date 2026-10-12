@@ -40,12 +40,23 @@ class _ProviderInfoCardState extends State<ProviderInfoCard> {
       } catch (_) {}
     }
 
+    // =========================================================================
+    // 🔧 TAREA 2.5: Validación de fecha en facturas
+    // Limitar: no futura y no más de 1 año antigua
+    // =========================================================================
+    final now = DateTime.now();
+    final oneYearAgo = DateTime(now.year - 1, now.month, now.day);
+    
+    // Si la fecha inicial está fuera del rango, ajustarla
+    if (initialDate.isAfter(now)) initialDate = now;
+    if (initialDate.isBefore(oneYearAgo)) initialDate = now;
+
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      helpText: 'SELECCIONAR FECHA',
+      firstDate: oneYearAgo,
+      lastDate: now, // No permitir fechas futuras
+      helpText: 'SELECCIONAR FECHA DE EMISIÓN',
       cancelText: 'CANCELAR',
       confirmText: 'ACEPTAR',
       builder: (context, child) {
@@ -72,6 +83,31 @@ class _ProviderInfoCardState extends State<ProviderInfoCard> {
       setState(() {
         widget.dateCtrl.text = DateFormat('dd/MM/yyyy').format(picked);
       });
+
+      // Advertencia si la fecha es antigua (más de 6 meses)
+      final sixMonthsAgo = DateTime(now.year, now.month - 6, now.day);
+      if (picked.isBefore(sixMonthsAgo) && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.info_outline, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "⚠️ La fecha seleccionada es de hace más de 6 meses (${DateFormat('dd/MM/yyyy').format(picked)})",
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.orange[800],
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     }
   }
 

@@ -6,6 +6,7 @@ import 'package:app_movil/features/catalog/models/brand_model.dart';
 import 'package:app_movil/features/catalog/models/provider_model.dart';
 
 import 'package:app_movil/core/services/master_data_cache.dart';
+import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/features/catalog/services/product_service.dart';
 import 'package:app_movil/core/services/image_service.dart';
 
@@ -432,6 +433,78 @@ class InventoryProvider with ChangeNotifier {
       return true;
     }
     return false;
+  }
+
+  // =========================================================================
+  // 🔧 TAREA 2.4: Sistema de Fusión de Duplicados
+  // Permite fusionar dos registros: reasigna las FK del duplicado al que
+  // permanece y luego elimina el duplicado
+  // =========================================================================
+
+  /// Fusiona dos marcas: reasigna productos del duplicado a la que permanece
+  Future<bool> mergeBrands(int keepId, int removeId) async {
+    try {
+      final db = await LocalDatabase.instance.database;
+      await db.transaction((txn) async {
+        // Reasignar todos los productos que usan la marca duplicada
+        await txn.rawUpdate(
+          'UPDATE productos SET marca_id = ? WHERE marca_id = ?',
+          [keepId, removeId],
+        );
+        // Eliminar la marca duplicada
+        await txn.delete('marcas', where: 'id = ?', whereArgs: [removeId]);
+      });
+      await loadMasterData();
+      return true;
+    } catch (e) {
+      debugPrint("Error fusionando marcas: $e");
+      return false;
+    }
+  }
+
+  /// Fusiona dos categorías: reasigna productos del duplicado a la que permanece
+  Future<bool> mergeCategories(int keepId, int removeId) async {
+    try {
+      final db = await LocalDatabase.instance.database;
+      await db.transaction((txn) async {
+        await txn.rawUpdate(
+          'UPDATE productos SET categoria_id = ? WHERE categoria_id = ?',
+          [keepId, removeId],
+        );
+        await txn.delete('categorias', where: 'id = ?', whereArgs: [removeId]);
+      });
+      await loadMasterData();
+      return true;
+    } catch (e) {
+      debugPrint("Error fusionando categorías: $e");
+      return false;
+    }
+  }
+
+  /// Fusiona dos proveedores: reasigna productos, presentaciones y facturas
+  Future<bool> mergeProviders(int keepId, int removeId) async {
+    try {
+      final db = await LocalDatabase.instance.database;
+      await db.transaction((txn) async {
+        // Reasignar presentaciones que usan el proveedor duplicado
+        await txn.rawUpdate(
+          'UPDATE presentaciones_producto SET proveedor_id = ? WHERE proveedor_id = ?',
+          [keepId, removeId],
+        );
+        // Reasignar facturas de carga
+        await txn.rawUpdate(
+          'UPDATE facturas_carga SET proveedor_id = ? WHERE proveedor_id = ?',
+          [keepId, removeId],
+        );
+        // Eliminar el proveedor duplicado
+        await txn.delete('proveedores', where: 'id = ?', whereArgs: [removeId]);
+      });
+      await loadMasterData();
+      return true;
+    } catch (e) {
+      debugPrint("Error fusionando proveedores: $e");
+      return false;
+    }
   }
 
   // 🔥 SOLUCIÓN A LA CARGA INFINITA

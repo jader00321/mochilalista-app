@@ -7,6 +7,8 @@ import 'package:app_movil/core/widgets/master_item_tile.dart';
 import 'package:app_movil/core/widgets/master_detail_modal.dart';
 import 'package:app_movil/core/widgets/sortable_toolbar.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/duplicate_warning_dialog.dart';
+import 'package:app_movil/core/widgets/duplicate_merge_modal.dart';
 
 class ProvidersTab extends StatefulWidget {
   const ProvidersTab({super.key});
@@ -209,12 +211,75 @@ class _ProvidersTabState extends State<ProvidersTab> {
                 context,
                 listen: false,
               );
+              final newName = nameCtrl.text.trim();
+              final newRuc = rucCtrl.text.trim();
+
+              // =========================================================
+              // 🔧 TAREA 2.2: Validación de duplicados al crear proveedores
+              // Busca por nombre similar Y por RUC idéntico
+              // =========================================================
+              if (!isEditing) {
+                final existingProviders = provider.providers;
+                final duplicates = <Map<String, dynamic>>[];
+                final addedIds = <int>{};
+                
+                for (final prov in existingProviders) {
+                  bool isDup = false;
+                  String reason = '';
+
+                  // Verificar por RUC idéntico
+                  if (newRuc.isNotEmpty && prov.ruc != null && prov.ruc!.isNotEmpty) {
+                    if (newRuc == prov.ruc) {
+                      isDup = true;
+                      reason = 'RUC idéntico: ${prov.ruc}';
+                    }
+                  }
+
+                  // Verificar por nombre similar
+                  if (!isDup && DuplicateDetector.areSimilar(newName, prov.nombreEmpresa)) {
+                    isDup = true;
+                    reason = 'Nombre similar';
+                  }
+
+                  if (isDup && !addedIds.contains(prov.id)) {
+                    addedIds.add(prov.id);
+                    duplicates.add({
+                      'id': prov.id,
+                      'name': prov.nombreEmpresa,
+                      'extra': '$reason${prov.ruc != null && prov.ruc!.isNotEmpty ? " • RUC: ${prov.ruc}" : ""}',
+                    });
+                  }
+                }
+
+                if (duplicates.isNotEmpty && context.mounted) {
+                  final result = await DuplicateWarningDialog.show(
+                    context,
+                    entityType: 'proveedor',
+                    newName: newName,
+                    duplicates: duplicates,
+                    isDark: isDark,
+                  );
+
+                  if (result == null) return;
+                  if (result > 0) {
+                    if (context.mounted) {
+                      Navigator.pop(ctx);
+                      CustomSnackBar.show(
+                        context,
+                        message: 'Se usará el proveedor existente: ${duplicates.firstWhere((d) => d['id'] == result)['name']}',
+                      );
+                    }
+                    return;
+                  }
+                }
+              }
+
               bool success = false;
 
               if (isEditing) {
                 success = await provider.updateProvider(
                   providerItem.id,
-                  nameCtrl.text.trim(),
+                  newName,
                   ruc: rucCtrl.text.trim(),
                   contacto: contactCtrl.text.trim(),
                   telefono: phoneCtrl.text.trim(),
@@ -222,7 +287,7 @@ class _ProvidersTabState extends State<ProvidersTab> {
                 );
               } else {
                 final id = await provider.createProvider(
-                  nameCtrl.text.trim(),
+                  newName,
                   ruc: rucCtrl.text.trim(),
                   contacto: contactCtrl.text.trim(),
                   telefono: phoneCtrl.text.trim(),
@@ -376,6 +441,19 @@ class _ProvidersTabState extends State<ProvidersTab> {
                 currentSort: provider.provSort,
                 isAscending: provider.provAsc,
                 onSortChanged: (type) => provider.sortProviders(type),
+                trailing: !isGuest ? IconButton(
+                  icon: Icon(
+                    Icons.find_replace,
+                    color: isDark ? Colors.purple[300] : Colors.purple[700],
+                    size: 22,
+                  ),
+                  tooltip: 'Detectar Duplicados',
+                  onPressed: () => DuplicateMergeModal.show(
+                    context,
+                    type: MergeEntityType.provider,
+                    isDark: isDark,
+                  ),
+                ) : null,
               ),
 
               Expanded(

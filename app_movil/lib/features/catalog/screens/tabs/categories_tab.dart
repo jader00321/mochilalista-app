@@ -7,6 +7,8 @@ import 'package:app_movil/core/widgets/master_item_tile.dart';
 import 'package:app_movil/core/widgets/master_detail_modal.dart';
 import 'package:app_movil/core/widgets/sortable_toolbar.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/duplicate_warning_dialog.dart';
+import 'package:app_movil/core/widgets/duplicate_merge_modal.dart';
 
 class CategoriesTab extends StatefulWidget {
   const CategoriesTab({super.key});
@@ -203,17 +205,59 @@ class _CategoriesTabState extends State<CategoriesTab> {
                 context,
                 listen: false,
               );
+              final newName = nameCtrl.text.trim();
+
+              // =========================================================
+              // 🔧 TAREA 2.3: Validación de duplicados al crear categorías
+              // =========================================================
+              if (!isEditing) {
+                final existingCategories = provider.categories;
+                final duplicates = <Map<String, dynamic>>[];
+                
+                for (final cat in existingCategories) {
+                  if (DuplicateDetector.areSimilar(newName, cat.nombre)) {
+                    duplicates.add({
+                      'id': cat.id,
+                      'name': cat.nombre,
+                      'extra': '${cat.productsCount} productos vinculados',
+                    });
+                  }
+                }
+
+                if (duplicates.isNotEmpty && context.mounted) {
+                  final result = await DuplicateWarningDialog.show(
+                    context,
+                    entityType: 'categoría',
+                    newName: newName,
+                    duplicates: duplicates,
+                    isDark: isDark,
+                  );
+
+                  if (result == null) return;
+                  if (result > 0) {
+                    if (context.mounted) {
+                      Navigator.pop(ctx);
+                      CustomSnackBar.show(
+                        context,
+                        message: 'Se usará la categoría existente: ${duplicates.firstWhere((d) => d['id'] == result)['name']}',
+                      );
+                    }
+                    return;
+                  }
+                }
+              }
+
               bool success = false;
 
               if (isEditing) {
                 success = await provider.updateCategory(
                   category.id,
-                  nameCtrl.text.trim(),
+                  newName,
                   descripcion: descCtrl.text.trim(),
                 );
               } else {
                 final id = await provider.createCategory(
-                  nameCtrl.text.trim(),
+                  newName,
                   descripcion: descCtrl.text.trim(),
                 );
                 success = id != null;
@@ -312,6 +356,19 @@ class _CategoriesTabState extends State<CategoriesTab> {
                 currentSort: provider.catSort,
                 isAscending: provider.catAsc,
                 onSortChanged: (type) => provider.sortCategories(type),
+                trailing: !isGuest ? IconButton(
+                  icon: Icon(
+                    Icons.find_replace,
+                    color: isDark ? Colors.blue[300] : Colors.blue[800],
+                    size: 22,
+                  ),
+                  tooltip: 'Detectar Duplicados',
+                  onPressed: () => DuplicateMergeModal.show(
+                    context,
+                    type: MergeEntityType.category,
+                    isDark: isDark,
+                  ),
+                ) : null,
               ),
 
               Expanded(

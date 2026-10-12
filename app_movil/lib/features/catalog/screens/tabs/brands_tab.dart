@@ -8,6 +8,8 @@ import 'package:app_movil/core/widgets/master_detail_modal.dart';
 import 'package:app_movil/core/widgets/sortable_toolbar.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/image_picker_field.dart';
+import 'package:app_movil/core/widgets/duplicate_warning_dialog.dart';
+import 'package:app_movil/core/widgets/duplicate_merge_modal.dart';
 
 class BrandsTab extends StatefulWidget {
   const BrandsTab({super.key});
@@ -137,6 +139,19 @@ class _BrandsTabState extends State<BrandsTab> {
                 currentSort: provider.brandSort,
                 isAscending: provider.brandAsc,
                 onSortChanged: (type) => provider.sortBrands(type),
+                trailing: !isGuest ? IconButton(
+                  icon: Icon(
+                    Icons.find_replace,
+                    color: isDark ? Colors.orange[300] : Colors.orange[800],
+                    size: 22,
+                  ),
+                  tooltip: 'Detectar Duplicados',
+                  onPressed: () => DuplicateMergeModal.show(
+                    context,
+                    type: MergeEntityType.brand,
+                    isDark: isDark,
+                  ),
+                ) : null,
               ),
 
               Expanded(
@@ -328,21 +343,66 @@ class _BrandFormDialogState extends State<_BrandFormDialog> {
       return;
     }
 
-    setState(() => _isLoading = true);
-
     final provider = Provider.of<InventoryProvider>(context, listen: false);
     final isEditing = widget.brand != null;
+    final newName = _nameCtrl.text.trim();
+
+    // =========================================================================
+    // 🔧 TAREA 2.1: Validación de duplicados al crear marcas
+    // Busca marcas con nombre similar (case-insensitive, sin acentos)
+    // =========================================================================
+    if (!isEditing) {
+      final existingBrands = provider.brands;
+      final duplicates = <Map<String, dynamic>>[];
+      
+      for (final brand in existingBrands) {
+        if (DuplicateDetector.areSimilar(newName, brand.nombre)) {
+          duplicates.add({
+            'id': brand.id,
+            'name': brand.nombre,
+            'extra': '${brand.productsCount} productos vinculados',
+          });
+        }
+      }
+
+      if (duplicates.isNotEmpty && mounted) {
+        final result = await DuplicateWarningDialog.show(
+          context,
+          entityType: 'marca',
+          newName: newName,
+          duplicates: duplicates,
+          isDark: widget.isDark,
+        );
+
+        if (result == null) return; // Cancelado
+        if (result > 0) {
+          // Usar la existente: cerrar el diálogo y notificar
+          if (mounted) {
+            Navigator.pop(context);
+            CustomSnackBar.show(
+              context,
+              message: 'Se usará la marca existente: ${duplicates.firstWhere((d) => d['id'] == result)['name']}',
+            );
+          }
+          return;
+        }
+        // result == -1: Crear de todos modos, continuar...
+      }
+    }
+
+    setState(() => _isLoading = true);
+
     bool success = false;
 
     if (isEditing) {
       success = await provider.updateBrand(
         widget.brand!.id,
-        _nameCtrl.text.trim(),
+        newName,
         urlImagen: _imgCtrl.text.trim(),
       );
     } else {
       final id = await provider.createBrand(
-        _nameCtrl.text.trim(),
+        newName,
         urlImagen: _imgCtrl.text.trim(),
       );
       success = id != null;
