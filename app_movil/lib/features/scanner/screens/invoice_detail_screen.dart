@@ -28,6 +28,9 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   // 🔥 Control del Toggle del visor de Auditoría
   bool _showRawJson = false;
 
+  // 🔧 TAREA 1.4: Presentaciones vinculadas para facturas manuales
+  List<Map<String, dynamic>> _linkedPresentations = [];
+
   final ScrollController _scrollController = ScrollController();
   bool _showScrollToTop = false;
 
@@ -65,9 +68,16 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     final invcProv = Provider.of<InvoiceProvider>(context, listen: false);
     final invoice = await invcProv.getInvoiceDetail(widget.invoiceId);
 
+    // 🔧 TAREA 1.4: Si la factura es manual (sin datos IA), cargar presentaciones vinculadas
+    List<Map<String, dynamic>> linked = [];
+    if (invoice != null && invoice.datosCrudosIaJson == null) {
+      linked = await invcProv.getLinkedPresentations(widget.invoiceId);
+    }
+
     if (mounted) {
       setState(() {
         _invoice = invoice;
+        _linkedPresentations = linked;
         _isLoading = false;
       });
     }
@@ -324,12 +334,15 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     final statusColor = _getStatusColor(_invoice!.estado, isDark);
     final providerName = invProv.getProviderName(_invoice!.proveedorId);
 
-    // Obtener los ítems extraídos del JSON
+    // Obtener los ítems extraídos del JSON (facturas escaneadas con IA)
     List<dynamic> extractedItems = [];
     if (_invoice!.datosCrudosIaJson != null &&
         _invoice!.datosCrudosIaJson!['items'] != null) {
       extractedItems = _invoice!.datosCrudosIaJson!['items'];
     }
+
+    // 🔧 TAREA 1.4: Determinar si es factura manual
+    final bool isManualInvoice = _invoice!.datosCrudosIaJson == null;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -468,6 +481,26 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                       ? Colors.grey[500]
                                       : Colors.grey[600],
                                 ),
+                              ),
+                              // 🔧 TAREA 1.4: Mostrar tipo de factura debajo de la fecha
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Icon(
+                                    isManualInvoice ? Icons.edit_note_rounded : Icons.document_scanner_outlined,
+                                    size: 14,
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    isManualInvoice ? "Factura Manual" : "Escaneada con IA",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
                               ),
                               Text(
                                 DateFormat(
@@ -901,7 +934,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                         ),
                                       ),
                                     );
-                                  } else if (extractedItems.isEmpty) {
+                                  } else if (extractedItems.isEmpty && _linkedPresentations.isEmpty) {
                                     return Container(
                                       width: double.infinity,
                                       padding: const EdgeInsets.all(24),
@@ -938,7 +971,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                           ),
                                           const SizedBox(height: 8),
                                           Text(
-                                            "Esta factura no tiene productos extraídos o se procesó con una versión anterior del sistema.",
+                                            "Esta factura no tiene productos extraídos o vinculados.",
                                             textAlign: TextAlign.center,
                                             style: TextStyle(
                                               fontSize: 12,
@@ -949,6 +982,99 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                           ),
                                         ],
                                       ),
+                                    );
+                                  } else if (extractedItems.isEmpty && _linkedPresentations.isNotEmpty) {
+                                    // =========================================================
+                                    // 🔧 TAREA 1.4: Vista para facturas manuales
+                                    // Mostrar las presentaciones vinculadas por factura_carga_id
+                                    // =========================================================
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal[50],
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.edit_note_rounded, size: 16, color: isDark ? Colors.teal[300] : Colors.teal[700]),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  "${_linkedPresentations.length} presentaciones vinculadas manualmente",
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: isDark ? Colors.teal[200] : Colors.teal[800],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        ListView.separated(
+                                          shrinkWrap: true,
+                                          physics: const NeverScrollableScrollPhysics(),
+                                          itemCount: _linkedPresentations.length,
+                                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                          itemBuilder: (ctx, i) {
+                                            final pres = _linkedPresentations[i];
+                                            final pCosto = (pres['precio_costo'] as num?)?.toDouble();
+                                            final pVenta = (pres['precio_venta'] as num?)?.toDouble();
+                                            final stock = (pres['cantidad_stock'] as num?)?.toDouble();
+                                            return Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: isDark ? Colors.white10 : Colors.grey[50],
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: isDark ? Colors.transparent : Colors.grey.shade300,
+                                                ),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    pres['producto_nombre'] ?? "Producto",
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: isDark ? Colors.white : Colors.black87,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    pres['presentacion_nombre'] ?? "Presentación",
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Wrap(
+                                                    spacing: 12,
+                                                    runSpacing: 8,
+                                                    children: [
+                                                      if (pCosto != null)
+                                                        _auditTag("Costo", "S/ ${pCosto.toStringAsFixed(2)}", isDark),
+                                                      if (pVenta != null)
+                                                        _auditTag("Venta", "S/ ${pVenta.toStringAsFixed(2)}", isDark),
+                                                      if (stock != null)
+                                                        _auditTag("Stock", "${stock.toStringAsFixed(stock.truncateToDouble() == stock ? 0 : 1)}", isDark),
+                                                      if (pres['unidad_medida'] != null)
+                                                        _auditTag("UMP", pres['unidad_medida'].toString(), isDark),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
                                     );
                                   } else {
                                     return ListView.separated(

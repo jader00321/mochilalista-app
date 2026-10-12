@@ -142,140 +142,160 @@ class BusinessBackupService {
     return backupFile;
   }
 
-  // Exportar negocio específico
+  // =========================================================================
+  // 🔧 TAREA 1.3: Método compartido para recopilar datos de backup
+  // Elimina la duplicación de ~250 líneas entre exportBusiness y exportBusinessToFile
+  // =========================================================================
+  static Future<Map<String, dynamic>> _collectBackupData(int negocioId, {bool includeSecurityPin = false}) async {
+    final db = await LocalDatabase.instance.database;
+    
+    Map<String, dynamic> backupData = {
+      'version': 1,
+      'export_date': DateTime.now().toIso8601String(),
+      'negocio_id': negocioId,
+      'has_security_pin': includeSecurityPin,
+      'data': {}
+    };
+
+    // 1. Negocio y Usuarios
+    backupData['data']['negocios'] = await db.query('negocios', where: 'id = ?', whereArgs: [negocioId]);
+    
+    final negociosList = backupData['data']['negocios'] as List;
+    if (negociosList.isNotEmpty) {
+        int idDueno = negociosList.first['id_dueno'];
+        final userRow = await db.query('usuarios', where: 'id = ?', whereArgs: [idDueno]);
+        if (userRow.isNotEmpty) {
+           var u = Map<String,dynamic>.from(userRow.first);
+           if (includeSecurityPin) {
+              final storage = FlutterSecureStorage();
+              String? pin = await storage.read(key: 'pin_$idDueno');
+              u['password_hash'] = pin; // Usamos este campo en el JSON para transportarlo
+           } else {
+              u['password_hash'] = null; 
+           }
+           backupData['data']['usuarios'] = [u];
+        }
+    }
+    
+    backupData['data']['codigos_acceso_negocio'] = await db.query('codigos_acceso_negocio', where: 'negocio_id = ?', whereArgs: [negocioId]);
+
+    // 2. Catálogo e Inventario
+    backupData['data']['categorias'] = await db.query('categorias', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    backupData['data']['marcas'] = await db.query('marcas', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    backupData['data']['proveedores'] = await db.query('proveedores', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    backupData['data']['productos'] = await db.query('productos', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    backupData['data']['facturas_carga'] = await db.query('facturas_carga', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    
+    // Presentaciones (asociadas a productos del negocio)
+    final productIds = (backupData['data']['productos'] as List).map((p) => p['id']).toList();
+    if (productIds.isNotEmpty) {
+      backupData['data']['presentaciones_producto'] = await db.query(
+        'presentaciones_producto',
+        where: 'producto_id IN (${List.filled(productIds.length, '?').join(',')})',
+        whereArgs: productIds,
+      );
+    } else {
+      backupData['data']['presentaciones_producto'] = [];
+    }
+
+    // 3. CRM y Cotizaciones
+    backupData['data']['clientes'] = await db.query('clientes', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    backupData['data']['smart_quotations'] = await db.query('smart_quotations', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    
+    final quoteIds = (backupData['data']['smart_quotations'] as List).map((q) => q['id']).toList();
+    if (quoteIds.isNotEmpty) {
+      backupData['data']['smart_quotation_items'] = await db.query(
+        'smart_quotation_items',
+        where: 'quotation_id IN (${List.filled(quoteIds.length, '?').join(',')})',
+        whereArgs: quoteIds,
+      );
+    } else {
+      backupData['data']['smart_quotation_items'] = [];
+    }
+
+    // 4. Ventas y Pagos
+    backupData['data']['ventas'] = await db.query('ventas', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    final saleIds = (backupData['data']['ventas'] as List).map((v) => v['id']).toList();
+    
+    if (saleIds.isNotEmpty) {
+      backupData['data']['venta_items'] = await db.query(
+        'venta_items',
+        where: 'venta_id IN (${List.filled(saleIds.length, '?').join(',')})',
+        whereArgs: saleIds,
+      );
+      backupData['data']['cuotas'] = await db.query(
+        'cuotas',
+        where: 'venta_id IN (${List.filled(saleIds.length, '?').join(',')})',
+        whereArgs: saleIds,
+      );
+    } else {
+      backupData['data']['venta_items'] = [];
+      backupData['data']['cuotas'] = [];
+    }
+
+    backupData['data']['pagos'] = await db.query('pagos', where: 'negocio_id = ?', whereArgs: [negocioId]);
+
+    // 5. Promociones
+    backupData['data']['campanas_promocionales'] = await db.query('campanas_promocionales', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    backupData['data']['paquetes'] = await db.query('paquetes', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    
+    final pkgIds = (backupData['data']['paquetes'] as List).map((p) => p['id']).toList();
+    if (pkgIds.isNotEmpty) {
+      backupData['data']['items_paquete'] = await db.query(
+        'items_paquete',
+        where: 'paquete_id IN (${List.filled(pkgIds.length, '?').join(',')})',
+        whereArgs: pkgIds,
+      );
+    } else {
+      backupData['data']['items_paquete'] = [];
+    }
+
+    // Campañas y Reglas de Promoción
+    final campaignIds = (backupData['data']['campanas_promocionales'] as List).map((c) => c['id']).toList();
+    if (campaignIds.isNotEmpty) {
+      backupData['data']['reglas_promocion'] = await db.query(
+        'reglas_promocion',
+        where: 'campana_id IN (${List.filled(campaignIds.length, '?').join(',')})',
+        whereArgs: campaignIds,
+      );
+    } else {
+      backupData['data']['reglas_promocion'] = [];
+    }
+
+    // Trazabilidad, Historial y Notificaciones
+    backupData['data']['stock_ledger'] = await db.query('stock_ledger', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    backupData['data']['notificaciones'] = await db.query('notificaciones', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    
+    // Exportar product_history para AMBOS tipos: 'producto' Y 'presentacion'
+    final presentationIds = (backupData['data']['presentaciones_producto'] as List).map((p) => p['id']).toList();
+    List<Map<String, dynamic>> allHistory = [];
+    
+    if (productIds.isNotEmpty) {
+      allHistory.addAll(await db.query(
+        'product_history',
+        where: 'entidad_tipo = ? AND entidad_id IN (${List.filled(productIds.length, '?').join(',')})',
+        whereArgs: ['producto', ...productIds],
+      ));
+    }
+    if (presentationIds.isNotEmpty) {
+      allHistory.addAll(await db.query(
+        'product_history',
+        where: 'entidad_tipo = ? AND entidad_id IN (${List.filled(presentationIds.length, '?').join(',')})',
+        whereArgs: ['presentacion', ...presentationIds],
+      ));
+    }
+    backupData['data']['product_history'] = allHistory;
+
+    // 6. Snapshots
+    backupData['data']['business_snapshots'] = await db.query('business_snapshots', where: 'negocio_id = ?', whereArgs: [negocioId]);
+
+    return backupData;
+  }
+
+  // Exportar negocio específico (compartir por WhatsApp/otros)
   static Future<bool> exportBusiness(int negocioId, String businessName, {bool includeSecurityPin = false}) async {
     try {
-      final db = await LocalDatabase.instance.database;
-      
-      Map<String, dynamic> backupData = {
-        'version': 1,
-        'export_date': DateTime.now().toIso8601String(),
-        'negocio_id': negocioId,
-        'has_security_pin': includeSecurityPin,
-        'data': {}
-      };
-
-      // 1. Negocio y Usuarios
-      backupData['data']['negocios'] = await db.query('negocios', where: 'id = ?', whereArgs: [negocioId]);
-      
-      final negociosList = backupData['data']['negocios'] as List;
-      if (negociosList.isNotEmpty) {
-          int idDueno = negociosList.first['id_dueno'];
-          final userRow = await db.query('usuarios', where: 'id = ?', whereArgs: [idDueno]);
-          if (userRow.isNotEmpty) {
-             var u = Map<String,dynamic>.from(userRow.first);
-             if (includeSecurityPin) {
-                final storage = FlutterSecureStorage();
-                String? pin = await storage.read(key: 'pin_$idDueno');
-                u['password_hash'] = pin; // Usamos este campo en el JSON para transportarlo
-             } else {
-                u['password_hash'] = null; 
-             }
-             backupData['data']['usuarios'] = [u];
-          }
-      }
-      
-      backupData['data']['codigos_acceso_negocio'] = await db.query('codigos_acceso_negocio', where: 'negocio_id = ?', whereArgs: [negocioId]);
-
-      // 2. Catálogo e Inventario
-      backupData['data']['categorias'] = await db.query('categorias', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['marcas'] = await db.query('marcas', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['proveedores'] = await db.query('proveedores', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['productos'] = await db.query('productos', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['facturas_carga'] = await db.query('facturas_carga', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      
-      // Presentaciones (asociadas a productos del negocio)
-      final productIds = (backupData['data']['productos'] as List).map((p) => p['id']).toList();
-      if (productIds.isNotEmpty) {
-        backupData['data']['presentaciones_producto'] = await db.query(
-          'presentaciones_producto',
-          where: 'producto_id IN (${List.filled(productIds.length, '?').join(',')})',
-          whereArgs: productIds,
-        );
-      } else {
-        backupData['data']['presentaciones_producto'] = [];
-      }
-
-      // 3. CRM y Cotizaciones
-      backupData['data']['clientes'] = await db.query('clientes', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['smart_quotations'] = await db.query('smart_quotations', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      
-      final quoteIds = (backupData['data']['smart_quotations'] as List).map((q) => q['id']).toList();
-      if (quoteIds.isNotEmpty) {
-        backupData['data']['smart_quotation_items'] = await db.query(
-          'smart_quotation_items',
-          where: 'quotation_id IN (${List.filled(quoteIds.length, '?').join(',')})',
-          whereArgs: quoteIds,
-        );
-      } else {
-        backupData['data']['smart_quotation_items'] = [];
-      }
-
-      // 4. Ventas y Pagos
-      backupData['data']['ventas'] = await db.query('ventas', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      final saleIds = (backupData['data']['ventas'] as List).map((v) => v['id']).toList();
-      
-      if (saleIds.isNotEmpty) {
-        backupData['data']['venta_items'] = await db.query(
-          'venta_items',
-          where: 'venta_id IN (${List.filled(saleIds.length, '?').join(',')})',
-          whereArgs: saleIds,
-        );
-        backupData['data']['cuotas'] = await db.query(
-          'cuotas',
-          where: 'venta_id IN (${List.filled(saleIds.length, '?').join(',')})',
-          whereArgs: saleIds,
-        );
-      } else {
-        backupData['data']['venta_items'] = [];
-        backupData['data']['cuotas'] = [];
-      }
-
-      backupData['data']['pagos'] = await db.query('pagos', where: 'negocio_id = ?', whereArgs: [negocioId]);
-
-      // 5. Promociones
-      backupData['data']['campanas_promocionales'] = await db.query('campanas_promocionales', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['paquetes'] = await db.query('paquetes', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      
-      final pkgIds = (backupData['data']['paquetes'] as List).map((p) => p['id']).toList();
-      if (pkgIds.isNotEmpty) {
-        backupData['data']['items_paquete'] = await db.query(
-          'items_paquete',
-          where: 'paquete_id IN (${List.filled(pkgIds.length, '?').join(',')})',
-          whereArgs: pkgIds,
-        );
-      } else {
-        backupData['data']['items_paquete'] = [];
-      }
-
-      // Campañas y Reglas de Promoción
-      final campaignIds = (backupData['data']['campanas_promocionales'] as List).map((c) => c['id']).toList();
-      if (campaignIds.isNotEmpty) {
-        backupData['data']['reglas_promocion'] = await db.query(
-          'reglas_promocion',
-          where: 'campana_id IN (${List.filled(campaignIds.length, '?').join(',')})',
-          whereArgs: campaignIds,
-        );
-      } else {
-        backupData['data']['reglas_promocion'] = [];
-      }
-
-      // Trazabilidad, Historial y Notificaciones
-      backupData['data']['stock_ledger'] = await db.query('stock_ledger', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['notificaciones'] = await db.query('notificaciones', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      
-      if (productIds.isNotEmpty) {
-        backupData['data']['product_history'] = await db.query(
-          'product_history',
-          where: 'entidad_tipo = ? AND entidad_id IN (${List.filled(productIds.length, '?').join(',')})',
-          whereArgs: ['producto', ...productIds],
-        );
-      } else {
-        backupData['data']['product_history'] = [];
-      }
-
-      // 6. Snapshots
-      backupData['data']['business_snapshots'] = await db.query('business_snapshots', where: 'negocio_id = ?', whereArgs: [negocioId]);
+      final backupData = await _collectBackupData(negocioId, includeSecurityPin: includeSecurityPin);
 
       final dir = await getTemporaryDirectory();
       final File backupFile = await _createBackupZip(backupData, dir, businessName);
@@ -296,136 +316,7 @@ class BusinessBackupService {
   // Exportar a descargas (Para backup automático)
   static Future<bool> exportBusinessToFile(int negocioId, String businessName, {bool includeSecurityPin = false, String? targetDirectory}) async {
     try {
-      final db = await LocalDatabase.instance.database;
-      
-      Map<String, dynamic> backupData = {
-        'version': 1,
-        'export_date': DateTime.now().toIso8601String(),
-        'negocio_id': negocioId,
-        'has_security_pin': includeSecurityPin,
-        'data': {}
-      };
-
-      // 1. Negocio y Usuarios
-      backupData['data']['negocios'] = await db.query('negocios', where: 'id = ?', whereArgs: [negocioId]);
-      
-      final negociosList = backupData['data']['negocios'] as List;
-      if (negociosList.isNotEmpty) {
-          int idDueno = negociosList.first['id_dueno'];
-          final userRow = await db.query('usuarios', where: 'id = ?', whereArgs: [idDueno]);
-          if (userRow.isNotEmpty) {
-             var u = Map<String,dynamic>.from(userRow.first);
-             if (includeSecurityPin) {
-                final storage = FlutterSecureStorage();
-                String? pin = await storage.read(key: 'pin_$idDueno');
-                u['password_hash'] = pin;
-             } else {
-                u['password_hash'] = null; 
-             }
-             backupData['data']['usuarios'] = [u];
-          }
-      }
-      
-      backupData['data']['codigos_acceso_negocio'] = await db.query('codigos_acceso_negocio', where: 'negocio_id = ?', whereArgs: [negocioId]);
-
-      // 2. Catálogo e Inventario
-      backupData['data']['categorias'] = await db.query('categorias', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['marcas'] = await db.query('marcas', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['proveedores'] = await db.query('proveedores', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['productos'] = await db.query('productos', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['facturas_carga'] = await db.query('facturas_carga', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      
-      final productIds = (backupData['data']['productos'] as List).map((p) => p['id']).toList();
-      if (productIds.isNotEmpty) {
-        backupData['data']['presentaciones_producto'] = await db.query(
-          'presentaciones_producto',
-          where: 'producto_id IN (${List.filled(productIds.length, '?').join(',')})',
-          whereArgs: productIds,
-        );
-      } else {
-        backupData['data']['presentaciones_producto'] = [];
-      }
-
-      // 3. CRM y Cotizaciones
-      backupData['data']['clientes'] = await db.query('clientes', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['smart_quotations'] = await db.query('smart_quotations', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      
-      final quoteIds = (backupData['data']['smart_quotations'] as List).map((q) => q['id']).toList();
-      if (quoteIds.isNotEmpty) {
-        backupData['data']['smart_quotation_items'] = await db.query(
-          'smart_quotation_items',
-          where: 'quotation_id IN (${List.filled(quoteIds.length, '?').join(',')})',
-          whereArgs: quoteIds,
-        );
-      } else {
-        backupData['data']['smart_quotation_items'] = [];
-      }
-
-      // 4. Ventas y Pagos
-      backupData['data']['ventas'] = await db.query('ventas', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      final saleIds = (backupData['data']['ventas'] as List).map((v) => v['id']).toList();
-      
-      if (saleIds.isNotEmpty) {
-        backupData['data']['venta_items'] = await db.query(
-          'venta_items',
-          where: 'venta_id IN (${List.filled(saleIds.length, '?').join(',')})',
-          whereArgs: saleIds,
-        );
-        backupData['data']['cuotas'] = await db.query(
-          'cuotas',
-          where: 'venta_id IN (${List.filled(saleIds.length, '?').join(',')})',
-          whereArgs: saleIds,
-        );
-      } else {
-        backupData['data']['venta_items'] = [];
-        backupData['data']['cuotas'] = [];
-      }
-
-      backupData['data']['pagos'] = await db.query('pagos', where: 'negocio_id = ?', whereArgs: [negocioId]);
-
-      // 5. Promociones
-      backupData['data']['campanas_promocionales'] = await db.query('campanas_promocionales', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['paquetes'] = await db.query('paquetes', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      
-      final pkgIds = (backupData['data']['paquetes'] as List).map((p) => p['id']).toList();
-      if (pkgIds.isNotEmpty) {
-        backupData['data']['items_paquete'] = await db.query(
-          'items_paquete',
-          where: 'paquete_id IN (${List.filled(pkgIds.length, '?').join(',')})',
-          whereArgs: pkgIds,
-        );
-      } else {
-        backupData['data']['items_paquete'] = [];
-      }
-
-      // Campañas y Reglas de Promoción
-      final campaignIds = (backupData['data']['campanas_promocionales'] as List).map((c) => c['id']).toList();
-      if (campaignIds.isNotEmpty) {
-        backupData['data']['reglas_promocion'] = await db.query(
-          'reglas_promocion',
-          where: 'campana_id IN (${List.filled(campaignIds.length, '?').join(',')})',
-          whereArgs: campaignIds,
-        );
-      } else {
-        backupData['data']['reglas_promocion'] = [];
-      }
-
-      // Trazabilidad, Historial y Notificaciones
-      backupData['data']['stock_ledger'] = await db.query('stock_ledger', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      backupData['data']['notificaciones'] = await db.query('notificaciones', where: 'negocio_id = ?', whereArgs: [negocioId]);
-      
-      if (productIds.isNotEmpty) {
-        backupData['data']['product_history'] = await db.query(
-          'product_history',
-          where: 'entidad_tipo = ? AND entidad_id IN (${List.filled(productIds.length, '?').join(',')})',
-          whereArgs: ['producto', ...productIds],
-        );
-      } else {
-        backupData['data']['product_history'] = [];
-      }
-
-      // 6. Snapshots
-      backupData['data']['business_snapshots'] = await db.query('business_snapshots', where: 'negocio_id = ?', whereArgs: [negocioId]);
+      final backupData = await _collectBackupData(negocioId, includeSecurityPin: includeSecurityPin);
 
       final dir = Directory(targetDirectory ?? '/storage/emulated/0/Download');
       if (!await dir.exists()) {
@@ -787,21 +678,44 @@ class BusinessBackupService {
             await txn.insert('business_snapshots', item);
           }
 
-          // Insertar Stock Ledger
+          // =========================================================================
+          // 🔧 TAREA 1.1: Insertar Stock Ledger con remapeo de origen_id
+          // Ahora remapea origen_id según tipo_transaccion:
+          //   COMPRA_LOTE → invoiceIdMap
+          //   VENTA → saleIdMap  
+          //   AJUSTE_MANUAL → no necesita remapeo de origen_id
+          // =========================================================================
           for (var item in data['stock_ledger'] ?? []) {
             item = Map<String, dynamic>.from(item);
             item.remove('id');
             item['negocio_id'] = targetNegocioId;
             if (item['presentation_id'] != null) item['presentation_id'] = presentationIdMap[item['presentation_id']];
+            
+            // Remapear origen_id según el tipo de transacción
+            if (item['origen_id'] != null) {
+              final tipoTransaccion = item['tipo_transaccion']?.toString().toUpperCase() ?? '';
+              if (tipoTransaccion == 'COMPRA_LOTE' || tipoTransaccion == 'COMPRA') {
+                item['origen_id'] = invoiceIdMap[item['origen_id']] ?? item['origen_id'];
+              } else if (tipoTransaccion == 'VENTA') {
+                item['origen_id'] = saleIdMap[item['origen_id']] ?? item['origen_id'];
+              }
+              // AJUSTE_MANUAL u otros tipos no necesitan remapeo de origen_id
+            }
+            
             await txn.insert('stock_ledger', item);
           }
 
-          // Insertar Product History
+          // =========================================================================
+          // 🔧 TAREA 1.2: Insertar Product History con remapeo de presentaciones
+          // Ahora remapea entidad_id para AMBOS tipos: 'producto' Y 'presentacion'
+          // =========================================================================
           for (var item in data['product_history'] ?? []) {
             item = Map<String, dynamic>.from(item);
             item.remove('id');
             if (item['entidad_tipo'] == 'producto' && item['entidad_id'] != null) {
               item['entidad_id'] = productIdMap[item['entidad_id']];
+            } else if (item['entidad_tipo'] == 'presentacion' && item['entidad_id'] != null) {
+              item['entidad_id'] = presentationIdMap[item['entidad_id']];
             }
             item['usuario_id'] = currentUserId; // Reasignar al usuario que importa
             await txn.insert('product_history', item);

@@ -135,4 +135,53 @@ class InvoiceProvider with ChangeNotifier {
     }
     return false;
   }
+
+  // =========================================================================
+  // 🔧 TAREA 1.4: Consultar presentaciones vinculadas a una factura
+  // Para facturas manuales que no tienen datos_crudos_ia_json,
+  // mostramos los productos que se vincularon manualmente via factura_carga_id
+  // =========================================================================
+  
+  /// Obtiene las presentaciones vinculadas a una factura por factura_carga_id
+  /// Incluye información del producto padre para mostrar en la UI
+  Future<List<Map<String, dynamic>>> getLinkedPresentations(int invoiceId) async {
+    try {
+      final db = await dbHelper.database;
+      final rows = await db.rawQuery('''
+        SELECT 
+          pp.id AS presentacion_id,
+          pp.nombre AS presentacion_nombre,
+          pp.precio_costo,
+          pp.precio_venta,
+          pp.cantidad_stock,
+          pp.unidad_medida,
+          pp.contenido,
+          p.nombre AS producto_nombre,
+          p.imagen_url AS producto_imagen
+        FROM presentaciones_producto pp
+        INNER JOIN productos p ON pp.producto_id = p.id
+        WHERE pp.factura_carga_id = ?
+        ORDER BY p.nombre ASC, pp.nombre ASC
+      ''', [invoiceId]);
+      return rows;
+    } catch (e) {
+      debugPrint("Error obteniendo presentaciones vinculadas: $e");
+      return [];
+    }
+  }
+
+  /// Obtiene el conteo de presentaciones vinculadas a una factura
+  Future<int> getLinkedPresentationsCount(int invoiceId) async {
+    try {
+      final db = await dbHelper.database;
+      final result = await db.rawQuery(
+        'SELECT COUNT(*) AS total FROM presentaciones_producto WHERE factura_carga_id = ?',
+        [invoiceId],
+      );
+      return result.first['total'] as int? ?? 0;
+    } catch (e) {
+      debugPrint("Error contando presentaciones vinculadas: $e");
+      return 0;
+    }
+  }
 }

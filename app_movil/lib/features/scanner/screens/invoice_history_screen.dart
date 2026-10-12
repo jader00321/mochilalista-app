@@ -76,7 +76,7 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text("Historial de Facturas IA", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text("Historial de Facturas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         centerTitle: true,
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.teal[800],
         foregroundColor: Colors.white,
@@ -172,7 +172,13 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
                                       color: isDark ? statusColor.withValues(alpha: 0.15) : statusColor.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: Icon(_getStatusIcon(invoice.estado), color: statusColor, size: 24),
+                                    // 🔧 TAREA 1.4: Diferenciar facturas manuales (✍️) vs escaneadas (📷)
+                                    child: Icon(
+                                      invoice.datosCrudosIaJson != null 
+                                          ? _getStatusIcon(invoice.estado)
+                                          : Icons.edit_note_rounded,
+                                      color: statusColor, size: 24,
+                                    ),
                                   ),
                                   const SizedBox(width: 12),
                                   
@@ -243,14 +249,38 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.shopping_basket_outlined, size: 12, color: isDark ? Colors.purple[200] : Colors.purple[700]),
+                                          Icon(Icons.document_scanner_outlined, size: 12, color: isDark ? Colors.purple[200] : Colors.purple[700]),
                                           const SizedBox(width: 4),
                                           Text(
-                                            "${invoice.cantidadItemsExtraidos} ítems",
+                                            "${invoice.cantidadItemsExtraidos} ítems IA",
                                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.purple[200] : Colors.purple[700]),
                                           ),
                                         ],
                                       ),
+                                    )
+                                  // 🔧 TAREA 1.4: Si no tiene items IA, mostrar conteo de presentaciones vinculadas
+                                  else if (invoice.datosCrudosIaJson == null)
+                                    FutureBuilder<int>(
+                                      future: invcProv.getLinkedPresentationsCount(invoice.id),
+                                      builder: (ctx, snap) {
+                                        final count = snap.data ?? 0;
+                                        if (count == 0) return const SizedBox.shrink();
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(color: isDark ? Colors.teal.withValues(alpha: 0.2) : Colors.teal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.edit_note_rounded, size: 12, color: isDark ? Colors.teal[200] : Colors.teal[700]),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                "$count ítems vinculados",
+                                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.teal[200] : Colors.teal[700]),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
                                     ),
                                 ],
                               )
