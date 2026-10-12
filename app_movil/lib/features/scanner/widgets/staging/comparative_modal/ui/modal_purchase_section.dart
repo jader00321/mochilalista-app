@@ -3,193 +3,148 @@ part of '../comparative_update_modal.dart';
 extension _ModalPurchaseSection on _ComparativeUpdateModalState {
 
   Widget _buildGroupedPurchaseRow() {
+    // Resumen para mostrar cuando está colapsado
+    String summaryUmp = _umpCompraCtrl.text.isEmpty ? 'N/A' : _umpCompraCtrl.text;
+    String summaryCant = _cantidadUmpCtrl.text.isEmpty ? '0' : _cantidadUmpCtrl.text;
+    String summaryTotal = _pagoTotalCtrl.text.isEmpty ? '0.00' : _pagoTotalCtrl.text;
+    String summaryUnidLote = _unidLoteCtrl.text.isEmpty ? '1' : _unidLoteCtrl.text;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: widget.isDark
-            ? Colors.orange.withValues(alpha: 0.05)
-            : Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(16),
+        color: widget.isDark ? Colors.orange.withValues(alpha: 0.04) : Colors.orange.shade50.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: widget.isDark
-              ? Colors.orange.withValues(alpha: 0.2)
-              : Colors.orange.shade200,
+          color: widget.isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade200,
         ),
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.shopping_cart,
-                size: 18,
-                color: widget.isDark ? Colors.orange[300] : Colors.orange[700],
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  "Comparativa de Compra (Proveedor)",
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: widget.isDark
-                        ? Colors.orange[300]
-                        : Colors.orange[700],
-                    letterSpacing: 0.5,
+          // HEADER retráctil
+          InkWell(
+            onTap: () => updateState(() => _showProveedor = !_showProveedor),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Icon(Icons.shopping_cart, size: 18, color: widget.isDark ? Colors.orange[300] : Colors.orange[700]),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("🛒 Proveedor", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
+                        if (!_showProveedor) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            "$summaryUmp (x$summaryUnidLote) | Cant: $summaryCant | Total: S/$summaryTotal",
+                            style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.orange[200] : Colors.orange[800]),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                          ),
+                        ]
+                      ],
+                    ),
                   ),
-                ),
-              ),
-              Checkbox(
-                value: widget.variant.updateDatosCompra,
-                onChanged: (v) =>
-                    updateState(() => widget.variant.updateDatosCompra = v!),
-                activeColor: Colors.orange,
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: widget.isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade100, borderRadius: BorderRadius.circular(8)),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.history, size: 16, color: widget.isDark ? Colors.orange[300] : Colors.orange[800]),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Último valor registrado:", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[300] : Colors.orange[800])),
-                      Text("${widget.variant.originalUmpCompra} (x${widget.variant.originalUnidadesPorLote}) | Cant: ${widget.variant.originalCantidadUmpComprada} | Total: S/${widget.variant.originalTotalPagoLote}", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.orange[200] : Colors.orange[900])),
-                    ],
+                  // Checkbox global para actualizar datos de compra
+                  Checkbox(
+                    value: widget.variant.updateDatosCompra,
+                    onChanged: (v) => updateState(() => widget.variant.updateDatosCompra = v!),
+                    activeColor: Colors.orange,
+                    visualDensity: VisualDensity.compact,
                   ),
-                ),
-              ],
+                  Icon(_showProveedor ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 16),
 
-          Row(
-            children: [
-              const SizedBox(width: 32),
-              Expanded(
-                flex: 3,
-                child: Text(
-                  "Concepto",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: widget.isDark ? Colors.grey[500] : Colors.grey,
+          // BODY colapsable
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            child: !_showProveedor ? const SizedBox.shrink() : Padding(
+              padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Referencia al último valor registrado
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: widget.isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.history, size: 14, color: widget.isDark ? Colors.orange[300] : Colors.orange[800]),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            "Último: ${widget.variant.originalUmpCompra} (x${widget.variant.originalUnidadesPorLote}) | Cant: ${widget.variant.originalCantidadUmpComprada} | S/${widget.variant.originalTotalPagoLote}",
+                            style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.orange[200] : Colors.orange[900]),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-              Expanded(
-                flex: 4,
-                child: Text(
-                  "Actual (BD)",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: widget.isDark ? Colors.grey[500] : Colors.grey,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 4,
-                child: Text(
-                  "Nuevo (Factura)",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: widget.isDark
-                        ? Colors.orange[300]
-                        : Colors.orange[700],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 16),
 
-          // Bloque 1: Identidad del Lote (Unidad y Factor)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: widget.isDark ? Colors.blue.withValues(alpha: 0.05) : Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: widget.isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue.shade100),
-            ),
-            child: Column(
-              children: [
-                _buildCompareRow(
-                  "Ud. Compra",
-                  (_currentDbData['ump_compra']?.toString() ?? 'N/A'),
-                  _umpCompraCtrl,
-                  widget.variant.updateUmpCompra,
-                  (v) => updateState(() => widget.variant.updateUmpCompra = v!),
-                  isText: true,
-                  onTextChanged: _onUmpNameChanged,
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 32, right: 16, bottom: 8),
-                  child: Text(
-                    "Ejem: Caja, Unidad, Par, 1/2 Doc, Docena, Ciento, Millar",
-                    style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.blue[300] : Colors.blue[700], fontStyle: FontStyle.italic),
+                  // Bloque 1: Identidad del Lote (Ud. Compra + Unid x Lote)
+                  _buildCompactFieldRow([
+                    _CompactFieldData(
+                      label: "Ud. Compra",
+                      dbValue: _currentDbData['ump_compra']?.toString() ?? 'N/A',
+                      ctrl: _umpCompraCtrl,
+                      isChecked: widget.variant.updateDatosCompra,
+                      onChanged: (v) => updateState(() => widget.variant.updateDatosCompra = v!),
+                      isText: true,
+                      onTextChanged: _onUmpNameChanged,
+                    ),
+                    _CompactFieldData(
+                      label: "Unid x Lote",
+                      dbValue: _currentDbData['unidades_por_lote']?.toString() ?? '0',
+                      ctrl: _unidLoteCtrl,
+                      isChecked: widget.variant.updateDatosCompra,
+                      onChanged: (v) => updateState(() => widget.variant.updateDatosCompra = v!),
+                      onTextChanged: _onUmpFactorChanged,
+                    ),
+                  ]),
+
+                  // Bloque 2: Financiero (Cant. Comprada + P. Unitario)
+                  _buildCompactFieldRow([
+                    _CompactFieldData(
+                      label: "Cant. Comprada",
+                      dbValue: _currentDbData['cantidad_ump_comprada']?.toString() ?? '0',
+                      ctrl: _cantidadUmpCtrl,
+                      isChecked: widget.variant.updateDatosCompra,
+                      onChanged: (v) => updateState(() => widget.variant.updateDatosCompra = v!),
+                      onTextChanged: () => _onPurchaseDataChanged(fromTotal: false),
+                    ),
+                    _CompactFieldData(
+                      label: "P. Unitario",
+                      dbValue: _currentDbData['precio_ump_proveedor']?.toString() ?? '0.00',
+                      ctrl: _precioUmpCtrl,
+                      isChecked: widget.variant.updateDatosCompra,
+                      onChanged: (v) => updateState(() => widget.variant.updateDatosCompra = v!),
+                      isPrefix: "S/",
+                      onTextChanged: () => _onPurchaseDataChanged(fromTotal: false),
+                    ),
+                  ]),
+
+                  // Pago Total (ancho completo)
+                  _buildCompactField(
+                    "Pago Total",
+                    _currentDbData['total_pago_lote']?.toString() ?? '0.00',
+                    _pagoTotalCtrl,
+                    widget.variant.updateDatosCompra,
+                    (v) => updateState(() => widget.variant.updateDatosCompra = v!),
+                    isPrefix: "S/",
+                    onTextChanged: () => _onPurchaseDataChanged(fromTotal: true),
                   ),
-                ),
-                _buildCompareRow(
-                  "Unid. x Lote",
-                  (_currentDbData['unidades_por_lote']?.toString() ?? '0'),
-                  _unidLoteCtrl,
-                  widget.variant.updateUnidLote,
-                  (v) => updateState(() => widget.variant.updateUnidLote = v!),
-                  onTextChanged: _onUmpFactorChanged,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          
-          // Bloque 2: Matemática Financiera
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: widget.isDark ? Colors.green.withValues(alpha: 0.05) : Colors.green.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green.shade100),
-            ),
-            child: Column(
-              children: [
-                _buildCompareRow(
-                  "Cant. Comprada",
-                  (_currentDbData['cantidad_ump_comprada']?.toString() ?? '0'),
-                  _cantidadUmpCtrl,
-                  widget.variant.updateCantidadUmp,
-                  (v) => updateState(() => widget.variant.updateCantidadUmp = v!),
-                  onTextChanged: () => _onPurchaseDataChanged(fromTotal: false),
-                ),
-                _buildCompareRow(
-                  "P. Unitario",
-                  (_currentDbData['precio_ump_proveedor']?.toString() ?? '0.00'),
-                  _precioUmpCtrl,
-                  widget.variant.updatePrecioUmp,
-                  (v) => updateState(() => widget.variant.updatePrecioUmp = v!),
-                  isPrefix: "S/",
-                  onTextChanged: () => _onPurchaseDataChanged(fromTotal: false),
-                ),
-                _buildCompareRow(
-                  "Pago Total",
-                  (_currentDbData['total_pago_lote']?.toString() ?? '0.00'),
-                  _pagoTotalCtrl,
-                  widget.variant.updatePagoTotal,
-                  (v) => updateState(() => widget.variant.updatePagoTotal = v!),
-                  isPrefix: "S/",
-                  onTextChanged: () => _onPurchaseDataChanged(fromTotal: true),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

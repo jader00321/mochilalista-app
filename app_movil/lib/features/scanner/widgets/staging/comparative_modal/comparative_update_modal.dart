@@ -41,6 +41,8 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
   late Map<String, dynamic> _currentDbData;
   String _discountMode = 'keep';
   bool _showIdentidad = false;
+  bool _showProveedor = false; // FASE 9: Colapsado por defecto
+  bool _showVenta = true; // FASE 10: Expandido por defecto (es lo primero que ve el usuario)
   
   late TextEditingController _nomCtrl;
   late TextEditingController _uVentaCtrl;
@@ -142,6 +144,10 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     super.dispose();
   }
 
+  // ============================================================================
+  // FASE 2: SISTEMA REFACTORIZADO DE RECÁLCULOS CON CADENA DE DEPENDENCIAS
+  // ============================================================================
+
   void _onUnidadVentaChanged() {
     String nuevaU = _uVentaCtrl.text.trim().toLowerCase();
     int currentFactor = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
@@ -159,7 +165,9 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
       _uVentaFactorCtrl.text = factor.toString();
     }
     
-    _onPurchaseDataChanged(fromTotal: false);
+    // FASE 2 FIX: Al cambiar la unidad de venta, NO recalcular el pago total.
+    // Solo recalcular: costo de presentación, precio de venta y stock.
+    _recalculateFromSaleUnit();
   }
 
   void _onUmpNameChanged() {
@@ -171,7 +179,8 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
         _unidLoteCtrl.text = newFactor.toString();
       }
     }
-    _onPurchaseDataChanged(fromTotal: false);
+    // Cambió la unidad de compra → mantener pago total fijo, recalcular costo unitario
+    _recalculateFromPurchase(keepTotal: true);
   }
 
   void _onUmpFactorChanged() {
@@ -180,47 +189,117 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     if (fixedUnitName != null) {
       _umpCompraCtrl.text = fixedUnitName;
     }
-    _onPurchaseDataChanged(fromTotal: false);
+    // Cambió unid x lote → mantener pago total fijo, recalcular costo unitario
+    _recalculateFromPurchase(keepTotal: true);
   }
 
+  /// FASE 2: Recalcula toda la cadena desde datos de compra.
+  /// [keepTotal] = true: el pago total se mantiene, se recalcula el precio UMP.
+  /// [keepTotal] = false: el pago total se recalcula desde cantidad × precio.
+  /// [fromTotal] = true: se recalcula precio UMP desde pagoTotal / cantidad.
   void _onPurchaseDataChanged({bool fromTotal = false}) {
+    _recalculateFromPurchase(keepTotal: fromTotal);
+  }
+
+  void _recalculateFromPurchase({required bool keepTotal}) {
     double cantidadUMP = double.tryParse(_cantidadUmpCtrl.text) ?? 0.0;
     double precioUMP = double.tryParse(_precioUmpCtrl.text) ?? 0.0;
     double pagoTotal = double.tryParse(_pagoTotalCtrl.text) ?? 0.0;
     int unidLote = int.tryParse(_unidLoteCtrl.text) ?? 1;
     
-    updateState(() {
-      if (fromTotal) {
-        if (cantidadUMP > 0) {
-          precioUMP = pagoTotal / cantidadUMP;
-          _precioUmpCtrl.text = precioUMP.toStringAsFixed(2);
-        }
-      } else {
-        pagoTotal = cantidadUMP * precioUMP;
-        _pagoTotalCtrl.text = pagoTotal.toStringAsFixed(2);
+    // 1. Resolver la relación pagoTotal ↔ cantidadUMP × precioUMP
+    if (keepTotal) {
+      // El total se mantiene, recalcular precio unitario
+      if (cantidadUMP > 0) {
+        precioUMP = pagoTotal / cantidadUMP;
+        _precioUmpCtrl.text = precioUMP.toStringAsFixed(2);
       }
-    });
+    } else {
+      // Precio y cantidad se mantienen, recalcular total
+      pagoTotal = cantidadUMP * precioUMP;
+      _pagoTotalCtrl.text = pagoTotal.toStringAsFixed(2);
+    }
     
-    double costoUnitarioReal = ScannerCostEngine.calculateInvoiceUnitCost(
-      totalPago: pagoTotal, 
-      unidadesPorLote: unidLote,
-      cantidadUmp: cantidadUMP,
-    );
-    int factor = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
-    double nuevoCostoPres = ScannerCostEngine.calculatePresentationCost(
-      unitCost: costoUnitarioReal, 
-      unidadesPorVenta: factor,
-    );
+    // 2. Calcular unidades base y costos
+    int unidBasesTotal = (cantidadUMP * unidLote).toInt();
+    double costoUnitBase = (unidBasesTotal > 0) ? pagoTotal / unidBasesTotal : 0.0;
     
-    int newStock = factor > 0 ? ((cantidadUMP * unidLote) / factor).toInt() : 0;
-
+    int factorVenta = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
+    double costoPresentacion = costoUnitBase * factorVenta;
+    
+    // 3. Actualizar controladores
     updateState(() {
-      widget.variant.stockIngresanteOverride = null;
-      _stockIngresanteCtrl.text = newStock.toString();
-      _costoCtrl.text = nuevoCostoPres.toStringAsFixed(2);
+      widget.variant.stockIngresanteOverride = null; // Reset override al recalcular desde compra
+      _stockIngresanteCtrl.text = unidBasesTotal.toString();
+      _costoCtrl.text = costoPresentacion.toStringAsFixed(2);
     });
 
+    // 4. Propagar a precio de venta (margen se mantiene)
     _recalcularModal(fromMargen: true);
+  }
+
+  /// FASE 2: Recalcula solo costo de presentación, precio y stock
+  /// cuando cambia la unidad de venta o su factor (sin tocar datos de compra).
+  void _recalculateFromSaleUnit() {
+    double cantidadUMP = double.tryParse(_cantidadUmpCtrl.text) ?? 0.0;
+    double pagoTotal = double.tryParse(_pagoTotalCtrl.text) ?? 0.0;
+    int unidLote = int.tryParse(_unidLoteCtrl.text) ?? 1;
+    int factorVenta = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
+    
+    // Recalcular costo de presentación con el nuevo factor
+    int unidBasesTotal = widget.variant.stockIngresanteOverride ?? (cantidadUMP * unidLote).toInt();
+    double costoUnitBase = (unidBasesTotal > 0) ? pagoTotal / unidBasesTotal : 0.0;
+    double costoPresentacion = costoUnitBase * factorVenta;
+    
+    // Actualizar stock en controlador (solo si no tiene override manual)
+    if (widget.variant.stockIngresanteOverride == null) {
+      _stockIngresanteCtrl.text = unidBasesTotal.toString();
+    }
+    
+    updateState(() {
+      _costoCtrl.text = costoPresentacion.toStringAsFixed(2);
+    });
+    
+    // Propagar a precio de venta (margen se mantiene)
+    _recalcularModal(fromMargen: true);
+  }
+
+  /// FASE 3: Recálculo en cascada inverso cuando el usuario edita "Nuevo Ingreso".
+  /// El pago total se mantiene fijo; se recalculan: cantidadUmp, costoUnitBase, 
+  /// costoPresentación, y precioVenta (margen se mantiene fijo).
+  void _onStockBaseManualEdit() {
+    int nuevoStockBase = int.tryParse(_stockIngresanteCtrl.text) ?? 0;
+    double pagoTotal = double.tryParse(_pagoTotalCtrl.text) ?? 0.0;
+    int unidLote = int.tryParse(_unidLoteCtrl.text) ?? 1;
+    int factorVenta = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
+    
+    // 1. Marcar override
+    widget.variant.stockIngresanteOverride = nuevoStockBase;
+    
+    // 2. Recalcular cantidad de empaques hacia atrás (pago total se mantiene)
+    if (unidLote > 0) {
+      double nuevaCantidad = nuevoStockBase / unidLote;
+      _cantidadUmpCtrl.text = nuevaCantidad.toStringAsFixed(2).replaceAll(RegExp(r'([.]*0+)(?!.*\d)'), '');
+    }
+    
+    // 3. Recalcular precio unitario UMP (pago total fijo)
+    double nuevaCantidadUMP = double.tryParse(_cantidadUmpCtrl.text) ?? 0.0;
+    if (nuevaCantidadUMP > 0) {
+      double nuevoPrecioUMP = pagoTotal / nuevaCantidadUMP;
+      _precioUmpCtrl.text = nuevoPrecioUMP.toStringAsFixed(2);
+    }
+    
+    // 4. Recalcular costo unitario base
+    double costoUnitBase = nuevoStockBase > 0 ? pagoTotal / nuevoStockBase : 0.0;
+    
+    // 5. Recalcular costo de presentación
+    double costoPres = costoUnitBase * factorVenta;
+    _costoCtrl.text = costoPres.toStringAsFixed(2);
+    
+    // 6. Recalcular precio de venta (margen se mantiene fijo)
+    _recalcularModal(fromMargen: true);
+    
+    updateState(() {});
   }
 
   void _recalcularModal({bool fromMargen = true}) {
@@ -276,9 +355,9 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     
     double cantUmp = double.tryParse(_cantidadUmpCtrl.text) ?? widget.variant.cantidadUmpComprada;
     int unLote = int.tryParse(_unidLoteCtrl.text) ?? widget.variant.unidadesPorLote;
-    int factor = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
     
-    int calculatedStock = factor > 0 ? ((cantUmp * unLote) / factor).toInt() : 0;
+    // FASE 1 FIX: calculatedStock en UNIDADES BASE para comparar con _stockIngresanteCtrl
+    int calculatedStock = (cantUmp * unLote).toInt();
     int? enteredStock = int.tryParse(_stockIngresanteCtrl.text);
     
     if (enteredStock == calculatedStock) {
@@ -468,32 +547,21 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
 
                     const SizedBox(height: 16),
                     
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: widget.isDark ? Colors.blue.withValues(alpha: 0.05) : Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: widget.isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade200)
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline, color: widget.isDark ? Colors.blue[300] : Colors.blue[700], size: 24),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              "Compara los datos extraídos de la factura (izquierda) con los de tu base de datos (derecha). Marca las casillas para actualizar el inventario.",
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: widget.isDark ? Colors.blue[100] : Colors.blue[900],
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    // FASE 6: Orden optimizado por prioridad del usuario
+                    // 1. CÁLCULO FINANCIERO (lo que más importa al usuario)
+                    _buildGroupedSaleRow(isNuevo),
 
+                    // 2. GESTIÓN DE STOCK
+                    if (!isNuevo) _buildStockManagementRow() else _buildNewVariantStockRow(),
+                    _buildLeftoverWarning(),
+
+                    // 3. DESCUENTOS (si aplica)
+                    if (hasDiscount) _buildDiscountRow(),
+
+                    // 4. COMPARATIVA DE COMPRA (Proveedor) — ahora después de precios
+                    _buildGroupedPurchaseRow(),
+
+                    // FASE 8: Identidad rediseñada con _buildCompactField
                     Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(color: widget.isDark ? Colors.grey.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.02), borderRadius: BorderRadius.circular(12), border: Border.all(color: widget.isDark ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.shade300)),
@@ -515,7 +583,11 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
                                         Text("📝 Identidad del Producto", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
                                         if (!_showIdentidad) ...[
                                           const SizedBox(height: 2),
-                                          Text(_nomCtrl.text.isEmpty ? "Sin nombre específico" : _nomCtrl.text, style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                          Text(
+                                            "${_nomCtrl.text.isEmpty ? 'Sin nombre' : _nomCtrl.text} | ${_marcaCtrl.text.isEmpty ? 'Sin marca' : _marcaCtrl.text}",
+                                            style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                                          ),
                                         ]
                                       ],
                                     ),
@@ -529,39 +601,47 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
                             duration: const Duration(milliseconds: 200),
                             curve: Curves.easeInOut,
                             child: !_showIdentidad ? const SizedBox.shrink() : Padding(
-                              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                              padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
                               child: Column(
                                 children: [
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                                    child: Text("Actualiza o mantén los datos de identidad de tu producto.", style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
+                                  _buildCompactField(
+                                    "Nombre Específico",
+                                    _currentDbData['nombre_especifico']?.toString() ?? 'N/A',
+                                    _nomCtrl,
+                                    widget.variant.updateNombre,
+                                    (v) => updateState(() => widget.variant.updateNombre = v!),
+                                    isText: true,
                                   ),
-                                  _buildCompareRow("Nombre Específico", _currentDbData['nombre_especifico']?.toString() ?? 'N/A', _nomCtrl, widget.variant.updateNombre, (v) => updateState(() => widget.variant.updateNombre = v!), isText: true),
-                                  _buildCompareRow("Marca", _currentDbData['marca_nombre']?.toString() ?? 'N/A', _marcaCtrl, widget.variant.updateMarca, (v) => updateState(() => widget.variant.updateMarca = v!), isText: true),
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: _buildCompareRow("Código de Barras", _currentDbData['codigo_barras']?.toString() ?? 'N/A', _codigoBarraCtrl, widget.variant.updateCodigoBarra, (v) => updateState(() => widget.variant.updateCodigoBarra = v!), isText: true),
-                                      ),
-                                      Container(
-                                        margin: const EdgeInsets.only(left: 8, top: 12),
-                                        child: IconButton(
-                                          icon: const Icon(Icons.qr_code_scanner),
-                                          color: Colors.blue,
-                                          tooltip: "Escanear",
-                                          onPressed: () async {
-                                            final code = await Navigator.push(context, MaterialPageRoute(builder: (_) => const BarcodeScannerScreen(captureOnly: true)));
-                                            if (code != null && code is String) {
-                                              updateState(() {
-                                                _codigoBarraCtrl.text = code;
-                                                widget.variant.updateCodigoBarra = true;
-                                              });
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                    ],
+                                  _buildCompactField(
+                                    "Marca",
+                                    _currentDbData['marca_nombre']?.toString() ?? 'N/A',
+                                    _marcaCtrl,
+                                    widget.variant.updateMarca,
+                                    (v) => updateState(() => widget.variant.updateMarca = v!),
+                                    isText: true,
+                                  ),
+                                  _buildCompactField(
+                                    "Código de Barras",
+                                    _currentDbData['codigo_barras']?.toString() ?? 'N/A',
+                                    _codigoBarraCtrl,
+                                    widget.variant.updateCodigoBarra,
+                                    (v) => updateState(() => widget.variant.updateCodigoBarra = v!),
+                                    isText: true,
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.qr_code_scanner),
+                                      color: Colors.blue,
+                                      iconSize: 22,
+                                      tooltip: "Escanear",
+                                      onPressed: () async {
+                                        final code = await Navigator.push(context, MaterialPageRoute(builder: (_) => const BarcodeScannerScreen(captureOnly: true)));
+                                        if (code != null && code is String) {
+                                          updateState(() {
+                                            _codigoBarraCtrl.text = code;
+                                            widget.variant.updateCodigoBarra = true;
+                                          });
+                                        }
+                                      },
+                                    ),
                                   ),
                                 ],
                               ),
@@ -570,14 +650,6 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
                         ],
                       ),
                     ),
-                    
-                    _buildGroupedPurchaseRow(),
-                    _buildGroupedSaleRow(isNuevo),
-
-                    if (!isNuevo) _buildStockManagementRow() else _buildNewVariantStockRow(),
-                    _buildLeftoverWarning(),
-
-                    if (hasDiscount) _buildDiscountRow(),
                   ],
                 ),
               ),

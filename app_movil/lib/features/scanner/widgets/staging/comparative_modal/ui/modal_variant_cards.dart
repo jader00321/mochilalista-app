@@ -122,63 +122,161 @@ extension _ModalVariantCards on _ComparativeUpdateModalState {
     );
   }
 
-  Widget _buildCompareRow(String label, String dbValue, TextEditingController ctrl, bool isChecked, Function(bool?) onChanged, {bool isText = false, String? isPrefix, VoidCallback? onTextChanged}) {
+
+
+  // ============================================================================
+  // FASE 7: NUEVOS WIDGETS DE COMPARACIÓN COMPACTOS
+  // ============================================================================
+
+  /// Layout vertical compacto: checkbox + label + referencia BD en una línea,
+  /// TextField a ancho completo debajo.
+  /// ```
+  /// ┌──────────────────────────────────────────┐
+  /// │ [✓] Nombre Específico       BD: Papel A4 │
+  /// │ ┌────────────────────────────────────────┐│
+  /// │ │ Papel A4 Rojo                          ││
+  /// │ └────────────────────────────────────────┘│
+  /// └──────────────────────────────────────────┘
+  /// ```
+  Widget _buildCompactField(
+    String label, 
+    String dbValue, 
+    TextEditingController ctrl, 
+    bool isChecked, 
+    Function(bool?) onChanged, {
+    bool isText = false, 
+    String? isPrefix, 
+    VoidCallback? onTextChanged,
+    Widget? trailing,
+  }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(color: widget.isDark ? Colors.white10 : Colors.grey[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isChecked ? Colors.blue.withValues(alpha: 0.5) : Colors.transparent)),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: widget.isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey[50], 
+        borderRadius: BorderRadius.circular(10), 
+        border: Border.all(color: isChecked ? Colors.blue.withValues(alpha: 0.4) : (widget.isDark ? Colors.white10 : Colors.grey.shade200)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Checkbox(value: isChecked, onChanged: onChanged, activeColor: Colors.blue, visualDensity: VisualDensity.compact),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], letterSpacing: 0.5)),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      flex: 4,
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text("Actual (BD)", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[500] : Colors.grey)), 
-                        const SizedBox(height: 4),
-                        Text(dbValue, style: TextStyle(fontSize: 14, color: widget.isDark ? Colors.white70 : Colors.black54, decoration: isChecked ? TextDecoration.lineThrough : null), maxLines: 2, overflow: TextOverflow.ellipsis)
-                      ]),
+          // Línea 1: Checkbox + Label + Referencia BD
+          Row(
+            children: [
+              SizedBox(
+                width: 24, height: 24,
+                child: Checkbox(
+                  value: isChecked, 
+                  onChanged: onChanged, 
+                  activeColor: Colors.blue, 
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: widget.isDark ? Colors.white70 : Colors.black87)),
+              const Spacer(),
+              Flexible(
+                child: Text(
+                  "BD: $dbValue", 
+                  style: TextStyle(
+                    fontSize: 10, 
+                    color: widget.isDark ? Colors.grey[500] : Colors.grey[600], 
+                    decoration: isChecked ? TextDecoration.lineThrough : null,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  maxLines: 1, 
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Línea 2: TextField a ancho completo
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 36,
+                  child: TextField(
+                    controller: ctrl,
+                    enabled: isChecked,
+                    onChanged: (_) => onTextChanged?.call(),
+                    keyboardType: isText ? TextInputType.text : const TextInputType.numberWithOptions(decimal: true),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isChecked ? (widget.isDark ? Colors.white : Colors.black) : Colors.grey),
+                    decoration: InputDecoration(
+                      prefixText: isPrefix,
+                      prefixStyle: TextStyle(color: widget.isDark ? Colors.white70 : Colors.black87, fontSize: 13, fontWeight: FontWeight.bold),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                      isDense: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey.shade300)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey.shade300)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.blue, width: 1.5)),
+                      disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: widget.isDark ? Colors.white10 : Colors.grey.shade200)),
+                      filled: true,
+                      fillColor: isChecked ? (widget.isDark ? const Color(0xFF14141C) : Colors.white) : (widget.isDark ? Colors.transparent : Colors.grey.shade100),
                     ),
-                    Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Icon(Icons.arrow_forward, size: 20, color: widget.isDark ? Colors.grey[600] : Colors.grey[400])),
-                    Expanded(
-                      flex: 5,
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text("Nuevo (A Guardar)", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold)), 
-                        const SizedBox(height: 4),
-                        SizedBox(
-                          height: 34,
-                          child: TextField(
-                            controller: ctrl,
-                            enabled: isChecked,
-                            onChanged: (_) => onTextChanged?.call(),
-                            keyboardType: isText ? TextInputType.text : const TextInputType.numberWithOptions(decimal: true),
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isChecked ? (widget.isDark ? Colors.white : Colors.black) : Colors.grey),
-                            decoration: InputDecoration(
-                              prefixText: isPrefix, prefixStyle: TextStyle(color: widget.isDark ? Colors.white : Colors.black, fontSize: 14, fontWeight: FontWeight.bold),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                              isDense: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
-                              filled: true, fillColor: isChecked ? (widget.isDark ? const Color(0xFF14141C) : Colors.white) : Colors.transparent,
-                            ),
-                          ),
-                        )
-                      ]),
-                    ),
-                  ],
-                )
+                  ),
+                ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing,
               ],
-            ),
-          )
+            ],
+          ),
         ],
       ),
     );
   }
+
+  /// Para campos numéricos cortos: agrupa 2 campos en una fila horizontal.
+  /// ```
+  /// ┌───────────────────┬───────────────────┐
+  /// │ [✓] Precio UMP    │ [✓] Pago Total    │
+  /// │ BD: 9.95          │ BD: 9.95          │
+  /// │ [___S/ 9.95___]   │ [___S/ 9.95___]   │
+  /// └───────────────────┴───────────────────┘
+  /// ```
+  Widget _buildCompactFieldRow(List<_CompactFieldData> fields) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: fields.asMap().entries.map((entry) {
+        final i = entry.key;
+        final f = entry.value;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: i < fields.length - 1 ? 8 : 0),
+            child: _buildCompactField(
+              f.label, f.dbValue, f.ctrl, f.isChecked, f.onChanged,
+              isText: f.isText, isPrefix: f.isPrefix, onTextChanged: f.onTextChanged,
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// Datos para un campo compacto (usado por _buildCompactFieldRow).
+class _CompactFieldData {
+  final String label;
+  final String dbValue;
+  final TextEditingController ctrl;
+  final bool isChecked;
+  final Function(bool?) onChanged;
+  final bool isText;
+  final String? isPrefix;
+  final VoidCallback? onTextChanged;
+
+  _CompactFieldData({
+    required this.label,
+    required this.dbValue,
+    required this.ctrl,
+    required this.isChecked,
+    required this.onChanged,
+    this.isText = false,
+    this.isPrefix,
+    this.onTextChanged,
+  });
 }

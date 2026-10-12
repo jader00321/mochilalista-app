@@ -229,7 +229,7 @@ class ScannerMatchingEngine {
             }
           }
 
-          if (bestCandidate != null && highestScore >= 40) {
+          if (bestCandidate != null && highestScore >= 50) { // FASE 4: Subido de 40 → 50
             prodMatch = MatchResult(
               estado: "MATCH_SUGERIDO",
               confianza: highestScore,
@@ -387,6 +387,7 @@ class ScannerMatchingEngine {
 
   /// Función utilitaria para medir qué tanto se parecen dos strings usando
   /// lematización y distancia de Levenshtein (fuzzy matching).
+  /// FASE 4: Mejorado con penalización por baja cobertura de tokens.
   int _calculateSimilarity(String a, String b) {
     if (a.isEmpty || b.isEmpty) return 0;
 
@@ -406,10 +407,11 @@ class ScannerMatchingEngine {
     double globalSim = SpanishLemmatizer.calculateSimilarity(lemA, lemB);
     if (globalSim >= 0.8) return (globalSim * 100).toInt();
 
-    // Conteo básico de tokens coincidentes lematizados y difusos
-    var tokensA = a.split(' ');
-    var tokensB = b.split(' ');
+    // Conteo de tokens coincidentes lematizados y difusos
+    var tokensA = a.split(' ').where((t) => t.length > 1).toList();
+    var tokensB = b.split(' ').where((t) => t.length > 1).toList();
     double score = 0;
+    int matchingTokenCount = 0;
 
     for (var ta in tokensA) {
       String lta = SpanishLemmatizer.lemmatize(ta);
@@ -427,10 +429,29 @@ class ScannerMatchingEngine {
       // Solo sumamos puntos por tokens similares >= 75%
       if (bestTokenSim >= 0.75) {
         score += bestTokenSim;
+        matchingTokenCount++;
       }
     }
 
     if (tokensA.isEmpty) return 0;
-    return ((score / tokensA.length) * 100).toInt();
+    int baseScore = ((score / tokensA.length) * 100).toInt();
+
+    // FASE 4: Penalización por baja cobertura de tokens.
+    // Si solo 1 token coincide y hay 3+ tokens, es muy probable un falso positivo.
+    // Ej: "CHOCOLATE MAXI MANI" vs "MAXI COFFE TOFFI" → solo "maxi" coincide.
+    if (matchingTokenCount <= 1 && tokensA.length >= 3) {
+      baseScore = (baseScore * 0.4).toInt(); // Penalizar al 40%
+    } else if (matchingTokenCount <= 1 && tokensA.length == 2) {
+      baseScore = (baseScore * 0.6).toInt(); // Penalizar al 60%
+    }
+
+    // FASE 4: Bonus por cobertura completa de tokens.
+    // Si la mayoría de los tokens coinciden, aumentar confianza.
+    if (tokensA.isNotEmpty) {
+      double coverage = matchingTokenCount / tokensA.length;
+      baseScore += (coverage * 15).toInt(); // Hasta 15 puntos extra
+    }
+
+    return baseScore.clamp(0, 100);
   }
 }

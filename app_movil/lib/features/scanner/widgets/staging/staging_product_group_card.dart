@@ -384,6 +384,10 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
             color: widget.isDark ? Colors.white10 : Colors.grey.shade200,
           ),
 
+          // FASE 4: Banner de advertencia de confianza del matching
+          if (isParentMatch && group.matchProducto.confianza < 75 && group.matchProducto.confianza > 0)
+            _buildMatchConfidenceWarning(group, widget.isDark),
+
           // LISTA DE VARIANTES (HIJOS)
           ListView.separated(
             shrinkWrap: true,
@@ -573,6 +577,83 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
           fontWeight: FontWeight.bold,
           letterSpacing: 0.5,
         ),
+      ),
+    );
+  }
+
+  /// FASE 4: Banner visual de advertencia de confianza del matching
+  Widget _buildMatchConfidenceWarning(StagingProductGroup group, bool isDark) {
+    final confianza = group.matchProducto.confianza;
+    final isLow = confianza < 50;
+    final color = isLow ? Colors.red : Colors.orange;
+    final nombreFactura = group.nombreOriginalFactura ?? group.nombrePadre;
+    final nombreInventario = group.matchProducto.datos?.nombre ?? '???';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? color.withValues(alpha: 0.1) : color.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? color.withValues(alpha: 0.4) : color.shade300,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isLow ? Icons.error_outline : Icons.warning_amber_rounded,
+                color: isDark ? color[300] : color[800],
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isLow
+                      ? "⚠️ Similitud baja ($confianza%) — Verificar"
+                      : "⚠️ Similitud parcial ($confianza%) — Verificar",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: isDark ? color[300] : color[800],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          RichText(
+            text: TextSpan(
+              style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[300] : Colors.grey[800]),
+              children: [
+                const TextSpan(text: "Factura: ", style: TextStyle(fontWeight: FontWeight.bold)),
+                TextSpan(text: "\"$nombreFactura\"\n"),
+                const TextSpan(text: "Inventario: ", style: TextStyle(fontWeight: FontWeight.bold)),
+                TextSpan(text: "\"$nombreInventario\""),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 32,
+            child: OutlinedButton.icon(
+              onPressed: () => widget.provider.unlinkProductGroup(group.uuidTemporal),
+              icon: Icon(Icons.link_off, size: 14, color: isDark ? color[300] : color[800]),
+              label: Text(
+                "No es el mismo — Desvincular",
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? color[300] : color[800]),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: isDark ? color.withValues(alpha: 0.5) : color.shade400),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -34,7 +34,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                         filled: true,
                         fillColor: widget.isDark ? const Color(0xFF14141C) : Colors.white,
                       ),
-                      onChanged: (_) => updateState(() {}),
+                      onChanged: (_) => _onStockBaseManualEdit(),
                     )
                   ),
                 ],
@@ -53,7 +53,8 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
     double cantComprada = double.tryParse(_cantidadUmpCtrl.text) ?? widget.variant.cantidadUmpComprada;
     int unidLote = int.tryParse(_unidLoteCtrl.text) ?? widget.variant.unidadesPorLote;
     
-    int stockCalculado = factor > 0 ? ((cantComprada * unidLote) / factor).toInt() : 0;
+    // FASE 1 FIX: stockCalculado en UNIDADES BASE (sin dividir por factor)
+    int stockCalculado = (cantComprada * unidLote).toInt();
     int stockIngresante = int.tryParse(_stockIngresanteCtrl.text) ?? widget.variant.stockIngresanteOverride ?? stockCalculado;
 
     int stockSumado = stockBD + stockIngresante;
@@ -114,7 +115,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                                   filled: true,
                                   fillColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
                                 ),
-                                onChanged: (_) => updateState(() {}),
+                                onChanged: (_) => _onStockBaseManualEdit(),
                               )
                             ),
                             if (factor > 1) ...[

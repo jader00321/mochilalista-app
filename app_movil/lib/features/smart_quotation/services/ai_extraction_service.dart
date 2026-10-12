@@ -86,7 +86,6 @@ class AIExtractionService {
           throw Exception("La IA no devolvió datos legibles.");
         }
       } on RateLimitException {
-        // Rate limit (429) — reintentar si hay intentos restantes
         if (currentTry < maxRetries) {
           currentTry++;
           if (onRetrying != null) onRetrying("Reintentando conexión...");
@@ -94,29 +93,27 @@ class AIExtractionService {
           continue;
         } else {
           throw Exception(
-            "Los servidores de IA están muy concurridos en este momento. "
-            "Por favor, intenta de nuevo en unos segundos.",
+            "Los servidores están concurridos en este momento. "
+            "Intenta de nuevo en unos segundos.",
           );
         }
       } on AuthenticationException catch (e, stack) {
-        // API key inválida o sin permisos
-        debugPrint("Error IA Extracción [AUTH]: $e\n$stack");
+        debugPrint("ExtractionAI: Auth error - $e\n$stack");
         throw Exception(
           "Hubo un problema con el servicio de procesamiento. "
-          "Si el problema persiste, contacta al soporte. (Ref: AUTH-Q01)",
+          "Si persiste, contacta al soporte. (Ref: Q.401)",
         );
       } on TimeoutException catch (e, stack) {
-        // Timeout del SDK
-        debugPrint("Error IA Extracción [TIMEOUT]: $e\n$stack");
+        debugPrint("ExtractionAI: Timeout - $e\n$stack");
         throw Exception(
-          "El procesamiento tardó demasiado. Verifica tu conexión e intenta de nuevo.",
+          "El procesamiento tardó demasiado. "
+          "Verifica tu conexión e intenta de nuevo.",
         );
       } on ApiException catch (e, stack) {
-        // Errores generales del API (404, 500, etc.)
-        final msg = e.message.toLowerCase();
+        debugPrint("ExtractionAI: [${e.statusCode}] ${e.message}\n$stack");
 
-        // Reintentar si es error de servidor temporal (503, unavailable)
-        if (msg.contains('503') || msg.contains('unavailable')) {
+        // Servidor temporal — reintentar
+        if (e.statusCode == 503) {
           if (currentTry < maxRetries) {
             currentTry++;
             if (onRetrying != null) onRetrying("Reintentando conexión...");
@@ -125,40 +122,45 @@ class AIExtractionService {
           }
         }
 
-        // Modelo no encontrado
-        if (msg.contains('404') || msg.contains('not found')) {
-          debugPrint("Error IA Extracción [MODEL]: $e\n$stack");
+        // Créditos de prepago agotados
+        if (e.statusCode == 402) {
           throw Exception(
-            "El servicio de procesamiento necesita una actualización. "
-            "Contacta al soporte para resolverlo rápidamente. (Ref: MDL-Q02)",
+            "El servicio de procesamiento está temporalmente fuera de servicio. "
+            "Contacta al soporte para restablecerlo. (Ref: Q.402)",
           );
         }
 
-        debugPrint("Error IA Extracción [API]: $e\n$stack");
+        // Modelo no encontrado
+        if (e.statusCode == 404) {
+          throw Exception(
+            "El servicio necesita una actualización. "
+            "Contacta al soporte para resolverlo. (Ref: Q.404)",
+          );
+        }
+
+        // Cualquier otro error de API
         throw Exception(
           "No pudimos procesar esta imagen en este momento. "
-          "Intenta con otra foto o reintenta en unos segundos. (Ref: API-Q04)",
+          "Intenta con otra foto o reintenta en unos segundos. (Ref: Q.${e.statusCode})",
         );
       } on SocketException {
         throw Exception("Sin conexión a Internet. Verifica tu señal y reintenta.");
       } catch (e, stack) {
-        // Reenviar excepciones que ya tienen mensaje formateado
-        if (e.toString().contains("Los servidores de IA") || 
-            e.toString().contains("Sin conexión a Internet") || 
-            e.toString().contains("API Key") ||
-            e.toString().contains("Ref:")) {
-           rethrow;
+        if (e.toString().contains("Ref:") ||
+            e.toString().contains("servidores") ||
+            e.toString().contains("conexión a Internet")) {
+          rethrow;
         }
 
-        debugPrint("Error IA Extracción: $e\n$stack");
+        debugPrint("ExtractionAI: Unexpected - $e\n$stack");
         throw Exception(
           "No pudimos procesar esta imagen en este momento. "
-          "Intenta con otra foto o reintenta en unos segundos. (Ref: GEN-Q03)",
+          "Intenta con otra foto o reintenta en unos segundos. (Ref: Q.500)",
         );
       } finally {
         client?.close();
       }
     }
-    throw Exception("No pudimos procesar esta imagen en este momento. (Ref: GEN-Q04)");
+    throw Exception("No pudimos procesar esta imagen en este momento. (Ref: Q.000)");
   }
 }

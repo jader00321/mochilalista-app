@@ -596,14 +596,6 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                   ),
                 ),
                 
-                const SizedBox(height: 8),
-                  SmartUnitSelector(
-                    unitCtrl: _unidadVentaCtrl,
-                    factorCtrl: _unidadesVentaCtrl,
-                    isDark: widget.isDark,
-                    isMini: true,
-                    onChanged: (unit, factor, isAuto) => _onPurchaseDataChanged(),
-                  ),
                   Divider(height: 16, color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
                   
                   Text("🛒 Datos de Compra (Factura)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
@@ -703,7 +695,16 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                   ],
                   Divider(height: 16, color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
 
-                  Text("💰 Precio de Venta", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                  Text("💰 Venta y Precio", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                  const SizedBox(height: 8),
+                  // FASE 11: SmartUnitSelector movido aquí desde Identificación
+                  SmartUnitSelector(
+                    unitCtrl: _unidadVentaCtrl,
+                    factorCtrl: _unidadesVentaCtrl,
+                    isDark: widget.isDark,
+                    isMini: true,
+                    onChanged: (unit, factor, isAuto) => _onPurchaseDataChanged(),
+                  ),
                   const SizedBox(height: 8),
                   Row(children: [
                     Expanded(flex: 3, child: MiniInput(ctrl: _margenCtrl, label: "Margen (X)", isNum: true, hint: "1.35", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromMargen: true))),

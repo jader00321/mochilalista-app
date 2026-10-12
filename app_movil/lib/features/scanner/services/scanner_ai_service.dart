@@ -53,7 +53,6 @@ class ScannerAIService {
           throw Exception("La IA no devolvió datos legibles.");
         }
       } on RateLimitException {
-        // Rate limit (429) — reintentar si hay intentos restantes
         if (currentTry < maxRetries) {
           currentTry++;
           if (onRetrying != null) onRetrying("Reintentando conexión...");
@@ -61,29 +60,29 @@ class ScannerAIService {
           continue;
         } else {
           throw Exception(
-            "Los servidores de IA están muy concurridos en este momento. "
-            "Por favor, intenta de nuevo en unos segundos.",
+            "Los servidores están concurridos en este momento. "
+            "Intenta de nuevo en unos segundos.",
           );
         }
       } on AuthenticationException catch (e, stack) {
-        // API key inválida o sin permisos
-        AppLogger.error('ScannerAIService: Error de autenticación', e, stack);
+        AppLogger.error('ScannerAI: Auth error', e, stack);
         throw Exception(
           "Hubo un problema con el servicio de procesamiento. "
-          "Si el problema persiste, contacta al soporte. (Ref: AUTH-S01)",
+          "Si persiste, contacta al soporte. (Ref: S.401)",
         );
       } on TimeoutException catch (e, stack) {
-        // Timeout del SDK
-        AppLogger.error('ScannerAIService: Timeout', e, stack);
+        AppLogger.error('ScannerAI: Timeout', e, stack);
         throw Exception(
-          "El procesamiento tardó demasiado. Verifica tu conexión e intenta de nuevo.",
+          "El procesamiento tardó demasiado. "
+          "Verifica tu conexión e intenta de nuevo.",
         );
       } on ApiException catch (e, stack) {
-        // Errores generales del API (404, 500, etc.)
-        final msg = e.message.toLowerCase();
+        AppLogger.error(
+          'ScannerAI: [${e.statusCode}] ${e.message}', e, stack,
+        );
 
-        // Reintentar si es error de servidor temporal (503, unavailable)
-        if (msg.contains('503') || msg.contains('unavailable')) {
+        // Servidor temporal — reintentar
+        if (e.statusCode == 503) {
           if (currentTry < maxRetries) {
             currentTry++;
             if (onRetrying != null) onRetrying("Reintentando conexión...");
@@ -92,37 +91,42 @@ class ScannerAIService {
           }
         }
 
-        // Modelo no encontrado
-        if (msg.contains('404') || msg.contains('not found')) {
-          AppLogger.error('ScannerAIService: Modelo no encontrado', e, stack);
+        // Créditos de prepago agotados
+        if (e.statusCode == 402) {
           throw Exception(
-            "El servicio de procesamiento necesita una actualización. "
-            "Contacta al soporte para resolverlo rápidamente. (Ref: MDL-S02)",
+            "El servicio de procesamiento está temporalmente fuera de servicio. "
+            "Contacta al soporte para restablecerlo. (Ref: S.402)",
           );
         }
 
-        AppLogger.error('ScannerAIService: Error de API', e, stack);
+        // Modelo no encontrado
+        if (e.statusCode == 404) {
+          throw Exception(
+            "El servicio necesita una actualización. "
+            "Contacta al soporte para resolverlo. (Ref: S.404)",
+          );
+        }
+
+        // Cualquier otro error de API
         throw Exception(
           "No pudimos procesar esta imagen en este momento. "
-          "Intenta con otra foto o reintenta en unos segundos. (Ref: API-S04)",
+          "Intenta con otra foto o reintenta en unos segundos. (Ref: S.${e.statusCode})",
         );
       } on SocketException {
         throw Exception(
           "Sin conexión a Internet. Verifica tu señal y reintenta.",
         );
       } catch (e, stack) {
-        // Reenviar excepciones que ya tienen mensaje formateado
-        if (e.toString().contains("Los servidores de IA") ||
-            e.toString().contains("Sin conexión a Internet") ||
-            e.toString().contains("API Key") ||
-            e.toString().contains("Ref:")) {
+        if (e.toString().contains("Ref:") ||
+            e.toString().contains("servidores") ||
+            e.toString().contains("conexión a Internet")) {
           rethrow;
         }
 
-        AppLogger.error('ScannerAIService.analyzeInvoiceImage', e, stack);
+        AppLogger.error('ScannerAI: Unexpected', e, stack);
         throw Exception(
           "No pudimos procesar esta imagen en este momento. "
-          "Intenta con otra foto o reintenta en unos segundos. (Ref: GEN-S03)",
+          "Intenta con otra foto o reintenta en unos segundos. (Ref: S.500)",
         );
       } finally {
         client?.close();

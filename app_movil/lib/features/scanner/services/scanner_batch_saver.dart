@@ -152,22 +152,20 @@ class ScannerBatchSaver {
                 'proveedor_id': idProveedor,
               };
 
-              if (v.updateUmpCompra) updateData['ump_compra'] = v.umpCompra;
-              if (v.updatePrecioUmp) {
+              // FASE 5 FIX: Datos de compra se guardan como BLOQUE ATÓMICO coherente
+              // (no individualmente) para evitar inconsistencias entre campos dependientes.
+              if (v.updateDatosCompra) {
+                updateData['ump_compra'] = v.umpCompra;
                 updateData['precio_ump_proveedor'] = v.precioUmpProveedor;
-              }
-              if (v.updateCantidadUmp) {
                 updateData['cantidad_ump_comprada'] = v.cantidadUmpComprada;
-              }
-              if (v.updatePagoTotal) {
                 updateData['total_pago_lote'] = v.totalPagoLote;
-              }
-              if (v.updateUnidLote) {
                 updateData['unidades_por_lote'] = v.unidadesPorLote;
               }
               int stockDiff = (updateData['stock_actual'] as int) - stockActual;
 
-              if (v.updateCosto || v.updatePrecio) {
+              // FASE 5 FIX: Unidad de venta se guarda con su propio flag
+              // (antes dependía de updateCosto || updatePrecio)
+              if (v.updateUnidadVenta) {
                 updateData['unidad_venta'] = v.unidadVenta;
                 updateData['unidades_por_venta'] = v.unidadesPorVenta;
               }
