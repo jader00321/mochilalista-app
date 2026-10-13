@@ -5,6 +5,7 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/widgets/image_picker_field.dart'; 
 import 'package:app_movil/core/widgets/custom_text_field.dart';
 import 'package:app_movil/core/widgets/primary_button.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
 
 class OnboardingScreen extends StatefulWidget {
@@ -88,12 +89,258 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
     );
 
     if (success && mounted) {
-      Navigator.of(context).pop(); 
+      // 🚀 TAREA 5.5: Sugerir categorías iniciales antes de finalizar onboarding
+      await _showInitialCategoriesDialog(context);
+      if (mounted) {
+        Navigator.of(context).pop(); 
+      }
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(auth.errorMessage), backgroundColor: Colors.red),
       );
     }
+  }
+
+  // 🚀 TAREA 5.5: Diálogo interactivo de categorías sugeridas al crear negocio
+  Future<void> _showInitialCategoriesDialog(BuildContext context) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final inventory = Provider.of<InventoryProvider>(context, listen: false);
+    if (auth.activeBusinessId != null) {
+      inventory.updateContext(auth.activeBusinessId);
+    }
+
+    final Set<int> selectedIndices = {0, 1, 2, 3}; // Abarrotes, Bebidas, Golosinas, Limpieza preseleccionadas
+    bool isSaving = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 12),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.category_rounded, color: Colors.blue, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "¡Tu negocio está listo!",
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          "Categorías sugeridas",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.blue[300] : Colors.blue[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Elige las categorías con las que deseas comenzar para tener tu catálogo organizado:",
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.grey[400] : Colors.grey[700],
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 280),
+                      child: Scrollbar(
+                        thumbVisibility: true,
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _initialSuggestedCategories.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 6),
+                          itemBuilder: (context, index) {
+                            final cat = _initialSuggestedCategories[index];
+                            final isSelected = selectedIndices.contains(index);
+
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: isSaving
+                                  ? null
+                                  : () {
+                                      setDialogState(() {
+                                        if (isSelected) {
+                                          selectedIndices.remove(index);
+                                        } else {
+                                          selectedIndices.add(index);
+                                        }
+                                      });
+                                    },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? (isDark ? Colors.blue.withValues(alpha: 0.15) : const Color(0xFFEBF3FF))
+                                      : (isDark ? const Color(0xFF1B1B26) : Colors.grey[50]),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? Colors.blue
+                                        : (isDark ? Colors.white12 : Colors.grey.shade300),
+                                    width: isSelected ? 1.5 : 1.0,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(cat.icon, style: const TextStyle(fontSize: 18)),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            cat.name,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                              color: isDark ? Colors.white : Colors.black87,
+                                            ),
+                                          ),
+                                          Text(
+                                            cat.description,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Checkbox(
+                                      value: isSelected,
+                                      activeColor: Colors.blue,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                      onChanged: isSaving
+                                          ? null
+                                          : (val) {
+                                              setDialogState(() {
+                                                if (val == true) {
+                                                  selectedIndices.add(index);
+                                                } else {
+                                                  selectedIndices.remove(index);
+                                                }
+                                              });
+                                            },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              actions: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: isSaving ? null : () => Navigator.pop(dialogCtx),
+                        child: Text(
+                          "Omitir por ahora",
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: isSaving
+                            ? null
+                            : () async {
+                                if (selectedIndices.isEmpty) {
+                                  Navigator.pop(dialogCtx);
+                                  return;
+                                }
+                                setDialogState(() => isSaving = true);
+                                int createdCount = 0;
+                                for (final idx in selectedIndices) {
+                                  final cat = _initialSuggestedCategories[idx];
+                                  final res = await inventory.createCategory(
+                                    cat.name,
+                                    descripcion: cat.description,
+                                  );
+                                  if (res != null) createdCount++;
+                                }
+                                if (dialogCtx.mounted) {
+                                  Navigator.pop(dialogCtx);
+                                }
+                                if (context.mounted && createdCount > 0) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Se crearon $createdCount categorías iniciales con éxito.'),
+                                      backgroundColor: Colors.green,
+                                      duration: const Duration(seconds: 3),
+                                    ),
+                                  );
+                                }
+                              },
+                        child: Text(
+                          selectedIndices.isEmpty
+                              ? "Continuar"
+                              : "Guardar (${selectedIndices.length})",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -469,3 +716,22 @@ class _PhoneNumberFormatter extends TextInputFormatter {
     );
   }
 }
+
+class _InitialCategorySuggestion {
+  final String icon;
+  final String name;
+  final String description;
+  const _InitialCategorySuggestion(this.icon, this.name, this.description);
+}
+
+const List<_InitialCategorySuggestion> _initialSuggestedCategories = [
+  _InitialCategorySuggestion('🌾', 'Abarrotes', 'Arroz, azúcar, fideos, aceites y menestras'),
+  _InitialCategorySuggestion('🥤', 'Bebidas', 'Gaseosas, aguas, jugos e hidratantes'),
+  _InitialCategorySuggestion('🍬', 'Golosinas', 'Galletas, chocolates, caramelos y snacks'),
+  _InitialCategorySuggestion('🧹', 'Limpieza', 'Detergentes, lejías, jabones y desinfectantes'),
+  _InitialCategorySuggestion('🥛', 'Lácteos', 'Leches, yogures, quesos y mantequillas'),
+  _InitialCategorySuggestion('🧴', 'Cuidado Personal', 'Shampoos, desodorantes y cremas'),
+  _InitialCategorySuggestion('✏️', 'Útiles Escolares', 'Cuadernos, lápices, lapiceros y borradores'),
+  _InitialCategorySuggestion('🥫', 'Conservas', 'Atunes y conservas de verduras'),
+  _InitialCategorySuggestion('🥖', 'Panadería', 'Panes, tostadas y queques'),
+];
