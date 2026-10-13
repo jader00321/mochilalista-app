@@ -23,6 +23,7 @@ import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_i
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_footer.dart';             
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_save_modal.dart';         
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_empty_state.dart';        
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';        
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_headers_section.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/manual/client_search_modal.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_dialog_helper.dart'; 
@@ -268,6 +269,33 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
           backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
           foregroundColor: textColor, elevation: 0,
           actions: [
+            const InfoTooltipButton(
+              title: "Cotización Manual",
+              description:
+                  "Crea o edita presupuestos personalizados seleccionando productos del catálogo o agregando ítems con precios a medida.",
+              tips: [
+                InfoTip(
+                  icon: Icons.search_rounded,
+                  text:
+                      "Toca 'Agregar Producto' para buscar en tu inventario y añadir presentaciones al presupuesto.",
+                ),
+                InfoTip(
+                  icon: Icons.person_outline_rounded,
+                  text:
+                      "Asigna un cliente del directorio para vincularlo a su cuenta o enviar la cotización por WhatsApp.",
+                ),
+                InfoTip(
+                  icon: Icons.reorder_rounded,
+                  text:
+                      "Arrastra y suelta ítems para reorganizar el orden de la lista antes de guardar o compartir.",
+                ),
+                InfoTip(
+                  icon: Icons.point_of_sale_rounded,
+                  text:
+                      "Convierte la cotización en una venta directa con un solo toque desde el pie de página.",
+                ),
+              ],
+            ),
             if (_items.isNotEmpty)
               IconButton(icon: Icon(Icons.delete_sweep, color: isDark ? Colors.red[400] : Colors.red, size: 28), tooltip: "Limpiar Todo", onPressed: _clearWholeList),
             if (!isClient)

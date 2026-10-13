@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:app_movil/features/analytics/services/inventory_intelligence_service.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class AuditTrailScreen extends StatefulWidget {
   final int presentationId;
@@ -67,6 +68,30 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
         title: const Text("Trazabilidad"),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: const [
+          InfoTooltipButton(
+            title: "Trazabilidad de Stock (Kardex)",
+            description:
+                "Historial cronológico de auditoría para cada movimiento de stock: compras por factura, ventas directas y ajustes de inventario.",
+            tips: [
+              InfoTip(
+                icon: Icons.timeline_rounded,
+                text:
+                    "Cada evento muestra la fecha, tipo de movimiento, cantidad operada y el saldo de stock resultante.",
+              ),
+              InfoTip(
+                icon: Icons.receipt_outlined,
+                text:
+                    "Las compras registradas indican la factura de procedencia y su proveedor.",
+              ),
+              InfoTip(
+                icon: Icons.shield_outlined,
+                text:
+                    "Permite auditar diferencias de existencias y controlar la rotación exacta del producto.",
+              ),
+            ],
+          ),
+        ],
       ),
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
       body: _isLoading

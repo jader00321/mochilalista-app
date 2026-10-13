@@ -8,6 +8,7 @@ import 'package:app_movil/features/analytics/screens/audit_trail_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:app_movil/features/analytics/services/purchase_order_generator.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class SmartRestockItem {
   final int presentationId;
@@ -168,6 +169,28 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          const InfoTooltipButton(
+            title: "Reabastecimiento Inteligente",
+            description:
+                "Calcula en base a tu velocidad de ventas cuándo te quedarás sin stock y cuántas unidades debes pedir a tus proveedores.",
+            tips: [
+              InfoTip(
+                icon: Icons.speed_rounded,
+                text:
+                    "ROP (Punto de Reorden): Nivel de stock donde debes solicitar producto antes de que se agote.",
+              ),
+              InfoTip(
+                icon: Icons.shield_outlined,
+                text:
+                    "Stock de Seguridad: Cantidad de reserva para absorber picos inesperados de demanda.",
+              ),
+              InfoTip(
+                icon: Icons.picture_as_pdf_outlined,
+                text:
+                    "Toca el botón de descarga para generar una Orden de Compra en PDF lista para enviar a tus proveedores.",
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.download),
             tooltip: 'Exportar Orden de Compra',

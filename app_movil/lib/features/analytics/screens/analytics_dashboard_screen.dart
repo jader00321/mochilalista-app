@@ -22,6 +22,7 @@ import 'package:app_movil/features/analytics/widgets/dashboard/dead_stock_card.d
 import 'package:app_movil/features/analytics/widgets/dashboard/top_categories_card.dart';
 import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
 import 'package:app_movil/features/analytics/screens/predictive_analytics_screen.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class AnalyticsDashboardScreen extends StatefulWidget {
   const AnalyticsDashboardScreen({super.key});
@@ -88,33 +89,62 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: prov.currentStep == AnalyticsStep.done ? [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: "Regenerar reporte",
-            onPressed: () => prov.runStaggeredAnalysis(),
-          ),
-          IconButton(
-            icon: Icon(_obscureAmounts ? Icons.visibility_off : Icons.visibility),
-            onPressed: () {
-              setState(() {
-                _obscureAmounts = !_obscureAmounts;
-              });
-            },
-            tooltip: _obscureAmounts ? "Mostrar Saldos" : "Ocultar Saldos",
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.download),
-            onSelected: (value) {
-              if (value == 'pdf') _exportPdf(context, prov, auth);
-              if (value == 'csv') _exportCsv(context, prov, auth);
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'pdf', child: Text("Exportar a PDF")),
-              const PopupMenuItem(value: 'csv', child: Text("Exportar a Excel (CSV)")),
+        actions: [
+          const InfoTooltipButton(
+            title: "Inteligencia de Negocio",
+            description:
+                "Panel de analítica ejecutiva y financiera con KPIs de ingresos, margen de ganancia, productos estrella y stock estancado.",
+            tips: [
+              InfoTip(
+                icon: Icons.pie_chart_outline_rounded,
+                text:
+                    "Revisa la distribución de métodos de pago y orígenes de venta (Caja Rápida vs Cotizaciones).",
+              ),
+              InfoTip(
+                icon: Icons.visibility_outlined,
+                text:
+                    "Usa el ícono de ojo para ocultar montos cuando estés atendiendo frente a clientes.",
+              ),
+              InfoTip(
+                icon: Icons.warning_amber_rounded,
+                text:
+                    "Identifica el 'Stock Muerto' para lanzar promociones o combos y liberar capital.",
+              ),
+              InfoTip(
+                icon: Icons.file_download_outlined,
+                text:
+                    "Exporta el informe completo en PDF ejecutivo o formato Excel.",
+              ),
             ],
-          )
-        ] : null,
+          ),
+          if (prov.currentStep == AnalyticsStep.done) ...[
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: "Regenerar reporte",
+              onPressed: () => prov.runStaggeredAnalysis(),
+            ),
+            IconButton(
+              icon: Icon(_obscureAmounts ? Icons.visibility_off : Icons.visibility),
+              onPressed: () {
+                setState(() {
+                  _obscureAmounts = !_obscureAmounts;
+                });
+              },
+              tooltip: _obscureAmounts ? "Mostrar Saldos" : "Ocultar Saldos",
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.download),
+              onSelected: (value) {
+                if (value == 'pdf') _exportPdf(context, prov, auth);
+                if (value == 'csv') _exportCsv(context, prov, auth);
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'pdf', child: Text("Exportar a PDF")),
+                const PopupMenuItem(value: 'csv', child: Text("Exportar a Excel (CSV)")),
+              ],
+            ),
+          ],
+        ],
       ),
       body: _buildBody(prov, isDark),
       floatingActionButton: prov.currentStep == AnalyticsStep.done ? FloatingActionButton.extended(

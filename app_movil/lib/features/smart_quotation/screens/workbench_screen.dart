@@ -12,6 +12,7 @@ import 'package:app_movil/core/screens/home_screen.dart';
 import 'package:app_movil/features/smart_quotation/widgets/workbench/archived_lists_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/workbench/dashboard_header.dart';
 import 'package:app_movil/core/widgets/export_options_modal.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class WorkbenchScreen extends StatefulWidget {
   const WorkbenchScreen({super.key});
@@ -102,6 +103,33 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
                   onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen())),
                 ),
                 actions: [
+                  const InfoTooltipButton(
+                    title: "Mesa de Trabajo de Cotizaciones",
+                    description:
+                        "Centro de control de pedidos y listas escolares: cotizaciones en proceso, listas armadas y ventas despachadas.",
+                    tips: [
+                      InfoTip(
+                        icon: Icons.auto_awesome_rounded,
+                        text:
+                            "Usa el Escáner IA para digitalizar listas escolares de fotos o PDF en segundos.",
+                      ),
+                      InfoTip(
+                        icon: Icons.checklist_rounded,
+                        text:
+                            "Monitorea el flujo: 'En Proceso' (borradores), 'Listas Armadas' (listas para vender) y 'Vendidas'.",
+                      ),
+                      InfoTip(
+                        icon: Icons.archive_outlined,
+                        text:
+                            "Consulta las listas archivadas para reactivar o clonar pedidos anteriores.",
+                      ),
+                      InfoTip(
+                        icon: Icons.file_download_outlined,
+                        text:
+                            "Genera reportes y proformas en PDF o Excel con tu membrete comercial.",
+                      ),
+                    ],
+                  ),
                   IconButton(
                     icon: const Icon(Icons.archive, size: 26), 
                     tooltip: "Ver Listas Archivadas",

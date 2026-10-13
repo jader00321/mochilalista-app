@@ -15,7 +15,8 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/client_quotations
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_delete_modal.dart';
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart'; 
-import 'package:app_movil/core/widgets/confirm_action_modal.dart'; 
+import 'package:app_movil/core/widgets/confirm_action_modal.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart'; 
 
 class ClientDetailScreen extends StatefulWidget {
   final ClientModel client;
@@ -235,6 +236,33 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
               pinned: true, 
               floating: false,
               actions: [
+                const InfoTooltipButton(
+                  title: "Detalle y Estado de Cuenta",
+                  description:
+                      "Visión 360° del cliente: balance de deuda, compras históricas, cotizaciones pendientes y libro contable de abonos.",
+                  tips: [
+                    InfoTip(
+                      icon: Icons.payments_outlined,
+                      text:
+                          "Usa 'Abonar a Deuda' para registrar pagos parciales o totales que amortizan sus cuotas.",
+                    ),
+                    InfoTip(
+                      icon: Icons.chat_bubble_outline,
+                      text:
+                          "Toca 'Recordar' para generar el mensaje de WhatsApp con el desglose exacto de cuotas vencidas y métodos de pago.",
+                    ),
+                    InfoTip(
+                      icon: Icons.point_of_sale_rounded,
+                      text:
+                          "Inicia una 'Venta Rápida' pre-cargando los datos de este cliente automáticamente.",
+                    ),
+                    InfoTip(
+                      icon: Icons.receipt_long_outlined,
+                      text:
+                          "Navega entre 'Libro Contable', 'Compras' y 'Cotizaciones' para ver todo su historial.",
+                    ),
+                  ],
+                ),
                 IconButton(icon: const Icon(Icons.edit_note, size: 28), tooltip: "Editar Perfil", onPressed: () => _openEditor(context)),
                 IconButton(
                   icon: const Icon(Icons.delete_forever, size: 28), 

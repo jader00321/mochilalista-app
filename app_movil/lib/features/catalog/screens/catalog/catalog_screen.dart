@@ -22,6 +22,7 @@ import 'package:app_movil/core/widgets/product_detail_modal.dart';
 import 'package:app_movil/core/widgets/catalog_filter_drawer.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/catalog_cart_modal.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 // Pantallas
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
@@ -547,6 +548,28 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                         )
                       : null,
                   actions: [
+                    const InfoTooltipButton(
+                      title: "Catálogo de Ventas",
+                      description:
+                          "Muestra todos tus productos con stock disponible, presentaciones, precios y ofertas en un formato visual para ventas rápidas.",
+                      tips: [
+                        InfoTip(
+                          icon: Icons.touch_app_outlined,
+                          text:
+                              "Toca un producto para abrir sus opciones y agregarlo al Carrito o a tu Lista.",
+                        ),
+                        InfoTip(
+                          icon: Icons.filter_list_rounded,
+                          text:
+                              "Usa el botón de filtros o las categorías para encontrar rápidamente lo que necesitas.",
+                        ),
+                        InfoTip(
+                          icon: Icons.point_of_sale_rounded,
+                          text:
+                              "Pasa los ítems de tu carrito directamente a Caja Rápida o Cotización Manual.",
+                        ),
+                      ],
+                    ),
                     IconButton(
                       icon: Icon(
                         Icons.refresh,

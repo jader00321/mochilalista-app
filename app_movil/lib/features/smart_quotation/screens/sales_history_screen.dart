@@ -12,6 +12,7 @@ import 'package:app_movil/features/smart_quotation/widgets/history/sales_list_bu
 import 'package:app_movil/features/smart_quotation/services/history_export_service.dart';
 import 'package:app_movil/core/widgets/export_options_modal.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -259,6 +260,33 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
                 elevation: 0,
                 pinned: true,
                 actions: [
+                  const InfoTooltipButton(
+                    title: "Historial de Ventas",
+                    description:
+                        "Registro cronológico y financiero de todas las transacciones realizadas por Cotizaciones, Caja Rápida o Ventas a Crédito.",
+                    tips: [
+                      InfoTip(
+                        icon: Icons.tab_rounded,
+                        text:
+                            "Usa las pestañas para separar ventas por Cotización Inteligente, Caja Rápida o Anuladas.",
+                      ),
+                      InfoTip(
+                        icon: Icons.filter_alt_outlined,
+                        text:
+                            "Filtra por método de pago (Efectivo, Yape/Plin, Crédito) o rango de fechas.",
+                      ),
+                      InfoTip(
+                        icon: Icons.file_download_outlined,
+                        text:
+                            "Exporta tus reportes financieros consolidados en formato PDF o Excel (CSV).",
+                      ),
+                      InfoTip(
+                        icon: Icons.receipt_long_rounded,
+                        text:
+                            "Toca cualquier venta para ver su detalle, desglose de ítems o reimprimir comprobante.",
+                      ),
+                    ],
+                  ),
                   IconButton(
                     icon: const Icon(Icons.file_download, size: 26),
                     tooltip: "Exportar Reportes",

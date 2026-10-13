@@ -8,6 +8,7 @@ import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:intl/intl.dart';
 
 class BundleBuilderScreen extends StatefulWidget {
@@ -711,6 +712,28 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
       appBar: AppBar(
         title: Text(widget.bundleToEdit == null ? "Nuevo Paquete" : "Editar Paquete"),
         actions: [
+          const InfoTooltipButton(
+            title: "Creador de Combos y Promociones",
+            description:
+                "Crea paquetes, combos escolares o liquidaciones agrupando productos con precios de oferta para maximizar tus ventas.",
+            tips: [
+              InfoTip(
+                icon: Icons.inventory_2_outlined,
+                text:
+                    "Paquete Fusión: Combina 2 o más productos complementarios con un precio especial más atractivo.",
+              ),
+              InfoTip(
+                icon: Icons.bolt_outlined,
+                text:
+                    "Ofertas Flash y 2x1: Descuentos temporales con fecha de caducidad ideales para campañas escolares.",
+              ),
+              InfoTip(
+                icon: Icons.calculate_outlined,
+                text:
+                    "El indicador de margen te avisa si el precio asignado al combo cubre tus costos de adquisición.",
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.check), 
             onPressed: _saveBundle,

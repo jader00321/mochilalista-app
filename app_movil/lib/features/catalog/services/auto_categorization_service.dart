@@ -77,7 +77,7 @@ class AutoCategorizationService {
     for (var entry in categoryKeywords.entries) {
       for (var kw in entry.value) {
         final regex = RegExp(r'\b' + RegExp.escape(kw) + r'\b', caseSensitive: false);
-        if (regex.hasMatch(lower) || lower.contains(kw)) {
+        if (regex.hasMatch(lower)) {
           return entry.key;
         }
       }

@@ -10,6 +10,7 @@ import 'package:app_movil/features/scanner/models/invoice_model.dart';
 import 'package:app_movil/features/catalog/models/provider_model.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class InvoiceDetailScreen extends StatefulWidget {
   final int invoiceId;
@@ -354,6 +355,30 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.teal[800],
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: const [
+          InfoTooltipButton(
+            title: "Detalle y Auditoría de Factura",
+            description:
+                "Visor interactivo con división de pantalla: compara la foto original de la factura contra los datos extraídos por IA o registrados manualmente.",
+            tips: [
+              InfoTip(
+                icon: Icons.unfold_more_rounded,
+                text:
+                    "Arrastra la barra divisoria central para expandir el visor de la foto o el listado de productos.",
+              ),
+              InfoTip(
+                icon: Icons.zoom_in_rounded,
+                text:
+                    "Haz zoom con dos dedos en la imagen de la factura para comprobar precios o códigos borrosos.",
+              ),
+              InfoTip(
+                icon: Icons.checklist_rounded,
+                text:
+                    "Revisa los ítems vinculados directamente a tus presentaciones de producto y stock en almacén.",
+              ),
+            ],
+          ),
+        ],
       ),
       body: SafeArea(
         child: MultiSplitViewTheme(
@@ -1064,7 +1089,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                                       if (pVenta != null)
                                                         _auditTag("Venta", "S/ ${pVenta.toStringAsFixed(2)}", isDark),
                                                       if (stock != null)
-                                                        _auditTag("Stock", "${stock.toStringAsFixed(stock.truncateToDouble() == stock ? 0 : 1)}", isDark),
+                                                        _auditTag("Stock", stock.toStringAsFixed(stock.truncateToDouble() == stock ? 0 : 1), isDark),
                                                       if (pres['unidad_medida'] != null)
                                                         _auditTag("UMP", pres['unidad_medida'].toString(), isDark),
                                                     ],

@@ -8,6 +8,7 @@ import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_filter_bar.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_card.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_profile_editor.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class ClientTrackingScreen extends StatefulWidget {
   const ClientTrackingScreen({super.key});
@@ -303,6 +304,33 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                 floating: true,
                 snap: true,
                 actions: [
+                  const InfoTooltipButton(
+                    title: "Directorio de Clientes (CRM)",
+                    description:
+                        "Control integral de clientes, cuentas por cobrar, deudas pendientes y comunicación por WhatsApp.",
+                    tips: [
+                      InfoTip(
+                        icon: Icons.person_add_rounded,
+                        text:
+                            "Registra clientes con nombre, teléfono y documento para asignarles cotizaciones o ventas a crédito.",
+                      ),
+                      InfoTip(
+                        icon: Icons.filter_alt_outlined,
+                        text:
+                            "Filtra por 'Con Deuda', 'Al Día' o busca rápidamente por nombre o número.",
+                      ),
+                      InfoTip(
+                        icon: Icons.notifications_active_outlined,
+                        text:
+                            "Usa 'Recordatorio Masivo' para enviar mensajes de cobro por WhatsApp con tus métodos de pago.",
+                      ),
+                      InfoTip(
+                        icon: Icons.history_rounded,
+                        text:
+                            "Toca un cliente para ver su estado de cuenta, historial de compras y pagos registrados.",
+                      ),
+                    ],
+                  ),
                   IconButton(
                     icon: const Icon(Icons.person_add, size: 28), 
                     tooltip: "Nuevo Cliente", 

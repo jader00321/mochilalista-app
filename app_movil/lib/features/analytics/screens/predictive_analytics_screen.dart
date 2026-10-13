@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/analytics/services/predictive_service.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class PredictiveAnalyticsScreen extends StatefulWidget {
   const PredictiveAnalyticsScreen({super.key});
@@ -64,6 +65,30 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         title: const Text("Proyecciones y Crecimiento", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: const [
+          InfoTooltipButton(
+            title: "Proyecciones y Crecimiento",
+            description:
+                "Simulador financiero y algoritmos de proyección que anticipan la evolución de tu patrimonio, ventas e inventario a futuro.",
+            tips: [
+              InfoTip(
+                icon: Icons.trending_up_rounded,
+                text:
+                    "Curva de Tendencia: Proyección matemática basada en el histórico de snapshots diarios de tu negocio.",
+              ),
+              InfoTip(
+                icon: Icons.tune_rounded,
+                text:
+                    "Simulador de Escenarios: Mueve los sliders de incremento de ventas o reducción de costos para ver el impacto financiero proyectado.",
+              ),
+              InfoTip(
+                icon: Icons.account_balance_outlined,
+                text:
+                    "Patrimonio Total: Valuación combinada del inventario físico en stock y el flujo de caja.",
+              ),
+            ],
+          ),
+        ],
       ),
       body: _buildBody(isDark),
     );

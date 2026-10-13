@@ -4,6 +4,7 @@ import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:app_movil/core/providers/printer_provider.dart';
 import 'package:app_movil/core/providers/theme_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class PrinterConfigScreen extends StatelessWidget {
   const PrinterConfigScreen({super.key});
@@ -26,6 +27,33 @@ class PrinterConfigScreen extends StatelessWidget {
         elevation: 0,
         iconTheme: IconThemeData(color: textColor),
         actions: [
+          const InfoTooltipButton(
+            title: "Impresora Térmica Bluetooth",
+            description:
+                "Conecta tu impresora de tickets portátil o de escritorio para imprimir comprobantes de venta y tickets de caja al instante.",
+            tips: [
+              InfoTip(
+                icon: Icons.bluetooth_searching_rounded,
+                text:
+                    "Primero vincula la impresora en los Ajustes de Bluetooth de tu celular Android.",
+              ),
+              InfoTip(
+                icon: Icons.refresh_rounded,
+                text:
+                    "Presiona el botón de refrescar para detectar los dispositivos Bluetooth emparejados.",
+              ),
+              InfoTip(
+                icon: Icons.receipt_outlined,
+                text:
+                    "Configura el ancho de papel correcto (58mm para mini portátil o 80mm para escritorio).",
+              ),
+              InfoTip(
+                icon: Icons.print_rounded,
+                text:
+                    "Usa 'Prueba de Impresión' para verificar la conexión y la nitidez del ticket impreso.",
+              ),
+            ],
+          ),
           IconButton(
             icon: Icon(Icons.refresh, color: textColor),
             onPressed: () => printerProv.scanDevices(),
