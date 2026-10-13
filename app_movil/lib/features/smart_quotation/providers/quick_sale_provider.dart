@@ -65,6 +65,19 @@ class QuickSaleProvider with ChangeNotifier {
     return diff > 0 ? diff : 0.0;
   }
 
+  // 🔧 TAREA 4.4.3: Ganancia estimada del carrito actual
+  double get estimatedCartProfit {
+    double profit = 0;
+    for (var item in _currentState.cart) {
+      final qty = _currentState.quantities[item.presentationId] ?? 1;
+      final effectivePrice = _currentState.overridePrices[item.presentationId] ?? item.offerPrice ?? item.price;
+      if (item.cost != null && item.cost! > 0) {
+        profit += (effectivePrice - item.cost!) * qty;
+      }
+    }
+    return profit > 0 ? profit : 0.0;
+  }
+
   int getQuantity(int presentationId) => _currentState.quantities[presentationId] ?? 1;
   
   double getEffectivePrice(int presentationId) {
@@ -109,6 +122,13 @@ class QuickSaleProvider with ChangeNotifier {
       return updateQuantity(presId, (_currentState.quantities[presId] ?? 1) + 1, itemWrapper.displayStockForValidation);
     }
 
+    // 🔧 TAREA 4.4.2: Costo de presentación para cálculo de margen en tiempo real
+    final double? calculatedCost = itemWrapper.presentation.costoUnitarioCalculado != null
+        ? itemWrapper.presentation.costoUnitarioCalculado! * itemWrapper.presentation.unidadesPorVenta
+        : (itemWrapper.presentation.factorGananciaVenta != null && itemWrapper.presentation.factorGananciaVenta! > 0
+            ? itemWrapper.presentation.precioVentaFinal / itemWrapper.presentation.factorGananciaVenta!
+            : null);
+
     final matched = MatchedProduct(
       productId: itemWrapper.product.id,
       presentationId: presId,
@@ -121,7 +141,8 @@ class QuickSaleProvider with ChangeNotifier {
       stock: itemWrapper.displayStockForValidation,
       imageUrl: itemWrapper.presentation.imagenUrl ?? itemWrapper.product.imagenUrl,
       unit: itemWrapper.presentation.unidadVenta ?? "Unidad", 
-      conversionFactor: itemWrapper.presentation.unidadesPorVenta, 
+      conversionFactor: itemWrapper.presentation.unidadesPorVenta,
+      cost: calculatedCost,
     );
 
     _currentState.cart.add(matched);

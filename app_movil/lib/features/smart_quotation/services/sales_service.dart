@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/database/product_queries.dart';
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/smart_quotation/repositories/sale_repository.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 
@@ -726,6 +729,28 @@ class SalesService {
       return null;
     } catch (e) {
       throw Exception("Error al obtener cuota local: $e");
+    }
+  }
+
+  // 🔧 TAREA 4.4.1: Productos vendidos recientemente para acceso rápido
+  Future<List<InventoryWrapper>> getRecentSoldPresentations(int negocioId, {int limit = 6}) async {
+    try {
+      final db = await dbHelper.database;
+      final results = await db.rawQuery('''
+        ${ProductQueries.selectInventoryCols}
+        INNER JOIN venta_items vi ON vi.presentation_id = pr.id
+        INNER JOIN ventas v ON vi.venta_id = v.id
+        WHERE v.negocio_id = ? 
+          AND v.estado_pago != 'anulado'
+          AND pr.activo = 1
+        GROUP BY pr.id
+        ORDER BY MAX(v.fecha_venta) DESC
+        LIMIT ?
+      ''', [negocioId, limit]);
+      return results.map((r) => ProductQueries.parseInventoryRow(r)).toList();
+    } catch (e) {
+      debugPrint("Error obteniendo productos vendidos recientemente: $e");
+      return [];
     }
   }
 }

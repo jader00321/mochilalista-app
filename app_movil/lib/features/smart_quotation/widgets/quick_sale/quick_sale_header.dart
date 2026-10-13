@@ -82,9 +82,15 @@ class QuickSaleHeader extends StatelessWidget {
     final headerColor = isDark ? const Color(0xFF14141C) : const Color(0xFF1F2937); // Gris muy oscuro
     final bodyColor = isDark ? const Color(0xFF1A1A24) : const Color(0xFF2D3748); // Gris medio oscuro
 
+    final clientSubtitle = provider.clientId != null
+        ? "Cliente Vinculado"
+        : (provider.cartItems.isNotEmpty && provider.estimatedCartProfit > 0
+            ? "Cliente anónimo · Ganancia est. ${currency.format(provider.estimatedCartProfit)}"
+            : "Cliente anónimo o nuevo");
+
     return ExpansionTile(
       title: Text(provider.clientName ?? "Datos del Cliente (Opcional)", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
-      subtitle: Text(provider.clientId != null ? "Cliente Vinculado" : "Cliente anónimo o nuevo", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+      subtitle: Text(clientSubtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
       iconColor: Colors.white,
       collapsedIconColor: Colors.white,
       backgroundColor: headerColor,

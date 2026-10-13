@@ -19,6 +19,7 @@ import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_sale
 import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_checkout_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_search_result_tile.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/features/smart_quotation/services/sales_service.dart';
 
 class QuickSaleScreen extends StatefulWidget {
   const QuickSaleScreen({super.key});
@@ -479,6 +480,91 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                         ),
                       ),
 
+                    // 🔧 TAREA 4.4.1: Productos vendidos recientemente
+                    if (searchProv.searchResults.isEmpty && !isGuest && auth.activeBusinessId != null)
+                      SliverToBoxAdapter(
+                        child: FutureBuilder<List<InventoryWrapper>>(
+                          future: SalesService().getRecentSoldPresentations(auth.activeBusinessId!),
+                          builder: (ctx, snap) {
+                            if (!snap.hasData || snap.data!.isEmpty) return const SizedBox.shrink();
+                            final recents = snap.data!;
+                            return Container(
+                              margin: const EdgeInsets.only(top: 8),
+                              padding: const EdgeInsets.only(left: 20, right: 20, top: 10, bottom: 6),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.bolt, size: 16, color: Colors.amber[700]),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        "Vendidos Recientemente",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    height: 38,
+                                    child: ListView.separated(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: recents.length,
+                                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                      itemBuilder: (ctx, i) {
+                                        final wrapper = recents[i];
+                                        final displayName = wrapper.displayNameDetail;
+                                        return InkWell(
+                                          borderRadius: BorderRadius.circular(10),
+                                          onTap: () => _addToCart(wrapper),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: isDark ? Colors.blue.withValues(alpha: 0.12) : Colors.blue.withValues(alpha: 0.08),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.2)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.add_circle_outline, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  displayName.length > 20 ? '${displayName.substring(0, 18)}...' : displayName,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isDark ? Colors.blue[200] : Colors.blue[800],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  "S/ ${wrapper.effectivePrice.toStringAsFixed(2)}",
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+
                     if (promoProv.bundles.isNotEmpty && searchProv.searchResults.isEmpty)
                       SliverToBoxAdapter(
                         child: Builder(builder: (ctx) {
@@ -632,7 +718,30 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("TOTAL A COBRAR", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1)),
+                            Row(
+                              children: [
+                                const Text("TOTAL A COBRAR", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1)),
+                                if (quickProv.estimatedCartProfit > 0) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300),
+                                    ),
+                                    child: Text(
+                                      "Ganancia ~${currency.format(quickProv.estimatedCartProfit)}",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.green[300] : Colors.green[800],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                             FittedBox(
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerLeft,

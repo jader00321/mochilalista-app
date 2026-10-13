@@ -24,6 +24,7 @@ class MatchedProduct {
   final bool isAvailable;
   final bool isOriginalItem;
   final int? bundleId;
+  final double? cost;
 
   MatchedProduct({
     required this.productId,
@@ -42,6 +43,7 @@ class MatchedProduct {
     this.isAvailable = true,
     this.isOriginalItem = false,
     this.bundleId,
+    this.cost,
   });
 
   factory MatchedProduct.fromJson(Map<String, dynamic> json) {
@@ -66,6 +68,7 @@ class MatchedProduct {
       isAvailable: json['is_available'] == 1 || json['is_available'] == true || json['is_available'] == null,
       isOriginalItem: json['is_original_item'] ?? false,
       bundleId: json['bundle_id'],
+      cost: json['cost'] != null ? (json['cost'] as num).toDouble() : null,
     );
   }
 
@@ -95,6 +98,7 @@ class MatchedProduct {
       unit: unit, conversionFactor: conversionFactor, isAvailable: isAvailable,
       isOriginalItem: isOriginalItem,
       bundleId: bundleId,
+      cost: cost,
     );
   }
 }

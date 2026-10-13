@@ -180,7 +180,42 @@ class QuickSaleCartItem extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Unitario", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600], fontWeight: FontWeight.w600)),
+                        Row(
+                          children: [
+                            Text("Unitario", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600], fontWeight: FontWeight.w600)),
+                            if (product.cost != null && product.cost! > 0) ...[
+                              const SizedBox(width: 6),
+                              Builder(
+                                builder: (_) {
+                                  final double margin = ((effectivePrice - product.cost!) / effectivePrice) * 100;
+                                  final Color marginColor = margin >= 20
+                                      ? (isDark ? Colors.green[400]! : Colors.green[700]!)
+                                      : (margin >= 10
+                                          ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
+                                          : (isDark ? Colors.red[400]! : Colors.red[700]!));
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: marginColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(width: 5, height: 5, decoration: BoxDecoration(color: marginColor, shape: BoxShape.circle)),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          "${margin.round()}% mrg",
+                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: marginColor),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
                         const SizedBox(height: 2),
                         Wrap(
                           crossAxisAlignment: WrapCrossAlignment.end,
