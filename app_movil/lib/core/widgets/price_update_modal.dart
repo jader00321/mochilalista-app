@@ -136,6 +136,87 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
               ),
               onChanged: (_) => _calculate(),
             ),
+
+            // 🔧 TAREA 5.2: Calculadora de margen en tiempo real
+            Builder(
+              builder: (_) {
+                final double costoPresentacion = (widget.presentation.costoUnitarioCalculado != null && widget.presentation.costoUnitarioCalculado! > 0)
+                    ? widget.presentation.costoUnitarioCalculado!
+                    : (widget.presentation.factorGananciaVenta != null && widget.presentation.factorGananciaVenta! > 0
+                        ? widget.presentation.precioVentaFinal / widget.presentation.factorGananciaVenta!
+                        : 0.0);
+
+                if (costoPresentacion <= 0) return const SizedBox.shrink();
+
+                final double targetPrice = finalOfferPrice ?? currentBase;
+                if (targetPrice <= 0) return const SizedBox.shrink();
+
+                final double ganancia = targetPrice - costoPresentacion;
+                final double margenPercent = ((targetPrice - costoPresentacion) / targetPrice) * 100;
+
+                final Color marginColor = margenPercent >= 20
+                    ? (widget.isDark ? Colors.green[400]! : Colors.green[700]!)
+                    : (margenPercent >= 10
+                        ? (widget.isDark ? Colors.amber[400]! : Colors.amber[800]!)
+                        : (widget.isDark ? Colors.red[400]! : Colors.red[700]!));
+
+                return Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: marginColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: marginColor.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        margenPercent >= 20 ? Icons.check_circle : (margenPercent >= 10 ? Icons.info_outline : Icons.warning_amber),
+                        color: marginColor,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "Margen: ${margenPercent.toStringAsFixed(1)}%",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: marginColor,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                Text(
+                                  "Ganancia: S/ ${ganancia.toStringAsFixed(2)}",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: widget.isDark ? Colors.grey[300] : Colors.grey[700],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              "Costo estimado: S/ ${costoPresentacion.toStringAsFixed(2)}",
+                              style: TextStyle(
+                                color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 24),
 
             Container(
