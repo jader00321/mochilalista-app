@@ -87,9 +87,14 @@ class AuthService {
     }
   }
 
-  Future<UserModel> updateProfile(int userId, String nombre, String telefono) async {
+  Future<UserModel> updateProfile(int userId, String nombre, String telefono, {String? email}) async {
     final db = await dbHelper.database;
-    await db.update('usuarios', {'nombre_completo': nombre, 'telefono': telefono}, where: 'id = ?', whereArgs: [userId]);
+    final updateData = <String, dynamic>{
+      'nombre_completo': nombre, 
+      'telefono': telefono,
+    };
+    if (email != null) updateData['email'] = email.isEmpty ? null : email;
+    await db.update('usuarios', updateData, where: 'id = ?', whereArgs: [userId]);
     return await getUserProfile(userId);
   }
 

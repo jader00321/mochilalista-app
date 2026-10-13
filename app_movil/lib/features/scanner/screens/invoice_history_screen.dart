@@ -7,6 +7,7 @@ import 'package:app_movil/features/scanner/models/invoice_model.dart';
 import 'package:app_movil/features/scanner/screens/invoice_detail_screen.dart';
 import 'package:app_movil/features/scanner/screens/scan_screen.dart';
 import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 class InvoiceHistoryScreen extends StatefulWidget {
   const InvoiceHistoryScreen({super.key});
 
@@ -82,6 +83,17 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          InfoTooltipButton(
+            iconColor: Colors.white70,
+            title: 'Historial de Facturas',
+            description: 'Aquí se almacenan todas las facturas de proveedores que han sido procesadas por la IA o creadas manualmente. Cada factura contiene los productos y presentaciones que registraste.',
+            tips: const [
+              InfoTip(icon: Icons.camera_alt, text: 'Las facturas con 📷 fueron escaneadas con IA. Las con ✍️ fueron creadas manualmente.'),
+              InfoTip(icon: Icons.touch_app, text: 'Toca una factura para ver su detalle completo con todos los productos vinculados.'),
+              InfoTip(icon: Icons.warning_amber, text: 'Las facturas en "Revisión" tienen ítems pendientes de verificar o vincular.'),
+              InfoTip(icon: Icons.refresh, text: 'Usa el botón de actualizar para recargar el historial.'),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => invcProv.fetchInvoices(reset: true),

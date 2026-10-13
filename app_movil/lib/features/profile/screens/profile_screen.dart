@@ -25,6 +25,8 @@ import 'package:app_movil/core/screens/home_screen.dart';
 import 'package:app_movil/features/profile/screens/printer_config_screen.dart';
 import 'package:app_movil/features/profile/screens/notifications_screen.dart';
 import 'package:app_movil/features/profile/screens/backup_screen.dart'; 
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/features/profile/widgets/profile_completion_indicator.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -110,6 +112,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       ),
                       const SizedBox(height: 16),
                       BusinessInfoCard(business: auth.currentBusiness), 
+                      // 🔧 TAREA 3.2: Indicador de completitud del perfil
+                      ProfileCompletionIndicator(
+                          user: user,
+                          hasPin: auth.hasPinCache,
+                          isDark: isDark,
+                          onEditProfile: () => _showEditProfile(context),
+                          onEditBusiness: () => _showEditBusiness(context),
+                          onChangePin: () => _showChangePassword(context),
+                        ),
                       const SizedBox(height: 35),
 
                       _buildSectionHeader("Configuración General", textColor),
@@ -262,6 +273,23 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
                   onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              // 🔧 TAREA 3.4: Info Tooltip en el perfil
+              Positioned(
+                right: 10,
+                top: 0,
+                child: InfoTooltipButton(
+                  iconColor: Colors.white60,
+                  title: 'Tu Perfil',
+                  description: 'Desde aquí gestionas toda la información de tu cuenta y negocio. Puedes actualizar tus datos personales, configurar tu negocio, gestionar respaldos y personalizar la app.',
+                  tips: const [
+                    InfoTip(icon: Icons.person, text: 'Edita tu nombre, teléfono y correo electrónico en "Editar Datos Personales".'),
+                    InfoTip(icon: Icons.store, text: 'Actualiza la información de tu negocio (nombre, RUC, dirección, logo) con "Editar Datos".'),
+                    InfoTip(icon: Icons.security, text: 'En "Respaldos y Seguridad" puedes exportar e importar toda tu información.'),
+                    InfoTip(icon: Icons.camera_alt, text: 'Toca el ícono de cámara sobre tu logo para cambiarlo.'),
+                    InfoTip(icon: Icons.dark_mode, text: 'Activa el modo oscuro/claro según tu preferencia.'),
+                  ],
                 ),
               ),
               Column(

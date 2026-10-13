@@ -193,11 +193,11 @@ class AuthProvider with ChangeNotifier {
     }
   }
   
-  Future<bool> updateUserProfile(String nombre, String telefono) async {
+  Future<bool> updateUserProfile(String nombre, String telefono, {String? email}) async {
     if (_activeUser == null) return false;
     _setLoading(true);
     try {
-      final updatedUser = await _authService.updateProfile(_activeUser!.id, nombre, telefono);
+      final updatedUser = await _authService.updateProfile(_activeUser!.id, nombre, telefono, email: email);
       _activeUser = updatedUser; 
       return true;
     } catch (e) {

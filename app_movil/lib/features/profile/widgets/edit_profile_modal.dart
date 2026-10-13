@@ -16,6 +16,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameCtrl;
   late TextEditingController _phoneCtrl;
+  late TextEditingController _emailCtrl; // 🔧 TAREA 3.1
 
   @override
   void initState() {
@@ -23,12 +24,14 @@ class _EditProfileModalState extends State<EditProfileModal> {
     final user = Provider.of<AuthProvider>(context, listen: false).user;
     _nameCtrl = TextEditingController(text: user?.fullName ?? "");
     _phoneCtrl = TextEditingController(text: user?.phone ?? "");
+    _emailCtrl = TextEditingController(text: user?.email ?? ""); // 🔧 TAREA 3.1
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
+    _emailCtrl.dispose();
     super.dispose();
   }
 
@@ -84,6 +87,24 @@ class _EditProfileModalState extends State<EditProfileModal> {
               ),
               validator: (v) => v!.length < 9 ? "Debe tener 9 dígitos exactos" : null,
             ),
+            const SizedBox(height: 16),
+
+            // 🔧 TAREA 3.1: Campo de Email
+            TextFormField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              style: textStyle,
+              decoration: _deco("Correo Electrónico", Icons.email_outlined, isDark),
+              validator: (v) {
+                if (v != null && v.trim().isNotEmpty) {
+                  final emailRegex = RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$');
+                  if (!emailRegex.hasMatch(v.trim())) {
+                    return "Formato de correo inválido";
+                  }
+                }
+                return null; // Email es opcional
+              },
+            ),
             
             const SizedBox(height: 30),
             
@@ -107,7 +128,11 @@ class _EditProfileModalState extends State<EditProfileModal> {
                     child: ElevatedButton(
                       onPressed: auth.isLoading ? null : () async {
                         if (!_formKey.currentState!.validate()) return;
-                        final success = await auth.updateUserProfile(_nameCtrl.text.trim(), _phoneCtrl.text.trim());
+                        final success = await auth.updateUserProfile(
+                          _nameCtrl.text.trim(), 
+                          _phoneCtrl.text.trim(),
+                          email: _emailCtrl.text.trim(),
+                        );
                         if (context.mounted) {
                           if (success) {
                             CustomSnackBar.show(context, message: "Perfil actualizado con éxito", isError: false);

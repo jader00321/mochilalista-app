@@ -12,6 +12,7 @@ import 'package:app_movil/features/catalog/screens/tabs/providers_tab.dart';
 import 'package:app_movil/features/promotions/screens/offers_tab.dart';
 
 import 'package:app_movil/features/scanner/screens/invoice_history_screen.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class PlaceholderTab extends StatelessWidget {
   final String title;
@@ -214,6 +215,19 @@ class _InventoryScreenState extends State<InventoryScreen>
                 ),
               ),
             ),
+          ),
+          // 🔧 TAREA 3.4: Info Tooltip discreto
+          InfoTooltipButton(
+            iconColor: Colors.white70,
+            title: 'Gestión de Negocio',
+            description: 'Aquí administras todo tu inventario: productos, categorías, marcas, proveedores y ofertas. Desde aquí puedes organizar, buscar y filtrar todo tu catálogo.',
+            tips: const [
+              InfoTip(icon: Icons.search, text: 'Usa el buscador y los filtros del panel derecho para encontrar productos rápidamente.'),
+              InfoTip(icon: Icons.receipt_long, text: 'El botón naranja con IA abre el historial de facturas procesadas por la inteligencia artificial.'),
+              InfoTip(icon: Icons.category, text: 'Organiza tus productos en Categorías y Márcas para tener un catálogo ordenado.'),
+              InfoTip(icon: Icons.local_offer, text: 'Crea ofertas y combos en la pestaña de Ofertas para atraer más clientes.'),
+              InfoTip(icon: Icons.find_replace, text: 'Usa el botón de Detectar Duplicados (🔄) en cada pestaña para fusionar registros repetidos.'),
+            ],
           ),
           const SizedBox.shrink(),
         ],

@@ -16,6 +16,7 @@ import 'package:app_movil/features/smart_quotation/screens/crm/client_detail_scr
 import 'package:app_movil/features/smart_quotation/services/sales_service.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 import 'package:app_movil/features/profile/widgets/notifications/notification_filter_bar.dart';
 import 'package:app_movil/features/profile/widgets/notifications/notification_item_card.dart';
@@ -334,6 +335,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
         elevation: 0,
         centerTitle: false,
         actions: [
+          // 🔧 TAREA 3.4: Info Tooltip
+          InfoTooltipButton(
+            title: 'Notificaciones',
+            description: 'Aquí recibes alertas automáticas sobre tu negocio: stock bajo, cuotas vencidas, facturas procesadas y más. Las notificaciones se clasifican en Pendientes (requieren acción), Resueltas y un Historial completo.',
+            tips: const [
+              InfoTip(icon: Icons.touch_app, text: 'Toca una notificación para ver su detalle o ir directamente al recurso relacionado.'),
+              InfoTip(icon: Icons.filter_list, text: 'Usa los filtros superiores para ver solo las notificaciones que te interesan.'),
+              InfoTip(icon: Icons.done_all, text: 'Marca todas como leídas con el botón de la esquina superior.'),
+              InfoTip(icon: Icons.delete_sweep, text: 'En la pestaña Historial puedes seleccionar y eliminar notificaciones antiguas.'),
+            ],
+          ),
           if (notifProv.unreadCount > 0)
             Padding(
               padding: const EdgeInsets.only(right: 8.0),

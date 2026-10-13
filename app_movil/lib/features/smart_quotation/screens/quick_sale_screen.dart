@@ -18,6 +18,7 @@ import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_sale
 import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_sale_detail_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_checkout_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_search_result_tile.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class QuickSaleScreen extends StatefulWidget {
   const QuickSaleScreen({super.key});
@@ -339,6 +340,20 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             onPressed: () => Navigator.pop(context, _saleCompleted),
           ),
           actions: [
+            // 🔧 TAREA 3.4: Info Tooltip
+            InfoTooltipButton(
+              iconColor: Colors.white60,
+              title: 'Caja Rápida',
+              description: 'Tu punto de venta rápido. Busca productos, agrégalos al carrito y procesa el cobro en segundos. Ideal para ventas del día a día.',
+              tips: const [
+                InfoTip(icon: Icons.search, text: 'Busca productos por nombre o escanea su código de barras con el botón de cámara.'),
+                InfoTip(icon: Icons.touch_app, text: 'Toca un producto del carrito para editar cantidad, precio o cambiar de presentación.'),
+                InfoTip(icon: Icons.person_search, text: 'Asocia un cliente a la venta desde el header superior para llevar su historial.'),
+                InfoTip(icon: Icons.edit_note, text: 'Usa el botón de notas (esquina superior derecha) para agregar comentarios a la venta.'),
+                InfoTip(icon: Icons.local_offer, text: 'Las ofertas activas aparecen debajo del buscador. Tócalas para aplicarlas.'),
+                InfoTip(icon: Icons.shopping_cart_checkout, text: 'Presiona "Cobrar" para finalizar la venta con el método de pago elegido.'),
+              ],
+            ),
             if (!quickProv.isEmpty)
               IconButton(
                 icon: const Icon(Icons.delete_sweep, size: 28),

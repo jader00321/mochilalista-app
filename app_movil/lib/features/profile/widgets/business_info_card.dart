@@ -176,8 +176,47 @@ class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepA
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 🔧 TAREA 3.3: Dirección con chip de GPS
                 if (canSeeAddress)
-                   _buildRow(Icons.location_on, widget.business!.address ?? "Referencia no registrada", isDark ? Colors.white : Colors.black87)
+                  Row(
+                    children: [
+                      Icon(Icons.location_on, size: 22, color: Colors.grey),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(widget.business!.address ?? "Referencia no registrada", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15))),
+                      if (hasMap)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.gps_fixed, size: 12, color: Colors.green[700]),
+                              const SizedBox(width: 3),
+                              Text("GPS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green[700])),
+                            ],
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.gps_off, size: 12, color: Colors.orange[700]),
+                              const SizedBox(width: 3),
+                              Text("Sin GPS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange[700])),
+                            ],
+                          ),
+                        ),
+                    ],
+                  )
                 else
                    _buildRow(Icons.location_off, "Dirección Privada", isDark ? Colors.grey[500]! : Colors.grey),
                 
@@ -191,6 +230,17 @@ class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepA
                     ],
                   )
                 ],
+
+                // 🔧 TAREA 3.3: Sección de Información de Pago
+                if (!widget.isCommunityClient || (widget.business!.paymentInfo != null && widget.business!.paymentInfo!.isNotEmpty)) ...[
+                  const Divider(height: 24),
+                  _buildPaymentSection(isDark),
+                ],
+
+                // 🔧 TAREA 3.3: Moneda configurada
+                const Divider(height: 24),
+                _buildRow(Icons.monetization_on_outlined, "Moneda: ${widget.business!.moneda}", isDark ? Colors.white : Colors.black87),
+
                 const Divider(height: 24),
                 _buildRow(Icons.verified_user, widget.isCommunityClient ? "Tienda Verificada" : "Cuenta Verificada", isDark ? Colors.white : Colors.black87),
               ],
@@ -198,6 +248,48 @@ class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepA
           )
         ],
       ),
+    );
+  }
+
+  // 🔧 TAREA 3.3: Sección de información de pago mejorada
+  Widget _buildPaymentSection(bool isDark) {
+    final paymentInfo = widget.business!.paymentInfo;
+    
+    if (paymentInfo == null || paymentInfo.isEmpty) {
+      return Row(
+        children: [
+          Icon(Icons.payment, size: 22, color: Colors.grey[500]),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              "Sin información de pago configurada",
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Icon(Icons.payment, size: 22, color: isDark ? Colors.green[300] : Colors.green[700]),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            paymentInfo,
+            style: TextStyle(
+              color: isDark ? Colors.white : Colors.black87,
+              fontSize: 14,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 
