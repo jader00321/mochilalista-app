@@ -254,6 +254,39 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
                                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor, letterSpacing: 0.5),
                                     ),
                                   ),
+                                  // 🔧 TAREA 4.2: Chip diferenciador Manual vs Escaneada
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: invoice.datosCrudosIaJson != null
+                                          ? (isDark ? Colors.cyan.withValues(alpha: 0.2) : Colors.cyan.withValues(alpha: 0.1))
+                                          : (isDark ? Colors.amber.withValues(alpha: 0.2) : Colors.amber.withValues(alpha: 0.1)),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          invoice.datosCrudosIaJson != null ? Icons.auto_awesome : Icons.edit_note,
+                                          size: 12,
+                                          color: invoice.datosCrudosIaJson != null
+                                              ? (isDark ? Colors.cyan[200] : Colors.cyan[800])
+                                              : (isDark ? Colors.amber[200] : Colors.amber[800]),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          invoice.datosCrudosIaJson != null ? "IA" : "Manual",
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: invoice.datosCrudosIaJson != null
+                                                ? (isDark ? Colors.cyan[200] : Colors.cyan[800])
+                                                : (isDark ? Colors.amber[200] : Colors.amber[800]),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                   if (invoice.cantidadItemsExtraidos != null && invoice.cantidadItemsExtraidos! > 0)
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

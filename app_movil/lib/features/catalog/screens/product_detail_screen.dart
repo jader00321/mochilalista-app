@@ -222,6 +222,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         : _selectedPresentation.precioVentaFinal;
     final bool isPublic = _selectedPresentation.estado == 'publico';
 
+    // 🔧 TAREA 4.1.4: Stock visual para alerta de reabastecimiento
+    final double factorVenta = _selectedPresentation.unidadesPorVenta.toDouble();
+    final int stockVisual = factorVenta > 0
+        ? (_selectedPresentation.stockActual ~/ factorVenta)
+        : _selectedPresentation.stockActual;
+
     return Scaffold(
       backgroundColor: bgColor,
       body: RefreshIndicator(
@@ -614,6 +620,61 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     // 🔥 REDUCCIÓN DE ESPACIO DE 20 a 10px
                     const SizedBox(height: 10),
 
+                    // 🔧 TAREA 4.1.4: Alerta de stock bajo con CTA
+                    if (stockVisual <= 5 && stockVisual >= 0)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: stockVisual == 0
+                              ? (isDark ? Colors.red.withValues(alpha: 0.12) : Colors.red.withValues(alpha: 0.08))
+                              : (isDark ? Colors.orange.withValues(alpha: 0.12) : Colors.orange.withValues(alpha: 0.08)),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: stockVisual == 0
+                                ? Colors.red.withValues(alpha: 0.3)
+                                : Colors.orange.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              stockVisual == 0 ? Icons.error_outline : Icons.warning_amber_rounded,
+                              color: stockVisual == 0
+                                  ? (isDark ? Colors.red[300] : Colors.red[700])
+                                  : (isDark ? Colors.orange[300] : Colors.orange[700]),
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    stockVisual == 0 ? "¡Sin stock!" : "Stock bajo: $stockVisual unidades",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: stockVisual == 0
+                                          ? (isDark ? Colors.red[300] : Colors.red[800])
+                                          : (isDark ? Colors.orange[300] : Colors.orange[800]),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "Considera reabastecer este producto pronto.",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                     // GRID DE DETALLES
                     GridView.count(
                       shrinkWrap: true,
@@ -696,6 +757,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
       ),
     );
+  }
+
+  // 🔧 TAREA 4.1.1: Helpers para indicador visual de margen
+  Color _getMarginColor(int marginPercent, bool isDark) {
+    if (marginPercent >= 30) return isDark ? Colors.green[400]! : Colors.green[700]!;
+    if (marginPercent >= 10) return isDark ? Colors.orange[300]! : Colors.orange[700]!;
+    return isDark ? Colors.red[300]! : Colors.red[700]!;
+  }
+
+  IconData _getMarginIcon(int marginPercent) {
+    if (marginPercent >= 30) return Icons.trending_up;
+    if (marginPercent >= 10) return Icons.trending_flat;
+    return Icons.trending_down;
   }
 
   // 🔥 REDISEÑO DEL DASHBOARD FINANCIERO 🔥
@@ -889,7 +963,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 12),
                     ),
 
-                    // MARGEN (Azul)
+                    // MARGEN (Color dinámico según rentabilidad)
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -900,8 +974,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                               color: isDark
-                                  ? Colors.blue[300]
-                                  : Colors.blue[600],
+                                  ? _getMarginColor(margenPorcentaje, isDark)
+                                  : _getMarginColor(margenPorcentaje, isDark),
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -911,20 +985,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: isDark
-                                  ? Colors.blue.withValues(alpha: 0.2)
-                                  : Colors.blue.shade50,
+                              color: _getMarginColor(margenPorcentaje, isDark).withValues(alpha: isDark ? 0.2 : 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: Text(
-                              "+$margenPorcentaje%",
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w900,
-                                color: isDark
-                                    ? Colors.blue[300]
-                                    : Colors.blue[700],
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getMarginIcon(margenPorcentaje),
+                                  size: 12,
+                                  color: _getMarginColor(margenPorcentaje, isDark),
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  "+$margenPorcentaje%",
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                    color: _getMarginColor(margenPorcentaje, isDark),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
