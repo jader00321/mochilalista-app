@@ -16,6 +16,7 @@ import 'package:app_movil/features/smart_quotation/screens/client_orders_screen.
 import 'package:app_movil/features/scanner/screens/scan_screen.dart'; 
 import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
 import 'package:app_movil/features/auth/screens/onboarding/lock_screen.dart';
+import 'package:app_movil/features/profile/screens/profile_screen.dart';
 
 import 'package:app_movil/core/widgets/home/dashboard_header.dart';
 import 'package:app_movil/core/widgets/home/quotation_banner.dart';
@@ -241,6 +242,11 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                     if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                       const RestockSmartBanner(),
                       const SizedBox(height: 16),
+                      // 🔧 TAREA 5.4: Recordatorio amigable de PIN de seguridad
+                      if (!auth.hasPinCache) ...[
+                        _buildSecurityPinBanner(context, isDark),
+                        const SizedBox(height: 16),
+                      ],
                     ],
                     if (isGuest)
                         _buildGuestBanner(context, isDark)
@@ -374,6 +380,66 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // 🔧 TAREA 5.4: Banner amigable de PIN de seguridad
+  Widget _buildSecurityPinBanner(BuildContext context, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E2235) : const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.shade200,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.shield_outlined, color: Colors.blue, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Protege tu negocio con un PIN",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: isDark ? Colors.blue[200] : Colors.blue[900],
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "Evita accesos no deseados configurando un PIN de 4 dígitos.",
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+            child: const Text("Activar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          ),
+        ],
       ),
     );
   }

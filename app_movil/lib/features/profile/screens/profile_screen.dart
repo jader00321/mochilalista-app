@@ -86,6 +86,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
     final cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87; 
+    final bool isGuest = !auth.hasActiveContext;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -157,6 +158,70 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       const SizedBox(height: 35),
                       _buildSectionHeader("Seguridad de la Cuenta", textColor),
                       const SizedBox(height: 12),
+
+                      // 🔧 TAREA 5.4: Recordatorio amigable de PIN de seguridad si no está configurado
+                      if (!auth.hasPinCache && !isGuest)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.amber.withValues(alpha: 0.12) : const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDark ? Colors.amber.withValues(alpha: 0.35) : Colors.amber.shade300,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.shield_outlined, color: Colors.amber, size: 24),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Protege tu Negocio con un PIN",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: isDark ? Colors.amber[200] : Colors.amber[900],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      "Configura un PIN de 4 dígitos para bloquear la app y proteger tus finanzas.",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark ? Colors.grey[400] : Colors.grey[700],
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: () => _showChangePassword(context),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.amber[700],
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  elevation: 0,
+                                ),
+                                child: const Text("Activar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ),
+
                       _buildSettingsContainer(cardColor, [
                         ProfileMenuItem(
                           title: auth.hasPinCache ? "Cambiar PIN de Seguridad" : "Crear PIN de Seguridad", 
