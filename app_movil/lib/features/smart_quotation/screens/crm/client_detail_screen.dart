@@ -142,13 +142,37 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
       icon: Icons.chat,
       color: const Color(0xFF25D366),
       onConfirm: () async {
-        String msg = "Hola ${_currentClient.fullName}, te saludamos de la librería.";
+        String msg = "Hola ${_currentClient.fullName}, te saludamos de la tienda 👋.\n\n";
         if (_currentClient.totalDebt > 0) {
           final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-          msg += " Te escribimos para recordarte que tienes un saldo pendiente de ${currency.format(_currentClient.totalDebt)}.";
+          msg += "Le escribimos para recordarle que tiene un saldo pendiente de ${currency.format(_currentClient.totalDebt)}.\n";
+          
+          final trackingProv = Provider.of<TrackingProvider>(context, listen: false);
+          int overdueCount = 0;
+          double overdueAmount = 0;
+          final today = DateTime.now();
+          for (var s in trackingProv.currentClientDebts) {
+            for (var c in s.installments) {
+              if (c.status != 'pagado') {
+                final due = DateTime.tryParse(c.dueDate);
+                if (due != null && due.isBefore(today)) {
+                  overdueCount++;
+                  overdueAmount += (c.amount - c.montoPagado);
+                }
+              }
+            }
+          }
+          if (overdueCount > 0) {
+            msg += "\n⚠️ Cuenta con $overdueCount cuota(s) vencida(s) por ${currency.format(overdueAmount)}.\n";
+          }
+          msg += "\nPuede realizar su abono mediante Yape, Plin o en tienda física. Si ya realizó su pago, por favor haga caso omiso a este mensaje. ¡Muchas gracias!";
+        } else {
+          msg += "Esperamos que se encuentre bien. ¡Estamos a su disposición para cualquier consulta!";
         }
 
-        final url = Uri.parse("https://wa.me/51${_currentClient.phone.replaceAll(' ', '')}?text=${Uri.encodeComponent(msg)}");
+        final cleanPhone = _currentClient.phone.replaceAll(RegExp(r'\D'), '');
+        final waPhone = cleanPhone.startsWith('51') ? cleanPhone : '51$cleanPhone';
+        final url = Uri.parse("https://wa.me/$waPhone?text=${Uri.encodeComponent(msg)}");
         if (await canLaunchUrl(url)) {
           await launchUrl(url, mode: LaunchMode.externalApplication);
         } else {

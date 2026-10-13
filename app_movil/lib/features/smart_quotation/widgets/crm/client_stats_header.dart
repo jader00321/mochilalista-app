@@ -345,6 +345,19 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                 ],
               ),
             ),
+            if (widget.client.phone.isNotEmpty && widget.client.phone != "000000000")
+              ElevatedButton.icon(
+                onPressed: widget.onWhatsAppTap,
+                icon: const Icon(Icons.send, size: 14),
+                label: const Text("Recordar", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF25D366),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+              ),
           ],
         ),
       );

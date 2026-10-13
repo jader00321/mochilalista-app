@@ -117,7 +117,12 @@ class DetailStatusCard extends StatelessWidget {
               if (pendingDebt > 0)
                 _buildSummaryRow("Deuda Pendiente", currency.format(pendingDebt), isDark ? Colors.red[300]! : Colors.red[700]!, isDark, isBold: true, fontSize: 16),
               
-              SalePaymentTimeline(cuotasRaw: cuotasRaw, isDark: isDark),
+              SalePaymentTimeline(
+                cuotasRaw: cuotasRaw,
+                isDark: isDark,
+                clientPhone: saleData['cliente_telefono'] ?? (saleData['cliente_info'] != null ? saleData['cliente_info']['telefono'] : null),
+                clientName: saleData['cliente_nombre'] ?? (saleData['cliente_info'] != null ? saleData['cliente_info']['nombre_completo'] : null),
+              ),
             ],
           ),
         ),
