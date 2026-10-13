@@ -6,6 +6,7 @@ import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/features/catalog/screens/product_edit_screen.dart';
 import 'package:app_movil/core/widgets/discount_intelligent_modal.dart';
 import 'package:app_movil/features/analytics/screens/audit_trail_screen.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -237,6 +238,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   : Theme.of(context).primaryColor,
               iconTheme: const IconThemeData(color: Colors.white),
               actions: [
+                // 🔧 TAREA 3.4: Info Tooltip
+                Container(
+                  margin: const EdgeInsets.only(right: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black38,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: InfoTooltipButton(
+                    iconColor: Colors.white70,
+                    title: 'Detalle de Producto',
+                    description: 'Toda la información de tu producto en un solo lugar: precio de compra, precio de venta, stock, presentaciones disponibles y más.',
+                    tips: const [
+                      InfoTip(icon: Icons.swap_horiz, text: 'Desliza las presentaciones para ver precio y stock de cada variante (unidad, pack, caja, etc).'),
+                      InfoTip(icon: Icons.local_offer, text: 'Toca "Aplicar Descuento" para crear un descuento inteligente sobre este producto.'),
+                      InfoTip(icon: Icons.history, text: 'El botón de reloj (⏰) abre el historial de cambios de precios y stock del producto.'),
+                      InfoTip(icon: Icons.edit, text: 'El botón de lápiz te lleva a editar toda la información del producto.'),
+                      InfoTip(icon: Icons.inventory_2, text: 'El stock se actualiza automáticamente al procesar facturas o realizar ventas.'),
+                    ],
+                  ),
+                ),
                 Container(
                   margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(

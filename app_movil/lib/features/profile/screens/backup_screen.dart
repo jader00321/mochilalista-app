@@ -9,6 +9,7 @@ import 'package:app_movil/features/profile/services/business_backup_service.dart
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:app_movil/core/utils/backup_manager.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class AutoBackupTimerWidget extends StatefulWidget {
   final BackupProvider provider;
@@ -560,6 +561,20 @@ class BackupScreen extends StatelessWidget {
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          // 🔧 TAREA 3.4: Info Tooltip
+          InfoTooltipButton(
+            title: 'Respaldos y Seguridad',
+            description: 'Desde aquí proteges toda tu información. Puedes crear respaldos manuales o automáticos, exportar tu base de datos completa y configurar la seguridad de tu app.',
+            tips: const [
+              InfoTip(icon: Icons.inventory_2, text: 'Backup por Negocio (.mlb): Exporta solo los datos del negocio actual. Ideal para migrar a otro dispositivo.'),
+              InfoTip(icon: Icons.storage, text: 'Exportación Global (.db): Guarda una copia exacta de TODOS tus negocios. Úsalo como respaldo total.'),
+              InfoTip(icon: Icons.security, text: 'Protección Automática: Activa los backups automáticos para que la app respalde tus datos sin que tengas que hacer nada.'),
+              InfoTip(icon: Icons.lock, text: 'Seguridad: Configura el tiempo de bloqueo automático para proteger tu app cuando no la uses.'),
+              InfoTip(icon: Icons.warning_amber, text: 'Zona de Peligro: Solo usa la importación global si cambiaste de celular o necesitas recuperar una versión anterior.'),
+            ],
+          ),
+        ],
       ),
       body: Stack(
         children: [
