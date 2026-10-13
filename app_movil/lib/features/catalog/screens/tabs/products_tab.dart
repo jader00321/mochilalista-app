@@ -16,8 +16,9 @@ import 'package:app_movil/features/scanner/screens/barcode_scanner_screen.dart';
 import 'package:app_movil/features/scanner/screens/invoice_review_screen.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
-import 'package:app_movil/features/catalog/screens/tabs/widgets/inventory_filter_header.dart';
 import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
+import 'package:app_movil/features/catalog/screens/tabs/widgets/inventory_filter_header.dart';
+import 'package:app_movil/features/catalog/widgets/auto_categorization_modal.dart';
 
 class ProductsTab extends StatefulWidget {
   const ProductsTab({super.key});
@@ -662,6 +663,21 @@ class _ProductsTabState extends State<ProductsTab>
                     label: "Escanear Código",
                     onTap: () => _handleBarcodeScan(isGuest, isDark),
                     color: isDark ? Colors.blue[400]! : Colors.blue,
+                    isDark: isDark,
+                  ),
+
+                  _buildFabOption(
+                    icon: Icons.auto_awesome,
+                    label: "Auto-categorizar (IA)",
+                    onTap: () {
+                      _toggleFab();
+                      if (isGuest) {
+                        _showExplorationModal(context, isDark);
+                        return;
+                      }
+                      AutoCategorizationModal.show(context, isDark: isDark);
+                    },
+                    color: isDark ? Colors.teal[400]! : Colors.teal,
                     isDark: isDark,
                   ),
 

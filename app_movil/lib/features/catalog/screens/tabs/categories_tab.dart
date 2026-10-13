@@ -9,6 +9,7 @@ import 'package:app_movil/core/widgets/sortable_toolbar.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/duplicate_warning_dialog.dart';
 import 'package:app_movil/core/widgets/duplicate_merge_modal.dart';
+import 'package:app_movil/features/catalog/widgets/auto_categorization_modal.dart';
 
 class CategoriesTab extends StatefulWidget {
   const CategoriesTab({super.key});
@@ -359,18 +360,35 @@ class _CategoriesTabState extends State<CategoriesTab> {
                 currentSort: provider.catSort,
                 isAscending: provider.catAsc,
                 onSortChanged: (type) => provider.sortCategories(type),
-                trailing: !isGuest ? IconButton(
-                  icon: Icon(
-                    Icons.find_replace,
-                    color: isDark ? Colors.blue[300] : Colors.blue[800],
-                    size: 22,
-                  ),
-                  tooltip: 'Detectar Duplicados',
-                  onPressed: () => DuplicateMergeModal.show(
-                    context,
-                    type: MergeEntityType.category,
-                    isDark: isDark,
-                  ),
+                trailing: !isGuest ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.auto_awesome,
+                        color: isDark ? Colors.amber[300] : Colors.amber[800],
+                        size: 22,
+                      ),
+                      tooltip: 'Auto-categorizar Productos',
+                      onPressed: () => AutoCategorizationModal.show(
+                        context,
+                        isDark: isDark,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.find_replace,
+                        color: isDark ? Colors.blue[300] : Colors.blue[800],
+                        size: 22,
+                      ),
+                      tooltip: 'Detectar Duplicados',
+                      onPressed: () => DuplicateMergeModal.show(
+                        context,
+                        type: MergeEntityType.category,
+                        isDark: isDark,
+                      ),
+                    ),
+                  ],
                 ) : null,
               ),
 
