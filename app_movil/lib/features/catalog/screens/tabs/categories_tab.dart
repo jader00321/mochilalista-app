@@ -18,6 +18,9 @@ class CategoriesTab extends StatefulWidget {
 }
 
 class _CategoriesTabState extends State<CategoriesTab> {
+  // 🔧 TAREA 4.5: Bandera para ocultar sugerencias de categorías
+  bool _dismissSuggestions = false;
+
   // 🔥 NUEVO: Explicación de Exploración
   void _showExplorationModal(BuildContext context, bool isDark) {
     showDialog(
@@ -371,6 +374,10 @@ class _CategoriesTabState extends State<CategoriesTab> {
                 ) : null,
               ),
 
+              // 🔧 TAREA 4.5: Banner de categorías predefinidas sugeridas
+              if (!isGuest && categories.length <= 3 && !_dismissSuggestions)
+                _buildSuggestedCategoriesBanner(context, provider, categories, isDark),
+
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async => await provider.loadMasterData(),
@@ -515,4 +522,139 @@ class _CategoriesTabState extends State<CategoriesTab> {
       },
     );
   }
+
+  // 🔧 TAREA 4.5: Widget del Banner de categorías predefinidas
+  Widget _buildSuggestedCategoriesBanner(
+    BuildContext context,
+    InventoryProvider provider,
+    List<Category> existingCategories,
+    bool isDark,
+  ) {
+    final availableSuggestions = _suggestedCategories.where((s) =>
+        !existingCategories.any((c) =>
+            c.nombre.toLowerCase().trim() == s.name.toLowerCase().trim())).toList();
+
+    if (availableSuggestions.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E2235) : const Color(0xFFF0F4FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.shade200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.lightbulb_outline, size: 20, color: Colors.amber[600]),
+              const SizedBox(width: 8),
+              Text(
+                "Categorías Sugeridas",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: isDark ? Colors.blue[200] : Colors.blue[900],
+                ),
+              ),
+              const Spacer(),
+              Text(
+                "Toca para agregar",
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+              const SizedBox(width: 4),
+              InkWell(
+                onTap: () => setState(() => _dismissSuggestions = true),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(Icons.close, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: availableSuggestions.take(6).map((s) {
+              return InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () async {
+                  final id = await provider.createCategory(s.name, descripcion: s.description);
+                  if (context.mounted) {
+                    if (id != null) {
+                      CustomSnackBar.show(
+                        context,
+                        message: "Categoría '${s.name}' agregada con éxito",
+                        isError: false,
+                      );
+                    } else {
+                      CustomSnackBar.show(
+                        context,
+                        message: provider.lastActionError ?? "Error al crear la categoría",
+                        isError: true,
+                      );
+                    }
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : Colors.blue.shade100,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(s.icon, style: const TextStyle(fontSize: 13)),
+                      const SizedBox(width: 5),
+                      Text(
+                        s.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.add, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+class _SuggestedCat {
+  final String icon;
+  final String name;
+  final String description;
+  const _SuggestedCat(this.icon, this.name, this.description);
+}
+
+const List<_SuggestedCat> _suggestedCategories = [
+  _SuggestedCat('🥛', 'Lácteos', 'Leches, yogures, quesos y mantequillas'),
+  _SuggestedCat('🧹', 'Limpieza', 'Detergentes, lejías, jabones y desinfectantes'),
+  _SuggestedCat('🧴', 'Cuidado Personal', 'Shampoos, desodorantes y cremas'),
+  _SuggestedCat('🍬', 'Golosinas', 'Galletas, chocolates, caramelos y snacks'),
+  _SuggestedCat('🥤', 'Bebidas', 'Gaseosas, aguas, jugos e hidratantes'),
+  _SuggestedCat('✏️', 'Útiles Escolares', 'Cuadernos, lápices, lapiceros y borradores'),
+  _SuggestedCat('🥫', 'Conservas', 'Atunes, conservas de frutas y verduras'),
+  _SuggestedCat('🥖', 'Panadería', 'Panes, tostadas y queques'),
+];
