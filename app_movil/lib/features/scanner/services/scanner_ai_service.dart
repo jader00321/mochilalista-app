@@ -4,6 +4,7 @@ import 'dart:async' hide TimeoutException;
 import 'package:googleai_dart/googleai_dart.dart' hide File;
 import 'package:app_movil/core/utils/app_logger.dart';
 import 'package:app_movil/core/config/api_constants.dart';
+import 'package:app_movil/core/services/image_optimizer_service.dart';
 import 'package:app_movil/features/scanner/models/scanner_models.dart';
 
 /// Servicio dedicado a la comunicación con Google Gemini AI
@@ -11,7 +12,7 @@ import 'package:app_movil/features/scanner/models/scanner_models.dart';
 ///
 /// Responsabilidad única: Enviar imagen → Recibir JSON estructurado.
 class ScannerAIService {
-  /// Analiza una imagen de factura usando Gemini AI y retorna
+  /// Analiza una imagen de factura usando la cascada de Agentes Gemini AI y retorna
   /// la respuesta estructurada con los items extraídos.
   ///
   /// Retorna `null` si hay error o la IA no devuelve datos.
@@ -19,18 +20,33 @@ class ScannerAIService {
     File imageFile, {
     Function(String)? onRetrying,
   }) async {
-    int maxRetries = 1;
-    int currentTry = 0;
+    // 1. Pre-procesamiento de Alta Fidelidad (2048px, 88% calidad, sin borrosidad)
+    if (onRetrying != null) {
+      onRetrying("Optimizando nitidez y resolución del comprobante...");
+    }
+    final imageBytes = await ImageOptimizerService.getOptimizedBytes(imageFile);
 
-    while (currentTry <= maxRetries) {
+    final modelsToTry = ApiConstants.cascadeModels;
+
+    for (int i = 0; i < modelsToTry.length; i++) {
+      final currentModel = modelsToTry[i];
+      final isLastModel = i == modelsToTry.length - 1;
+      final modelLabel = currentModel == ApiConstants.geminiPrimaryModel
+          ? "Agente Principal (Gemini 3.8 Flash)"
+          : (currentModel == ApiConstants.geminiFallbackModelFast
+              ? "Agente Rápido (Gemini 3.1 Flash-Lite)"
+              : "Agente de Estabilidad (Gemini 3.6 Flash)");
+
       GoogleAIClient? client;
       try {
+        if (i > 0 && onRetrying != null) {
+          onRetrying("Conectando con $modelLabel...");
+        }
+
         client = ApiConstants.createAIClient();
 
-        final imageBytes = await imageFile.readAsBytes();
-
         final response = await client.models.generateContent(
-          model: ApiConstants.geminiModelFlash,
+          model: currentModel,
           request: GenerateContentRequest(
             contents: [
               Content.user([
@@ -53,64 +69,58 @@ class ScannerAIService {
           throw Exception("La IA no devolvió datos legibles.");
         }
       } on RateLimitException {
-        if (currentTry < maxRetries) {
-          currentTry++;
-          if (onRetrying != null) onRetrying("Reintentando conexión...");
-          await Future.delayed(const Duration(seconds: 2));
+        if (!isLastModel) {
+          if (onRetrying != null) {
+            onRetrying("Límite temporal alcanzado. Conmutando al agente de respaldo...");
+          }
+          await Future.delayed(const Duration(milliseconds: 3500));
           continue;
         } else {
           throw Exception(
-            "Los servidores están concurridos en este momento. "
-            "Intenta de nuevo en unos segundos.",
+            "Los servidores de IA están con alta demanda en este momento. "
+            "Por favor, reintenta en unos segundos.",
           );
         }
       } on AuthenticationException catch (e, stack) {
         AppLogger.error('ScannerAI: Auth error', e, stack);
         throw Exception(
-          "Hubo un problema con el servicio de procesamiento. "
-          "Si persiste, contacta al soporte. (Ref: S.401)",
+          "Problema de autenticación con la IA. Verifica tu API Key en .env. (Ref: S.401)",
         );
       } on TimeoutException catch (e, stack) {
-        AppLogger.error('ScannerAI: Timeout', e, stack);
-        throw Exception(
-          "El procesamiento tardó demasiado. "
-          "Verifica tu conexión e intenta de nuevo.",
-        );
+        AppLogger.error('ScannerAI: Timeout en $currentModel', e, stack);
+        if (!isLastModel) {
+          if (onRetrying != null) {
+            onRetrying("Tiempo excedido. Conmutando al agente rápido de respaldo...");
+          }
+          await Future.delayed(const Duration(milliseconds: 2000));
+          continue;
+        } else {
+          throw Exception(
+            "El análisis tomó más tiempo del esperado. "
+            "Verifica tu conexión a Internet e intenta de nuevo.",
+          );
+        }
       } on ApiException catch (e, stack) {
         AppLogger.error(
-          'ScannerAI: [${e.statusCode}] ${e.message}', e, stack,
+          'ScannerAI: [${e.statusCode}] en $currentModel - ${e.message}', e, stack,
         );
 
-        // Servidor temporal — reintentar
-        if (e.statusCode == 503) {
-          if (currentTry < maxRetries) {
-            currentTry++;
-            if (onRetrying != null) onRetrying("Reintentando conexión...");
-            await Future.delayed(const Duration(seconds: 2));
-            continue;
+        // Servidor temporal 503 o 429 — conmutar a siguiente agente en cascada
+        if ((e.statusCode == 503 || e.statusCode == 429) && !isLastModel) {
+          if (onRetrying != null) {
+            onRetrying("Servidor ocupado. Conmutando al agente de respaldo en alta velocidad...");
           }
+          await Future.delayed(const Duration(milliseconds: 3500));
+          continue;
         }
 
-        // Créditos de prepago agotados
-        if (e.statusCode == 402) {
-          throw Exception(
-            "El servicio de procesamiento está temporalmente fuera de servicio. "
-            "Contacta al soporte para restablecerlo. (Ref: S.402)",
-          );
+        if (e.statusCode == 404 && !isLastModel) {
+          continue; // Pasa al siguiente modelo si el actual no estuviese disponible
         }
 
-        // Modelo no encontrado
-        if (e.statusCode == 404) {
-          throw Exception(
-            "El servicio necesita una actualización. "
-            "Contacta al soporte para resolverlo. (Ref: S.404)",
-          );
-        }
-
-        // Cualquier otro error de API
         throw Exception(
           "No pudimos procesar esta imagen en este momento. "
-          "Intenta con otra foto o reintenta en unos segundos. (Ref: S.${e.statusCode})",
+          "Intenta de nuevo en unos segundos. (Ref: S.${e.statusCode})",
         );
       } on SocketException {
         throw Exception(
@@ -118,15 +128,20 @@ class ScannerAIService {
         );
       } catch (e, stack) {
         if (e.toString().contains("Ref:") ||
-            e.toString().contains("servidores") ||
+            e.toString().contains("alta demanda") ||
             e.toString().contains("conexión a Internet")) {
           rethrow;
         }
 
         AppLogger.error('ScannerAI: Unexpected', e, stack);
+        if (!isLastModel) {
+          await Future.delayed(const Duration(milliseconds: 2000));
+          continue;
+        }
+
         throw Exception(
           "No pudimos procesar esta imagen en este momento. "
-          "Intenta con otra foto o reintenta en unos segundos. (Ref: S.500)",
+          "Intenta de nuevo en unos segundos. (Ref: S.500)",
         );
       } finally {
         client?.close();
@@ -136,8 +151,15 @@ class ScannerAIService {
   }
 
   String _sanitizeResponse(String rawText) {
-    // 1. Limpiar marcas de markdown
-    return rawText.replaceAll('```json', '').replaceAll('```', '').trim();
+    String clean = rawText.replaceAll('```json', '').replaceAll('```', '').trim();
+    final firstBrace = clean.indexOf('{');
+    final lastBrace = clean.lastIndexOf('}');
+    if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+      clean = clean.substring(firstBrace, lastBrace + 1);
+    }
+    // Remueve comas sobrantes antes de llaves o corchetes de cierre
+    clean = clean.replaceAllMapped(RegExp(r',\s*([}\]])'), (m) => m.group(1)!);
+    return clean;
   }
 
   /// Prompt de análisis de facturas para Gemini usando Few-Shot Prompting.

@@ -15,15 +15,32 @@ class ApiConstants {
     return key;
   }
 
-  // Modelos recomendados de Gemini para extracción JSON
-  static const String geminiModelFlash = 'gemini-3.8-flash';
+  // Modelos oficiales de Gemini (Familia Flash 2026 en Free Tier)
+  /// Agente Primario: Mayor inteligencia y capacidad de razonamiento para comprobantes y tablas.
+  static const String geminiPrimaryModel = 'gemini-3.8-flash';
 
-  // Tiempo de espera máximo para procesamiento de IA (en segundos)
-  static const int aiTimeoutSeconds = 45;
+  /// Agente Secundario (Respaldo Inmediato): Ultra baja latencia y alta concurrencia.
+  static const String geminiFallbackModelFast = 'gemini-3.1-flash-lite';
+
+  /// Agente Terciario (Respaldo de Estabilidad): Generación previa balanceada.
+  static const String geminiFallbackModelStable = 'gemini-3.6-flash';
+
+  /// Compatibilidad con referencias previas
+  static const String geminiModelFlash = geminiPrimaryModel;
+
+  /// Lista ordenada de agentes en cascada para tolerancia a fallos
+  static const List<String> cascadeModels = [
+    geminiPrimaryModel,
+    geminiFallbackModelFast,
+    geminiFallbackModelStable,
+  ];
+
+  // Tiempo de espera generoso (95 segundos) para permitir razonamiento multimodal profundo
+  static const int aiTimeoutSeconds = 95;
 
   /// Crea un cliente configurado de Google AI con la API Key del .env
   /// El caller es responsable de cerrar el cliente cuando termine.
-  static GoogleAIClient createAIClient() {
+  static GoogleAIClient createAIClient({Duration? timeout}) {
     final apiKey = googleApiKey;
     if (apiKey.isEmpty) {
       throw Exception(
@@ -33,7 +50,7 @@ class ApiConstants {
     return GoogleAIClient(
       config: GoogleAIConfig.googleAI(
         authProvider: ApiKeyProvider(apiKey),
-        timeout: Duration(seconds: aiTimeoutSeconds),
+        timeout: timeout ?? const Duration(seconds: aiTimeoutSeconds),
       ),
     );
   }

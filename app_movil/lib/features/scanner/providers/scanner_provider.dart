@@ -256,7 +256,8 @@ class ScannerProvider with ChangeNotifier {
       );
       return activeState.aiRawData != null;
     } catch (e) {
-      activeState.statusMessage = "Error de conexión con la IA: $e";
+      final cleanMsg = e.toString().replaceAll("Exception:", "").trim();
+      activeState.statusMessage = cleanMsg;
     } finally {
       activeState.isLoading = false;
       notifyListeners();

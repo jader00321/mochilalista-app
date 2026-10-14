@@ -149,28 +149,54 @@ class _ScanScreenState extends State<ScanScreen>
           : "Preparando documento...",
     );
 
+    bool isCancelled = false;
+
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.7),
-      builder: (ctx) =>
-          ScanningDialog(mode: widget.mode, statusNotifier: statusNotifier),
+      builder: (ctx) => ScanningDialog(
+        mode: widget.mode,
+        statusNotifier: statusNotifier,
+        onCancel: () {
+          isCancelled = true;
+          if (mounted) Navigator.pop(ctx);
+        },
+      ),
     );
 
-    // 🔥 FASE 3: Lógica dinámica de textos de carga (Timer)
+    // 🔥 Lógica dinámica de textos de carga progresiva (Narrativa transparente)
     int tick = 0;
-    Timer? loadingTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+    Timer? loadingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       tick++;
-      if (statusNotifier.value.contains("Reintentando")) {
-        return; // Prioridad al error
+      // Si el servicio emitió un mensaje prioritario de cascada o reintento, mantenerlo visible
+      final current = statusNotifier.value;
+      if (current.contains("Conmutando") ||
+          current.contains("Límite") ||
+          current.contains("Servidor") ||
+          current.contains("Reintentando") ||
+          current.contains("demanda")) {
+        return;
       }
 
-      if (tick == 1) {
-        statusNotifier.value = "Enviando a la Inteligencia Artificial...";
-      } else if (tick == 2) {
-        statusNotifier.value = "Analizando contenido con IA...";
-      } else if (tick == 4) {
-        statusNotifier.value = "Extrayendo datos, casi listo...";
+      if (tick <= 2) {
+        statusNotifier.value = widget.mode == ScanMode.quotation
+            ? "Optimizando nitidez y legibilidad de la lista..."
+            : "Optimizando nitidez y resolución del comprobante...";
+      } else if (tick <= 9) {
+        statusNotifier.value = "Conectando con Agente IA (Gemini 3.8 Flash)...";
+      } else if (tick <= 22) {
+        statusNotifier.value = widget.mode == ScanMode.quotation
+            ? "Leyendo productos, marcas y cantidades requeridas..."
+            : "Leyendo detalle de productos, códigos y precios...";
+      } else if (tick <= 45) {
+        statusNotifier.value = widget.mode == ScanMode.quotation
+            ? "Normalizando nombres, unidades y notas escolares..."
+            : "Deduciendo empaques, fracciones y cálculos contables...";
+      } else if (tick <= 68) {
+        statusNotifier.value = "Estructurando catálogo con máxima precisión...";
+      } else {
+        statusNotifier.value = "Finalizando análisis exhaustivo, casi listo...";
       }
     });
 
@@ -190,8 +216,9 @@ class _ScanScreenState extends State<ScanScreen>
     try {
       if (widget.mode == ScanMode.quotation) {
         smartListener = () {
-          if (smartProvider!.errorMessage.contains("Reintentando") && mounted) {
-            statusNotifier.value = smartProvider.errorMessage;
+          final msg = smartProvider!.errorMessage.trim();
+          if (msg.isNotEmpty && mounted) {
+            statusNotifier.value = msg;
           }
         };
         smartProvider!.addListener(smartListener);
@@ -199,9 +226,9 @@ class _ScanScreenState extends State<ScanScreen>
         errorMsg = smartProvider.errorMessage;
       } else {
         scannerListener = () {
-          if (scannerProvider!.statusMessage.contains("Reintentando") &&
-              mounted) {
-            statusNotifier.value = scannerProvider.statusMessage;
+          final msg = scannerProvider!.statusMessage.trim();
+          if (msg.isNotEmpty && mounted) {
+            statusNotifier.value = msg;
           }
         };
         scannerProvider!.addListener(scannerListener);
@@ -218,7 +245,13 @@ class _ScanScreenState extends State<ScanScreen>
 
       loadingTimer.cancel();
       statusNotifier.dispose();
-      if (mounted) Navigator.pop(context); // Cierra dialog
+      if (!isCancelled && mounted) {
+        Navigator.pop(context); // Cierra dialog
+      }
+    }
+
+    if (isCancelled) {
+      return; // El usuario canceló conscientemente la espera
     }
 
     if (success && mounted) {
