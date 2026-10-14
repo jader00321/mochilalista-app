@@ -1,7 +1,7 @@
 name: app_movil
 description: "MochilaLista Mobile Application"
 publish_to: 'none'
-version: 9.1.0+50
+version: 9.2.0+51
 
 environment:
   sdk: ^3.9.0

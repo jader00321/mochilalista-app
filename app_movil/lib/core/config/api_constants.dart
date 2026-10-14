@@ -16,7 +16,7 @@ class ApiConstants {
   }
 
   // Modelos recomendados de Gemini para extracción JSON
-  static const String geminiModelFlash = 'gemini-3.6-flash';
+  static const String geminiModelFlash = 'gemini-3.8-flash';
 
   // Tiempo de espera máximo para procesamiento de IA (en segundos)
   static const int aiTimeoutSeconds = 45;
