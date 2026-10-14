@@ -84,9 +84,9 @@ class QuickSaleHeader extends StatelessWidget {
 
     final clientSubtitle = provider.clientId != null
         ? "Cliente Vinculado"
-        : (provider.cartItems.isNotEmpty && provider.estimatedCartProfit > 0
+        : (provider.cartItems.isNotEmpty && provider.estimatedCartProfit > 0 && !provider.hideProfits
             ? "Cliente anónimo · Ganancia est. ${currency.format(provider.estimatedCartProfit)}"
-            : "Cliente anónimo o nuevo");
+            : "Cliente anónimo");
 
     return ExpansionTile(
       title: Text(provider.clientName ?? "Datos del Cliente (Opcional)", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),

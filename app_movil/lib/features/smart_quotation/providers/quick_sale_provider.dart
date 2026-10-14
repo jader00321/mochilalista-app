@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
@@ -24,6 +25,30 @@ class QuickSaleProvider with ChangeNotifier {
   int? _negocioId;
   int? _usuarioId;
   
+  bool _hideProfits = false;
+  bool get hideProfits => _hideProfits;
+
+  QuickSaleProvider() {
+    _loadPrivacyPreference();
+  }
+
+  Future<void> _loadPrivacyPreference() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _hideProfits = prefs.getBool('commercial_hide_profits') ?? false;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> toggleHideProfits() async {
+    _hideProfits = !_hideProfits;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('commercial_hide_profits', _hideProfits);
+    } catch (_) {}
+  }
+
   final Map<int, QuickSaleState> _states = {};
 
   QuickSaleState get _currentState {

@@ -24,53 +24,84 @@ class SortableToolbar extends StatelessWidget {
     final textColor = isDark ? Colors.white : Colors.black87;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       color: bgColor,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // 1. Contador / Título
-          Text(
-            title,
-            style: TextStyle(
-              fontWeight: FontWeight.bold, 
-              color: textColor,
-              fontSize: 15
-            ),
-          ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 380;
+          final isVeryNarrow = constraints.maxWidth < 330;
 
-          // 2. Botones de Ordenamiento + trailing
-          Row(
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (trailing != null) ...[
-                trailing!,
-                const SizedBox(width: 8),
-              ],
-              Text("Ordenar:", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey)),
-              const SizedBox(width: 8),
-              
-              _SortButton(
-                label: "ID",
-                icon: Icons.numbers,
-                isSelected: currentSort == SortType.id,
-                isAscending: isAscending,
-                isDark: isDark,
-                onTap: () => onSortChanged(SortType.id),
+              // 1. Contador / Título + trailing agrupado a la izquierda
+              Flexible(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                          fontSize: isVeryNarrow ? 13 : (isNarrow ? 14 : 15),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (trailing != null) ...[
+                      const SizedBox(width: 4),
+                      trailing!,
+                    ],
+                  ],
+                ),
               ),
-              
+
               const SizedBox(width: 6),
-              
-              _SortButton(
-                label: "A-Z",
-                icon: Icons.sort_by_alpha,
-                isSelected: currentSort == SortType.alpha,
-                isAscending: isAscending,
-                isDark: isDark,
-                onTap: () => onSortChanged(SortType.alpha),
+
+              // 2. Botones de Ordenamiento a la derecha
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!isNarrow) ...[
+                    Text(
+                      "Ordenar:",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+
+                  _SortButton(
+                    label: "ID",
+                    icon: Icons.numbers,
+                    tooltip: "Ordenar por orden de creación",
+                    isSelected: currentSort == SortType.id,
+                    isAscending: isAscending,
+                    isDark: isDark,
+                    onTap: () => onSortChanged(SortType.id),
+                  ),
+
+                  const SizedBox(width: 4),
+
+                  _SortButton(
+                    label: "A-Z",
+                    icon: Icons.sort_by_alpha,
+                    tooltip: "Ordenar alfabéticamente",
+                    isSelected: currentSort == SortType.alpha,
+                    isAscending: isAscending,
+                    isDark: isDark,
+                    onTap: () => onSortChanged(SortType.alpha),
+                  ),
+                ],
               ),
             ],
-          )
-        ],
+          );
+        },
       ),
     );
   }
@@ -79,6 +110,7 @@ class SortableToolbar extends StatelessWidget {
 class _SortButton extends StatelessWidget {
   final String label;
   final IconData icon;
+  final String tooltip;
   final bool isSelected;
   final bool isAscending;
   final bool isDark;
@@ -87,6 +119,7 @@ class _SortButton extends StatelessWidget {
   const _SortButton({
     required this.label,
     required this.icon,
+    required this.tooltip,
     required this.isSelected,
     required this.isAscending,
     required this.isDark,
@@ -95,30 +128,38 @@ class _SortButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? (isDark ? Colors.blue[300]! : Theme.of(context).primaryColor) : (isDark ? Colors.grey[500]! : Colors.grey);
-    
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? color.withValues(alpha: 0.5) : Colors.transparent),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: color),
-            if (isSelected) ...[
-              const SizedBox(width: 4),
-              Icon(
-                isAscending ? Icons.arrow_upward : Icons.arrow_downward,
-                size: 14, 
-                color: color
-              ),
-            ]
-          ],
+    final color = isSelected
+        ? (isDark ? Colors.blue[300]! : Theme.of(context).primaryColor)
+        : (isDark ? Colors.grey[500]! : Colors.grey);
+
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? color.withValues(alpha: 0.5) : Colors.transparent,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              if (isSelected) ...[
+                const SizedBox(width: 3),
+                Icon(
+                  isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                  size: 13,
+                  color: color,
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

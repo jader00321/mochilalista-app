@@ -24,6 +24,7 @@ import 'package:app_movil/core/widgets/home/smart_action_grid.dart';
 import 'package:app_movil/features/analytics/widgets/restock_smart_banner.dart';
 import 'package:app_movil/core/widgets/home/weekly_sales_chart.dart';
 import 'package:app_movil/core/widgets/home/recent_activity_list.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -242,9 +243,9 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                     if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                       const RestockSmartBanner(),
                       const SizedBox(height: 16),
-                      // 🔧 TAREA 5.4: Recordatorio amigable de PIN de seguridad
-                      if (!auth.hasPinCache) ...[
-                        _buildSecurityPinBanner(context, isDark),
+                      // 🔧 Recordatorio amigable de PIN de seguridad con snooze inteligente de 7 días
+                      if (!auth.hasPinCache && !auth.isPinReminderSnoozed) ...[
+                        _buildSecurityPinBanner(context, isDark, auth),
                         const SizedBox(height: 16),
                       ],
                     ],
@@ -384,10 +385,10 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
     );
   }
 
-  // 🔧 TAREA 5.4: Banner amigable de PIN de seguridad
-  Widget _buildSecurityPinBanner(BuildContext context, bool isDark) {
+  // 🔧 Recordatorio amigable de PIN de seguridad con snooze de 7 días
+  Widget _buildSecurityPinBanner(BuildContext context, bool isDark, AuthProvider auth) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E2235) : const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(16),
@@ -429,7 +430,7 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           TextButton(
             onPressed: () {
               Navigator.push(
@@ -437,7 +438,28 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                 MaterialPageRoute(builder: (_) => const ProfileScreen()),
               );
             },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
             child: const Text("Activar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          ),
+          IconButton(
+            icon: Icon(Icons.close_rounded, size: 18, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+            tooltip: "Recordar en 7 días",
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            onPressed: () async {
+              await auth.snoozePinReminder(days: 7);
+              if (context.mounted) {
+                CustomSnackBar.show(
+                  context,
+                  message: "Recordatorio pospuesto por 7 días. Puedes activarlo cuando gustes desde tu Perfil.",
+                  isError: false,
+                );
+              }
+            },
           ),
         ],
       ),

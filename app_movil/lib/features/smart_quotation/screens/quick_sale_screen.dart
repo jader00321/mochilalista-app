@@ -30,7 +30,7 @@ class QuickSaleScreen extends StatefulWidget {
 
 class _QuickSaleScreenState extends State<QuickSaleScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
-  final FocusNode _searchFocus = FocusNode();
+  final FocusNode _searchFocus = FocusNode(skipTraversal: true);
   Timer? _debounce;
   bool _saleCompleted = false; 
   bool _isOffersExpanded = false;
@@ -117,14 +117,14 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     CustomSnackBar.show(context, message: "Agregado: ${item.product.nombre}", isError: false);
   }
 
-  void _openDetailModal(QuickSaleProvider provider, int presentationId) {
-    FocusScope.of(context).unfocus(); // Evita que el teclado se reabra al cerrar el modal
+  void _openDetailModal(QuickSaleProvider provider, int presentationId) async {
+    FocusManager.instance.primaryFocus?.unfocus();
 
     final item = provider.cartItems.firstWhere((p) => p.presentationId == presentationId);
     final qty = provider.getQuantity(presentationId);
     final effectivePrice = provider.getEffectivePrice(presentationId);
     
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -140,10 +140,15 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         },
       )
     );
+
+    if (mounted) {
+      FocusScope.of(context).unfocus();
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
   }
 
-  void _processToCheckout() {
-    FocusScope.of(context).unfocus(); // Evitar reapertura del teclado al cerrar checkout
+  void _processToCheckout() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -156,7 +161,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final provider = Provider.of<QuickSaleProvider>(context, listen: false);
     if (provider.isEmpty) return;
     
-    showModalBottomSheet<bool>(
+    final wasSaleSuccessful = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -164,11 +169,15 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: const QuickCheckoutModal(),
       ),
-    ).then((wasSaleSuccessful) {
+    );
+
+    if (mounted) {
+      FocusScope.of(context).unfocus();
+      FocusManager.instance.primaryFocus?.unfocus();
       if (wasSaleSuccessful == true) {
         _saleCompleted = true;
       }
-    });
+    }
   }
 
   Widget _buildNotesDrawer(BuildContext context, QuickSaleProvider prov, bool isDark) {
@@ -342,6 +351,15 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           ),
           actions: [
             // 🔧 TAREA 3.4: Info Tooltip
+            IconButton(
+              icon: Icon(
+                quickProv.hideProfits ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                size: 24,
+                color: Colors.white70,
+              ),
+              tooltip: quickProv.hideProfits ? "Modo Cliente (Ganancias ocultas)" : "Modo Vendedor (Ver ganancias)",
+              onPressed: () => quickProv.toggleHideProfits(),
+            ),
             InfoTooltipButton(
               iconColor: Colors.white60,
               title: 'Caja Rápida',
@@ -350,6 +368,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                 InfoTip(icon: Icons.search, text: 'Busca productos por nombre o escanea su código de barras con el botón de cámara.'),
                 InfoTip(icon: Icons.touch_app, text: 'Toca un producto del carrito para editar cantidad, precio o cambiar de presentación.'),
                 InfoTip(icon: Icons.person_search, text: 'Asocia un cliente a la venta desde el header superior para llevar su historial.'),
+                InfoTip(icon: Icons.visibility, text: 'Usa el botón de ojo en la barra superior para ocultar tus ganancias antes de mostrarle la pantalla a tu cliente.'),
                 InfoTip(icon: Icons.edit_note, text: 'Usa el botón de notas (esquina superior derecha) para agregar comentarios a la venta.'),
                 InfoTip(icon: Icons.local_offer, text: 'Las ofertas activas aparecen debajo del buscador. Tócalas para aplicarlas.'),
                 InfoTip(icon: Icons.shopping_cart_checkout, text: 'Presiona "Cobrar" para finalizar la venta con el método de pago elegido.'),
@@ -374,12 +393,12 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           ],
         ),
         body: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => FocusScope.of(context).unfocus(),
-                  behavior: HitTestBehavior.translucent,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: Column(
+              children: [
+                Expanded(
                   child: CustomScrollView(
                     slivers: [
                     SliverToBoxAdapter(
@@ -416,20 +435,35 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                             fillColor: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.2),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                            suffixIcon: Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(10),
+                            suffixIcon: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_searchCtrl.text.isNotEmpty || searchProv.searchResults.isNotEmpty)
+                                  IconButton(
+                                    icon: const Icon(Icons.clear, color: Colors.white, size: 20),
+                                    tooltip: "Limpiar búsqueda",
+                                    onPressed: () {
+                                      _searchCtrl.clear();
+                                      searchProv.clearSearch();
+                                      FocusManager.instance.primaryFocus?.unfocus();
+                                    },
+                                  ),
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 24),
+                                      onPressed: _scanBarcode,
+                                      tooltip: "Escanear código",
+                                    ),
+                                  ),
                                 ),
-                                child: IconButton(
-                                  icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 24),
-                                  onPressed: _scanBarcode,
-                                  tooltip: "Escanear código",
-                                ),
-                              ),
-                            )
+                              ],
+                            ),
                           ),
                           onChanged: _onSearchChanged,
                         ),
@@ -705,94 +739,168 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   ],
                 ),
               ),
-              ),
 
               if (quickProv.cartItems.isNotEmpty && searchProv.searchResults.isEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                  decoration: BoxDecoration(color: Theme.of(context).cardTheme.color, boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -5))]),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardTheme.color,
+                    boxShadow: [
+                      if (!isDark)
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 15,
+                          offset: const Offset(0, -5),
+                        ),
+                    ],
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Row(
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              runSpacing: 2,
                               children: [
-                                const Text("TOTAL A COBRAR", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1)),
-                                if (quickProv.estimatedCartProfit > 0) ...[
-                                  const SizedBox(width: 8),
+                                const Text(
+                                  "TOTAL A COBRAR",
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                                if (!quickProv.hideProfits && quickProv.estimatedCartProfit > 0)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
                                       borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300),
+                                      border: Border.all(
+                                        color: isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300,
+                                      ),
                                     ),
                                     child: Text(
                                       "Ganancia ~${currency.format(quickProv.estimatedCartProfit)}",
                                       style: TextStyle(
-                                        fontSize: 11,
+                                        fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                         color: isDark ? Colors.green[300] : Colors.green[800],
                                       ),
                                     ),
                                   ),
-                                ],
                               ],
                             ),
+                            const SizedBox(height: 2),
                             FittedBox(
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerLeft,
-                              child: Text(currency.format(quickProv.totalToPay), style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87)),
+                              child: Text(
+                                currency.format(quickProv.totalToPay),
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w900,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        height: 60, width: 140, 
-                        child: ElevatedButton.icon(
-                          onPressed: _processToCheckout, 
-                          icon: const Icon(Icons.payment, size: 22),
-                          label: const Text("COBRAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 1)),
-                          style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.pink[600] : const Color(0xFFD81B60), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: isDark ? 0 : 4, padding: const EdgeInsets.symmetric(horizontal: 10)),
+                      const SizedBox(width: 12),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 120, maxWidth: 140),
+                        child: SizedBox(
+                          height: 54,
+                          child: ElevatedButton.icon(
+                            onPressed: _processToCheckout,
+                            icon: const Icon(Icons.payment, size: 20),
+                            label: const Text(
+                              "COBRAR",
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isDark ? Colors.pink[600] : const Color(0xFFD81B60),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              elevation: isDark ? 0 : 4,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                            ),
+                          ),
                         ),
-                      )
+                      ),
                     ],
                   ),
-                )
+                ),
             ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   List<Widget> _buildSearchResultsSlivers(QuickSearchProvider searchProv, bool isDark) {
+    final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
     return [
       SliverToBoxAdapter(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("${searchProv.searchResults.length} resultados encontrados", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 14)),
+              Expanded(
+                child: Text(
+                  "${searchProv.searchResults.length} resultados",
+                  style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               PopupMenuButton<String>(
                 color: Theme.of(context).colorScheme.surface,
-                child: Row(children: [Icon(Icons.sort, size: 18, color: isDark ? Colors.blue[300] : Colors.blue), const SizedBox(width: 6), Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 14))]),
+                child: Row(
+                  children: [
+                    Icon(Icons.sort, size: 16, color: isDark ? Colors.blue[300] : Colors.blue),
+                    const SizedBox(width: 4),
+                    Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 13)),
+                  ],
+                ),
                 onSelected: (val) => searchProv.sortResults(val),
                 itemBuilder: (ctx) => [
                   PopupMenuItem(value: 'nombre_asc', child: Text("Alfabético (A-Z)", style: TextStyle(color: isDark ? Colors.white : Colors.black))),
                   PopupMenuItem(value: 'precio_desc', child: Text("Mayor Precio", style: TextStyle(color: isDark ? Colors.white : Colors.black))),
                   PopupMenuItem(value: 'precio_asc', child: Text("Menor Precio", style: TextStyle(color: isDark ? Colors.white : Colors.black))),
                 ],
-              )
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  _searchCtrl.clear();
+                  searchProv.clearSearch();
+                  FocusManager.instance.primaryFocus?.unfocus();
+                },
+                icon: const Icon(Icons.close, size: 16),
+                label: Text(
+                  quickProv.cartItems.isNotEmpty ? "Carrito (${quickProv.cartItems.length})" : "Cerrar",
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  side: BorderSide(color: isDark ? Colors.blue[400]! : Colors.blue[700]!),
+                  foregroundColor: isDark ? Colors.blue[200] : Colors.blue[800],
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
             ],
           ),
         ),

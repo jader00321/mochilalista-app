@@ -9,6 +9,7 @@ import 'package:app_movil/core/widgets/marquee_text.dart';
 
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart'; 
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
@@ -532,6 +533,17 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          Consumer<QuickSaleProvider>(
+            builder: (ctx, quickProv, _) => IconButton(
+              icon: Icon(
+                quickProv.hideProfits ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                size: 24,
+                color: Colors.white70,
+              ),
+              tooltip: quickProv.hideProfits ? "Modo Cliente (Privacidad activa)" : "Modo Vendedor",
+              onPressed: () => quickProv.toggleHideProfits(),
+            ),
+          ),
           IconButton(icon: const Icon(Icons.refresh, size: 26), onPressed: _loadData),
           
           if (!isClient && _fullQuotation?.status != 'SOLD') // 🔒 Si está vendido, ocultar menú

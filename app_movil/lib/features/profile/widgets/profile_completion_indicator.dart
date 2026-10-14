@@ -13,6 +13,7 @@ class ProfileCompletionIndicator extends StatelessWidget {
   final bool isDark;
   final VoidCallback? onEditProfile;
   final VoidCallback? onEditBusiness;
+  final VoidCallback? onChangeLogo;
   final VoidCallback? onChangePin;
 
   const ProfileCompletionIndicator({
@@ -22,6 +23,7 @@ class ProfileCompletionIndicator extends StatelessWidget {
     required this.isDark,
     this.onEditProfile,
     this.onEditBusiness,
+    this.onChangeLogo,
     this.onChangePin,
   });
 
@@ -68,7 +70,7 @@ class ProfileCompletionIndicator extends StatelessWidget {
         label: 'Logo',
         icon: Icons.image,
         isComplete: biz?.logoUrl != null && biz!.logoUrl!.isNotEmpty && biz.logoUrl != 'null',
-        onTap: onEditBusiness,
+        onTap: onChangeLogo ?? onEditBusiness,
       ),
       _ProfileField(
         label: 'Info Pago',

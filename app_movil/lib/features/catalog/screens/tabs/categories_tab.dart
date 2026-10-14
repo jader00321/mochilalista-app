@@ -360,36 +360,45 @@ class _CategoriesTabState extends State<CategoriesTab> {
                 currentSort: provider.catSort,
                 isAscending: provider.catAsc,
                 onSortChanged: (type) => provider.sortCategories(type),
-                trailing: !isGuest ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.auto_awesome,
-                        color: isDark ? Colors.amber[300] : Colors.amber[800],
-                        size: 22,
-                      ),
-                      tooltip: 'Auto-categorizar Productos',
-                      onPressed: () => AutoCategorizationModal.show(
-                        context,
-                        isDark: isDark,
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.find_replace,
-                        color: isDark ? Colors.blue[300] : Colors.blue[800],
-                        size: 22,
-                      ),
-                      tooltip: 'Detectar Duplicados',
-                      onPressed: () => DuplicateMergeModal.show(
-                        context,
-                        type: MergeEntityType.category,
-                        isDark: isDark,
-                      ),
-                    ),
-                  ],
-                ) : null,
+                trailing: !isGuest
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.auto_awesome,
+                              color: isDark ? Colors.amber[300] : Colors.amber[800],
+                              size: 19,
+                            ),
+                            tooltip: 'Auto-categorizar Productos',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => AutoCategorizationModal.show(
+                              context,
+                              isDark: isDark,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          IconButton(
+                            icon: Icon(
+                              Icons.find_replace,
+                              color: isDark ? Colors.blue[300] : Colors.blue[800],
+                              size: 19,
+                            ),
+                            tooltip: 'Detectar Duplicados',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => DuplicateMergeModal.show(
+                              context,
+                              type: MergeEntityType.category,
+                              isDark: isDark,
+                            ),
+                          ),
+                        ],
+                      )
+                    : null,
               ),
 
               // 🔧 TAREA 4.5: Banner de categorías predefinidas sugeridas
@@ -571,15 +580,19 @@ class _CategoriesTabState extends State<CategoriesTab> {
             children: [
               Icon(Icons.lightbulb_outline, size: 20, color: Colors.amber[600]),
               const SizedBox(width: 8),
-              Text(
-                "Categorías Sugeridas",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: isDark ? Colors.blue[200] : Colors.blue[900],
+              Expanded(
+                child: Text(
+                  "Categorías Sugeridas",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: isDark ? Colors.blue[200] : Colors.blue[900],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 6),
               Text(
                 "Toca para agregar",
                 style: TextStyle(
@@ -624,6 +637,7 @@ class _CategoriesTabState extends State<CategoriesTab> {
                   }
                 },
                 child: Container(
+                  constraints: const BoxConstraints(maxWidth: 200),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
@@ -637,12 +651,16 @@ class _CategoriesTabState extends State<CategoriesTab> {
                     children: [
                       Text(s.icon, style: const TextStyle(fontSize: 13)),
                       const SizedBox(width: 5),
-                      Text(
-                        s.name,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white70 : Colors.black87,
+                      Flexible(
+                        child: Text(
+                          s.name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white70 : Colors.black87,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 4),

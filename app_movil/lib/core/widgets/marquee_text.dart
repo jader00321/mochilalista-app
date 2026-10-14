@@ -65,7 +65,6 @@ class _MarqueeTextState extends State<MarqueeText> with SingleTickerProviderStat
     if (_scrollController.hasClients) {
       final maxExtent = _scrollController.position.maxScrollExtent;
       if (maxExtent > 0) {
-        
         await Future.delayed(widget.pauseDuration);
         if (!mounted || currentLoop != _loopId) return;
 
@@ -91,9 +90,12 @@ class _MarqueeTextState extends State<MarqueeText> with SingleTickerProviderStat
         
         _scrollLoop(currentLoop);
       } else {
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 4));
         if (mounted && currentLoop == _loopId) _scrollLoop(currentLoop); 
       }
+    } else {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted && currentLoop == _loopId) _scrollLoop(currentLoop);
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/core/services/auth_service.dart';
+import 'package:app_movil/core/services/pin_reminder_service.dart';
 import 'package:app_movil/core/models/user_model.dart';
 
 enum AuthStatus { checking, authenticated, profileSelection }
@@ -19,6 +20,7 @@ class AuthProvider with ChangeNotifier {
   bool _isLoading = false;
   String _errorMessage = '';
   bool _hasPinCache = false;
+  bool _isPinReminderSnoozed = false;
 
   AuthStatus get status => _status;
   List<UserModel> get localProfiles => _localProfiles;
@@ -34,6 +36,7 @@ class AuthProvider with ChangeNotifier {
   String get businessName => _activeUser?.business?.commercialName ?? "Mi Negocio";
   String get currentCurrency => _activeUser?.business?.moneda ?? 'S/ (Soles)';
   bool get hasPinCache => _hasPinCache;
+  bool get isPinReminderSnoozed => _isPinReminderSnoozed;
 
   bool get isAuthenticated => _status == AuthStatus.authenticated && _activeUser != null;
   bool get hasActiveContext => activeBusinessId != null;
@@ -79,6 +82,8 @@ class AuthProvider with ChangeNotifier {
         if (lastUserId != null) {
           try {
             _activeUser = await _authService.getUserProfile(lastUserId);
+            _hasPinCache = await profileHasPin(lastUserId);
+            _isPinReminderSnoozed = await PinReminderService.isSnoozed(lastUserId);
             _status = AuthStatus.authenticated;
           } catch (_) {
             await prefs.remove('last_active_user_id');
@@ -101,6 +106,8 @@ class AuthProvider with ChangeNotifier {
       try {
         _activeUser = await _authService.getUserProfile(_activeUser!.id);
         _localProfiles = await _authService.getLocalProfiles();
+        _hasPinCache = await profileHasPin(_activeUser!.id);
+        _isPinReminderSnoozed = await PinReminderService.isSnoozed(_activeUser!.id);
         notifyListeners();
       } catch (e) {
         // Ignore silent refresh errors
@@ -141,6 +148,7 @@ class AuthProvider with ChangeNotifier {
     _activeUser = await _authService.getUserProfile(userId);
     _localProfiles = await _authService.getLocalProfiles(); 
     _hasPinCache = await profileHasPin(userId);
+    _isPinReminderSnoozed = await PinReminderService.isSnoozed(userId);
     
     _status = AuthStatus.authenticated;
     notifyListeners();
@@ -159,10 +167,18 @@ class AuthProvider with ChangeNotifier {
     return correctPin == enteredPin;
   }
 
+  Future<void> snoozePinReminder({int days = 7}) async {
+    if (_activeUser == null) return;
+    await PinReminderService.snooze(_activeUser!.id, days: days);
+    _isPinReminderSnoozed = true;
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('last_active_user_id');
     _activeUser = null;
+    _isPinReminderSnoozed = false;
     _status = AuthStatus.profileSelection;
     notifyListeners();
   }
@@ -221,6 +237,8 @@ class AuthProvider with ChangeNotifier {
       } else {
         await _secureStorage.write(key: 'pin_${_activeUser!.id}', value: newPin);
         _hasPinCache = true;
+        await PinReminderService.clearSnooze(_activeUser!.id);
+        _isPinReminderSnoozed = false;
       }
       notifyListeners();
       return true;
@@ -229,6 +247,72 @@ class AuthProvider with ChangeNotifier {
       return false;
     } finally {
       _setLoading(false);
+    }
+  }
+
+  /// Restablece directamente el PIN del usuario activo (tras autenticación biométrica exitosa)
+  Future<bool> resetPinDirectly(String newPin) async {
+    if (_activeUser == null) return false;
+    return await resetPinForUser(_activeUser!.id, newPin);
+  }
+
+  /// Restablece directamente el PIN para un usuario específico (usado en LockScreen durante recuperación)
+  Future<bool> resetPinForUser(int userId, String newPin) async {
+    _setLoading(true);
+    try {
+      if (newPin.isEmpty) {
+        await _secureStorage.delete(key: 'pin_$userId');
+        if (_activeUser?.id == userId) _hasPinCache = false;
+      } else {
+        await _secureStorage.write(key: 'pin_$userId', value: newPin);
+        if (_activeUser?.id == userId) _hasPinCache = true;
+      }
+      await PinReminderService.clearSnooze(userId);
+      if (_activeUser?.id == userId) _isPinReminderSnoozed = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Verifica la identidad del titular contra los datos del negocio y usuario almacenados localmente en SQLite
+  Future<bool> verifyOwnerIdentity(int userId, {required String rucOrDni, required String phoneOrEmail}) async {
+    try {
+      final user = await _authService.getUserProfile(userId);
+      final cleanInputRuc = rucOrDni.trim().replaceAll(RegExp(r'[^0-9]'), '');
+      final cleanInputPhone = phoneOrEmail.trim().replaceAll(RegExp(r'[^0-9]'), '');
+      final cleanInputEmail = phoneOrEmail.trim().toLowerCase();
+
+      bool rucMatches = false;
+      final registeredRuc = user.business?.ruc?.trim().replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+      if (cleanInputRuc.isNotEmpty && registeredRuc.isNotEmpty && registeredRuc == cleanInputRuc) {
+        rucMatches = true;
+      }
+
+      bool contactMatches = false;
+      final registeredPhone = user.phone?.trim().replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+      final registeredEmail = user.email?.trim().toLowerCase() ?? '';
+
+      if (cleanInputPhone.isNotEmpty && registeredPhone.isNotEmpty && registeredPhone == cleanInputPhone) {
+        contactMatches = true;
+      } else if (cleanInputEmail.isNotEmpty && registeredEmail.isNotEmpty && registeredEmail == cleanInputEmail) {
+        contactMatches = true;
+      }
+
+      // Si el negocio tiene RUC registrado, requerimos que coincida el RUC y el medio de contacto
+      if (registeredRuc.isNotEmpty) {
+        return rucMatches && contactMatches;
+      }
+      
+      // Si no tenía RUC registrado, la coincidencia del teléfono o correo basta
+      return contactMatches;
+    } catch (e) {
+      debugPrint("Error verificando identidad del titular: $e");
+      return false;
     }
   }
 

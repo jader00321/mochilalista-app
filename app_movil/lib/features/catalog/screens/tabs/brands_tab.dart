@@ -139,19 +139,24 @@ class _BrandsTabState extends State<BrandsTab> {
                 currentSort: provider.brandSort,
                 isAscending: provider.brandAsc,
                 onSortChanged: (type) => provider.sortBrands(type),
-                trailing: !isGuest ? IconButton(
-                  icon: Icon(
-                    Icons.find_replace,
-                    color: isDark ? Colors.orange[300] : Colors.orange[800],
-                    size: 22,
-                  ),
-                  tooltip: 'Detectar Duplicados',
-                  onPressed: () => DuplicateMergeModal.show(
-                    context,
-                    type: MergeEntityType.brand,
-                    isDark: isDark,
-                  ),
-                ) : null,
+                trailing: !isGuest
+                    ? IconButton(
+                        icon: Icon(
+                          Icons.find_replace,
+                          color: isDark ? Colors.orange[300] : Colors.orange[800],
+                          size: 19,
+                        ),
+                        tooltip: 'Detectar Duplicados',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => DuplicateMergeModal.show(
+                          context,
+                          type: MergeEntityType.brand,
+                          isDark: isDark,
+                        ),
+                      )
+                    : null,
               ),
 
               Expanded(

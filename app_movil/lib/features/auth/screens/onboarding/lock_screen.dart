@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Para el HapticFeedback (Vibración)
 import 'package:local_auth/local_auth.dart';
@@ -5,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/screens/home_screen.dart'; 
 import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
+import 'package:app_movil/features/auth/screens/onboarding/widgets/forgot_pin_recovery_modal.dart';
 
 class LockScreen extends StatefulWidget {
   final int userId;
@@ -19,6 +21,14 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   String _enteredPin = '';
   bool _isAuthenticating = false;
   bool _isError = false;
+
+  // Protección anti fuerza bruta
+  int _failedAttempts = 0;
+  DateTime? _lockoutUntil;
+  Timer? _lockoutTimer;
+  int _lockoutSecondsRemaining = 0;
+
+  bool get _isLockedOut => _lockoutUntil != null && DateTime.now().isBefore(_lockoutUntil!);
 
   late AnimationController _shakeController;
   late AnimationController _fadeController;
@@ -45,6 +55,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _lockoutTimer?.cancel();
     _shakeController.dispose();
     _fadeController.dispose();
     super.dispose();
@@ -85,6 +96,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   }
 
   void _onPinPadPressed(String digit) async {
+    if (_isLockedOut) return;
     if (_enteredPin.length < 4 && !_isError) {
       setState(() {
         _enteredPin += digit;
@@ -97,14 +109,44 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _startLockout(int seconds) {
+    _lockoutUntil = DateTime.now().add(Duration(seconds: seconds));
+    _lockoutSecondsRemaining = seconds;
+    _lockoutTimer?.cancel();
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final remaining = _lockoutUntil!.difference(DateTime.now()).inSeconds;
+      if (remaining <= 0) {
+        timer.cancel();
+        setState(() {
+          _lockoutUntil = null;
+          _lockoutSecondsRemaining = 0;
+          _failedAttempts = 0;
+        });
+      } else {
+        setState(() {
+          _lockoutSecondsRemaining = remaining;
+        });
+      }
+    });
+  }
+
   Future<void> _verifyPin() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     bool isCorrect = await auth.verifyPin(widget.userId, _enteredPin);
     
     if (isCorrect) {
+      _failedAttempts = 0;
       await _unlockApp();
     } else {
       HapticFeedback.vibrate(); // Vibración fuerte por error
+      _failedAttempts++;
+      if (_failedAttempts >= 5) {
+        _startLockout(30);
+      }
       setState(() => _isError = true);
       _shakeController.forward(from: 0.0).then((_) {
         setState(() {
@@ -250,8 +292,14 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 8),
               Text(
-                _isError ? 'PIN Incorrecto' : 'Ingresa tu PIN de seguridad',
-                style: TextStyle(fontSize: 15, color: _isError ? Colors.red : (isDark ? Colors.grey[400] : Colors.grey[600]), fontWeight: _isError ? FontWeight.bold : FontWeight.normal),
+                _isLockedOut
+                    ? 'Bloqueado temporalmente (${_lockoutSecondsRemaining}s)'
+                    : (_isError ? 'PIN Incorrecto' : 'Ingresa tu PIN de seguridad'),
+                style: TextStyle(
+                  fontSize: 15,
+                  color: (_isError || _isLockedOut) ? Colors.red : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                  fontWeight: (_isError || _isLockedOut) ? FontWeight.bold : FontWeight.normal,
+                ),
               ),
               
               const SizedBox(height: 40),
@@ -330,7 +378,31 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                 ),
               ),
               
-              const SizedBox(height: 40),
+              const SizedBox(height: 30),
+
+              // Botón de Recuperación de PIN Olvidado
+              TextButton.icon(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (ctx) => ForgotPinRecoveryModal(
+                      userId: widget.userId,
+                      onSuccess: _unlockApp,
+                    ),
+                  );
+                },
+                icon: Icon(Icons.help_outline_rounded, size: 16, color: Colors.blue[300]),
+                label: Text(
+                  "¿Olvidaste tu PIN?",
+                  style: TextStyle(color: Colors.blue[300], fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                ),
+              ),
+              const SizedBox(height: 6),
               
               TextButton.icon(
                 onPressed: () async {

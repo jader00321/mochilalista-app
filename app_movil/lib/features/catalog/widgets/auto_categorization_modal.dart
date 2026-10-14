@@ -272,12 +272,16 @@ class _AutoCategorizationModalState extends State<AutoCategorizationModal> {
                                               const SizedBox(height: 4),
                                               Row(
                                                 children: [
-                                                  Text(
-                                                    s.currentCategoryName,
-                                                    style: TextStyle(
-                                                      fontSize: 11,
-                                                      color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                                                      decoration: TextDecoration.lineThrough,
+                                                  Flexible(
+                                                    child: Text(
+                                                      s.currentCategoryName,
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                                                        decoration: TextDecoration.lineThrough,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
                                                   ),
                                                   const SizedBox(width: 6),
@@ -287,18 +291,22 @@ class _AutoCategorizationModalState extends State<AutoCategorizationModal> {
                                                     color: widget.isDark ? Colors.blue[300] : Colors.blue[800],
                                                   ),
                                                   const SizedBox(width: 6),
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.green.withValues(alpha: 0.15),
-                                                      borderRadius: BorderRadius.circular(6),
-                                                    ),
-                                                    child: Text(
-                                                      s.suggestedCategoryName,
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        fontWeight: FontWeight.bold,
-                                                        color: widget.isDark ? Colors.green[300] : Colors.green[800],
+                                                  Flexible(
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.green.withValues(alpha: 0.15),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                      ),
+                                                      child: Text(
+                                                        s.suggestedCategoryName,
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: widget.isDark ? Colors.green[300] : Colors.green[800],
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                     ),
                                                   ),

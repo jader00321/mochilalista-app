@@ -50,7 +50,10 @@ class _MasterDetailModalState extends State<MasterDetailModal> {
     final textColor = isDark ? Colors.white : Colors.black87;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom + 24),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.88,
+      ),
+      padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
@@ -62,134 +65,269 @@ class _MasterDetailModalState extends State<MasterDetailModal> {
           // Barra de arrastre
           Center(
             child: Container(
-              width: 50, height: 5, margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-
-          // Cabecera
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(color: (_isActive ? widget.color : Colors.grey).withValues(alpha: 0.15), shape: BoxShape.circle),
-                child: Icon(widget.icon, color: _isActive ? widget.color : (isDark ? Colors.grey[400] : Colors.grey), size: 36),
+              width: 50,
+              height: 5,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor)),
-                    const SizedBox(height: 4),
-                    Text(widget.subtitle, style: TextStyle(fontSize: 15, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Switch Estado
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _isActive ? (isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.05)) : (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.05)),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _isActive ? (isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.withValues(alpha: 0.2)) : (isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.withValues(alpha: 0.2))),
-            ),
-            child: Row(
-              children: [
-                Icon(_isActive ? Icons.check_circle : Icons.pause_circle_filled, color: _isActive ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.orange[400] : Colors.orange), size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_isActive ? "Estado: ACTIVO" : "Estado: SUSPENDIDO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _isActive ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.orange[300] : Colors.orange[800]))),
-                      const SizedBox(height: 2),
-                      Text(_isActive ? "Visible para usar en el inventario." : "Oculto en las listas desplegables.", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.black54)),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: _isActive,
-                  activeThumbColor: isDark ? Colors.green[400] : Colors.green,
-                  onChanged: (val) { 
-                    setState(() => _isActive = val);
-                    widget.onToggleActive(val); 
-                  },
-                ),
-              ],
             ),
           ),
-          const SizedBox(height: 30),
 
-          // Datos
-          if (widget.dataRows.isNotEmpty) ...[
-            Text("INFORMACIÓN DETALLADA", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[500] : Colors.grey, letterSpacing: 1)),
-            const SizedBox(height: 16),
-            ...widget.dataRows.map((row) => Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: Row(
+          // Contenido scrollable
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 110, child: Text(row['label'] ?? "", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w500, fontSize: 15))),
-                  Expanded(child: Text((row['value']?.isEmpty ?? true) ? "-" : row['value']!, style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 15))),
+                  // Cabecera
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: (_isActive ? widget.color : Colors.grey).withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          widget.icon,
+                          color: _isActive ? widget.color : (isDark ? Colors.grey[400] : Colors.grey),
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.title,
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.subtitle,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Switch Estado
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: _isActive
+                          ? (isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.05))
+                          : (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.05)),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _isActive
+                            ? (isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.withValues(alpha: 0.2))
+                            : (isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.withValues(alpha: 0.2)),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _isActive ? Icons.check_circle : Icons.pause_circle_filled,
+                          color: _isActive
+                              ? (isDark ? Colors.green[400] : Colors.green)
+                              : (isDark ? Colors.orange[400] : Colors.orange),
+                          size: 26,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _isActive ? "Estado: ACTIVO" : "Estado: SUSPENDIDO",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: _isActive
+                                      ? (isDark ? Colors.green[300] : Colors.green[800])
+                                      : (isDark ? Colors.orange[300] : Colors.orange[800]),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _isActive ? "Visible para usar en el inventario." : "Oculto en las listas desplegables.",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? Colors.grey[400] : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _isActive,
+                          activeThumbColor: isDark ? Colors.green[400] : Colors.green,
+                          onChanged: (val) {
+                            setState(() => _isActive = val);
+                            widget.onToggleActive(val);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Datos
+                  if (widget.dataRows.isNotEmpty) ...[
+                    Text(
+                      "INFORMACIÓN DETALLADA",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.grey[500] : Colors.grey,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...widget.dataRows.map((row) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 105,
+                                child: Text(
+                                  row['label'] ?? "",
+                                  style: TextStyle(
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  (row['value']?.isEmpty ?? true) ? "-" : row['value']!,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                    Divider(height: 28, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  ],
                 ],
               ),
-            )),
-            Divider(height: 40, color: isDark ? Colors.white10 : Colors.grey[200]),
-          ],
+            ),
+          ),
 
-          // Botones Acción
+          const SizedBox(height: 14),
+
+          // Botones Acción fijos en el fondo
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () { 
+                  onPressed: () {
                     Navigator.pop(context); // Cierra el bottomsheet
                     widget.onEdit(); // Llama a la lógica principal de manera segura
                   },
-                  icon: const Icon(Icons.edit, size: 20),
-                  label: const Text("EDITAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800], side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade200), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text(
+                    "EDITAR",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
+                    side: BorderSide(
+                      color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade200,
+                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
                 ),
               ),
-              const SizedBox(width: 16),
-              
+              const SizedBox(width: 12),
+
               // BOTÓN ELIMINAR INTELIGENTE
               Expanded(
-                child: canDelete 
-                ? OutlinedButton.icon(
-                    onPressed: () { 
-                      Navigator.pop(context); // Cierra el bottomsheet
-                      widget.onDelete(); // Llama a la lógica principal de manera segura
-                    },
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    label: const Text("ELIMINAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: isDark ? Colors.red[300] : Colors.red[700], side: BorderSide(color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade200), backgroundColor: isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.05), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                  )
-                : Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.grey[100], borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade300)),
-                    child: Column(
-                      children: [
-                        Icon(Icons.lock_outline, size: 20, color: isDark ? Colors.grey[400] : Colors.grey),
-                        const SizedBox(height: 2),
-                        Text("En uso (${widget.usageCount})", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey)),
-                      ],
-                    ),
-                  ),
+                child: canDelete
+                    ? OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context); // Cierra el bottomsheet
+                          widget.onDelete(); // Llama a la lógica principal de manera segura
+                        },
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text(
+                          "ELIMINAR",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          foregroundColor: isDark ? Colors.red[300] : Colors.red[700],
+                          side: BorderSide(
+                            color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade200,
+                          ),
+                          backgroundColor: isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.05),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isDark ? Colors.transparent : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(Icons.lock_outline, size: 18, color: isDark ? Colors.grey[400] : Colors.grey),
+                            const SizedBox(height: 2),
+                            Text(
+                              "En uso (${widget.usageCount})",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.grey[400] : Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
               ),
             ],
           ),
           if (!canDelete)
             Padding(
-              padding: const EdgeInsets.only(top: 12.0),
+              padding: const EdgeInsets.only(top: 8.0),
               child: Text(
                 "No se puede eliminar porque está asignado a ${widget.usageCount} productos. Suspéndalo para dejar de usarlo.",
-                style: TextStyle(fontSize: 13, color: isDark ? Colors.red[300] : Colors.red, fontStyle: FontStyle.italic),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.red[300] : Colors.red,
+                  fontStyle: FontStyle.italic,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),

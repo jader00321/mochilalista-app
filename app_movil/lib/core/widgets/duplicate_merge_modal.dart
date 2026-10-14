@@ -432,6 +432,8 @@ class _DuplicateMergeSheetState extends State<_DuplicateMergeSheet> {
                                         fontSize: 14,
                                         color: widget.isDark ? Colors.white : Colors.black87,
                                       ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                     Text(
                                       "ID: ${item['id']} • ${item['extra']}",
@@ -439,6 +441,8 @@ class _DuplicateMergeSheetState extends State<_DuplicateMergeSheet> {
                                         fontSize: 11,
                                         color: widget.isDark ? Colors.grey[500] : Colors.grey[600],
                                       ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),

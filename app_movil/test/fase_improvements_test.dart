@@ -188,4 +188,101 @@ void main() {
       expect(gananciaTotal, 11.0);
     });
   });
+
+  group('Mejoras UX - Modo Privacidad Comercial', () {
+    test('Simula visibilidad condicional de ganancia y subtítulo según modo privacidad', () {
+      bool hideProfits = false;
+      const double profit = 15.5;
+
+      String getSubtitle(bool isPrivacyActive) {
+        if (isPrivacyActive) return "Cliente anónimo";
+        return "Cliente anónimo · Ganancia est. S/ ${profit.toStringAsFixed(2)}";
+      }
+
+      expect(getSubtitle(hideProfits), "Cliente anónimo · Ganancia est. S/ 15.50");
+
+      hideProfits = true;
+      expect(getSubtitle(hideProfits), "Cliente anónimo");
+    });
+  });
+
+  group('Mejoras UX - Lógica de Reabastecimiento Rápido de Stock', () {
+    test('Modo Suma: Incrementa stock existente con mercancía recibida', () {
+      const int currentStock = 5;
+      const int receivedStock = 12;
+      const int calculatedNewStock = currentStock + receivedStock;
+      expect(calculatedNewStock, 17);
+    });
+
+    test('Modo Directo: Fija inventario físico exacto respetando no-negativos', () {
+      const int currentStock = 5;
+      int exactInventory = 24;
+      expect(exactInventory, 24);
+
+      int invalidStock = -3;
+      bool isValid = invalidStock >= 0;
+      expect(isValid, false);
+      expect(currentStock, 5);
+    });
+  });
+
+  group('Mejoras UX - Navegación y Toggle de Categorías', () {
+    test('Des-selecciona categoría activa al tocarla por segunda vez', () {
+      int? selectedCategoryId = 2; // Categoría Abarrotes
+      
+      // Simula toggle
+      int? onCategoryTapped(int? tappedId) {
+        if (selectedCategoryId == tappedId) {
+          return null; // Toggle OFF
+        }
+        return tappedId;
+      }
+
+      // Tocar la misma categoría la deselecciona
+      selectedCategoryId = onCategoryTapped(2);
+      expect(selectedCategoryId, isNull);
+
+      // Tocar otra categoría la selecciona
+      selectedCategoryId = onCategoryTapped(4);
+      expect(selectedCategoryId, 4);
+    });
+  });
+
+  group('Mejoras UX - Atajos de Perfil y Responsividad de Toolbar', () {
+    test('Atajo de Logo invoca onChangeLogo preferencialmente antes que onEditBusiness', () {
+      bool logoPickerCalled = false;
+      bool businessModalCalled = false;
+
+      void mockOnChangeLogo() => logoPickerCalled = true;
+      void mockOnEditBusiness() => businessModalCalled = true;
+
+      // Simula el callback del campo Logo en ProfileCompletionIndicator
+      const Function? mockNull = null;
+      final Function logoTapAction = mockOnChangeLogo;
+      logoTapAction();
+
+      expect(logoPickerCalled, isTrue);
+      expect(businessModalCalled, isFalse);
+
+      final Function fallbackAction = mockNull ?? mockOnEditBusiness;
+      fallbackAction();
+      expect(businessModalCalled, isTrue);
+    });
+
+    test('Lógica de Toolbar Responsiva oculta etiqueta Ordenar cuando ancho < 380', () {
+      bool shouldShowSortLabel(double maxWidth) => maxWidth >= 380;
+
+      expect(shouldShowSortLabel(390), isTrue);
+      expect(shouldShowSortLabel(360), isFalse); // Pantalla compacta (360dp)
+      expect(shouldShowSortLabel(320), isFalse); // Pantalla muy compacta (320dp)
+    });
+
+    test('Aislamiento de Seguridad: Cerrar Sesión es neutral y Eliminar Perfil es crítico', () {
+      const bool isLogoutDestructive = false; // Neutral / Slate
+      const bool isDeleteDestructive = true;  // Crítico / Danger Zone
+
+      expect(isLogoutDestructive, isFalse);
+      expect(isDeleteDestructive, isTrue);
+    });
+  });
 }

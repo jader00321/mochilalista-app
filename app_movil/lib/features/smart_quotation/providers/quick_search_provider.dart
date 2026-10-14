@@ -62,8 +62,20 @@ class QuickSearchProvider with ChangeNotifier {
   }
 
   void selectCategory(int? categoryId) {
-    if (_selectedCategoryId == categoryId) return;
+    if (_selectedCategoryId == categoryId) {
+      _selectedCategoryId = null;
+      if (_currentQuery.isEmpty) {
+        clearSearch();
+      } else {
+        searchProducts(_currentQuery, reset: true);
+      }
+      return;
+    }
     _selectedCategoryId = categoryId;
+    if (categoryId == null && _currentQuery.isEmpty) {
+      clearSearch();
+      return;
+    }
     searchProducts(_currentQuery, reset: true);
   }
 

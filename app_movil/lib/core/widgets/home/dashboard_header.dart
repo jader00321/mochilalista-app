@@ -16,8 +16,9 @@ import 'package:app_movil/features/smart_quotation/providers/tracking_provider.d
 // Screens
 import 'package:app_movil/features/profile/screens/profile_screen.dart'; 
 import 'package:app_movil/features/profile/screens/notifications_screen.dart'; 
-import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart'; // 🔥 Ajustado para usar la selección de perfiles
+import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
 import 'package:app_movil/core/widgets/shimmer_box.dart';
+import 'package:app_movil/core/widgets/marquee_text.dart';
 
 class DashboardHeader extends StatefulWidget {
   const DashboardHeader({super.key});
@@ -171,29 +172,35 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Flexible(
-                          child: Text(
-                            userName,
-                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5, height: 1.1),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                        Expanded(
+                          child: MarqueeText(
+                            text: userName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                              height: 1.1,
+                            ),
+                            pauseDuration: const Duration(seconds: 3),
+                            scrollSpeed: 32.0,
                           ),
                         ),
                         if (isGuest) ...[
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: Colors.orange.withValues(alpha: 0.8),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.2))
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                             ),
                             child: Text(
                               displayRole, 
-                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)
+                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                             ),
-                          )
-                        ]
+                          ),
+                        ],
                       ],
                     ),
                     
@@ -205,11 +212,15 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                             Icon(Icons.storefront_rounded, color: Colors.blue[200], size: 18),
                             const SizedBox(width: 6),
                             Expanded(
-                              child: Text(
-                                auth.businessName,
-                                style: TextStyle(color: Colors.blue[100], fontSize: 15, fontWeight: FontWeight.w600),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              child: MarqueeText(
+                                text: auth.businessName.isEmpty ? "Mi Negocio" : auth.businessName,
+                                style: TextStyle(
+                                  color: Colors.blue[100],
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                pauseDuration: const Duration(seconds: 3),
+                                scrollSpeed: 28.0,
                               ),
                             ),
                           ],

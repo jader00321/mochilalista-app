@@ -173,6 +173,8 @@ class DuplicateWarningDialog extends StatelessWidget {
           ],
         ),
       ),
+      actionsOverflowButtonSpacing: 8,
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, null),

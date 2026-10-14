@@ -6,6 +6,7 @@ import 'package:app_movil/core/widgets/marquee_text.dart';
 // Providers y Servicios
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart'; 
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
@@ -295,6 +296,17 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                       "Convierte la cotización en una venta directa con un solo toque desde el pie de página.",
                 ),
               ],
+            ),
+            Consumer<QuickSaleProvider>(
+              builder: (ctx, quickProv, _) => IconButton(
+                icon: Icon(
+                  quickProv.hideProfits ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  size: 24,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+                tooltip: quickProv.hideProfits ? "Modo Cliente (Privacidad activa)" : "Modo Vendedor",
+                onPressed: () => quickProv.toggleHideProfits(),
+              ),
             ),
             if (_items.isNotEmpty)
               IconButton(icon: Icon(Icons.delete_sweep, color: isDark ? Colors.red[400] : Colors.red, size: 28), tooltip: "Limpiar Todo", onPressed: _clearWholeList),

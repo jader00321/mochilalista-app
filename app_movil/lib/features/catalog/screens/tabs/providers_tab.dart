@@ -441,19 +441,24 @@ class _ProvidersTabState extends State<ProvidersTab> {
                 currentSort: provider.provSort,
                 isAscending: provider.provAsc,
                 onSortChanged: (type) => provider.sortProviders(type),
-                trailing: !isGuest ? IconButton(
-                  icon: Icon(
-                    Icons.find_replace,
-                    color: isDark ? Colors.purple[300] : Colors.purple[700],
-                    size: 22,
-                  ),
-                  tooltip: 'Detectar Duplicados',
-                  onPressed: () => DuplicateMergeModal.show(
-                    context,
-                    type: MergeEntityType.provider,
-                    isDark: isDark,
-                  ),
-                ) : null,
+                trailing: !isGuest
+                    ? IconButton(
+                        icon: Icon(
+                          Icons.find_replace,
+                          color: isDark ? Colors.purple[300] : Colors.purple[700],
+                          size: 19,
+                        ),
+                        tooltip: 'Detectar Duplicados',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => DuplicateMergeModal.show(
+                          context,
+                          type: MergeEntityType.provider,
+                          isDark: isDark,
+                        ),
+                      )
+                    : null,
               ),
 
               Expanded(

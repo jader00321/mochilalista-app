@@ -87,6 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87; 
     final bool isGuest = !auth.hasActiveContext;
+    final String? validLogoPath = _getValidLocalImagePath(auth.currentBusiness?.logoUrl);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -120,6 +121,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           isDark: isDark,
                           onEditProfile: () => _showEditProfile(context),
                           onEditBusiness: () => _showEditBusiness(context),
+                          onChangeLogo: () {
+                            if (auth.currentBusiness == null) {
+                              _showEditBusiness(context);
+                            } else {
+                              _showPhotoOptions(context, auth, validLogoPath);
+                            }
+                          },
                           onChangePin: () => _showChangePassword(context),
                         ),
                       const SizedBox(height: 35),
@@ -159,8 +167,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       _buildSectionHeader("Seguridad de la Cuenta", textColor),
                       const SizedBox(height: 12),
 
-                      // 🔧 TAREA 5.4: Recordatorio amigable de PIN de seguridad si no está configurado
-                      if (!auth.hasPinCache && !isGuest)
+                      // 🔧 Recordatorio amigable de PIN de seguridad con snooze de 7 días
+                      if (!auth.hasPinCache && !isGuest && !auth.isPinReminderSnoozed)
                         Container(
                           margin: const EdgeInsets.only(bottom: 14),
                           padding: const EdgeInsets.all(16),
@@ -206,17 +214,34 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 6),
                               ElevatedButton(
                                 onPressed: () => _showChangePassword(context),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.amber[700],
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                   elevation: 0,
                                 ),
                                 child: const Text("Activar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: Icon(Icons.close_rounded, size: 18, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                tooltip: "Recordar en 7 días",
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                onPressed: () async {
+                                  await auth.snoozePinReminder(days: 7);
+                                  if (context.mounted) {
+                                    CustomSnackBar.show(
+                                      context,
+                                      message: "Recordatorio pospuesto por 7 días. Puedes crear tu PIN en la sección inferior.",
+                                      isError: false,
+                                    );
+                                  }
+                                },
                               ),
                             ],
                           ),
@@ -229,11 +254,90 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           isDark: isDark, 
                           onTap: () => _showChangePassword(context)
                         ),
-                        _buildDivider(isDark),
-                        ProfileMenuItem(title: "Cambiar de Negocio / Cerrar Sesión", icon: Icons.logout, isDark: isDark, isDestructive: true, onTap: () => _confirmLogout(context, auth, isDark)),
-                        _buildDivider(isDark),
-                        ProfileMenuItem(title: "Eliminar Perfil Definitivamente", icon: Icons.delete_forever, isDark: isDark, isDestructive: true, onTap: () => _showDeleteBusinessModal(context, auth, isDark)),
                       ]),
+
+                      const SizedBox(height: 35),
+                      _buildSectionHeader("Sesión Activa", textColor),
+                      const SizedBox(height: 12),
+                      _buildSettingsContainer(cardColor, [
+                        ProfileMenuItem(
+                          title: "Cambiar de Negocio / Cerrar Sesión",
+                          icon: Icons.swap_horiz_rounded,
+                          isDark: isDark,
+                          isDestructive: false,
+                          onTap: () => _confirmLogout(context, auth, isDark),
+                        ),
+                      ]),
+
+                      const SizedBox(height: 35),
+                      // 🛡️ ZONA DE PELIGRO (DANGER ZONE)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E1418) : const Color(0xFFFFF5F5),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isDark ? Colors.red.withValues(alpha: 0.25) : Colors.red.shade200,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(Icons.warning_amber_rounded, size: 18, color: Colors.red[400]),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  "Zona de Peligro",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.red[300] : Colors.red[800],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              "Esta acción eliminará de forma permanente este perfil de negocio y todos sus registros locales en este dispositivo.",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () => _showDeleteBusinessModal(context, auth, isDark),
+                                icon: const Icon(Icons.delete_forever_outlined, size: 18),
+                                label: const Text(
+                                  "Eliminar este Perfil de Negocio...",
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: isDark ? Colors.red[300] : Colors.red[700],
+                                  side: BorderSide(
+                                    color: isDark ? Colors.red.withValues(alpha: 0.4) : Colors.red.shade300,
+                                  ),
+                                  backgroundColor: isDark ? Colors.red.withValues(alpha: 0.06) : Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 40),
                     ],
                   ),
@@ -247,38 +351,59 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildSectionHeader(String title, Color? color, {String? actionLabel, IconData? iconData, VoidCallback? onAction}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color, letterSpacing: 0.5), overflow: TextOverflow.ellipsis),
-        ),
-        if (actionLabel != null && onAction != null) ...[
-          const SizedBox(width: 12),
-          InkWell(
-            onTap: onAction,
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (iconData != null) ...[
-                    Icon(iconData, size: 16, color: Colors.blue),
-                    const SizedBox(width: 4),
-                  ],
-                  Text(actionLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blue)),
-                ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 360;
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: isNarrow ? 14.5 : 15.5,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-          )
-        ]
-      ],
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: onAction,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (iconData != null) ...[
+                        Icon(iconData, size: 15, color: Colors.blue),
+                        const SizedBox(width: 3),
+                      ],
+                      Text(
+                        actionLabel,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -442,9 +567,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   _openFullScreenImage(validLogoPath);
                 }),
               
+              _buildModalOption(icon: Icons.camera_alt, text: "Tomar foto con la cámara", color: Colors.blue, isDark: isDark, onTap: () {
+                Navigator.pop(ctx);
+                _pickImage(context, auth, source: ImageSource.camera);
+              }),
+
               _buildModalOption(icon: Icons.image_search, text: "Elegir foto de la galería", color: Colors.green, isDark: isDark, onTap: () {
                 Navigator.pop(ctx);
-                _pickImage(context, auth);
+                _pickImage(context, auth, source: ImageSource.gallery);
               }),
               
               if (validLogoPath != null)
@@ -497,11 +627,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     )));
   }
 
-  Future<void> _pickImage(BuildContext context, AuthProvider auth) async {
+  Future<void> _pickImage(BuildContext context, AuthProvider auth, {ImageSource source = ImageSource.gallery}) async {
     if (auth.isLoading) return; 
     final ImagePicker picker = ImagePicker();
     try {
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+      final XFile? image = await picker.pickImage(source: source, imageQuality: 70);
       if (image != null) {
         bool success = await auth.uploadBusinessLogo(File(image.path));
         if (context.mounted) {
@@ -513,7 +643,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         }
       }
     } catch (e) {
-      if (context.mounted) CustomSnackBar.show(context, message: "Error al abrir la galería", isError: true);
+      if (context.mounted) {
+        CustomSnackBar.show(
+          context,
+          message: source == ImageSource.camera ? "Error al abrir la cámara" : "Error al abrir la galería",
+          isError: true,
+        );
+      }
     }
   }
 

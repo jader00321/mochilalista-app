@@ -5,6 +5,7 @@ import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/features/catalog/screens/product_edit_screen.dart';
 import 'package:app_movil/core/widgets/discount_intelligent_modal.dart';
+import 'package:app_movil/features/catalog/widgets/quick_restock_modal.dart';
 import 'package:app_movil/features/analytics/screens/audit_trail_screen.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
@@ -84,6 +85,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ),
     );
     _refreshData();
+  }
+
+  void _openRestockModal() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => QuickRestockModal(
+        product: _currentProduct,
+        presentation: _selectedPresentation,
+        isDark: isDark,
+        onRestockSuccess: () {
+          _refreshData();
+        },
+        onNavigateToFullEdit: () {
+          _navigateToEdit();
+        },
+      ),
+    );
   }
 
   void _showImageModal(String? imagePath, bool isDark) {
@@ -671,6 +692,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 ],
                               ),
                             ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: _openRestockModal,
+                              icon: const Icon(Icons.add_business, size: 16),
+                              label: const Text(
+                                "Abastecer",
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: stockVisual == 0 ? Colors.red[700] : Colors.orange[800],
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 0,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1155,31 +1193,57 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     // STOCK
                     Expanded(
                       flex: 4,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Text(
-                            "STOCK DISPONIBLE",
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: isDark
-                                  ? Colors.purple[300]
-                                  : Colors.purple[700],
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: _openRestockModal,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 6.0,
+                              horizontal: 4.0,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      "STOCK DISP.",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.purple[300]
+                                            : Colors.purple[700],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.edit,
+                                      size: 12,
+                                      color: isDark
+                                          ? Colors.purple[300]
+                                          : Colors.purple[700],
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  "$stockVisual",
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    color: stockVisual > 0
+                                        ? (isDark ? Colors.white : Colors.black87)
+                                        : (isDark ? Colors.red[300] : Colors.red),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            "$stockVisual",
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              color: stockVisual > 0
-                                  ? (isDark ? Colors.white : Colors.black87)
-                                  : (isDark ? Colors.red[300] : Colors.red),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ],
