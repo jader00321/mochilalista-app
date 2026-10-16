@@ -15,8 +15,10 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/client_quotations
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_delete_modal.dart';
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
 import 'package:app_movil/core/widgets/confirm_action_modal.dart';
-import 'package:app_movil/core/widgets/info_tooltip_button.dart'; 
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/deep_nav_return_pill.dart'; 
 
 class ClientDetailScreen extends StatefulWidget {
   final ClientModel client;
@@ -110,6 +112,19 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
     );
     
     Navigator.push(context, MaterialPageRoute(builder: (_) => const QuickSaleScreen())).then((_) {
+      _refreshData();
+    });
+  }
+
+  void _goToManualQuotation() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ManualQuotationScreen(
+          preselectedClient: _currentClient,
+        ),
+      ),
+    ).then((_) {
       _refreshData();
     });
   }
@@ -224,8 +239,10 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: NestedScrollView(
-        controller: _scrollController, 
+      body: Stack(
+        children: [
+          NestedScrollView(
+            controller: _scrollController, 
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
             SliverAppBar(
@@ -287,6 +304,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                 onWhatsAppTap: () => _launchWhatsApp(context),
                 onCallTap: () => _launchCall(context),
                 onGoToQuickSale: _goToQuickSale,
+                onGoToQuotation: _goToManualQuotation,
                 onFinanceActionCompleted: _refreshData,
               ),
             ),
@@ -328,6 +346,9 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
           ),
         ),
       ),
+      const DeepNavReturnPill(isBottom: true),
+    ],
+  ),
 
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,

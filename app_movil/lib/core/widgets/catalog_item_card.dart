@@ -4,11 +4,21 @@ import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/providers/catalog_provider.dart'; // 🔥 CAMBIO: Ahora usamos CatalogProvider
 import 'package:app_movil/core/widgets/universal_image.dart';
 
+import 'package:flutter/services.dart';
+import 'package:app_movil/features/catalog/models/product_model.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+
 class CatalogItemCard extends StatefulWidget {
   final InventoryWrapper item;
   final VoidCallback onDetails;
+  final bool isStoreMode;
 
-  const CatalogItemCard({super.key, required this.item, required this.onDetails});
+  const CatalogItemCard({
+    super.key,
+    required this.item,
+    required this.onDetails,
+    this.isStoreMode = false,
+  });
 
   @override
   State<CatalogItemCard> createState() => _CatalogItemCardState();
@@ -16,16 +26,26 @@ class CatalogItemCard extends StatefulWidget {
 
 class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  ProductPresentation? _selectedPresentation;
 
   @override
   void initState() {
     super.initState();
+    _selectedPresentation = widget.item.presentation;
     _controller = AnimationController(
       duration: const Duration(milliseconds: 1000), 
       vsync: this,
       lowerBound: 0.95,
       upperBound: 1.05,
     )..repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant CatalogItemCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.presentation.id != widget.item.presentation.id) {
+      _selectedPresentation = widget.item.presentation;
+    }
   }
 
   @override
@@ -43,10 +63,12 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
     final textColor = isDark ? Colors.white : Colors.black87;
     
     final prod = widget.item.product;
-    final pres = widget.item.presentation;
+    final pres = _selectedPresentation ?? widget.item.presentation;
     
-    final double effectivePrice = widget.item.effectivePrice;
-    final bool hasOffer = widget.item.hasOffer;
+    final double effectivePrice = (pres.precioOferta != null && pres.precioOferta! > 0)
+        ? pres.precioOferta!
+        : pres.precioVentaFinal;
+    final bool hasOffer = pres.precioOferta != null && pres.precioOferta! > 0;
     
     int discountPercent = 0;
     if (hasOffer && pres.precioVentaFinal > 0) {
@@ -55,9 +77,11 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
 
     // 🔥 Consultamos la marca al provider del catálogo
     final brandName = catalogProv.getBrandName(prod.marcaId);
-    final bool isOutOfStock = widget.item.isOutOfStock;
+    final int factor = pres.unidadesPorVenta <= 0 ? 1 : pres.unidadesPorVenta;
+    final bool isOutOfStock = (pres.stockActual ~/ factor) <= 0;
 
     String salesUnitBadge = pres.unidadVenta ?? pres.umpCompra ?? "Unidad";
+    final hasMultiplePresentations = prod.presentaciones.length > 1;
 
     return GestureDetector(
       onTap: widget.onDetails,
@@ -119,18 +143,18 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               RichText(
-                                maxLines: 3, 
+                                maxLines: 2, 
                                 overflow: TextOverflow.ellipsis,
                                 text: TextSpan(
                                   children: [
                                     TextSpan(
                                       text: "${prod.nombre} ", 
-                                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, height: 1.2, color: textColor)
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, height: 1.2, color: textColor)
                                     ),
                                     if (pres.nombreEspecifico != null && pres.nombreEspecifico!.isNotEmpty)
                                       TextSpan(
                                         text: pres.nombreEspecifico!, 
-                                        style: TextStyle(fontSize: 15, color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w800, height: 1.2)
+                                        style: TextStyle(fontSize: 14, color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w800, height: 1.2)
                                       ),
                                   ],
                                 ),
@@ -138,14 +162,59 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                               
                               const SizedBox(height: 6),
                               
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, 
-                                  borderRadius: BorderRadius.circular(6)
+                              // Selector Instantáneo de Presentaciones
+                              if (hasMultiplePresentations)
+                                SizedBox(
+                                  height: 24,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: prod.presentaciones.length,
+                                    separatorBuilder: (_, __) => const SizedBox(width: 4),
+                                    itemBuilder: (ctx, i) {
+                                      final p = prod.presentaciones[i];
+                                      final isSelected = p.id == pres.id;
+                                      final label = p.unidadVenta ?? p.nombreEspecifico ?? "P${i + 1}";
+                                      return InkWell(
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          setState(() => _selectedPresentation = p);
+                                        },
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 150),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? (isDark ? Colors.blue[700] : Colors.blue[600])
+                                                : (isDark ? Colors.white10 : Colors.grey[200]),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: isSelected ? Colors.blue : Colors.transparent,
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            label.toUpperCase(),
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                              color: isSelected ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              else
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, 
+                                    borderRadius: BorderRadius.circular(6)
+                                  ),
+                                  child: Text(salesUnitBadge.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[700])),
                                 ),
-                                child: Text(salesUnitBadge.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[700])),
-                              ),
                             ],
                           ),
                         ),
@@ -181,13 +250,29 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                             ),
                             const SizedBox(width: 8),
                             if (!isOutOfStock)
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: isDark ? Theme.of(context).primaryColor.withValues(alpha: 0.2) : Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(10)
+                              InkWell(
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  final currentWrapper = InventoryWrapper(
+                                    product: prod,
+                                    presentation: pres,
+                                  );
+                                  catalogProv.addToCart(currentWrapper, 1);
+                                  CustomSnackBar.show(
+                                    context,
+                                    message: "Agregado a caja: ${currentWrapper.displayNameDetail}",
+                                    isError: false,
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(10),
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Theme.of(context).primaryColor.withValues(alpha: 0.2) : Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10)
+                                  ),
+                                  child: Icon(Icons.add, color: isDark ? Colors.blue[300] : Theme.of(context).primaryColor, size: 24),
                                 ),
-                                child: Icon(Icons.add, color: isDark ? Colors.blue[300] : Theme.of(context).primaryColor, size: 24),
                               )
                           ],
                         ),

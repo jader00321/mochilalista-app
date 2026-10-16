@@ -8,6 +8,8 @@ import 'package:app_movil/features/smart_quotation/providers/workbench_provider.
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart'; 
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+
 class QuickActionsBottomSheet extends StatelessWidget {
   final SmartQuotationModel quotation;
   final bool isDark; 
@@ -17,46 +19,38 @@ class QuickActionsBottomSheet extends StatelessWidget {
     super.key, 
     required this.quotation, 
     required this.isDark, 
-    required this.parentContext
+    required this.parentContext,
   });
+
+  static Future<void> show(
+    BuildContext context, {
+    required SmartQuotationModel quotation,
+    required bool isDark,
+    required BuildContext parentContext,
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      builder: (_) => QuickActionsBottomSheet(
+        quotation: quotation,
+        isDark: isDark,
+        parentContext: parentContext,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black87;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-            const SizedBox(height: 20),
-            
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Icon(Icons.flash_on, color: isDark ? Colors.amber[300] : Colors.amber, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      quotation.clientName ?? "Opciones Rápidas",
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Divider(color: isDark ? Colors.white10 : Colors.grey[200], height: 1),
-            const SizedBox(height: 12),
+    return InteractiveSheetWrapper(
+      title: quotation.clientName ?? "Opciones Rápidas",
+      icon: Icons.flash_on,
+      iconColor: isDark ? Colors.amber[300] : Colors.amber,
+      maxHeightFactor: 0.85,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
             
             _buildListTile(
               icon: Icons.copy_all, 
@@ -141,8 +135,7 @@ class QuickActionsBottomSheet extends StatelessWidget {
               }
             ),
             const SizedBox(height: 10),
-          ],
-        ),
+        ],
       ),
     );
   }

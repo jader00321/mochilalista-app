@@ -188,37 +188,42 @@ class QuickSaleCartItem extends StatelessWidget {
                               Builder(
                                 builder: (ctx) {
                                   final quickProv = Provider.of<QuickSaleProvider>(ctx);
-                                  if (quickProv.hideProfits) return const SizedBox.shrink();
-
                                   final double margin = ((effectivePrice - product.cost!) / effectivePrice) * 100;
                                   final Color marginColor = margin >= 20
                                       ? (isDark ? Colors.green[400]! : Colors.green[700]!)
                                       : (margin >= 10
                                           ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
                                           : (isDark ? Colors.red[400]! : Colors.red[700]!));
-                                  return Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                        decoration: BoxDecoration(
-                                          color: marginColor.withValues(alpha: 0.12),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Container(width: 5, height: 5, decoration: BoxDecoration(color: marginColor, shape: BoxShape.circle)),
-                                            const SizedBox(width: 3),
-                                            Text(
-                                              "${margin.round()}% mrg",
-                                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: marginColor),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+
+                                  return AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 250),
+                                    child: quickProv.hideProfits
+                                        ? const SizedBox.shrink(key: ValueKey('margin_hidden'))
+                                        : Row(
+                                            key: const ValueKey('margin_visible'),
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                                decoration: BoxDecoration(
+                                                  color: marginColor.withValues(alpha: 0.12),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Container(width: 5, height: 5, decoration: BoxDecoration(color: marginColor, shape: BoxShape.circle)),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      "${margin.round()}% mrg",
+                                                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: marginColor),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                   );
                                 },
                               ),

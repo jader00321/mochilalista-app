@@ -24,6 +24,9 @@ import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dar
 import 'package:app_movil/features/smart_quotation/screens/sales_history_screen.dart';
 import 'package:app_movil/features/analytics/screens/analytics_dashboard_screen.dart';
 import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
+import 'package:flutter/services.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/screens/db_inspector_screen.dart';
 
 class SmartActionGrid extends StatelessWidget {
@@ -70,6 +73,7 @@ class SmartActionGrid extends StatelessWidget {
           isDark: isDark,
           badge: quickSaleProv.cartItems.isNotEmpty ? _buildBadge("${quickSaleProv.cartItems.length}", Colors.red) : null,
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const QuickSaleScreen())),
+          onLongPress: () => _showQuickSalePowerShortcut(context, quickSaleProv, isDark),
         ),
         
         _buildCard(
@@ -227,7 +231,20 @@ class SmartActionGrid extends StatelessWidget {
     );
   }
 
-  Widget _buildCard(BuildContext context, {required int index, required double screenWidth, required String title, required String subtitle, required IconData icon, required Color color, required bool isDark, Widget? badge, String? infoTooltip, required VoidCallback onTap}) {
+  Widget _buildCard(
+    BuildContext context, {
+    required int index,
+    required double screenWidth,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required bool isDark,
+    Widget? badge,
+    String? infoTooltip,
+    required VoidCallback onTap,
+    VoidCallback? onLongPress,
+  }) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: const Duration(milliseconds: 400),
@@ -252,6 +269,7 @@ class SmartActionGrid extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: isDark ? BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 1.5) : BorderSide.none),
         child: InkWell(
           onTap: onTap,
+          onLongPress: onLongPress,
           borderRadius: BorderRadius.circular(24),
           splashColor: color.withValues(alpha: 0.15),
           highlightColor: color.withValues(alpha: 0.05),
@@ -319,5 +337,73 @@ class SmartActionGrid extends StatelessWidget {
     );
   }
 
-
+  void _showQuickSalePowerShortcut(BuildContext context, QuickSaleProvider prov, bool isDark) {
+    HapticFeedback.heavyImpact();
+    InteractiveSheetWrapper.show(
+      context: context,
+      builder: (ctx) => InteractiveSheetWrapper(
+        title: "Atajos de Venta Rápida",
+        maxHeightFactor: 0.6,
+        applyEffectiveBottomPadding: true,
+        child: Column(
+          children: [
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.pink.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.flash_on_rounded, color: Colors.pinkAccent),
+              ),
+              title: const Text("⚡ Nueva Venta Limpia", style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text("Vacía la caja y abre una nueva venta en blanco"),
+              onTap: () {
+                Navigator.pop(ctx);
+                prov.clearCart();
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const QuickSaleScreen()));
+              },
+            ),
+            const Divider(),
+            if (prov.cartItems.isNotEmpty) ...[
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent),
+                ),
+                title: Text("🧹 Vaciar Caja (${prov.cartItems.length} ítems)", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                subtitle: const Text("Descarta todos los productos actualmente en cola"),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  prov.clearCart();
+                  CustomSnackBar.show(context, message: "Caja vaciada correctamente");
+                },
+              ),
+              const Divider(),
+            ],
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.point_of_sale_rounded, color: Colors.blue),
+              ),
+              title: const Text("Continuar Venta Pendiente", style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(prov.cartItems.isNotEmpty ? "${prov.cartItems.length} productos esperando cobro" : "Caja actualmente vacía"),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const QuickSaleScreen()));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

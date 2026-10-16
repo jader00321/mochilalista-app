@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class MatchingSmartBottomBar extends StatelessWidget {
   final MatchingProvider provider;
@@ -15,14 +16,18 @@ class MatchingSmartBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 16.0);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      padding: EdgeInsets.fromLTRB(24, 16, 24, effectiveBottom),
       decoration: BoxDecoration(
         color: isDark ? Theme.of(context).colorScheme.surface : Colors.white, 
         boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, -5))],
         border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.black12))
       ),
       child: SafeArea(
+        top: false,
+        bottom: false,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [

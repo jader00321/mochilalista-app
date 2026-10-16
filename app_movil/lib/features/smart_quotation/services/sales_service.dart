@@ -391,17 +391,21 @@ class SalesService {
               int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
               int totalDeduct = qtyReq * quantity;
 
-              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final'], where: 'id = ?', whereArgs: [presId]);
+              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
               if (presCheck.isNotEmpty) {
                 int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-                await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock + totalDeduct, presId]);
+                int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+                if (factor <= 0) factor = 1;
+                int baseUnitsToRestore = totalDeduct * factor;
+
+                await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock + baseUnitsToRestore, presId]);
                 
                 // Trazabilidad
                 await txn.insert('stock_ledger', {
                   'presentation_id': presId,
                   'negocio_id': negocioId,
                   'tipo_transaccion': 'ANULACION',
-                  'cantidad': totalDeduct,
+                  'cantidad': baseUnitsToRestore,
                   'costo_unitario': presCheck.first['costo_unitario_calculado'],
                   'precio_venta': presCheck.first['precio_venta_final'],
                   'origen_id': saleId,
@@ -411,18 +415,22 @@ class SalesService {
             }
           } else if (item['presentation_id'] != null) {
             int presId = item['presentation_id'] as int;
-            final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final'], where: 'id = ?', whereArgs: [presId]);
+            final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
             
             if (presCheck.isNotEmpty) {
               int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-              await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock + quantity, presId]);
+              int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+              if (factor <= 0) factor = 1;
+              int baseUnitsToRestore = quantity * factor;
+
+              await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock + baseUnitsToRestore, presId]);
               
               // Trazabilidad
               await txn.insert('stock_ledger', {
                 'presentation_id': presId,
                 'negocio_id': negocioId,
                 'tipo_transaccion': 'ANULACION',
-                'cantidad': quantity,
+                'cantidad': baseUnitsToRestore,
                 'costo_unitario': presCheck.first['costo_unitario_calculado'],
                 'precio_venta': item['precio_unitario'] ?? presCheck.first['precio_venta_final'],
                 'origen_id': saleId,
@@ -517,20 +525,24 @@ class SalesService {
               int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
               int totalDeduct = qtyReq * quantity;
               
-              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual'], where: 'id = ?', whereArgs: [presId]);
+              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
               if (presCheck.isNotEmpty) {
                  int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-                 if (currentStock < totalDeduct) throw Exception("Stock insuficiente para restaurar el paquete.");
+                 int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+                 if (factor <= 0) factor = 1;
+                 if (currentStock < (totalDeduct * factor)) throw Exception("Stock insuficiente para restaurar el paquete.");
               } else {
                  throw Exception("Componente de paquete no encontrado.");
               }
             }
           } else if (item['presentation_id'] != null) {
             int presId = item['presentation_id'] as int;
-            final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual'], where: 'id = ?', whereArgs: [presId]);
+            final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
             if (presCheck.isNotEmpty) {
                int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-               if (currentStock < quantity) throw Exception("Stock insuficiente para restaurar el producto.");
+               int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+               if (factor <= 0) factor = 1;
+               if (currentStock < (quantity * factor)) throw Exception("Stock insuficiente para restaurar el producto.");
             } else {
                throw Exception("Producto no encontrado.");
             }
@@ -550,40 +562,52 @@ class SalesService {
               int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
               int totalDeduct = qtyReq * quantity;
 
-              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final'], where: 'id = ?', whereArgs: [presId]);
+              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
+              if (presCheck.isNotEmpty) {
+                int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
+                int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+                if (factor <= 0) factor = 1;
+                int baseUnitsToDeduct = totalDeduct * factor;
+
+                await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - baseUnitsToDeduct, presId]);
+                
+                // Trazabilidad
+                await txn.insert('stock_ledger', {
+                  'presentation_id': presId,
+                  'negocio_id': negocioId,
+                  'tipo_transaccion': 'RESTAURACION',
+                  'cantidad': -baseUnitsToDeduct,
+                  'costo_unitario': presCheck.first['costo_unitario_calculado'],
+                  'precio_venta': presCheck.first['precio_venta_final'],
+                  'origen_id': saleId,
+                  'fecha_registro': DateTime.now().toIso8601String(),
+                });
+              }
+            }
+          } else if (item['presentation_id'] != null) {
+            int presId = item['presentation_id'] as int;
+            final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
+            
+            if (presCheck.isNotEmpty) {
               int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-              await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - totalDeduct, presId]);
+              int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+              if (factor <= 0) factor = 1;
+              int baseUnitsToDeduct = quantity * factor;
+
+              await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - baseUnitsToDeduct, presId]);
               
               // Trazabilidad
               await txn.insert('stock_ledger', {
                 'presentation_id': presId,
                 'negocio_id': negocioId,
                 'tipo_transaccion': 'RESTAURACION',
-                'cantidad': -totalDeduct,
+                'cantidad': -baseUnitsToDeduct,
                 'costo_unitario': presCheck.first['costo_unitario_calculado'],
-                'precio_venta': presCheck.first['precio_venta_final'],
+                'precio_venta': item['precio_unitario'] ?? presCheck.first['precio_venta_final'],
                 'origen_id': saleId,
                 'fecha_registro': DateTime.now().toIso8601String(),
               });
             }
-          } else if (item['presentation_id'] != null) {
-            int presId = item['presentation_id'] as int;
-            final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final'], where: 'id = ?', whereArgs: [presId]);
-            
-            int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-            await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - quantity, presId]);
-            
-            // Trazabilidad
-            await txn.insert('stock_ledger', {
-              'presentation_id': presId,
-              'negocio_id': negocioId,
-              'tipo_transaccion': 'RESTAURACION',
-              'cantidad': -quantity,
-              'costo_unitario': presCheck.first['costo_unitario_calculado'],
-              'precio_venta': item['precio_unitario'] ?? presCheck.first['precio_venta_final'],
-              'origen_id': saleId,
-              'fecha_registro': DateTime.now().toIso8601String(),
-            });
           }
         }
 

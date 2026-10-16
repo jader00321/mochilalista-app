@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/core/widgets/morphing_accordion.dart';
 
 class QuickSaleHeader extends StatelessWidget {
   final bool isGuest;
@@ -78,133 +79,298 @@ class QuickSaleHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = Provider.of<QuickSaleProvider>(context);
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-    
-    final headerColor = isDark ? const Color(0xFF14141C) : const Color(0xFF1F2937); // Gris muy oscuro
-    final bodyColor = isDark ? const Color(0xFF1A1A24) : const Color(0xFF2D3748); // Gris medio oscuro
+    final hasSaldo = provider.clientSaldo > 0;
 
-    final clientSubtitle = provider.clientId != null
-        ? "Cliente Vinculado"
-        : (provider.cartItems.isNotEmpty && provider.estimatedCartProfit > 0 && !provider.hideProfits
-            ? "Cliente anónimo · Ganancia est. ${currency.format(provider.estimatedCartProfit)}"
-            : "Cliente anónimo");
+    final badgeWidget = hasSaldo
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00E676).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF00E676).withValues(alpha: 0.4)),
+            ),
+            child: Text(
+              "S/ ${provider.clientSaldo.toStringAsFixed(2)} a favor",
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF00E676),
+              ),
+            ),
+          )
+        : (provider.clientId != null
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: (isDark ? const Color(0xFF42A5F5) : Colors.blue).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  "Vinculado",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? const Color(0xFF64B5F6) : const Color(0xFF1565C0),
+                  ),
+                ),
+              )
+            : (provider.clientName != null && provider.clientName!.isNotEmpty
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      "Cliente Manual",
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  )
+                : null));
 
-    return ExpansionTile(
-      title: Text(provider.clientName ?? "Datos del Cliente (Opcional)", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
-      subtitle: Text(clientSubtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-      iconColor: Colors.white,
-      collapsedIconColor: Colors.white,
-      backgroundColor: headerColor,
-      collapsedBackgroundColor: bodyColor,
-      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: Theme.of(context).cardTheme.color, borderRadius: BorderRadius.circular(16)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
+    return MorphingAccordion(
+      title: provider.clientName ?? "Datos del Cliente (Opcional)",
+      icon: Icons.person_outline_rounded,
+      iconColor: isDark ? Colors.blue[300] : Colors.blue,
+      summaryBadge: badgeWidget,
+      backgroundColor: isDark ? const Color(0xFF1E1E2A) : Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      content: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardTheme.color,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.search, size: 20),
+                label: const Text(
+                  "Buscar Cliente en BD",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
+                  side: BorderSide(
+                    color: isDark
+                        ? Colors.blue.withValues(alpha: 0.3)
+                        : Colors.blue.shade200,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () => _openClientSearch(context, provider),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            if (provider.clientSaldo > 0)
+              Container(
                 width: double.infinity,
-                height: 50,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.search, size: 20),
-                  label: const Text("Buscar Cliente en BD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800], side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.shade200), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: () => _openClientSearch(context, provider),
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.amber.withValues(alpha: 0.1)
+                      : Colors.amber[50],
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.amber.withValues(alpha: 0.3)
+                        : Colors.amber.shade200,
+                  ),
+                ),
+                child: Text(
+                  "💰 Este cliente tiene un Saldo a Favor de ${currency.format(provider.clientSaldo)}",
+                  style: TextStyle(
+                    color: isDark ? Colors.amber[300] : Colors.amber[900],
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
 
-              if (provider.clientSaldo > 0)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(color: isDark ? Colors.amber.withValues(alpha: 0.1) : Colors.amber[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: isDark ? Colors.amber.withValues(alpha: 0.3) : Colors.amber.shade200)),
-                  child: Text("💰 Este cliente tiene un Saldo a Favor de ${currency.format(provider.clientSaldo)}", style: TextStyle(color: isDark ? Colors.amber[300] : Colors.amber[900], fontWeight: FontWeight.bold, fontSize: 14)),
-                ),
-
-              if (provider.clientId != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF23232F) : Colors.blue[50], 
-                    borderRadius: BorderRadius.circular(16), 
-                    border: Border.all(color: isDark ? Colors.white10 : Colors.blue.shade200)
+            if (provider.clientId != null) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF23232F) : Colors.blue[50],
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : Colors.blue.shade200,
                   ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[200], 
-                        radius: 26,
-                        child: Text(provider.clientName!.isNotEmpty ? provider.clientName![0].toUpperCase() : "?", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.white, fontWeight: FontWeight.bold, fontSize: 24))
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(provider.clientName!, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black87, height: 1.2)),
-                            const SizedBox(height: 4),
-                            if (provider.clientPhone != null && provider.clientPhone!.isNotEmpty)
-                              Row(
-                                children: [
-                                  Icon(Icons.smartphone, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[700]),
-                                  const SizedBox(width: 6),
-                                  Text(_formatPhone(provider.clientPhone!), style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 14, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            if (provider.clientNote != null && provider.clientNote!.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text("Nota: ${provider.clientNote}", style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal, fontSize: 12, fontStyle: FontStyle.italic), maxLines: 2, overflow: TextOverflow.ellipsis),
-                              ),
-                          ],
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: isDark
+                          ? Colors.blue.withValues(alpha: 0.2)
+                          : Colors.blue[200],
+                      radius: 26,
+                      child: Text(
+                        provider.clientName!.isNotEmpty
+                            ? provider.clientName![0].toUpperCase()
+                            : "?",
+                        style: TextStyle(
+                          color: isDark ? Colors.blue[300] : Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 24,
                         ),
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            provider.clientName!,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: isDark ? Colors.white : Colors.black87,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          if (provider.clientPhone != null &&
+                              provider.clientPhone!.isNotEmpty)
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.smartphone,
+                                  size: 14,
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[700],
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _formatPhone(provider.clientPhone!),
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.grey[300]
+                                        : Colors.grey[700],
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          if (provider.clientNote != null &&
+                              provider.clientNote!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                "Nota: ${provider.clientNote}",
+                                style: TextStyle(
+                                  color: isDark ? Colors.teal[300] : Colors.teal,
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.center,
+                child: TextButton.icon(
+                  onPressed: () {
+                    provider.setClientInfo(
+                      id: null,
+                      name: null,
+                      phone: null,
+                      clientNote: null,
+                      saleNote: provider.saleNote,
+                      saldo: 0,
+                    );
+                  },
+                  icon: const Icon(Icons.person_off, color: Colors.red, size: 20),
+                  label: const Text(
+                    "Desvincular Cliente",
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.red.withValues(alpha: 0.1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.center,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      provider.setClientInfo(id: null, name: null, phone: null, clientNote: null, saleNote: provider.saleNote, saldo: 0);
-                    }, 
-                    icon: const Icon(Icons.person_off, color: Colors.red, size: 20),
-                    label: const Text("Desvincular Cliente", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 15)),
-                    style: TextButton.styleFrom(backgroundColor: Colors.red.withValues(alpha: 0.1), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              ),
+            ] else ...[
+              Text(
+                "O ingresa un cliente de paso:",
+                style: TextStyle(
+                  color: isDark ? Colors.grey[500] : Colors.grey[600],
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildTextField(
+                controller: TextEditingController(text: provider.clientName)
+                  ..selection = TextSelection.collapsed(
+                    offset: provider.clientName?.length ?? 0,
                   ),
-                )
-              ] 
-              else ...[
-                Text("O ingresa un cliente de paso:", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 14, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                _buildTextField(
-                  controller: TextEditingController(text: provider.clientName)..selection = TextSelection.collapsed(offset: provider.clientName?.length ?? 0),
-                  label: "Nombre del Cliente",
-                  icon: Icons.person,
-                  isDark: isDark,
-                  onChanged: (val) => provider.setClientInfo(id: provider.clientId, name: val.trim().isEmpty ? null : val, phone: provider.clientPhone, clientNote: provider.clientNote, saleNote: provider.saleNote, saldo: provider.clientSaldo),
+                label: "Nombre del Cliente",
+                icon: Icons.person,
+                isDark: isDark,
+                onChanged: (val) => provider.setClientInfo(
+                  id: provider.clientId,
+                  name: val.trim().isEmpty ? null : val,
+                  phone: provider.clientPhone,
+                  clientNote: provider.clientNote,
+                  saleNote: provider.saleNote,
+                  saldo: provider.clientSaldo,
                 ),
-                const SizedBox(height: 12),
-                _buildTextField(
-                  controller: TextEditingController(text: provider.clientPhone)..selection = TextSelection.collapsed(offset: provider.clientPhone?.length ?? 0),
-                  label: "Teléfono / WhatsApp",
-                  icon: Icons.phone,
-                  isDark: isDark,
-                  isPhone: true,
-                  onChanged: (val) {
-                    final cleanPhone = val.replaceAll(' ', '');
-                    provider.setClientInfo(id: provider.clientId, name: provider.clientName, phone: cleanPhone.trim().isEmpty ? null : cleanPhone, clientNote: provider.clientNote, saleNote: provider.saleNote, saldo: provider.clientSaldo);
-                  }
-                ),
-              ],
+              ),
+              const SizedBox(height: 12),
+              _buildTextField(
+                controller: TextEditingController(text: provider.clientPhone)
+                  ..selection = TextSelection.collapsed(
+                    offset: provider.clientPhone?.length ?? 0,
+                  ),
+                label: "Teléfono / WhatsApp",
+                icon: Icons.phone,
+                isDark: isDark,
+                isPhone: true,
+                onChanged: (val) {
+                  final cleanPhone = val.replaceAll(' ', '');
+                  provider.setClientInfo(
+                    id: provider.clientId,
+                    name: provider.clientName,
+                    phone: cleanPhone.trim().isEmpty ? null : cleanPhone,
+                    clientNote: provider.clientNote,
+                    saleNote: provider.saleNote,
+                    saldo: provider.clientSaldo,
+                  );
+                },
+              ),
             ],
-          ),
-        )
-      ],
+          ],
+        ),
+      ),
     );
   }
 

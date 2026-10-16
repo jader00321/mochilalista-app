@@ -4,11 +4,23 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ClientSearchModal extends StatefulWidget {
   final Function(ClientModel) onClientSelected;
 
   const ClientSearchModal({super.key, required this.onClientSelected});
+
+  /// 🏆 Despliegue seguro con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
+  static Future<void> show(
+    BuildContext context, {
+    required Function(ClientModel) onClientSelected,
+  }) {
+    return InteractiveSheetWrapper.show(
+      context: context,
+      builder: (_) => ClientSearchModal(onClientSelected: onClientSelected),
+    );
+  }
 
   @override
   State<ClientSearchModal> createState() => _ClientSearchModalState();
@@ -42,27 +54,18 @@ class _ClientSearchModalState extends State<ClientSearchModal> {
     final authProv = Provider.of<AuthProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.8,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (_, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF23232F) : Colors.white, 
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24))
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                    const SizedBox(height: 20),
-                    Text("Buscar Cliente", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87)),
-                    const SizedBox(height: 20),
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.92,
+      backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+      applyEffectiveBottomPadding: true,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+            child: Column(
+              children: [
+                Text("Buscar Cliente", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: isDark ? Colors.white : Colors.black87)),
+                const SizedBox(height: 16),
                     TextField(
                       autofocus: true,
                       style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16),
@@ -101,7 +104,7 @@ class _ClientSearchModalState extends State<ClientSearchModal> {
                         if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text("No se encontraron coincidencias", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey)));
 
                         return ListView.separated(
-                          controller: scrollController,
+                          padding: const EdgeInsets.only(bottom: 24),
                           itemCount: snapshot.data!.length,
                           separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
                           itemBuilder: (context, index) {
@@ -127,8 +130,6 @@ class _ClientSearchModalState extends State<ClientSearchModal> {
               )
             ],
           ),
-        );
-      },
     );
   }
 }

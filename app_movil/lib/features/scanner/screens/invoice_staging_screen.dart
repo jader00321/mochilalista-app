@@ -4,6 +4,7 @@ import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/services/unit_catalog_service.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 // Módulos UI
 import 'package:app_movil/features/scanner/widgets/staging/staging_vendor_card.dart';
@@ -245,128 +246,73 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
       }
     }
 
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Container(
-          height: MediaQuery.of(ctx).size.height * 0.6,
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              // Handle
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 12, bottom: 16),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white24 : Colors.black12,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
+        return InteractiveSheetWrapper(
+          title: "Problemas de Stock",
+          icon: Icons.warning_rounded,
+          iconColor: Colors.orange,
+          maxHeightFactor: 0.75,
+          bottomAction: SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDark ? Colors.blue[800] : Colors.blue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Entendido, ir a corregir", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ),
+          child: ListView.separated(
+            padding: const EdgeInsets.all(20),
+            itemCount: errors.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (ctx, i) {
+              final err = errors[i];
+              final isDeficit = err['status'] == StockValidationStatus.deficit;
+              final color = isDeficit ? Colors.red : Colors.orange;
+              
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? color.withValues(alpha: 0.05) : color.withValues(alpha: 0.05),
+                  border: Border.all(color: isDark ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.warning_rounded, color: Colors.orange, size: 28),
-                    ),
-                    const SizedBox(width: 16),
+                    Icon(isDeficit ? Icons.arrow_downward : Icons.arrow_upward, color: color, size: 24),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("Problemas de Stock", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                          Text(err['name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87)),
                           const SizedBox(height: 4),
-                          Text("Resuelve estas alertas antes de guardar.", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                          Text(err['group'], style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600])),
                         ],
                       ),
                     ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        "${isDeficit ? 'Faltan' : 'Sobran'}\n${err['diff']} ${err['unit']}",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 12),
+                      ),
+                    )
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              // List
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: errors.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (ctx, i) {
-                    final err = errors[i];
-                    final isDeficit = err['status'] == StockValidationStatus.deficit;
-                    final color = isDeficit ? Colors.red : Colors.orange;
-                    
-                    return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDark ? color.withValues(alpha: 0.05) : color.withValues(alpha: 0.05),
-                        border: Border.all(color: isDark ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0.3)),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(isDeficit ? Icons.arrow_downward : Icons.arrow_upward, color: color, size: 24),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(err['name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87)),
-                                const SizedBox(height: 4),
-                                Text(err['group'], style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              "${isDeficit ? 'Faltan' : 'Sobran'}\n${err['diff']} ${err['unit']}",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 12),
-                            ),
-                          )
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-              // Button
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isDark ? Colors.blue[800] : Colors.blue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text("Entendido, ir a corregir", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ),
-                ),
-              )
-            ],
+              );
+            },
           ),
         );
       },
@@ -689,7 +635,12 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
         ), // Cierre de GestureDetector
         // BOTÓN FINAL
         bottomNavigationBar: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            16,
+            20,
+            InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 16),
+          ),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1A1A24) : Colors.white,
             boxShadow: [
@@ -706,9 +657,8 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
               ),
             ),
           ),
-          child: SafeArea(
-            child: SizedBox(
-              height: 55,
+          child: SizedBox(
+            height: 55,
               child: ElevatedButton(
                 onPressed: provider.isLoading
                     ? null
@@ -756,7 +706,6 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                       ),
               ),
             ),
-          ),
         ),
       ),
     );

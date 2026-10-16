@@ -6,17 +6,42 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/widgets/universal_image.dart'; 
 import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/features/catalog/screens/product_detail_screen.dart';
+
 class ProductDetailModal extends StatefulWidget {
   final InventoryWrapper item;
   final Function(int) onAddToCart;
   final Function(int) onAddToList;
+
+  final bool isStoreMode;
 
   const ProductDetailModal({
     super.key,
     required this.item,
     required this.onAddToCart,
     required this.onAddToList,
+    this.isStoreMode = false,
   });
+
+  /// 🏆 Despliegue seguro con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
+  static Future<void> show(
+    BuildContext context, {
+    required InventoryWrapper item,
+    required Function(int) onAddToCart,
+    required Function(int) onAddToList,
+    bool isStoreMode = false,
+  }) {
+    return InteractiveSheetWrapper.show(
+      context: context,
+      builder: (_) => ProductDetailModal(
+        item: item,
+        onAddToCart: onAddToCart,
+        onAddToList: onAddToList,
+        isStoreMode: isStoreMode,
+      ),
+    );
+  }
 
   @override
   State<ProductDetailModal> createState() => _ProductDetailModalState();
@@ -71,7 +96,7 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
     final double subtotal = unitPrice * _quantity;
     
     final String imageUrl = pres.imagenUrl ?? prod.imagenUrl ?? "";
-    final String imageTag = "cat_${pres.id}"; 
+    final String imageTag = "modal_cat_${pres.id}"; 
 
     double totalSavings = 0;
     if (hasOffer) {
@@ -83,22 +108,73 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    return SafeArea(
-      child: Container(
-        decoration: BoxDecoration(
-          color: surfaceColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.92,
+      backgroundColor: surfaceColor,
+      applyEffectiveBottomPadding: false,
+      bottomAction: isOutOfStock
+          ? null
+          : (isClient
+              ? SizedBox(
+                  height: 54,
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () { widget.onAddToList(_quantity); Navigator.pop(context); },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDark ? Colors.orange[700] : Colors.orange[800],
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: isDark ? 0 : 4,
+                    ),
+                    icon: const Icon(Icons.playlist_add, size: 24),
+                    label: const Text("AGREGAR A MI PEDIDO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                )
+              : Row(
                   children: [
-                    Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
-                    const SizedBox(height: 24),
+                    Expanded(
+                      child: SizedBox(
+                        height: 54,
+                        child: ElevatedButton.icon(
+                          onPressed: () { widget.onAddToList(_quantity); Navigator.pop(context); },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDark ? const Color(0xFF2E2010) : const Color(0xFFFFF3E0),
+                            foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800],
+                            side: BorderSide(color: isDark ? Colors.orange[400]! : Colors.orange, width: 2),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                          ),
+                          icon: const Icon(Icons.playlist_add, size: 24),
+                          label: const Text("A LA LISTA", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 54,
+                        child: ElevatedButton.icon(
+                          onPressed: () { widget.onAddToCart(_quantity); Navigator.pop(context); },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDark ? Colors.green[700] : const Color(0xFF2E7D32),
+                            foregroundColor: Colors.white,
+                            elevation: isDark ? 0 : 4,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                          ),
+                          icon: const Icon(Icons.shopping_cart, size: 22),
+                          label: const Text("COMPRAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        ),
+                      ),
+                    ),
+                  ],
+                )),
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
 
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +253,40 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                         ),
                       ],
                     ),
-                    Divider(height: 40, thickness: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        icon: Icon(Icons.open_in_new, size: 16, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                        label: Text(
+                          "Ver Ficha Completa de Producto",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.blue[300] : Colors.blue[800],
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.12) : Colors.blue[50],
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProductDetailScreen(
+                                product: prod,
+                                initialPresentationId: pres.id!,
+                                heroTag: 'cat_${pres.id}',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Divider(height: 32, thickness: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
 
                     if (!isOutOfStock) ...[
                       Wrap(
@@ -269,71 +378,13 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                        )
                     ],
 
-                    const SizedBox(height: 32),
-                    
-                    if (!isOutOfStock)
-                      isClient 
-                        ? SizedBox(
-                            height: 55,
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () { widget.onAddToList(_quantity); Navigator.pop(context); },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isDark ? Colors.orange[700] : Colors.orange[800],
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                elevation: isDark ? 0 : 4,
-                              ),
-                              icon: const Icon(Icons.playlist_add, size: 24),
-                              label: const Text("AGREGAR A MI PEDIDO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            ),
-                          )
-                        : Row(
-                            children: [
-                              Expanded(
-                                child: SizedBox(
-                                  height: 55,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () { widget.onAddToList(_quantity); Navigator.pop(context); },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: isDark ? const Color(0xFF2E2010) : const Color(0xFFFFF3E0),
-                                      foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800],
-                                      side: BorderSide(color: isDark ? Colors.orange[400]! : Colors.orange, width: 2),
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
-                                    ),
-                                    icon: const Icon(Icons.playlist_add, size: 24),
-                                    label: const Text("A LA LISTA", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: SizedBox(
-                                  height: 55,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () { widget.onAddToCart(_quantity); Navigator.pop(context); },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: isDark ? Colors.green[700] : const Color(0xFF2E7D32),
-                                      foregroundColor: Colors.white,
-                                      elevation: isDark ? 0 : 4,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
-                                    ),
-                                    icon: const Icon(Icons.shopping_cart, size: 22),
-                                    label: const Text("COMPRAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
-            ),
-            Positioned(top: 15, right: 15, child: IconButton(onPressed: ()=>Navigator.pop(context), icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.grey, size: 28))),
+            Positioned(top: 8, right: 12, child: IconButton(onPressed: ()=>Navigator.pop(context), icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.grey, size: 26))),
           ],
         ),
-      ),
     );
   }
 }

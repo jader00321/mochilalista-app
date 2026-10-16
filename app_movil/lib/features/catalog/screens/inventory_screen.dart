@@ -13,6 +13,8 @@ import 'package:app_movil/features/promotions/screens/offers_tab.dart';
 
 import 'package:app_movil/features/scanner/screens/invoice_history_screen.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
+import 'package:app_movil/core/widgets/live_filter_bottom_sheet.dart';
 
 class PlaceholderTab extends StatelessWidget {
   final String title;
@@ -229,7 +231,33 @@ class _InventoryScreenState extends State<InventoryScreen>
               InfoTip(icon: Icons.find_replace, text: 'Usa el botón de Detectar Duplicados (🔄) en cada pestaña para fusionar registros repetidos.'),
             ],
           ),
-          const SizedBox.shrink(),
+          IconButton(
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.filter_list_rounded, size: 24),
+                Consumer<InventoryProvider>(
+                  builder: (_, inv, __) {
+                    if (!inv.hasActiveFilters) return const SizedBox.shrink();
+                    return Positioned(
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            tooltip: 'Filtros en Vivo',
+            onPressed: () => LiveFilterBottomSheet.show(context),
+          ),
         ],
 
         bottom: TabBar(
@@ -256,43 +284,48 @@ class _InventoryScreenState extends State<InventoryScreen>
         ),
       ),
 
-      body: Column(
+      body: Stack(
         children: [
-          // 🔥 AVISO DE EXPLORACIÓN PERMANENTE PARA INVITADOS
-          if (isGuest)
-            Container(
-              width: double.infinity,
-              color: Colors.orange.withValues(alpha: 0.15),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.orange[700]),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      "Modo Exploración. Para agregar productos y categorías reales, debes registrar tu negocio.",
-                      style: TextStyle(
-                        color: isDark ? Colors.orange[200] : Colors.orange[900],
-                        fontSize: 13,
+          Column(
+            children: [
+              // 🔥 AVISO DE EXPLORACIÓN PERMANENTE PARA INVITADOS
+              if (isGuest)
+                Container(
+                  width: double.infinity,
+                  color: Colors.orange.withValues(alpha: 0.15),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange[700]),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "Modo Exploración. Para agregar productos y categorías reales, debes registrar tu negocio.",
+                          style: TextStyle(
+                            color: isDark ? Colors.orange[200] : Colors.orange[900],
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
 
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: const [
-                ProductsTab(),
-                OffersTab(),
-                CategoriesTab(),
-                BrandsTab(),
-                ProvidersTab(),
-              ],
-            ),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: const [
+                    ProductsTab(),
+                    OffersTab(),
+                    CategoriesTab(),
+                    BrandsTab(),
+                    ProvidersTab(),
+                  ],
+                ),
+              ),
+            ],
           ),
+          const DeepNavReturnPill(isBottom: true),
         ],
       ),
     );

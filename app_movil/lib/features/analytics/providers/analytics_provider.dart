@@ -417,7 +417,7 @@ class AnalyticsProvider with ChangeNotifier {
 
       // Alertas de Stock
       final lowStockQuery = await db.rawQuery('''
-        SELECT p.nombre, m.nombre as marca_nombre, pp.nombre_especifico as presentacion_nombre, pp.stock_actual, IFNULL(pp.stock_alerta, 5) as stock_alerta
+        SELECT pp.id as presentacion_id, p.id as producto_id, p.nombre, m.nombre as marca_nombre, pp.nombre_especifico as presentacion_nombre, pp.stock_actual, IFNULL(pp.stock_alerta, 5) as stock_alerta
         FROM presentaciones_producto pp
         JOIN productos p ON pp.producto_id = p.id
         LEFT JOIN marcas m ON p.marca_id = m.id

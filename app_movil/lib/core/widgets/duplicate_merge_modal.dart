@@ -10,6 +10,8 @@ import 'package:app_movil/core/widgets/duplicate_warning_dialog.dart';
 /// proveedores, y permite al usuario fusionarlos con un solo toque.
 /// =========================================================================
 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+
 enum MergeEntityType { brand, category, provider }
 
 class DuplicateMergeModal {
@@ -63,10 +65,8 @@ class DuplicateMergeModal {
       return;
     }
 
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => _DuplicateMergeSheet(
         type: type,
         duplicateGroups: duplicateGroups,
@@ -301,26 +301,12 @@ class _DuplicateMergeSheetState extends State<_DuplicateMergeSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
-      decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF14141C) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.85,
+      backgroundColor: widget.isDark ? const Color(0xFF14141C) : Colors.white,
+      applyEffectiveBottomPadding: true,
       child: Column(
         children: [
-          // Handle
-          const SizedBox(height: 12),
-          Container(
-            width: 50,
-            height: 5,
-            decoration: BoxDecoration(
-              color: widget.isDark ? Colors.white24 : Colors.grey[300],
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          const SizedBox(height: 16),
-
           // Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),

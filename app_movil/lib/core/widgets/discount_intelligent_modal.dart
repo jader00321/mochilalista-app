@@ -1,8 +1,8 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class DiscountIntelligentModal extends StatefulWidget {
   final ProductPresentation presentation;
@@ -15,6 +15,23 @@ class DiscountIntelligentModal extends StatefulWidget {
     required this.provider,
     required this.isDark,
   });
+
+  /// 🏆 Despliegue con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
+  static Future<bool?> show({
+    required BuildContext context,
+    required ProductPresentation presentation,
+    required InventoryProvider provider,
+    required bool isDark,
+  }) {
+    return InteractiveSheetWrapper.show<bool>(
+      context: context,
+      builder: (ctx) => DiscountIntelligentModal(
+        presentation: presentation,
+        provider: provider,
+        isDark: isDark,
+      ),
+    );
+  }
 
   @override
   State<DiscountIntelligentModal> createState() => _DiscountIntelligentModalState();
@@ -93,51 +110,48 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
   Widget build(BuildContext context) {
     final textColor = widget.isDark ? Colors.white : Colors.black87;
 
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-      child: Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.88,
+      backgroundColor: widget.isDark ? const Color(0xFF14141C) : Colors.white,
+      applyEffectiveBottomPadding: false,
+      bottomAction: SizedBox(
+        width: double.infinity,
+        height: 54,
+        child: ElevatedButton(
+          onPressed: _isSaving ? null : _guardarDescuento,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.purple,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          child: _isSaving
+              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+              : const Text("Aplicar Cambios", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ),
-        decoration: BoxDecoration(
-          color: widget.isDark ? const Color(0xFF14141C).withValues(alpha: 0.9) : Colors.white.withValues(alpha: 0.95),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, -5))
-          ]
-        ),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Center(
-                  child: Container(
-                    width: 40, height: 5,
-                    decoration: BoxDecoration(color: widget.isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: widget.isDark ? Colors.purple.withValues(alpha: 0.2) : Colors.purple[50], borderRadius: BorderRadius.circular(12)),
-                          child: Icon(Icons.local_offer, color: widget.isDark ? Colors.purple[300] : Colors.purple, size: 24),
-                        ),
-                        const SizedBox(width: 16),
-                        Text("Gestión de Descuento", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: textColor)),
-                      ],
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: widget.isDark ? Colors.purple.withValues(alpha: 0.2) : Colors.purple[50], borderRadius: BorderRadius.circular(12)),
+                      child: Icon(Icons.local_offer, color: widget.isDark ? Colors.purple[300] : Colors.purple, size: 24),
                     ),
-                    Switch(
-                      value: _isActive,
-                      activeThumbColor: Colors.purple,
+                    const SizedBox(width: 16),
+                    Text("Gestión de Descuento", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: textColor)),
+                  ],
+                ),
+                Switch(
+                  value: _isActive,
+                  activeThumbColor: Colors.purple,
                       onChanged: (val) {
                         setState(() {
                           _isActive = val;
@@ -270,26 +284,7 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
                   ),
                 ),
                 
-                const SizedBox(height: 24),
-                
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : _guardarDescuento,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: _isSaving
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("Aplicar Cambios", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          ],
         ),
       ),
     );

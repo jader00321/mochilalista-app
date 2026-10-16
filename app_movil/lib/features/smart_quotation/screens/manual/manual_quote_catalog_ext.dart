@@ -28,20 +28,21 @@ extension _ManualQuoteCatalogExt on _ManualQuotationScreenState {
     final workbench = Provider.of<WorkbenchProvider>(context, listen: false);
     bool isOutdated = _currentQuotationId != null && item.bundleId != null && (workbench.getValidationFor(_currentQuotationId!)?.bundleChanges.any((bc) => bc.bundleId == item.bundleId) ?? false);
     
-    showModalBottomSheet(
-      context: context, isScrollControlled: true, backgroundColor: Colors.transparent, useSafeArea: false, 
-      builder: (ctx) => ManualQuoteDetailModal(
-        product: item, initialQty: _quantities[item.presentationId] ?? 1,
-        initialOverridePrice: _overriddenPrices[item.presentationId], initialCustomName: _customNames[item.presentationId],
-        isNewAddition: false,
-        isEditingSavedQuote: _currentQuotationId != null,
-        isBundleOutdated: isOutdated,
-        onSyncBundle: isOutdated && _currentQuotationId != null ? () async {
-          final res = await workbench.refreshQuotation(_currentQuotationId!, fixPrices: true, fixStock: true, fixNames: true, fixBundles: true);
-          if (res) _initData();
-          return res;
-        } : null,
-        onConfirm: (newProd, newQty, newPrice, newName) {
+    ManualQuoteDetailModal.show(
+      context,
+      product: item,
+      initialQty: _quantities[item.presentationId] ?? 1,
+      initialOverridePrice: _overriddenPrices[item.presentationId],
+      initialCustomName: _customNames[item.presentationId],
+      isNewAddition: false,
+      isEditingSavedQuote: _currentQuotationId != null,
+      isBundleOutdated: isOutdated,
+      onSyncBundle: isOutdated && _currentQuotationId != null ? () async {
+        final res = await workbench.refreshQuotation(_currentQuotationId!, fixPrices: true, fixStock: true, fixNames: true, fixBundles: true);
+        if (res) _initData();
+        return res;
+      } : null,
+      onConfirm: (newProd, newQty, newPrice, newName) {
           updateState(() {
             if (newProd.presentationId != item.presentationId) {
               _items.removeAt(index); _quantities.remove(item.presentationId); _overriddenPrices.remove(item.presentationId); _customNames.remove(item.presentationId);
@@ -68,8 +69,7 @@ extension _ManualQuoteCatalogExt on _ManualQuotationScreenState {
             _hasUnsavedChanges = true;
           });
         },
-      ),
-    );
+      );
   }
 
 }

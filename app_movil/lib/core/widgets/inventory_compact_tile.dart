@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
@@ -105,9 +107,9 @@ class InventoryCompactTile extends StatelessWidget {
                 ),
               ),
 
-              // 3. PRECIO Y STOCK 
+              // 3. PRECIO, STOCK Y QUICK STEPPER
               SizedBox(
-                width: 100, 
+                width: 110, 
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -115,10 +117,54 @@ class InventoryCompactTile extends StatelessWidget {
                       "S/ ${item.effectivePrice.toStringAsFixed(2)}", 
                       style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: isDark ? Colors.blue[300] : Colors.black87)
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       isOut ? "Agotado" : item.displayStockText, 
-                      style: TextStyle(color: stockColor, fontWeight: FontWeight.bold, fontSize: 14)
+                      style: TextStyle(color: stockColor, fontWeight: FontWeight.bold, fontSize: 13)
+                    ),
+                    const SizedBox(height: 4),
+                    // Quick Stepper
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        InkWell(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            int factor = presentation.unidadesPorVenta;
+                            if (factor <= 0) factor = 1;
+                            int newBaseStock = math.max(0, presentation.stockActual - factor);
+                            provider.updatePresentation(presentation.id!, stock: newBaseStock);
+                          },
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white12 : Colors.grey[200],
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(Icons.remove, size: 14, color: isDark ? Colors.white70 : Colors.black87),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        InkWell(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            int factor = presentation.unidadesPorVenta;
+                            if (factor <= 0) factor = 1;
+                            int newBaseStock = presentation.stockActual + factor;
+                            provider.updatePresentation(presentation.id!, stock: newBaseStock);
+                          },
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.blue.withValues(alpha: 0.25) : Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(Icons.add, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

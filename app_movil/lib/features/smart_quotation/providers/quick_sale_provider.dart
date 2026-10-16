@@ -231,6 +231,37 @@ class QuickSaleProvider with ChangeNotifier {
     return null;
   }
 
+  /// 🔄 Sincroniza inmediatamente precio y stock de un ítem en el carrito en memoria (0ms)
+  void syncItemPriceAndStock(int presentationId, {double? newPrice, int? newStock}) {
+    final index = _currentState.cart.indexWhere((p) => p.presentationId == presentationId);
+    if (index != -1) {
+      final current = _currentState.cart[index];
+      final updated = MatchedProduct(
+        productId: current.productId,
+        presentationId: current.presentationId,
+        fullName: current.fullName,
+        productName: current.productName,
+        specificName: current.specificName,
+        brand: current.brand,
+        price: newPrice ?? current.price,
+        offerPrice: current.offerPrice,
+        stock: newStock ?? current.stock,
+        imageUrl: current.imageUrl,
+        unit: current.unit,
+        conversionFactor: current.conversionFactor,
+        bundleId: current.bundleId,
+      );
+      _currentState.cart[index] = updated;
+
+      // Si la cantidad en el carrito supera el nuevo stock, ajustarla al máximo disponible
+      final currentQty = _currentState.quantities[presentationId] ?? 1;
+      if (newStock != null && newStock > 0 && currentQty > newStock) {
+        _currentState.quantities[presentationId] = newStock;
+      }
+      notifyListeners();
+    }
+  }
+
   String? updateQuantity(int presentationId, int newQty, int maxStock) {
     if (newQty <= 0) {
       removeItem(presentationId);

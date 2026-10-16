@@ -116,6 +116,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             builder: (_) => ProductDetailScreen(
               product: productObj,
               initialPresentationId: presentationId ?? 0,
+              heroTag: 'inv_${productObj.id}_${presentationId ?? 0}',
             ),
           ),
         );

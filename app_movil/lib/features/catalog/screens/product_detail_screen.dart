@@ -8,15 +8,19 @@ import 'package:app_movil/core/widgets/discount_intelligent_modal.dart';
 import 'package:app_movil/features/catalog/widgets/quick_restock_modal.dart';
 import 'package:app_movil/features/analytics/screens/audit_trail_screen.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
+import 'package:app_movil/core/widgets/morphing_accordion.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
   final int initialPresentationId;
+  final String? heroTag;
 
   const ProductDetailScreen({
     super.key,
     required this.product,
     required this.initialPresentationId,
+    this.heroTag,
   });
 
   @override
@@ -251,10 +255,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: RefreshIndicator(
-        onRefresh: _refreshData,
-        color: Colors.blue[800],
-        child: CustomScrollView(
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _refreshData,
+            color: Colors.blue[800],
+            child: CustomScrollView(
           slivers: [
             // 1. APPBAR CON IMAGEN
             SliverAppBar(
@@ -345,7 +351,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         color: isDark ? const Color(0xFF14141C) : Colors.white,
                         child: (displayImage != null && displayImage.isNotEmpty)
                             ? Hero(
-                                tag: 'product-img-${_currentProduct.id}',
+                                tag: widget.heroTag ?? 'inv_${_currentProduct.id}_${_selectedPresentation.id}',
                                 child: UniversalImage(path: displayImage),
                               )
                             : Icon(
@@ -794,7 +800,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ],
         ),
       ),
-    );
+      const DeepNavReturnPill(isBottom: true),
+    ],
+  ),
+);
   }
 
   // 🔧 TAREA 4.1.1: Helpers para indicador visual de margen
@@ -828,86 +837,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ? (_selectedPresentation.stockActual ~/ factorVenta)
         : _selectedPresentation.stockActual;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF23232F) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? Colors.white10 : Colors.grey.shade200,
+    return MorphingAccordion(
+      title: "Información Financiera (${(_selectedPresentation.unidadVenta ?? 'Unidad').toUpperCase()} x${_selectedPresentation.unidadesPorVenta})",
+      icon: Icons.storefront_rounded,
+      iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
+      summaryBadge: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.blue[900]!.withValues(alpha: 0.3) : Colors.blue[50],
+          borderRadius: BorderRadius.circular(6),
         ),
-        boxShadow: [
-          if (!isDark)
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // CABECERA: INTENCIÓN DE VENTA
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.blue.withValues(alpha: 0.1)
-                  : Colors.blue.shade50,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.storefront,
-                      color: isDark ? Colors.blue[300] : Colors.blue[800],
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      "INFORMACIÓN FINANCIERA",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: isDark ? Colors.blue[300] : Colors.blue[900],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                // 🔥 SOLUCIÓN AL DESBORDAMIENTO: ETIQUETA DIRECTA EN OTRA LÍNEA
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.blue[800] : Colors.blue,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    "${(_selectedPresentation.unidadVenta ?? 'Unidad').toUpperCase()} (x${_selectedPresentation.unidadesPorVenta})",
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+        child: Text(
+          "Margen $margenPorcentaje% · S/ ${utilidadNeta.toStringAsFixed(2)}",
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.blue[200] : Colors.blue[800],
           ),
-
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
+        ),
+      ),
+      initialExpanded: true,
+      contentPadding: const EdgeInsets.all(16),
+      content: Column(
+        children: [
                 // FILA 1: COSTOS Y RENTABILIDAD
                 Row(
                   children: [
@@ -1250,9 +1202,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }

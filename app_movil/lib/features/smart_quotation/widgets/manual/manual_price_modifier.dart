@@ -11,6 +11,7 @@ class ManualPriceModifier extends StatelessWidget {
   final Function(String) onPriceChanged;
   final bool isDark;
   final NumberFormat currency;
+  final VoidCallback? onEditCatalogPrice;
 
   const ManualPriceModifier({
     super.key,
@@ -23,6 +24,7 @@ class ManualPriceModifier extends StatelessWidget {
     required this.onPriceChanged,
     required this.isDark,
     required this.currency,
+    this.onEditCatalogPrice,
   });
 
   @override
@@ -39,7 +41,36 @@ class ManualPriceModifier extends StatelessWidget {
         children: [
           SwitchListTile(
             title: Text("Aplicar Descuento", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isManualPrice ? (isDark ? Colors.orange[300] : Colors.orange[900]) : textColor)),
-            subtitle: Text("Precio Base: ${currency.format(systemPrice)}", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+            subtitle: Row(
+              children: [
+                Text("Precio Base: ${currency.format(systemPrice)}", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                if (onEditCatalogPrice != null) ...[
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: onEditCatalogPrice,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.edit, size: 13, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                          const SizedBox(width: 2),
+                          Text(
+                            "Editar Catálogo",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.blue[300] : Colors.blue[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
             value: isManualPrice,
             activeThumbColor: Colors.orange,
             onChanged: onToggle,

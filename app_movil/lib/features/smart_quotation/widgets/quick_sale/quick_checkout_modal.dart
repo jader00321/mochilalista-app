@@ -10,8 +10,18 @@ import 'package:app_movil/core/providers/notification_provider.dart';
 import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+
 class QuickCheckoutModal extends StatefulWidget {
   const QuickCheckoutModal({super.key});
+
+  /// 🏆 Despliegue seguro con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
+  static Future<void> show(BuildContext context) {
+    return InteractiveSheetWrapper.show(
+      context: context,
+      builder: (_) => const QuickCheckoutModal(),
+    );
+  }
 
   @override
   State<QuickCheckoutModal> createState() => _QuickCheckoutModalState();
@@ -169,17 +179,38 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
 
     return PopScope(
       canPop: !_isProcessing && !_isSuccess,
-      child: SafeArea(
-        child: Container(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-          decoration: BoxDecoration(
-            color: surfaceColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: _isSuccess 
-            ? _buildSuccessAnimation()
-            : _buildPaymentForm(provider, currency, isDark),
-        ),
+      child: InteractiveSheetWrapper(
+        maxHeightFactor: 0.92,
+        backgroundColor: surfaceColor,
+        applyEffectiveBottomPadding: false,
+        enableDragToDismiss: !_isProcessing && !_isSuccess,
+        bottomAction: _isSuccess
+            ? null
+            : SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: _isProcessing ? null : _submitSale,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.pinkAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: _isProcessing 
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                          SizedBox(width: 12),
+                          Text("Sincronizando inventario...", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ],
+                      )
+                    : const Text("PROCESAR VENTA", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+                ),
+              ),
+        child: _isSuccess 
+          ? _buildSuccessAnimation()
+          : _buildPaymentForm(provider, currency, isDark),
       ),
     );
   }
@@ -195,12 +226,12 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
     final textColor = isDark ? Colors.white : Colors.black87;
 
     return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 50, height: 5, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-          Text("Confirmar Venta", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor)),
-          const SizedBox(height: 24),
+          Text("Confirmar Venta", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
+          const SizedBox(height: 20),
           
           Container(
             padding: const EdgeInsets.all(20),
@@ -310,28 +341,7 @@ class _QuickCheckoutModalState extends State<QuickCheckoutModal> {
             },
           ),
 
-          const SizedBox(height: 35),
-
-          SizedBox(
-            width: double.infinity, height: 60,
-            child: ElevatedButton(
-              onPressed: _isProcessing ? null : _submitSale,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.pinkAccent, foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              child: _isProcessing 
-                ? const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
-                      SizedBox(width: 12),
-                      Text("Sincronizando inventario...", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                    ],
-                  )
-                : const Text("PROCESAR VENTA", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1)),
-            ),
-          ),
+          const SizedBox(height: 12),
         ],
       ),
     );

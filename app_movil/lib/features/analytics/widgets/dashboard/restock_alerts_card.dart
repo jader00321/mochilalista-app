@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 import 'package:app_movil/features/analytics/widgets/dashboard/glass_card.dart';
 import 'package:app_movil/core/widgets/product_nomenclature_label.dart';
 import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/widgets/stock_update_modal.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class RestockAlertsCard extends StatefulWidget {
   final AnalyticsData data;
@@ -161,22 +165,97 @@ class _RestockAlertsCardState extends State<RestockAlertsCard> {
             style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[700], height: 1.4),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartRestockScreen()));
-              },
-              icon: const Icon(Icons.arrow_forward, size: 16),
-              label: const Text("Ir a Reponer Stock"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: actual == 0 ? Colors.red : Colors.orange,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final invProv = Provider.of<InventoryProvider>(
+                      context,
+                      listen: false,
+                    );
+                    final analytics = Provider.of<AnalyticsProvider>(
+                      context,
+                      listen: false,
+                    );
+                    final presId = p['presentacion_id'] as int?;
+                    final prodId = p['producto_id'] as int?;
+                    if (presId == null || prodId == null) {
+                      CustomSnackBar.show(
+                        context,
+                        message: "No se identificó la presentación",
+                        isError: true,
+                      );
+                      return;
+                    }
+                    final fullProd = await invProv
+                        .getFullProductWithFallback(prodId);
+                    final targetPres = fullProd?.presentaciones
+                        .where((pr) => pr.id == presId)
+                        .firstOrNull;
+                    if (targetPres != null && mounted) {
+                      await StockUpdateModal.show(
+                        context: context,
+                        presentation: targetPres,
+                        provider: invProv,
+                        isDark: widget.isDark,
+                      );
+                      if (mounted) {
+                        analytics.runStaggeredAnalysis();
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.edit_note, size: 16),
+                  label: const Text(
+                    "Ajustar Stock",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: actual == 0 ? Colors.red : Colors.orange,
+                    side: BorderSide(
+                      color: actual == 0 ? Colors.red : Colors.orange,
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          )
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SmartRestockScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.arrow_forward, size: 16),
+                  label: const Text(
+                    "Smart Restock",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: actual == 0 ? Colors.red : Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

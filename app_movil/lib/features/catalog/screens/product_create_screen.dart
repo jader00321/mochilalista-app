@@ -13,6 +13,7 @@ import 'package:app_movil/core/widgets/safe_dropdown.dart';
 import 'package:app_movil/core/widgets/product_optional_info.dart';
 import 'package:app_movil/core/widgets/product_presentation_card.dart';
 import 'package:app_movil/core/widgets/super_switch.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ProductCreateScreen extends StatefulWidget {
   final String? initialBarcode;
@@ -649,7 +650,12 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
       ),
 
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          16,
+          20,
+          InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 16),
+        ),
         decoration: BoxDecoration(
           color: surfaceColor,
           boxShadow: [
@@ -661,9 +667,8 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
               ),
           ],
         ),
-        child: SafeArea(
-          child: SizedBox(
-            height: 50,
+        child: SizedBox(
+          height: 50,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: provider.isLoading
@@ -701,7 +706,6 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
                     ),
             ),
           ),
-        ),
       ),
 
       body: GestureDetector(

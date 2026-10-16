@@ -13,6 +13,7 @@ import 'package:app_movil/features/smart_quotation/widgets/workbench/archived_li
 import 'package:app_movil/features/smart_quotation/widgets/workbench/dashboard_header.dart';
 import 'package:app_movil/core/widgets/export_options_modal.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class WorkbenchScreen extends StatefulWidget {
   const WorkbenchScreen({super.key});
@@ -275,38 +276,43 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
         ),
       ),
       
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          AnimatedScale(
-            scale: _showScrollToTop ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutBack,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: FloatingActionButton(
-                heroTag: 'btn_wb_up',
-                mini: true,
-                onPressed: _scrollToTop,
-                backgroundColor: isDark ? Colors.blueGrey[800] : Colors.blueGrey[100],
-                foregroundColor: isDark ? Colors.white : Colors.black87,
-                elevation: 4,
-                child: const Icon(Icons.keyboard_arrow_up, size: 24),
+      floatingActionButton: Padding(
+        padding: EdgeInsets.only(
+          bottom: InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 0),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            AnimatedScale(
+              scale: _showScrollToTop ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutBack,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: FloatingActionButton(
+                  heroTag: 'btn_wb_up',
+                  mini: true,
+                  onPressed: _scrollToTop,
+                  backgroundColor: isDark ? Colors.blueGrey[800] : Colors.blueGrey[100],
+                  foregroundColor: isDark ? Colors.white : Colors.black87,
+                  elevation: 4,
+                  child: const Icon(Icons.keyboard_arrow_up, size: 24),
+                ),
               ),
             ),
-          ),
-          FloatingActionButton(
-            heroTag: 'btn_wb_add',
-            backgroundColor: isDark ? Colors.green[700] : const Color(0xFF2E7D32),
-            elevation: 4,
-            child: const Icon(Icons.add, color: Colors.white, size: 28),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualQuotationScreen(quotationId: null)))
-                .then((_) => provider.loadDashboard());
-            },
-          ),
-        ],
+            FloatingActionButton(
+              heroTag: 'btn_wb_add',
+              backgroundColor: isDark ? Colors.green[700] : const Color(0xFF2E7D32),
+              elevation: 4,
+              child: const Icon(Icons.add, color: Colors.white, size: 28),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualQuotationScreen(quotationId: null)))
+                  .then((_) => provider.loadDashboard());
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -462,7 +468,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 12, bottom: 100),
+      padding: EdgeInsets.only(top: 12, bottom: 100 + InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 0)),
       itemCount: list.length,
       itemBuilder: (ctx, i) {
         final quotation = list[i];
@@ -494,10 +500,8 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
   }
 
   void _showQuickActions(BuildContext context, SmartQuotationModel quotation, bool isDark) {
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true, 
       builder: (ctx) => QuickActionsBottomSheet(
         quotation: quotation, 
         isDark: isDark,

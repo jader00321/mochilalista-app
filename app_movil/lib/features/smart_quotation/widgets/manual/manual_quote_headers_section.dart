@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_institution_header.dart';
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_client_header.dart';
+import 'package:app_movil/core/widgets/morphing_accordion.dart';
 
 class ManualQuoteHeadersSection extends StatelessWidget {
   final bool isDark;
@@ -66,121 +67,139 @@ class ManualQuoteHeadersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final titleText = quoteTitleCtrl.text.trim();
+    final clientDisplayName = selectedClient?.fullName ?? clientNameCtrl.text.trim();
+    final schoolText = schoolCtrl.text.trim();
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          color: surfaceColor,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           child: Column(
             children: [
-              // 🔥 SECCIÓN 1: Título y Notas de la Cotización
-              Theme(
-                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  initiallyExpanded: isQuoteDataExpanded,
-                  iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                  collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey,
-                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                  visualDensity: VisualDensity.compact,
-                  title: Text(
-                    "Identificación de la Cotización", 
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)
-                  ),
-                  subtitle: Text(
-                    "Nombre de la lista y notas internas", 
-                    style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey)
-                  ),
-                  onExpansionChanged: onQuoteDataExpansionChanged,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(
-                            controller: quoteTitleCtrl,
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
-                            decoration: InputDecoration(
-                              labelText: "Nombre / Título de la Cotización",
-                              labelStyle: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700]),
-                              prefixIcon: Icon(Icons.description, color: isDark ? Colors.blue[300] : Colors.blue),
-                              filled: true,
-                              fillColor: isDark ? Colors.blue.withValues(alpha: 0.05) : Colors.blue.shade50,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                            ),
+              // 🪗 SECCIÓN 1: Identificación con MorphingAccordion
+              MorphingAccordion(
+                title: "Identificación de Cotización",
+                icon: Icons.description_outlined,
+                iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
+                initialExpanded: isQuoteDataExpanded,
+                onExpansionChanged: onQuoteDataExpansionChanged,
+                summaryBadge: titleText.isNotEmpty
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.blue[900]!.withValues(alpha: 0.3) : Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          titleText.length > 20 ? '${titleText.substring(0, 18)}...' : titleText,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.blue[200] : Colors.blue[800],
                           ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: quoteNotesCtrl,
-                            style: TextStyle(fontSize: 14, color: textColor),
-                            maxLines: 2,
-                            minLines: 1,
-                            decoration: InputDecoration(
-                              labelText: "Notas de Cotización (Opcional)",
-                              labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                              prefixIcon: Icon(Icons.sticky_note_2_outlined, color: isDark ? Colors.grey[400] : Colors.grey),
-                              filled: true,
-                              fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                            ),
-                          ),
-                        ],
+                        ),
+                      )
+                    : null,
+                content: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: quoteTitleCtrl,
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
+                        decoration: InputDecoration(
+                          labelText: "Nombre / Título de la Cotización",
+                          labelStyle: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                          prefixIcon: Icon(Icons.description, color: isDark ? Colors.blue[300] : Colors.blue),
+                          filled: true,
+                          fillColor: isDark ? Colors.blue.withValues(alpha: 0.05) : Colors.blue.shade50,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: quoteNotesCtrl,
+                        style: TextStyle(fontSize: 14, color: textColor),
+                        maxLines: 2,
+                        minLines: 1,
+                        decoration: InputDecoration(
+                          labelText: "Notas de Cotización (Opcional)",
+                          labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                          prefixIcon: Icon(Icons.sticky_note_2_outlined, color: isDark ? Colors.grey[400] : Colors.grey),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              
-              Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
 
-              // 🔥 SECCIÓN 2: Datos del Cliente y Colegio
-              Theme(
-                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  initiallyExpanded: isClientPanelExpanded,
-                  iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                  collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey,
-                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                  visualDensity: VisualDensity.compact,
-                  title: Text(
-                    "Datos del Cliente y Colegio", 
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)
+              const SizedBox(height: 8),
+
+              // 🪗 SECCIÓN 2: Cliente y Colegio con MorphingAccordion
+              MorphingAccordion(
+                title: "Cliente y Colegio",
+                icon: Icons.school_outlined,
+                iconColor: isDark ? Colors.green[300] : Colors.green[800],
+                initialExpanded: isClientPanelExpanded,
+                onExpansionChanged: onClientPanelExpansionChanged,
+                summaryBadge: (clientDisplayName.isNotEmpty || schoolText.isNotEmpty)
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.green[900]!.withValues(alpha: 0.3) : Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          clientDisplayName.isNotEmpty
+                              ? (clientDisplayName.length > 16 ? '${clientDisplayName.substring(0, 14)}...' : clientDisplayName)
+                              : schoolText,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.green[300] : Colors.green[800],
+                          ),
+                        ),
+                      )
+                    : null,
+                content: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Column(
+                    children: [
+                      ManualQuoteInstitutionHeader(
+                        schoolCtrl: schoolCtrl,
+                        gradeCtrl: gradeCtrl,
+                        isDark: isDark,
+                      ),
+                      ManualQuoteClientHeader(
+                        selectedClient: selectedClient,
+                        nameCtrl: clientNameCtrl,
+                        phoneCtrl: clientPhoneCtrl,
+                        dniCtrl: clientDniCtrl,
+                        addressCtrl: clientAddressCtrl,
+                        emailCtrl: clientEmailCtrl,
+                        notesCtrl: clientNotesCtrl,
+                        isNewClientMode: isNewClientMode,
+                        isDark: isDark,
+                        isGuest: isGuest,
+                        onNewClientModeChanged: onNewClientModeChanged,
+                        onSearchClientTap: onSearchClientTap,
+                        onClearClient: onClearClient,
+                      ),
+                    ],
                   ),
-                  subtitle: Text(
-                    "Toca para desplegar y editar", 
-                    style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey)
-                  ),
-                  onExpansionChanged: onClientPanelExpansionChanged,
-                  children: [
-                    ManualQuoteInstitutionHeader(
-                      schoolCtrl: schoolCtrl,
-                      gradeCtrl: gradeCtrl,
-                      isDark: isDark,
-                    ),
-                    ManualQuoteClientHeader(
-                      selectedClient: selectedClient,
-                      nameCtrl: clientNameCtrl,
-                      phoneCtrl: clientPhoneCtrl,
-                      dniCtrl: clientDniCtrl,
-                      addressCtrl: clientAddressCtrl,
-                      emailCtrl: clientEmailCtrl,
-                      notesCtrl: clientNotesCtrl,
-                      isNewClientMode: isNewClientMode,
-                      isDark: isDark,
-                      isGuest: isGuest, // 🔥 Pasamos si es invitado
-                      onNewClientModeChanged: onNewClientModeChanged,
-                      onSearchClientTap: onSearchClientTap,
-                      onClearClient: onClearClient,
-                    ),
-                    const SizedBox(height: 6)
-                  ],
                 ),
               ),
             ],
           ),
         ),
         Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-        const SizedBox(height: 8), 
+        const SizedBox(height: 8),
       ],
     );
   }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/scanner/models/scanner_models.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class StagingVendorCard extends StatelessWidget {
   final ScannerProvider provider;
@@ -343,141 +344,117 @@ class _LocalProviderSearchState extends State<_LocalProviderSearch> {
         .toList();
     final textColor = widget.isDark ? Colors.white : Colors.black87;
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.8,
-      decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF23232F) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-        child: Column(
-          children: [
-            Center(
-              child: Container(
-                width: 50,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: widget.isDark ? Colors.white24 : Colors.grey[300],
-                  borderRadius: BorderRadius.circular(10),
-                ),
+    return InteractiveSheetWrapper(
+      title: "Buscar Proveedor",
+      icon: Icons.store,
+      iconColor: widget.isDark ? Colors.blue[300] : Colors.blue[800],
+      maxHeightFactor: 0.85,
+      child: Column(
+        children: [
+          TextField(
+            autofocus: true,
+            style: TextStyle(color: textColor, fontSize: 16),
+            decoration: InputDecoration(
+              hintText: "Escribe para buscar...",
+              hintStyle: TextStyle(
+                color: widget.isDark ? Colors.grey[500] : Colors.grey,
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              "Buscar Proveedor",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-                color: textColor,
+              prefixIcon: Icon(
+                Icons.search,
+                color: widget.isDark ? Colors.blue[300] : Colors.blue,
               ),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              autofocus: true,
-              style: TextStyle(color: textColor, fontSize: 16),
-              decoration: InputDecoration(
-                hintText: "Escribe para buscar...",
-                hintStyle: TextStyle(
-                  color: widget.isDark ? Colors.grey[500] : Colors.grey,
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: widget.isDark ? Colors.blue[300] : Colors.blue,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: widget.isDark
-                    ? const Color(0xFF14141C)
-                    : Colors.grey[100],
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
               ),
-              onChanged: (val) => setState(() => query = val),
+              filled: true,
+              fillColor: widget.isDark
+                  ? const Color(0xFF14141C)
+                  : Colors.grey[100],
             ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView.separated(
-                itemCount: filtered.length + 1,
-                separatorBuilder: (_, __) => Divider(
-                  height: 1,
-                  color: widget.isDark ? Colors.white10 : Colors.grey[200],
-                ),
-                itemBuilder: (ctx, i) {
-                  if (i == filtered.length) {
-                    if (query.isNotEmpty &&
-                        !filtered.any(
-                          (p) =>
-                              p.nombreEmpresa.toLowerCase() ==
-                              query.toLowerCase(),
-                        )) {
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 8,
+            onChanged: (val) => setState(() => query = val),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ListView.separated(
+              itemCount: filtered.length + 1,
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                color: widget.isDark ? Colors.white10 : Colors.grey[200],
+              ),
+              itemBuilder: (ctx, i) {
+                if (i == filtered.length) {
+                  if (query.isNotEmpty &&
+                      !filtered.any(
+                        (p) =>
+                            p.nombreEmpresa.toLowerCase() ==
+                            query.toLowerCase(),
+                      )) {
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 8,
+                      ),
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: widget.isDark
+                              ? Colors.blue.withValues(alpha: 0.2)
+                              : Colors.blue[50],
+                          shape: BoxShape.circle,
                         ),
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: widget.isDark
-                                ? Colors.blue.withValues(alpha: 0.2)
-                                : Colors.blue[50],
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.add_business,
-                            color: widget.isDark
-                                ? Colors.blue[300]
-                                : Colors.blue,
-                          ),
+                        child: Icon(
+                          Icons.add_business,
+                          color: widget.isDark
+                              ? Colors.blue[300]
+                              : Colors.blue,
                         ),
-                        title: Text(
-                          "Crear nuevo: '$query'",
+                      ),
+                      title: Text(
+                        "Crear nuevo: '$query'",
+                        style: TextStyle(
+                          color: widget.isDark
+                              ? Colors.blue[300]
+                              : Colors.blue[800],
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      onTap: () => widget.onCreate(query),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }
+                final prov = filtered[i];
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 8,
+                  ),
+                  title: Text(
+                    prov.nombreEmpresa,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: textColor,
+                    ),
+                  ),
+                  subtitle: prov.ruc != null
+                      ? Text(
+                          "RUC: ${prov.ruc}",
                           style: TextStyle(
                             color: widget.isDark
-                                ? Colors.blue[300]
-                                : Colors.blue[800],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                                ? Colors.grey[400]
+                                : Colors.grey[700],
                           ),
-                        ),
-                        onTap: () => widget.onCreate(query),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  }
-                  final prov = filtered[i];
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 8,
-                    ),
-                    title: Text(
-                      prov.nombreEmpresa,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: textColor,
-                      ),
-                    ),
-                    subtitle: prov.ruc != null
-                        ? Text(
-                            "RUC: ${prov.ruc}",
-                            style: TextStyle(
-                              color: widget.isDark
-                                  ? Colors.grey[400]
-                                  : Colors.grey[700],
-                            ),
-                          )
-                        : null,
-                    onTap: () => widget.onSelect(prov),
-                  );
-                },
-              ),
+                        )
+                      : null,
+                  onTap: () => widget.onSelect(prov),
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

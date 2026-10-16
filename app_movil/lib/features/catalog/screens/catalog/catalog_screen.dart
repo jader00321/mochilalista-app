@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 // Providers
@@ -19,10 +20,12 @@ import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 import 'package:app_movil/core/widgets/catalog_header.dart';
 import 'package:app_movil/core/widgets/catalog_item_card.dart';
 import 'package:app_movil/core/widgets/product_detail_modal.dart';
-import 'package:app_movil/core/widgets/catalog_filter_drawer.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/catalog_cart_modal.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
+import 'package:app_movil/core/widgets/live_filter_bottom_sheet.dart';
 
 // Pantallas
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
@@ -43,6 +46,7 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
   bool _isBottomMenuExpanded = false;
   bool _showScrollToTop = false;
   bool _isOffersExpanded = false;
+  bool _isStoreMode = false;
 
   @override
   void initState() {
@@ -417,37 +421,34 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
   }
 
   void _showDetailModal(BuildContext context, InventoryWrapper item) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => ProductDetailModal(
-        item: item,
-        onAddToCart: (qty) {
-          Provider.of<CatalogProvider>(
-            context,
-            listen: false,
-          ).addToCart(item, qty);
-          CustomSnackBar.show(
-            context,
-            message: "Agregado al Carrito",
-            isError: false,
-          );
-          setState(() => _isBottomMenuExpanded = true);
-        },
-        onAddToList: (qty) {
-          Provider.of<CatalogProvider>(
-            context,
-            listen: false,
-          ).addToUtilityList(item, qty);
-          CustomSnackBar.show(
-            context,
-            message: "Agregado a tu Lista",
-            backgroundColor: Colors.orange[800]!,
-          );
-          setState(() => _isBottomMenuExpanded = true);
-        },
-      ),
+    ProductDetailModal.show(
+      context,
+      item: item,
+      isStoreMode: _isStoreMode,
+      onAddToCart: (qty) {
+        Provider.of<CatalogProvider>(
+          context,
+          listen: false,
+        ).addToCart(item, qty);
+        CustomSnackBar.show(
+          context,
+          message: "Agregado al Carrito",
+          isError: false,
+        );
+        setState(() => _isBottomMenuExpanded = true);
+      },
+      onAddToList: (qty) {
+        Provider.of<CatalogProvider>(
+          context,
+          listen: false,
+        ).addToUtilityList(item, qty);
+        CustomSnackBar.show(
+          context,
+          message: "Agregado a tu Lista",
+          backgroundColor: Colors.orange[800]!,
+        );
+        setState(() => _isBottomMenuExpanded = true);
+      },
     );
   }
 
@@ -457,10 +458,8 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
     bool isDark,
     AuthProvider auth,
   ) {
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return CatalogCartModal(
           isCart: isCart,
@@ -500,7 +499,6 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: bgColor,
-      endDrawer: const CatalogFilterDrawer(),
 
       floatingActionButton: AnimatedScale(
         scale: _showScrollToTop ? 1.0 : 0.0,
@@ -521,12 +519,14 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
         onTap: () => FocusScope.of(context).unfocus(),
         behavior: HitTestBehavior.translucent,
         child: SafeArea(
-          child: RefreshIndicator(
-            onRefresh: _onRefresh,
-            color: Colors.blue[800],
-            child: CustomScrollView(
-              controller: _scrollController,
-              slivers: [
+          child: Stack(
+            children: [
+              RefreshIndicator(
+                onRefresh: _onRefresh,
+                color: Colors.blue[800],
+                child: CustomScrollView(
+                  controller: _scrollController,
+                  slivers: [
                 SliverAppBar(
                   title: Text(
                     "Catálogo de Ventas",
@@ -570,6 +570,115 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                         ),
                       ],
                     ),
+                    Tooltip(
+                      message: _isStoreMode
+                          ? "Desactivar Modo Tienda"
+                          : "Activar Modo Tienda (Ocultar costos y datos privados)",
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.mediumImpact();
+                          setState(() => _isStoreMode = !_isStoreMode);
+                          CustomSnackBar.show(
+                            context,
+                            message: _isStoreMode
+                                ? "Modo Tienda Activado: Listo para mostrar a clientes en mostrador"
+                                : "Modo Tienda Desactivado: Vista de comerciante",
+                            isError: false,
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          margin: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _isStoreMode
+                                ? (isDark
+                                    ? Colors.amber[900]!.withValues(alpha: 0.6)
+                                    : Colors.amber[100])
+                                : (isDark ? Colors.white10 : Colors.grey[100]),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _isStoreMode
+                                  ? Colors.amber
+                                  : Colors.transparent,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _isStoreMode
+                                    ? Icons.storefront
+                                    : Icons.storefront_outlined,
+                                size: 20,
+                                color: _isStoreMode
+                                    ? (isDark
+                                        ? Colors.amber[300]
+                                        : Colors.amber[900])
+                                    : (isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[700]),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                "Tienda",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: _isStoreMode
+                                      ? (isDark
+                                          ? Colors.amber[300]
+                                          : Colors.amber[900])
+                                      : (isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[700]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Consumer<CatalogProvider>(
+                      builder: (context, catProv, _) {
+                        final bool hasActiveFilters = catProv.hasActiveFilters;
+                        return Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                Icons.tune_rounded,
+                                color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                size: 24,
+                              ),
+                              onPressed: () => LiveFilterBottomSheet.show(context),
+                              tooltip: "Filtros en Vivo",
+                            ),
+                            if (hasActiveFilters)
+                              Positioned(
+                                right: 10,
+                                top: 10,
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.tealAccent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
                     IconButton(
                       icon: Icon(
                         Icons.refresh,
@@ -581,10 +690,51 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                   ],
                 ),
 
+                if (_isStoreMode)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.amber[900]!.withValues(alpha: 0.2)
+                            : Colors.amber[50],
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.amber.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.verified_user_outlined,
+                            size: 18,
+                            color: Colors.amber,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Modo Tienda: Costos y márgenes ocultos para atención directa al cliente.",
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? Colors.amber[200]
+                                    : Colors.amber[900],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                 SliverToBoxAdapter(
                   child: CatalogHeader(
-                    onFilterTap: () =>
-                        _scaffoldKey.currentState?.openEndDrawer(),
+                    onFilterTap: () => LiveFilterBottomSheet.show(context),
                   ),
                 ),
 
@@ -944,6 +1094,7 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                           final itemWrapper = provider.displayItems[index];
                           return CatalogItemCard(
                             item: itemWrapper,
+                            isStoreMode: _isStoreMode,
                             onDetails: () =>
                                 _showDetailModal(context, itemWrapper),
                           );
@@ -957,8 +1108,11 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
               ],
             ),
           ),
-        ),
+          const DeepNavReturnPill(isBottom: true),
+        ],
       ),
+    ),
+  ),
       bottomNavigationBar: _buildDynamicBottomBar(provider, isDark, auth),
     );
   }
@@ -968,9 +1122,12 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
     bool isDark,
     AuthProvider auth,
   ) {
+    final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 8);
+
     if (!_isBottomMenuExpanded) {
       return Container(
-        height: 60,
+        height: 56 + effectiveBottom,
+        padding: EdgeInsets.only(bottom: effectiveBottom),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1A1A24) : Colors.white,
           boxShadow: [
@@ -1023,58 +1180,57 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
           top: BorderSide(color: isDark ? Colors.white10 : Colors.transparent),
         ),
       ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            InkWell(
-              onTap: () => setState(() => _isBottomMenuExpanded = false),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Icon(
-                  Icons.keyboard_arrow_down,
-                  color: isDark ? Colors.grey[400] : Colors.grey,
-                ),
+      padding: EdgeInsets.only(bottom: effectiveBottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _isBottomMenuExpanded = false),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Icon(
+                Icons.keyboard_arrow_down,
+                color: isDark ? Colors.grey[400] : Colors.grey,
               ),
             ),
-            Container(
-              height: 80,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Row(
-                children: [
+          ),
+          Container(
+            height: 76,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _BottomSummaryBtn(
+                    icon: Icons.playlist_add_check,
+                    label: auth.isCommunityClient ? "Mi Pedido" : "Mi Lista",
+                    count: prov.utilityCount,
+                    total: prov.utilityTotal,
+                    color: Colors.orange,
+                    isDark: isDark,
+                    onTap: () {
+                      _showListPreview(context, false, isDark, auth);
+                    },
+                  ),
+                ),
+                if (!auth.isCommunityClient) ...[
+                  const SizedBox(width: 12),
                   Expanded(
                     child: _BottomSummaryBtn(
-                      icon: Icons.playlist_add_check,
-                      label: auth.isCommunityClient ? "Mi Pedido" : "Mi Lista",
-                      count: prov.utilityCount,
-                      total: prov.utilityTotal,
-                      color: Colors.orange,
+                      icon: Icons.shopping_cart,
+                      label: "Caja Rápida",
+                      count: prov.cartCount,
+                      total: prov.cartTotal,
+                      color: Colors.green,
                       isDark: isDark,
-                      onTap: () {
-                        _showListPreview(context, false, isDark, auth);
-                      },
+                      onTap: () =>
+                          _showListPreview(context, true, isDark, auth),
                     ),
                   ),
-                  if (!auth.isCommunityClient) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _BottomSummaryBtn(
-                        icon: Icons.shopping_cart,
-                        label: "Caja Rápida",
-                        count: prov.cartCount,
-                        total: prov.cartTotal,
-                        color: Colors.green,
-                        isDark: isDark,
-                        onTap: () =>
-                            _showListPreview(context, true, isDark, auth),
-                      ),
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1085,32 +1241,14 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
     CatalogProvider provider,
     bool isDark,
   ) {
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E1E28) : Colors.white,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(28),
-              topRight: Radius.circular(28),
-            ),
-          ),
+      builder: (ctx) => InteractiveSheetWrapper(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.grey[300],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              const SizedBox(height: 20),
               Text(
                 "¿Dónde deseas guardar esta oferta?",
                 style: TextStyle(
@@ -1167,11 +1305,11 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                   setState(() => _isBottomMenuExpanded = true);
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

@@ -7,6 +7,8 @@ import 'package:app_movil/features/catalog/screens/product_edit_screen.dart';
 import 'package:app_movil/core/widgets/price_update_modal.dart';
 import 'package:app_movil/core/widgets/stock_update_modal.dart';
 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+
 class ProductActionSheet extends StatefulWidget {
   final Product product;
   final int? initialPresentationId;
@@ -16,6 +18,21 @@ class ProductActionSheet extends StatefulWidget {
     required this.product,
     this.initialPresentationId,
   });
+
+  /// 🏆 Despliegue seguro con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
+  static Future<void> show(
+    BuildContext context, {
+    required Product product,
+    int? initialPresentationId,
+  }) {
+    return InteractiveSheetWrapper.show(
+      context: context,
+      builder: (_) => ProductActionSheet(
+        product: product,
+        initialPresentationId: initialPresentationId,
+      ),
+    );
+  }
 
   @override
   State<ProductActionSheet> createState() => _ProductActionSheetState();
@@ -72,25 +89,15 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
         final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
         final textColor = isDark ? Colors.white : Colors.black87;
 
-        return Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).padding.bottom + 20),
-          decoration: BoxDecoration(
-            color: surfaceColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: SafeArea(
-            child: SingleChildScrollView( 
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 50, height: 5,
-                      margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
+        return InteractiveSheetWrapper(
+          maxHeightFactor: 0.88,
+          backgroundColor: surfaceColor,
+          applyEffectiveBottomPadding: true,
+          child: SingleChildScrollView( 
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
 
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -203,14 +210,11 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                           isDark: isDark,
                           onTap: () {
                             if (selectedPresentation.id == -1) return;
-                            showDialog(
+                            PriceUpdateModal.show(
                               context: context, 
-                              barrierDismissible: false, 
-                              builder: (_) => PriceUpdateModal(
-                                presentation: selectedPresentation, 
-                                provider: provider,
-                                isDark: isDark,
-                              )
+                              presentation: selectedPresentation, 
+                              provider: provider,
+                              isDark: isDark,
                             );
                           },
                         ),
@@ -223,14 +227,11 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                           isDark: isDark,
                           onTap: () {
                             if (selectedPresentation.id == -1) return;
-                            showDialog(
+                            StockUpdateModal.show(
                               context: context, 
-                              barrierDismissible: false, 
-                              builder: (_) => StockUpdateModal(
-                                presentation: selectedPresentation, 
-                                provider: provider,
-                                isDark: isDark,
-                              )
+                              presentation: selectedPresentation, 
+                              provider: provider,
+                              isDark: isDark,
                             );
                           },
                         ),
@@ -255,7 +256,11 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                           onPressed: () {
                             if (selectedPresentation.id == -1) return;
                             Navigator.pop(context);
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: freshProduct, initialPresentationId: selectedPresentation.id!)));
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(
+                              product: freshProduct, 
+                              initialPresentationId: selectedPresentation.id!,
+                              heroTag: 'inv_${freshProduct.id}_${selectedPresentation.id}',
+                            )));
                           },
                         ),
                       ),
@@ -281,9 +286,8 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                 ],
               ),
             ),
-          ),
-        );
-      }
+          );
+        }
     );
   }
 }

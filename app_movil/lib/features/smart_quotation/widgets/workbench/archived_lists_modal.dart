@@ -3,27 +3,21 @@ import 'package:app_movil/features/smart_quotation/providers/workbench_provider.
 import 'package:app_movil/features/smart_quotation/widgets/quotation_card.dart';
 import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart';
 import 'package:app_movil/features/smart_quotation/services/quotation_service.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+
 class ArchivedListsModal {
   static void show(BuildContext context, WorkbenchProvider provider, bool isDark) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      elevation: 0,
       builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.8,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (_, scrollController) {
-            return _ArchivedListsModalContent(
-              provider: provider,
-              isDark: isDark,
-              scrollController: scrollController,
-            );
-          },
+        return _ArchivedListsModalContent(
+          provider: provider,
+          isDark: isDark,
         );
-      }
+      },
     );
   }
 }
@@ -31,12 +25,10 @@ class ArchivedListsModal {
 class _ArchivedListsModalContent extends StatefulWidget {
   final WorkbenchProvider provider;
   final bool isDark;
-  final ScrollController scrollController;
 
   const _ArchivedListsModalContent({
     required this.provider,
     required this.isDark,
-    required this.scrollController,
   });
 
   @override
@@ -83,35 +75,15 @@ class _ArchivedListsModalContentState extends State<_ArchivedListsModalContent> 
     return ListenableBuilder(
       listenable: widget.provider,
       builder: (context, _) {
-        return Stack(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: widget.isDark ? const Color(0xFF23232F) : Colors.white, 
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24))
-              ),
-              child: CustomScrollView(
-                controller: widget.scrollController,
+        return InteractiveSheetWrapper(
+          title: "Listas Archivadas",
+          icon: Icons.archive,
+          iconColor: widget.isDark ? Colors.grey[400] : Colors.grey[700],
+          maxHeightFactor: 0.90,
+          child: Stack(
+            children: [
+              CustomScrollView(
                 slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 24, left: 24, right: 24, bottom: 8),
-                      child: Column(
-                        children: [
-                          Container(width: 50, height: 5, decoration: BoxDecoration(color: widget.isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                          const SizedBox(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.archive, color: widget.isDark ? Colors.grey[400] : Colors.grey, size: 28),
-                              const SizedBox(width: 10),
-                              Text("Listas Archivadas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: widget.isDark ? Colors.white : Colors.black87)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                   SliverToBoxAdapter(
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -240,7 +212,6 @@ class _ArchivedListsModalContentState extends State<_ArchivedListsModalContent> 
                     ),
                 ],
               ),
-            ),
             if (_isLoading)
               Positioned.fill(
                 child: Container(
@@ -253,9 +224,10 @@ class _ArchivedListsModalContentState extends State<_ArchivedListsModalContent> 
                   ),
                 ),
               ),
-          ],
+            ],
+          ),
         );
-      }
+      },
     );
   }
 }

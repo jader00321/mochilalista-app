@@ -9,6 +9,8 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/morphing_accordion.dart';
 import 'package:intl/intl.dart';
 
 class BundleBuilderScreen extends StatefulWidget {
@@ -365,11 +367,8 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
   }
 
   void _showAddProductModal() {
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -586,65 +585,116 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
   }
 
   Widget _buildDateLimits(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Duración de la Campaña", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            SizedBox(
-              width: MediaQuery.of(context).size.width > 500 ? (MediaQuery.of(context).size.width - 44) / 2 : double.infinity,
-              child: InkWell(
-                onTap: () async {
-                  final date = await showDatePicker(context: context, initialDate: _fechaInicio ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2030));
-                  if (date != null) setState(() => _fechaInicio = date);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.calendar_today, size: 16, color: Colors.blue),
-                      const SizedBox(width: 8),
-                      Text(_fechaInicio != null ? DateFormat('dd/MM/yyyy').format(_fechaInicio!) : 'Inicio', style: const TextStyle(fontSize: 14)),
-                    ],
-                  ),
+    final bool hasLimits = _fechaInicio != null || _fechaFin != null;
+    final String dateSummary = !hasLimits
+        ? "Permanente"
+        : "${_fechaInicio != null ? DateFormat('dd/MM').format(_fechaInicio!) : 'Hoy'} → ${_fechaFin != null ? DateFormat('dd/MM').format(_fechaFin!) : 'Sin fin'}";
+
+    return MorphingAccordion(
+      title: "Vigencia de Campaña",
+      icon: Icons.calendar_month_outlined,
+      iconColor: Colors.blue,
+      initialExpanded: hasLimits || _tipoPromocion == 'flash',
+      summaryBadge: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: (hasLimits ? Colors.blue : Colors.grey).withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          dateSummary,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: hasLimits
+                ? (isDark ? Colors.blue[300] : Colors.blue[700])
+                : Colors.grey,
+          ),
+        ),
+      ),
+      content: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          SizedBox(
+            width: MediaQuery.of(context).size.width > 500
+                ? (MediaQuery.of(context).size.width - 44) / 2
+                : double.infinity,
+            child: InkWell(
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _fechaInicio ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2030),
+                );
+                if (date != null) setState(() => _fechaInicio = date);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today, size: 16, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    Text(
+                      _fechaInicio != null
+                          ? DateFormat('dd/MM/yyyy').format(_fechaInicio!)
+                          : 'Inicio',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ],
                 ),
               ),
             ),
-            SizedBox(
-              width: MediaQuery.of(context).size.width > 500 ? (MediaQuery.of(context).size.width - 44) / 2 : double.infinity,
-              child: InkWell(
-                onTap: () async {
-                  final date = await showDatePicker(context: context, initialDate: _fechaFin ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2030));
-                  if (date != null) setState(() => _fechaFin = date);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.event_busy, size: 16, color: Colors.redAccent),
-                      const SizedBox(width: 8),
-                      Text(_fechaFin != null ? DateFormat('dd/MM/yyyy').format(_fechaFin!) : 'Fin (Opcional)', style: const TextStyle(fontSize: 14)),
-                      if (_fechaFin != null) ...[
-                        const Spacer(),
-                        InkWell(
-                          onTap: () => setState(() => _fechaFin = null),
-                          child: const Icon(Icons.close, size: 16, color: Colors.grey),
-                        )
-                      ]
-                    ],
-                  ),
+          ),
+          SizedBox(
+            width: MediaQuery.of(context).size.width > 500
+                ? (MediaQuery.of(context).size.width - 44) / 2
+                : double.infinity,
+            child: InkWell(
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _fechaFin ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2030),
+                );
+                if (date != null) setState(() => _fechaFin = date);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.event_busy, size: 16, color: Colors.redAccent),
+                    const SizedBox(width: 8),
+                    Text(
+                      _fechaFin != null
+                          ? DateFormat('dd/MM/yyyy').format(_fechaFin!)
+                          : 'Fin (Opcional)',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    if (_fechaFin != null) ...[
+                      const Spacer(),
+                      InkWell(
+                        onTap: () => setState(() => _fechaFin = null),
+                        child: const Icon(Icons.close, size: 16, color: Colors.grey),
+                      )
+                    ]
+                  ],
                 ),
               ),
             ),
-          ],
-        )
-      ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1199,13 +1249,43 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
           ],
         ),
       ),
-      floatingActionButton: _selectedItems.isNotEmpty ? FloatingActionButton.extended(
-        onPressed: _saveBundle,
-        backgroundColor: Colors.blue,
-        icon: const Icon(Icons.save, color: Colors.white),
-        label: Text(widget.bundleToEdit == null ? "Guardar Paquete" : "Actualizar Paquete", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ) : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      bottomNavigationBar: _selectedItems.isNotEmpty
+          ? Container(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                12,
+                16,
+                InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 12),
+              ),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark ? Colors.black45 : Colors.black12,
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _saveBundle,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[700],
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 3,
+                  ),
+                  icon: const Icon(Icons.save_rounded, size: 22),
+                  label: Text(
+                    widget.bundleToEdit == null ? "GUARDAR PAQUETE" : "ACTUALIZAR PAQUETE",
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.5),
+                  ),
+                ),
+              ),
+            )
+          : null,
     );
   }
 }

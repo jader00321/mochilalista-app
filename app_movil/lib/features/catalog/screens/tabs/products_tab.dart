@@ -557,6 +557,7 @@ class _ProductsTabState extends State<ProductsTab>
                   expandedHeight: provider.categories.isNotEmpty ? 135.0 : 85.0,
                   floating: true,
                   snap: true,
+                  stretch: true,
                   elevation: 0,
                   flexibleSpace: FlexibleSpaceBar(
                     background: Column(

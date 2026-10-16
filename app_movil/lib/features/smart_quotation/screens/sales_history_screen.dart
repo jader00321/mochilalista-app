@@ -13,6 +13,7 @@ import 'package:app_movil/features/smart_quotation/services/history_export_servi
 import 'package:app_movil/core/widgets/export_options_modal.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -239,8 +240,10 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
                 child: const Icon(Icons.arrow_upward),
               )
             : null,
-        body: NotificationListener<ScrollUpdateNotification>(
-          onNotification: (notification) {
+        body: Stack(
+          children: [
+            NotificationListener<ScrollUpdateNotification>(
+              onNotification: (notification) {
             if (notification.metrics.axis == Axis.vertical) {
               bool shouldShow = notification.metrics.pixels > 120;
               if (shouldShow != _showBackToTop) {
@@ -259,6 +262,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
                 foregroundColor: Colors.white,
                 elevation: 0,
                 pinned: true,
+                stretch: true,
                 actions: [
                   const InfoTooltipButton(
                     title: "Historial de Ventas",
@@ -424,6 +428,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
           ),
         ),
       ),
+      const DeepNavReturnPill(isBottom: true),
+    ],
+  ),
     ),
   );
 }

@@ -10,6 +10,10 @@ import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_price_modifier.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/stock_update_modal.dart';
+import 'package:app_movil/core/widgets/price_update_modal.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
 
 class ManualQuoteDetailModal extends StatefulWidget {
   final MatchedProduct product;
@@ -37,6 +41,37 @@ class ManualQuoteDetailModal extends StatefulWidget {
     this.onSyncBundle,
     required this.onConfirm,
   });
+
+  /// 🏆 Despliegue seguro con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
+  static Future<void> show(
+    BuildContext context, {
+    required MatchedProduct product,
+    int initialQty = 1,
+    double? initialOverridePrice,
+    String? initialCustomName,
+    String? categoryName,
+    bool isNewAddition = false,
+    bool isEditingSavedQuote = false,
+    bool isBundleOutdated = false,
+    Future<bool> Function()? onSyncBundle,
+    required Function(MatchedProduct product, int qty, double? overridePrice, String? customName) onConfirm,
+  }) {
+    return InteractiveSheetWrapper.show(
+      context: context,
+      builder: (_) => ManualQuoteDetailModal(
+        product: product,
+        initialQty: initialQty,
+        initialOverridePrice: initialOverridePrice,
+        initialCustomName: initialCustomName,
+        categoryName: categoryName,
+        isNewAddition: isNewAddition,
+        isEditingSavedQuote: isEditingSavedQuote,
+        isBundleOutdated: isBundleOutdated,
+        onSyncBundle: onSyncBundle,
+        onConfirm: onConfirm,
+      ),
+    );
+  }
 
   @override
   State<ManualQuoteDetailModal> createState() => _ManualQuoteDetailModalState();
@@ -315,16 +350,16 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                          !hasCustomName &&
                          (isVariantChanged || isInventoryChanged);
 
-    return SafeArea(
-      child: Container(
-        padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-        decoration: BoxDecoration(color: surfaceColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(child: Container(width: 50, height: 5, margin: const EdgeInsets.only(bottom: 24), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.92,
+      backgroundColor: surfaceColor,
+      applyEffectiveBottomPadding: true,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
 
               if (isNameChanged)
                 Container(
@@ -459,9 +494,127 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                         ),
                         
                         const SizedBox(height: 8),
-                        Text(
-                          isStockEmpty ? "Agotado (0)" : "Stock disponible: ${_currentSelection.stock} ${_currentSelection.unit}", 
-                          style: textTheme.bodySmall?.copyWith(color: isStockEmpty ? (isDark ? Colors.red[400] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), fontWeight: FontWeight.bold)
+                        Row(
+                          children: [
+                            Text(
+                              isStockEmpty
+                                  ? "Agotado (0)"
+                                  : "Stock disponible: ${_currentSelection.stock} ${_currentSelection.unit}",
+                              style: textTheme.bodySmall?.copyWith(
+                                color: isStockEmpty
+                                    ? (isDark ? Colors.red[400] : Colors.red)
+                                    : (isDark
+                                        ? Colors.green[400]
+                                        : Colors.green),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () async {
+                                final invProv = Provider.of<InventoryProvider>(
+                                  context,
+                                  listen: false,
+                                );
+                                ProductPresentation? targetPres;
+                                if (_fullProduct != null) {
+                                  targetPres = _fullProduct!.presentaciones
+                                      .where(
+                                        (p) =>
+                                            p.id ==
+                                            _currentSelection.presentationId,
+                                      )
+                                      .firstOrNull ??
+                                      _fullProduct!.presentaciones.firstOrNull;
+                                }
+                                if (targetPres != null) {
+                                  await StockUpdateModal.show(
+                                    context: context,
+                                    presentation: targetPres,
+                                    provider: invProv,
+                                    isDark: isDark,
+                                  );
+                                  await _loadVariants();
+                                  if (_fullProduct != null) {
+                                    final updatedPres = _fullProduct!
+                                        .presentaciones
+                                        .where(
+                                          (p) =>
+                                              p.id ==
+                                              _currentSelection.presentationId,
+                                        )
+                                        .firstOrNull ??
+                                        targetPres;
+                                    setState(() {
+                                      _currentSelection = MatchedProduct(
+                                        productId: _currentSelection.productId,
+                                        presentationId:
+                                            _currentSelection.presentationId,
+                                        fullName: _currentSelection.fullName,
+                                        productName:
+                                            _currentSelection.productName,
+                                        specificName:
+                                            _currentSelection.specificName,
+                                        brand: _currentSelection.brand,
+                                        price: updatedPres.precioVentaFinal,
+                                        offerPrice: updatedPres.precioOferta,
+                                        stock: updatedPres.stockActual,
+                                        imageUrl: _currentSelection.imageUrl,
+                                        unit: _currentSelection.unit,
+                                        conversionFactor:
+                                            _currentSelection.conversionFactor,
+                                      );
+                                    });
+                                    if (context.mounted) {
+                                      final smartProv = Provider.of<SmartQuotationProvider>(context, listen: false);
+                                      smartProv.syncItemPriceAndStock(
+                                        _currentSelection.presentationId,
+                                        newStock: updatedPres.stockActual,
+                                        newPrice: updatedPres.precioVentaFinal,
+                                      );
+                                    }
+                                  }
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(4),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: Colors.blue.withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.edit_note_rounded,
+                                      size: 14,
+                                      color: isDark
+                                          ? Colors.blue[300]
+                                          : Colors.blue[700],
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      "Ajustar",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.blue[300]
+                                            : Colors.blue[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -522,6 +675,50 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                   },
                   onDiscountChanged: _onDiscountChanged,
                   onPriceChanged: _onPriceChanged,
+                  onEditCatalogPrice: () async {
+                    final invProv = Provider.of<InventoryProvider>(
+                      context,
+                      listen: false,
+                    );
+                    ProductPresentation? targetPres;
+                    if (_fullProduct != null) {
+                      targetPres = _fullProduct!.presentaciones
+                          .where(
+                            (p) => p.id == _currentSelection.presentationId,
+                          )
+                          .firstOrNull ??
+                          _fullProduct!.presentaciones.firstOrNull;
+                    }
+                    if (targetPres != null) {
+                      await PriceUpdateModal.show(
+                        context: context,
+                        presentation: targetPres,
+                        provider: invProv,
+                        isDark: isDark,
+                      );
+                      await _loadVariants();
+                      if (_fullProduct != null) {
+                        final updatedPres = _fullProduct!.presentaciones
+                            .where(
+                              (p) => p.id == _currentSelection.presentationId,
+                            )
+                            .firstOrNull ??
+                            targetPres;
+                        setState(() {
+                          _systemPrice = updatedPres.precioVentaFinal;
+                          _priceCtrl.text = _systemPrice.toStringAsFixed(2);
+                          _discountCtrl.clear();
+                        });
+                        if (context.mounted) {
+                          final smartProv = Provider.of<SmartQuotationProvider>(context, listen: false);
+                          smartProv.syncItemPriceAndStock(
+                            _currentSelection.presentationId,
+                            newPrice: updatedPres.precioVentaFinal,
+                          );
+                        }
+                      }
+                    }
+                  },
                   isDark: isDark,
                   currency: currency,
                 ),
@@ -587,10 +784,26 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                 ],
               ),
               
-              if (isStockEmpty) 
-                Padding(padding: const EdgeInsets.only(top: 12), child: Text("⚠️ Producto agotado. Requiere revisión para venderse.", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.red[300] : Colors.red[700])))
-              else if (exceedsStock && !isClient) 
-                Padding(padding: const EdgeInsets.only(top: 12), child: Text("⚠️ Supera el stock actual de ${_currentSelection.stock}.", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.orange[400] : Colors.orange[800]))),
+              if (isStockEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    "⚠️ Producto agotado. Requiere revisión para venderse.",
+                    style: textTheme.titleMedium?.copyWith(
+                      color: isDark ? Colors.red[300] : Colors.red[700],
+                    ),
+                  ),
+                )
+              else if (exceedsStock && !isClient)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    "⚠️ Supera el stock actual de ${_currentSelection.stock}.",
+                    style: textTheme.titleMedium?.copyWith(
+                      color: isDark ? Colors.orange[400] : Colors.orange[800],
+                    ),
+                  ),
+                ),
               
               const SizedBox(height: 35),
 
@@ -609,7 +822,6 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }

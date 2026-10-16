@@ -16,6 +16,7 @@ import 'package:app_movil/features/smart_quotation/providers/smart_quotation_pro
 import 'package:app_movil/features/smart_quotation/widgets/matching/product_quote_detail_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/matching/matching_item_row.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/matching/matching_product_search_modal.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/matching/suggested_replacements_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/matching/matching_smart_bottom_bar.dart'; 
 
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_client_header.dart'; 
@@ -457,6 +458,18 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
     );
   }
 
+  void _openSuggestedReplacementsModal(BuildContext context, MatchPair pair, bool isDark) {
+    SuggestedReplacementsModal.show(
+      context: context,
+      pair: pair,
+      isDark: isDark,
+      onSelectReplacement: (product) {
+        Provider.of<MatchingProvider>(context, listen: false).updatePairProduct(pair.sourceItem.id, product);
+        CustomSnackBar.show(context, message: "Reemplazo asignado: ${product.fullName}", isError: false);
+      },
+    );
+  }
+
   void _confirmAndDeletePair(BuildContext context, MatchPair pair, bool isDark) {
     showDialog(
       context: context,
@@ -668,6 +681,7 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                                               onChangeRequest: () => _openSearchModal(context, bp, isDark),
                                               onDelete: () => _confirmAndDeletePair(context, bp, isDark),
                                               onUnlink: () => matchingProvider.unmatchItem(bp.sourceItem.id),
+                                              onSuggestedReplacements: () => _openSuggestedReplacementsModal(context, bp, isDark),
                                             ),
                                           );
                                         }),
@@ -690,6 +704,7 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                                     onChangeRequest: () => _openSearchModal(context, pair, isDark),
                                     onDelete: () => _confirmAndDeletePair(context, pair, isDark),
                                     onUnlink: () => matchingProvider.unmatchItem(pair.sourceItem.id),
+                                    onSuggestedReplacements: () => _openSuggestedReplacementsModal(context, pair, isDark),
                                   ),
                                 );
                               },

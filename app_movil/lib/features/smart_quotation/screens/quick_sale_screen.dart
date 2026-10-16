@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -19,7 +20,10 @@ import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_sale
 import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_checkout_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/quick_sale/quick_search_result_tile.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/stock_update_modal.dart';
 import 'package:app_movil/features/smart_quotation/services/sales_service.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
 class QuickSaleScreen extends StatefulWidget {
   const QuickSaleScreen({super.key});
@@ -117,6 +121,43 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     CustomSnackBar.show(context, message: "Agregado: ${item.product.nombre}", isError: false);
   }
 
+  Future<void> _adjustStockAndAddToCart(InventoryWrapper item) async {
+    final invProv = Provider.of<InventoryProvider>(context, listen: false);
+    final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
+    final searchProv = Provider.of<QuickSearchProvider>(context, listen: false);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    await StockUpdateModal.show(
+      context: context,
+      presentation: item.presentation,
+      provider: invProv,
+      isDark: isDark,
+    );
+
+    if (!mounted) return;
+    final fullProd = await invProv.getFullProductWithFallback(item.product.id);
+    if (!mounted) return;
+    final updatedPres = fullProd?.presentaciones
+            .where((p) => p.id == item.presentation.id)
+            .firstOrNull ??
+        item.presentation;
+    final updatedWrapper = InventoryWrapper(
+      product: fullProd ?? item.product,
+      presentation: updatedPres,
+    );
+    if (updatedWrapper.presentation.stockActual > 0) {
+      quickProv.addToCart(updatedWrapper);
+      _searchCtrl.clear();
+      searchProv.clearSearch();
+      FocusScope.of(context).unfocus();
+      CustomSnackBar.show(
+        context,
+        message: "Stock actualizado y producto agregado a la venta: ${updatedWrapper.displayNameDetail}",
+        isError: false,
+      );
+    }
+  }
+
   void _openDetailModal(QuickSaleProvider provider, int presentationId) async {
     FocusManager.instance.primaryFocus?.unfocus();
 
@@ -124,21 +165,17 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final qty = provider.getQuantity(presentationId);
     final effectivePrice = provider.getEffectivePrice(presentationId);
     
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => QuickSaleDetailModal(
-        product: item,
-        initialQty: qty,
-        initialOverridePrice: effectivePrice,
-        onConfirm: (oldPresentationId, product, newQty, newPrice) {
-          final error = provider.updateItemFromModal(oldPresentationId, product, newQty, newPrice);
-          if (error != null) {
-             CustomSnackBar.show(context, message: error, isError: true);
-          }
-        },
-      )
+    await QuickSaleDetailModal.show(
+      context,
+      product: item,
+      initialQty: qty,
+      initialOverridePrice: effectivePrice,
+      onConfirm: (oldPresentationId, product, newQty, newPrice) {
+        final error = provider.updateItemFromModal(oldPresentationId, product, newQty, newPrice);
+        if (error != null) {
+           CustomSnackBar.show(context, message: error, isError: true);
+        }
+      },
     );
 
     if (mounted) {
@@ -742,7 +779,12 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
               if (quickProv.cartItems.isNotEmpty && searchProv.searchResults.isEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    14,
+                    20,
+                    InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 14.0),
+                  ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).cardTheme.color,
                     boxShadow: [
@@ -776,25 +818,71 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                     letterSpacing: 0.8,
                                   ),
                                 ),
-                                if (!quickProv.hideProfits && quickProv.estimatedCartProfit > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(
-                                        color: isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300,
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 300),
+                                  transitionBuilder: (child, animation) {
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: ScaleTransition(
+                                        scale: Tween<double>(begin: 0.85, end: 1.0).animate(
+                                          CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                                        ),
+                                        child: child,
                                       ),
-                                    ),
-                                    child: Text(
-                                      "Ganancia ~${currency.format(quickProv.estimatedCartProfit)}",
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark ? Colors.green[300] : Colors.green[800],
-                                      ),
-                                    ),
-                                  ),
+                                    );
+                                  },
+                                  child: quickProv.hideProfits
+                                      ? ClipRRect(
+                                          key: const ValueKey('blurred_profit_badge'),
+                                          borderRadius: BorderRadius.circular(6),
+                                          child: BackdropFilter(
+                                            filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: (isDark ? Colors.grey[800] : Colors.grey[300])?.withValues(alpha: 0.5),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.visibility_off, size: 10, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    "Oculto",
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                      : (quickProv.estimatedCartProfit > 0
+                                          ? Container(
+                                              key: const ValueKey('visible_profit_badge'),
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                "Ganancia ~${currency.format(quickProv.estimatedCartProfit)}",
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isDark ? Colors.green[300] : Colors.green[800],
+                                                ),
+                                              ),
+                                            )
+                                          : const SizedBox.shrink(key: ValueKey('empty_profit_badge'))),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 2),
@@ -929,7 +1017,12 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               return Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]);
             }
             final index = i ~/ 2;
-            return QuickSearchResultTile(item: searchProv.searchResults[index], onTap: () => _addToCart(searchProv.searchResults[index]));
+            final item = searchProv.searchResults[index];
+            return QuickSearchResultTile(
+              item: item,
+              onTap: () => _addToCart(item),
+              onAdjustStock: () => _adjustStockAndAddToCart(item),
+            );
           },
           childCount: searchProv.searchResults.length * 2 + (searchProv.hasMoreData ? 1 : 1),
         ),

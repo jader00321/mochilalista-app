@@ -5,6 +5,7 @@ import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/features/catalog/services/product_service.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ManualProductSearch extends StatefulWidget {
   final Function(InventoryWrapper) onSelect;
@@ -116,55 +117,39 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      height: (MediaQuery.of(context).size.height * 0.8) + bottomInset,
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF14141C) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
+    return InteractiveSheetWrapper(
+      title: "Vincular con Existente",
+      icon: Icons.link,
+      iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
+      maxHeightFactor: 0.90,
       child: Column(
         children: [
-          // HEADER
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF23232F) : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              boxShadow: [if(!isDark) BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 5))]
+          TextField(
+            controller: _searchCtrl,
+            autofocus: true,
+            style: TextStyle(color: textColor, fontSize: 16),
+            decoration: InputDecoration(
+              hintText: "Buscar: nombre, marca, categoría...",
+              hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey),
+              prefixIcon: Icon(Icons.search, color: isDark ? Colors.blue[300] : Colors.blue),
+              filled: true, fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              suffixIcon: _isSearching 
+                  ? Transform.scale(scale: 0.5, child: const CircularProgressIndicator(strokeWidth: 3)) 
+                  : null
             ),
-            child: Column(
-              children: [
-                Container(width: 50, height: 5, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                Text("Vincular con Existente", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _searchCtrl,
-                  autofocus: true,
-                  style: TextStyle(color: textColor, fontSize: 16),
-                  decoration: InputDecoration(
-                    hintText: "Buscar: nombre, marca, categoría...",
-                    hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey),
-                    prefixIcon: Icon(Icons.search, color: isDark ? Colors.blue[300] : Colors.blue),
-                    filled: true, fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    suffixIcon: _isSearching 
-                        ? Transform.scale(scale: 0.5, child: const CircularProgressIndicator(strokeWidth: 3)) 
-                        : null
-                  ),
-                  onChanged: _onSearchChanged,
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 12.0),
-                  child: Text(
-                    "${_localResults.length} resultados encontrados",
-                    style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.bold),
-                  ),
-                )
-              ],
+            onChanged: _onSearchChanged,
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "${_localResults.length} resultados encontrados",
+                style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.bold),
+              ),
             ),
           ),
           
@@ -176,7 +161,7 @@ class _ManualProductSearchState extends State<ManualProductSearch> {
                   ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.search_off, size: 60, color: isDark ? Colors.white10 : Colors.grey[300]), const SizedBox(height: 16), Text("No se encontraron coincidencias", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 16, fontWeight: FontWeight.bold))]))
                   : ListView.separated(
                       controller: _scrollController,
-                      padding: EdgeInsets.fromLTRB(20, 16, 20, bottomInset + 20),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: _localResults.length + (_isLoadingMore ? 1 : 0),
                       separatorBuilder: (_, __) => const SizedBox(height: 12),
                       itemBuilder: (ctx, i) {

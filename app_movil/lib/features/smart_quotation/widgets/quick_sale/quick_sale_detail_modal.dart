@@ -7,6 +7,11 @@ import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/stock_update_modal.dart';
+import 'package:app_movil/core/widgets/price_update_modal.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
+
 class QuickSaleDetailModal extends StatefulWidget {
   final MatchedProduct product;
   final int initialQty;
@@ -20,6 +25,25 @@ class QuickSaleDetailModal extends StatefulWidget {
     this.initialOverridePrice,
     required this.onConfirm,
   });
+
+  /// 🏆 Despliegue seguro con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
+  static Future<void> show(
+    BuildContext context, {
+    required MatchedProduct product,
+    required int initialQty,
+    double? initialOverridePrice,
+    required Function(int oldPresentationId, MatchedProduct product, int qty, double? overridePrice) onConfirm,
+  }) {
+    return InteractiveSheetWrapper.show(
+      context: context,
+      builder: (_) => QuickSaleDetailModal(
+        product: product,
+        initialQty: initialQty,
+        initialOverridePrice: initialOverridePrice,
+        onConfirm: onConfirm,
+      ),
+    );
+  }
 
   @override
   State<QuickSaleDetailModal> createState() => _QuickSaleDetailModalState();
@@ -218,15 +242,29 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     
     bool showBrand = brandName.isNotEmpty && !_currentSelection.productName.toUpperCase().contains(brandName.toUpperCase());
 
-    return SafeArea(
-      child: Container(
-        padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-        decoration: BoxDecoration(color: surfaceColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.92,
+      backgroundColor: surfaceColor,
+      applyEffectiveBottomPadding: false,
+      bottomAction: SizedBox(
+        height: 54,
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: (currentQty > 0 && subtotal >= 0 && !exceedsStock) ? _confirm : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue[800], 
+            foregroundColor: Colors.white, 
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          child: const Text("GUARDAR CAMBIOS", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+        ),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
               // 1. INFO SUPERIOR
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,7 +304,104 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                           child: Text("Se vende por: ${_currentSelection.unit}  (Factor: ${_currentSelection.conversionFactor})", style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.grey[800], fontWeight: FontWeight.bold)),
                         ),
                         const SizedBox(height: 8),
-                        Text(isStockEmpty ? "Agotado" : "Stock disponible: ${_currentSelection.stock} ${_currentSelection.unit}", style: TextStyle(color: isStockEmpty ? (isDark ? Colors.red[300] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), fontWeight: FontWeight.bold, fontSize: 15)),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                isStockEmpty
+                                    ? "Agotado"
+                                    : "Stock disponible: ${_currentSelection.stock} ${_currentSelection.unit}",
+                                style: TextStyle(
+                                  color: isStockEmpty
+                                      ? (isDark ? Colors.red[300] : Colors.red)
+                                      : (isDark
+                                          ? Colors.green[400]
+                                          : Colors.green),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () async {
+                                final invProv = Provider.of<InventoryProvider>(
+                                  context,
+                                  listen: false,
+                                );
+                                final currentPres = _fullProduct?.presentaciones
+                                    .firstWhere(
+                                      (p) =>
+                                          p.id ==
+                                          _currentSelection.presentationId,
+                                      orElse: () => ProductPresentation(
+                                        id: _currentSelection.presentationId,
+                                        precioVentaFinal:
+                                            _currentSelection.price,
+                                        stockActual:
+                                            _currentSelection.stock *
+                                            _currentSelection.conversionFactor,
+                                        unidadesPorVenta:
+                                            _currentSelection.conversionFactor,
+                                        unidadVenta: _currentSelection.unit,
+                                      ),
+                                    );
+                                if (currentPres != null) {
+                                  await StockUpdateModal.show(
+                                    context: context,
+                                    presentation: currentPres,
+                                    provider: invProv,
+                                    isDark: isDark,
+                                  );
+                                  await _loadVariants();
+                                  if (context.mounted) {
+                                    final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
+                                    quickProv.syncItemPriceAndStock(
+                                      _currentSelection.presentationId,
+                                      newStock: _currentSelection.stock,
+                                    );
+                                  }
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: Colors.blue.withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.edit_note_rounded,
+                                      size: 15,
+                                      color: isDark
+                                          ? Colors.blue[300]
+                                          : Colors.blue[700],
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      "Ajustar",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark
+                                            ? Colors.blue[300]
+                                            : Colors.blue[700],
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   )
@@ -308,7 +443,74 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                   children: [
                     SwitchListTile(
                       title: Text("Aplicar Descuento", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _isManualPrice ? (isDark ? Colors.orange[300] : Colors.orange[900]) : textColor)),
-                      subtitle: Text("Precio Base: ${currency.format(_systemPrice)}", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                      subtitle: Row(
+                        children: [
+                          Text(
+                            "Precio Base: ${currency.format(_systemPrice)}",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.grey[400] : Colors.grey[700],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          InkWell(
+                            onTap: () async {
+                              final invProv = Provider.of<InventoryProvider>(context, listen: false);
+                              ProductPresentation? targetPres;
+                              if (_fullProduct != null) {
+                                targetPres = _fullProduct!.presentaciones.where(
+                                  (p) => p.id == _currentSelection.presentationId,
+                                ).firstOrNull ?? _fullProduct!.presentaciones.firstOrNull;
+                              }
+                              if (targetPres != null) {
+                                await PriceUpdateModal.show(
+                                  context: context,
+                                  presentation: targetPres,
+                                  provider: invProv,
+                                  isDark: isDark,
+                                );
+                                await _loadVariants();
+                                if (_fullProduct != null) {
+                                  final updatedPres = _fullProduct!.presentaciones.where(
+                                    (p) => p.id == _currentSelection.presentationId,
+                                  ).firstOrNull ?? targetPres;
+                                  setState(() {
+                                    _systemPrice = updatedPres.precioVentaFinal;
+                                    _priceCtrl.text = _systemPrice.toStringAsFixed(2);
+                                    _discountCtrl.clear();
+                                  });
+                                  if (context.mounted) {
+                                    final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
+                                    quickProv.syncItemPriceAndStock(
+                                      _currentSelection.presentationId,
+                                      newPrice: updatedPres.precioVentaFinal,
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(4),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.edit, size: 13, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    "Editar Catálogo",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       value: _isManualPrice,
                       activeThumbColor: Colors.orange,
                       onChanged: (v) => setState(() {
@@ -418,21 +620,9 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                 ],
               ),
               if (exceedsStock) Padding(padding: const EdgeInsets.only(top: 10), child: Text("Supera el stock actual de ${_currentSelection.stock}", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red, fontWeight: FontWeight.bold, fontSize: 14))),
-              const SizedBox(height: 30),
-
-              // 5. CONFIRMAR
-              SizedBox(
-                height: 60,
-                child: ElevatedButton(
-                  onPressed: (currentQty > 0 && subtotal >= 0 && !exceedsStock) ? _confirm : null,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                  child: const Text("GUARDAR CAMBIOS", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                ),
-              ),
             ],
           ),
         ),
-      ),
     );
   }
 }

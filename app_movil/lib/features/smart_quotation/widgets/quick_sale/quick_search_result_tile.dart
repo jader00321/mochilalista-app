@@ -7,8 +7,14 @@ import 'package:app_movil/core/widgets/universal_image.dart';
 class QuickSearchResultTile extends StatelessWidget {
   final InventoryWrapper item;
   final VoidCallback onTap;
+  final VoidCallback? onAdjustStock;
 
-  const QuickSearchResultTile({super.key, required this.item, required this.onTap});
+  const QuickSearchResultTile({
+    super.key,
+    required this.item,
+    required this.onTap,
+    this.onAdjustStock,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +31,7 @@ class QuickSearchResultTile extends StatelessWidget {
     final cardColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     
-    Color statusColor = isOut ? (isDark ? Colors.red[400]! : Colors.red) : (!isPublic ? Colors.grey : (isDark ? Colors.green[400]! : Colors.green));
+    Color statusColor = isOut ? (isDark ? Colors.amber[400]! : Colors.amber) : (!isPublic ? Colors.grey : (isDark ? Colors.green[400]! : Colors.green));
     
     final bool hasDiscount = item.hasOffer;
     final double originalPrice = item.presentation.precioVentaFinal; 
@@ -39,16 +45,20 @@ class QuickSearchResultTile extends StatelessWidget {
     bool showBrand = brandName.isNotEmpty;
 
     return Opacity(
-      opacity: isOut ? 0.5 : 1.0,
+      opacity: isOut ? 0.85 : 1.0,
       child: InkWell(
         onTap: isOut ? () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text("No puedes vender un producto sin stock", style: TextStyle(fontWeight: FontWeight.bold)), 
-              backgroundColor: Colors.red[800],
-              behavior: SnackBarBehavior.floating,
-            )
-          );
+          if (onAdjustStock != null) {
+            onAdjustStock!();
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text("No puedes vender un producto sin stock", style: TextStyle(fontWeight: FontWeight.bold)), 
+                backgroundColor: Colors.red[800],
+                behavior: SnackBarBehavior.floating,
+              )
+            );
+          }
         } : onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -102,10 +112,48 @@ class QuickSearchResultTile extends StatelessWidget {
                   
                   const SizedBox(height: 6),
                   if (isOut)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red[100], borderRadius: BorderRadius.circular(6)),
-                      child: Text("AGOTADO", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red[800], fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                    InkWell(
+                      onTap: onAdjustStock,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.amber.withValues(alpha: 0.2)
+                              : Colors.amber[100],
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Colors.amber.withValues(alpha: 0.6),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.edit_note,
+                              size: 14,
+                              color: isDark
+                                  ? Colors.amber[300]
+                                  : Colors.amber[900],
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              "Ajustar Stock",
+                              style: TextStyle(
+                                color: isDark
+                                    ? Colors.amber[300]
+                                    : Colors.amber[900],
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     )
                   else
                     FittedBox(

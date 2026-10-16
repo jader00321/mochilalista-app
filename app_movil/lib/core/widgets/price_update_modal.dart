@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class PriceUpdateModal extends StatefulWidget {
   final ProductPresentation presentation;
@@ -14,6 +15,23 @@ class PriceUpdateModal extends StatefulWidget {
     required this.isDark
   });
 
+  /// 🏆 Despliegue con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
+  static Future<void> show({
+    required BuildContext context,
+    required ProductPresentation presentation,
+    required InventoryProvider provider,
+    required bool isDark,
+  }) {
+    return InteractiveSheetWrapper.show(
+      context: context,
+      builder: (ctx) => PriceUpdateModal(
+        presentation: presentation,
+        provider: provider,
+        isDark: isDark,
+      ),
+    );
+  }
+
   @override
   State<PriceUpdateModal> createState() => _PriceUpdateModalState();
 }
@@ -24,6 +42,7 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
   late int discountType; 
   double? finalOfferPrice;
   String? errorMsg;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -101,12 +120,38 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
     double currentBase = double.tryParse(priceCtrl.text) ?? 0.0;
     final textColor = widget.isDark ? Colors.white : Colors.black87;
 
-    return Dialog(
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.90,
       backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      applyEffectiveBottomPadding: false,
+      bottomAction: SizedBox(
+        width: double.infinity,
+        height: 54,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: widget.isDark ? Colors.blue[300] : Colors.blue[800], 
+            foregroundColor: widget.isDark ? Colors.black87 : Colors.white, 
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
+          ),
+          onPressed: (errorMsg != null || _isSaving) ? null : () async { 
+            setState(() => _isSaving = true);
+            await widget.provider.updatePresentation(
+              widget.presentation.id!,
+              precioVentaFinal: double.tryParse(priceCtrl.text),
+              oferta: finalOfferPrice ?? -1, 
+              tipoDesc: discountType == 0 ? 'porcentaje' : 'monto',
+              valorDesc: double.tryParse(discountCtrl.text)
+            );
+            if (context.mounted) Navigator.pop(context);
+          },
+          child: _isSaving 
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
+            : const Text("APLICAR CAMBIOS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
+        ),
+      ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -114,7 +159,20 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Gestionar Precio", style: TextStyle(fontWeight: FontWeight.w900, color: textColor, fontSize: 20)),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: (widget.isDark ? Colors.green[300]! : Colors.green[700]!).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.attach_money, color: widget.isDark ? Colors.green[300] : Colors.green[700], size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Text("Gestionar Precio", style: TextStyle(fontWeight: FontWeight.w900, color: textColor, fontSize: 20)),
+                  ],
+                ),
                 IconButton(icon: Icon(Icons.close, color: widget.isDark ? Colors.grey[500] : Colors.grey), onPressed: () => Navigator.pop(context), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
               ],
             ),
@@ -311,28 +369,6 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
                 : const SizedBox(width: double.infinity, height: 0),
             ),
             
-            const SizedBox(height: 32),
-            
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: widget.isDark ? Colors.blue[300] : Colors.blue[800], 
-                foregroundColor: widget.isDark ? Colors.black87 : Colors.white, 
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-              onPressed: errorMsg != null ? null : () async { 
-                await widget.provider.updatePresentation(
-                  widget.presentation.id!,
-                  precioVentaFinal: double.tryParse(priceCtrl.text),
-                  oferta: finalOfferPrice ?? -1, 
-                  tipoDesc: discountType == 0 ? 'porcentaje' : 'monto',
-                  valorDesc: double.tryParse(discountCtrl.text)
-                );
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: const Text("APLICAR CAMBIOS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
-            )
           ],
         ),
       ),

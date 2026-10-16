@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ManualQuoteFooter extends StatefulWidget {
   final int itemCount;
@@ -37,17 +38,18 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final surfaceColor = widget.isDark ? Theme.of(context).colorScheme.surface : Colors.white;
     final btnColor = widget.customColor ?? (widget.isDark ? Colors.green[700] : const Color(0xFF2E7D32));
+    final bottomPadding = InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 8.0);
 
     return Container(
+      padding: EdgeInsets.only(bottom: bottomPadding),
       decoration: BoxDecoration(
         color: surfaceColor, 
         boxShadow: [if(!widget.isDark) const BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, -5))],
         border: Border(top: BorderSide(color: widget.isDark ? Colors.white10 : Colors.transparent)),
       ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
             InkWell(
               onTap: () => setState(() => _isExpanded = !_isExpanded),
               child: Container(
@@ -118,10 +120,9 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
                     ),
                   ],
                 ),
-              )
+              ),
           ],
         ),
-      ),
-    );
+      );
   }
 }

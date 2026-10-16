@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class StockUpdateModal extends StatefulWidget {
   final ProductPresentation presentation;
@@ -14,6 +16,23 @@ class StockUpdateModal extends StatefulWidget {
     required this.isDark
   });
 
+  /// 🏆 Despliegue con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
+  static Future<void> show({
+    required BuildContext context,
+    required ProductPresentation presentation,
+    required InventoryProvider provider,
+    required bool isDark,
+  }) {
+    return InteractiveSheetWrapper.show(
+      context: context,
+      builder: (ctx) => StockUpdateModal(
+        presentation: presentation,
+        provider: provider,
+        isDark: isDark,
+      ),
+    );
+  }
+
   @override
   State<StockUpdateModal> createState() => _StockUpdateModalState();
 }
@@ -21,6 +40,7 @@ class StockUpdateModal extends StatefulWidget {
 class _StockUpdateModalState extends State<StockUpdateModal> {
   late int currentStock;
   late TextEditingController ctrl;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -38,6 +58,7 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
   }
 
   void _update(int val) {
+    HapticFeedback.lightImpact();
     setState(() {
       currentStock = val < 0 ? 0 : val;
       ctrl.text = currentStock.toString();
@@ -46,12 +67,37 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
+    final textColor = widget.isDark ? Colors.white : Colors.black87;
+
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.85,
       backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+      applyEffectiveBottomPadding: false,
+      bottomAction: SizedBox(
+        width: double.infinity,
+        height: 54,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: widget.isDark ? Colors.blue[300] : Colors.blue[800], 
+            foregroundColor: widget.isDark ? Colors.black87 : Colors.white, 
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
+          ),
+          onPressed: _isSaving ? null : () async {
+            setState(() => _isSaving = true);
+            int factor = widget.presentation.unidadesPorVenta;
+            if (factor <= 0) factor = 1;
+            int stockBase = currentStock * factor;
+            await widget.provider.updatePresentation(widget.presentation.id!, stock: stockBase);
+            if (context.mounted) Navigator.pop(context);
+          },
+          child: _isSaving 
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
+            : const Text("APLICAR CAMBIOS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
+        ),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -59,25 +105,57 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Ajustar Stock", style: TextStyle(fontWeight: FontWeight.w900, color: widget.isDark ? Colors.white : Colors.black87, fontSize: 20)),
-                IconButton(icon: Icon(Icons.close, color: widget.isDark ? Colors.grey[500] : Colors.grey), onPressed: () => Navigator.pop(context), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: (widget.isDark ? Colors.blue[300]! : Colors.blue[800]!).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.inventory_2_outlined, color: widget.isDark ? Colors.blue[300] : Colors.blue[800], size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      "Ajustar Stock", 
+                      style: TextStyle(fontWeight: FontWeight.w900, color: textColor, fontSize: 20),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: Icon(Icons.close, color: widget.isDark ? Colors.grey[500] : Colors.grey), 
+                  onPressed: () => Navigator.pop(context), 
+                  padding: EdgeInsets.zero, 
+                  constraints: const BoxConstraints(),
+                ),
               ],
             ),
-            const SizedBox(height: 6),
-            Text("Controla las unidades disponibles en tu inventario.\nUnidad de venta: ${widget.presentation.unidadVenta ?? 'Unidad'} (x${widget.presentation.unidadesPorVenta > 0 ? widget.presentation.unidadesPorVenta : 1})", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
-            const SizedBox(height: 32),
+            const SizedBox(height: 10),
+            Text(
+              "Controla las unidades disponibles en tu inventario.\nUnidad de venta: ${widget.presentation.unidadVenta ?? 'Unidad'} (x${widget.presentation.unidadesPorVenta > 0 ? widget.presentation.unidadesPorVenta : 1})", 
+              style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 28),
             
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
                   decoration: BoxDecoration(color: widget.isDark ? Colors.white10 : Colors.grey[200], shape: BoxShape.circle),
-                  child: IconButton(onPressed: () => _update(currentStock - 1), icon: const Icon(Icons.remove), color: widget.isDark ? Colors.white : Colors.black87),
+                  child: IconButton(
+                    onPressed: () => _update(currentStock - 1), 
+                    icon: const Icon(Icons.remove), 
+                    color: widget.isDark ? Colors.white : Colors.black87,
+                  ),
                 ),
                 Container(
                   width: 120,
                   margin: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF14141C) : Colors.grey[100], borderRadius: BorderRadius.circular(16), border: Border.all(color: widget.isDark ? Colors.white24 : Colors.grey.shade300)),
+                  decoration: BoxDecoration(
+                    color: widget.isDark ? const Color(0xFF14141C) : Colors.grey[100], 
+                    borderRadius: BorderRadius.circular(16), 
+                    border: Border.all(color: widget.isDark ? Colors.white24 : Colors.grey.shade300),
+                  ),
                   child: TextField(
                     controller: ctrl,
                     textAlign: TextAlign.center,
@@ -93,7 +171,11 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                 ),
                 Container(
                   decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[100], shape: BoxShape.circle),
-                  child: IconButton(onPressed: () => _update(currentStock + 1), icon: const Icon(Icons.add), color: widget.isDark ? Colors.blue[300] : Colors.blue[800]),
+                  child: IconButton(
+                    onPressed: () => _update(currentStock + 1), 
+                    icon: const Icon(Icons.add), 
+                    color: widget.isDark ? Colors.blue[300] : Colors.blue[800],
+                  ),
                 ),
               ],
             ),
@@ -114,6 +196,7 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
                       currentStock == 0 ? Icons.error_outline : (currentStock <= 5 ? Icons.warning_amber_rounded : Icons.check_circle_outline),
@@ -133,26 +216,6 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                 ),
               ),
             ),
-            
-            const SizedBox(height: 32),
-            
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: widget.isDark ? Colors.blue[300] : Colors.blue[800], 
-                foregroundColor: widget.isDark ? Colors.black87 : Colors.white, 
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
-              ),
-              onPressed: () async {
-                int factor = widget.presentation.unidadesPorVenta;
-                if (factor <= 0) factor = 1;
-                int stockBase = currentStock * factor;
-                await widget.provider.updatePresentation(widget.presentation.id!, stock: stockBase);
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: const Text("APLICAR CAMBIOS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
-            )
           ],
         ),
       ),

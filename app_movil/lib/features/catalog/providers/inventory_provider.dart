@@ -64,6 +64,18 @@ class InventoryProvider with ChangeNotifier {
   bool get activeHasOffer => _lastHasOffer;
   bool get activeOnlyDefaults => _lastOnlyDefaults;
 
+  bool get hasActiveFilters =>
+      activeCategoryIds.isNotEmpty ||
+      activeBrandIds.isNotEmpty ||
+      activeProviderIds.isNotEmpty ||
+      activeState != null ||
+      activeMinPrice != null ||
+      activeMaxPrice != null ||
+      activeMinStock != null ||
+      activeMaxStock != null ||
+      activeHasOffer ||
+      activeOnlyDefaults;
+
   int _realTotalProductsCount = 0;
   int _realTotalPresentationsCount = 0;
 

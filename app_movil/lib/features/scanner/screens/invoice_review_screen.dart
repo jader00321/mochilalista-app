@@ -11,6 +11,7 @@ import 'package:app_movil/features/scanner/screens/invoice_staging_screen.dart';
 import 'package:app_movil/features/scanner/widgets/review/review_item_card.dart';
 import 'package:app_movil/features/scanner/widgets/review/raw_data_audit_modal.dart';
 import 'package:app_movil/features/scanner/widgets/review/invoice_metadata_modal.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class InvoiceReviewScreen extends StatefulWidget {
   const InvoiceReviewScreen({super.key});
@@ -381,7 +382,12 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
       ),
 
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          12,
+          16,
+          InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 12),
+        ),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1A1A24) : Colors.white,
           boxShadow: [
@@ -393,36 +399,34 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
               ),
           ],
         ),
-        child: SafeArea(
-          child: SizedBox(
-            height: 50,
-            child: FilledButton.icon(
-              onPressed: provider.isLoading ? null : _analyzeAndContinue,
-              icon: provider.isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.check_circle_outline, size: 20),
-              label: Text(
-                provider.isLoading
-                    ? "PROCESANDO..."
-                    : "CONFIRMAR E IR A INVENTARIO",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
+        child: SizedBox(
+          height: 50,
+          child: FilledButton.icon(
+            onPressed: provider.isLoading ? null : _analyzeAndContinue,
+            icon: provider.isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.check_circle_outline, size: 20),
+            label: Text(
+              provider.isLoading
+                  ? "PROCESANDO..."
+                  : "CONFIRMAR E IR A INVENTARIO",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
               ),
-              style: FilledButton.styleFrom(
-                backgroundColor: isDark ? Colors.green[600] : Colors.green[800],
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: isDark ? Colors.green[600] : Colors.green[800],
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
           ),

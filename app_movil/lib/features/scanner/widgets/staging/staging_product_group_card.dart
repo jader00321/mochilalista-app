@@ -7,6 +7,7 @@ import 'package:app_movil/core/widgets/smart_dropdown_search.dart';
 import 'package:app_movil/core/widgets/manual_product_search.dart';
 import 'package:app_movil/features/scanner/widgets/staging/variant_editor_row.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class StagingProductGroupCard extends StatefulWidget {
   final int groupIndex;
@@ -28,10 +29,8 @@ class StagingProductGroupCard extends StatefulWidget {
 class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
   void _showProductSearchModal(BuildContext context, String groupUuid) {
     FocusScope.of(context).unfocus(); // Limpiar foco antes de abrir
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => ManualProductSearch(
         onSelect: (wrapper) async {
           final invProv = Provider.of<InventoryProvider>(

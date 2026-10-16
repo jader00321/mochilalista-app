@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:app_movil/core/widgets/barcode_input_field.dart';
 import 'package:app_movil/core/widgets/image_picker_field.dart';
 import 'package:app_movil/core/widgets/custom_text_field.dart';
@@ -78,10 +79,12 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
   int _trueOriginalBaseStock = 0;
   double _originalBaseCost = 0.0;
   int _originalFactor = 1;
+  bool _isCardExpanded = true;
 
   @override
   void initState() {
     super.initState();
+    _isCardExpanded = widget.controllerMap['isDefault'] == true;
     _specificCtrl = widget.controllerMap['specific'];
     _unidadVentaCtrl = widget.controllerMap['unidadVenta'];
     _unidadesVentaCtrl = widget.controllerMap['unidadesVenta'];
@@ -554,14 +557,126 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
                     ),
                     onPressed: widget.onDelete,
                   ),
+                IconButton(
+                  icon: Icon(
+                    _isCardExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                  tooltip: _isCardExpanded
+                      ? "Colapsar tarjeta"
+                      : "Expandir detalles",
+                  onPressed: () {
+                    setState(() {
+                      _isCardExpanded = !_isCardExpanded;
+                    });
+                  },
+                ),
               ],
             ),
           ),
 
-          // CUERPO MODULAR
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+          // RESUMEN COMPACTO (CUANDO ESTÁ COLAPSADA - 60% MENOS ESPACIO)
+          if (!_isCardExpanded)
+            InkWell(
+              onTap: () {
+                setState(() {
+                  _isCardExpanded = true;
+                });
+              },
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(14),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: (isDark
+                                ? Colors.purple[900]
+                                : Colors.purple[50])
+                            ?.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: (isDark
+                                  ? Colors.purple[400]
+                                  : Colors.purple[300])!
+                              .withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Text(
+                        "${_unidadVentaCtrl.text.isEmpty ? 'Unidad' : _unidadVentaCtrl.text} (x${_unidadesVentaCtrl.text.isEmpty ? '1' : _unidadesVentaCtrl.text})",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? Colors.purple[200]
+                              : Colors.purple[800],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _specificCtrl.text.isNotEmpty
+                                ? _specificCtrl.text
+                                : "Presentación",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            "Stock: ${_stockFinalCtrl.text.isEmpty ? '0' : _stockFinalCtrl.text} | Costo: S/ ${_costoPresCtrl.text.isEmpty ? '0.00' : _costoPresCtrl.text}",
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      "S/ ${_ventaCtrl.text.isEmpty ? '0.00' : _ventaCtrl.text}",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.teal[300] : Colors.teal[800],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.edit_note,
+                      size: 20,
+                      color: isDark ? Colors.teal[300] : Colors.teal,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // CUERPO MODULAR EXPANDIDO
+          if (_isCardExpanded)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 1. Nombre
@@ -592,6 +707,17 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
                   factorCtrl: _unidadesVentaCtrl,
                   isDark: isDark,
                   onChanged: _onUnidadVentaChanged,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _buildFactorChip("x12 (Docena)", 12, isDark),
+                    _buildFactorChip("x24 (2 Docenas)", 24, isDark),
+                    _buildFactorChip("x50 (50 Uds)", 50, isDark),
+                    _buildFactorChip("x100 (Ciento)", 100, isDark),
+                  ],
                 ),
                 Divider(
                   height: 16,
@@ -687,6 +813,7 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
                     ),
                   ],
                 ),
+                _buildMarginTrafficLight(isDark),
 
                 if (widget.controllerMap['descuentoActivo'] == true &&
                     _precioOferta != null) ...[
@@ -1511,6 +1638,105 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFactorChip(String label, int factorVal, bool isDark) {
+    final currentFactor = int.tryParse(_unidadesVentaCtrl.text) ?? 1;
+    final isSelected = currentFactor == factorVal;
+    return InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        _unidadesVentaCtrl.text = "$factorVal";
+        _onUnidadVentaChanged(label, factorVal, false);
+        setState(() {});
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? Colors.purple[800] : Colors.purple[100])
+              : (isDark ? Colors.white10 : Colors.grey[200]),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? Colors.purple : Colors.transparent,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected
+                ? (isDark ? Colors.white : Colors.purple[900])
+                : (isDark ? Colors.grey[400] : Colors.grey[700]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMarginTrafficLight(bool isDark) {
+    final double cPres = double.tryParse(_costoPresCtrl.text) ?? 0.0;
+    final double pVenta = double.tryParse(_ventaCtrl.text) ?? 0.0;
+
+    double margenPct = 0.0;
+    if (cPres > 0 && pVenta > 0) {
+      margenPct = ((pVenta - cPres) / cPres) * 100;
+    }
+
+    Color semaforoColor;
+    String semaforoTexto;
+    IconData semaforoIcon;
+
+    if (pVenta <= 0 || cPres <= 0) {
+      semaforoColor = Colors.grey;
+      semaforoTexto = "Define costo y precio de venta";
+      semaforoIcon = Icons.info_outline;
+    } else if (margenPct < 0) {
+      semaforoColor = Colors.red;
+      semaforoTexto = "🔴 ¡Pérdida! (${margenPct.toStringAsFixed(1)}%) - Bajo el costo";
+      semaforoIcon = Icons.error_outline;
+    } else if (margenPct < 15) {
+      semaforoColor = Colors.red;
+      semaforoTexto = "🔴 Margen Crítico (${margenPct.toStringAsFixed(1)}%) - Rentabilidad baja";
+      semaforoIcon = Icons.warning_amber_rounded;
+    } else if (margenPct <= 30) {
+      semaforoColor = Colors.orange;
+      semaforoTexto = "🟡 Margen Medio (${margenPct.toStringAsFixed(1)}%) - Ganancia moderada";
+      semaforoIcon = Icons.trending_up;
+    } else {
+      semaforoColor = Colors.green;
+      semaforoTexto = "🟢 Margen Óptimo (${margenPct.toStringAsFixed(1)}%) - Excelente margen";
+      semaforoIcon = Icons.check_circle_outline;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: semaforoColor.withValues(alpha: isDark ? 0.15 : 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: semaforoColor.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(semaforoIcon, size: 16, color: semaforoColor),
+            const SizedBox(width: 8),
+            Text(
+              semaforoTexto,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: semaforoColor,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

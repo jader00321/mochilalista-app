@@ -276,24 +276,17 @@ class VariantEditorRowState extends State<VariantEditorRow> {
   }
 
   void _openComparativeModal(Map<String, dynamic> dbData) {
-    widget.variant.takeSnapshot(); // TOMAR SNAPSHOT AQUI ANTES DE ABRIR EL MODAL
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return ComparativeUpdateModal(
-          variant: widget.variant,
-          group: widget.group,
-          dbData: dbData,
-          isDark: widget.isDark,
-          provider: widget.provider,
-          onConfirm: () {
-            widget.provider.notifyUIUpdate(); 
-            Navigator.pop(ctx);
-          },
-        );
-      }
+    ComparativeUpdateModal.show(
+      context,
+      variant: widget.variant,
+      group: widget.group,
+      dbData: dbData,
+      isDark: widget.isDark,
+      provider: widget.provider,
+      onConfirm: () {
+        widget.provider.notifyUIUpdate();
+        Navigator.pop(context);
+      },
     );
   }
 

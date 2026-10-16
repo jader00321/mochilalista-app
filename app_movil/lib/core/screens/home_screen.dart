@@ -25,6 +25,8 @@ import 'package:app_movil/features/analytics/widgets/restock_smart_banner.dart';
 import 'package:app_movil/core/widgets/home/weekly_sales_chart.dart';
 import 'package:app_movil/core/widgets/home/recent_activity_list.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/persistent_work_dock.dart';
+import 'package:app_movil/core/widgets/omni_search_bar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -240,6 +242,17 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    OmniSearchBar(
+                      onBarcodeTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ScanScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
                     if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                       const RestockSmartBanner(),
                       const SizedBox(height: 16),
@@ -281,7 +294,7 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                       const SizedBox(height: 32),
                       const RecentActivityList(),
                     ],
-                    const SizedBox(height: 40), 
+                    const SizedBox(height: 100), 
                   ],
                 ),
               ),
@@ -334,7 +347,12 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
           ),
         ),
         mainContent,
-
+        const Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: PersistentWorkDock(isFloating: true),
+        ),
       ],
     );
   }

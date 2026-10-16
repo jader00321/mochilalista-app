@@ -10,6 +10,7 @@ import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/promotions/models/bundle_model.dart';
 import 'package:app_movil/features/promotions/models/bundle_item_model.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 enum _PricingMode { normal, catalogOffer, manualDiscount }
 
@@ -36,6 +37,37 @@ class ProductQuoteDetailModal extends StatefulWidget {
     this.availableBundles,
     this.bundleItemsCache,
   });
+
+  static Future<void> show(
+    BuildContext context, {
+    required InventoryWrapper wrapper,
+    String? brandName,
+    required int currentQuantity,
+    double? currentOverridePrice,
+    required Function(ProductPresentation newPresentation, int newQty, double? newPrice, String? newName) onSave,
+    String? currentSnapshotName,
+    String? categoryName,
+    List<BundleModel>? availableBundles,
+    Map<int, List<BundleItemModel>>? bundleItemsCache,
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      builder: (_) => ProductQuoteDetailModal(
+        wrapper: wrapper,
+        brandName: brandName,
+        currentQuantity: currentQuantity,
+        currentOverridePrice: currentOverridePrice,
+        onSave: onSave,
+        currentSnapshotName: currentSnapshotName,
+        categoryName: categoryName,
+        availableBundles: availableBundles,
+        bundleItemsCache: bundleItemsCache,
+      ),
+    );
+  }
 
   @override
   State<ProductQuoteDetailModal> createState() => _ProductQuoteDetailModalState();
@@ -520,7 +552,6 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
     final textTheme = Theme.of(context).textTheme;
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final productDisplay = _fullProduct ?? widget.wrapper.product;
-    final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     
     final basePrice = _selectedPresentation.precioVentaFinal;
@@ -542,268 +573,255 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                          currentBuiltName.toLowerCase() != snapshot.toLowerCase() &&
                          !snapshot.toLowerCase().contains("nuevo ítem");
 
-    // Increased height to accommodate offers section
-    final double initialSize = isClient ? 0.65 : 0.70;
-    final double maxSize = isClient ? 0.80 : 0.85;
+    final double maxSheetHeight = isClient ? 0.82 : 0.90;
 
-    return DraggableScrollableSheet(
-      initialChildSize: initialSize, 
-      minChildSize: 0.4,
-      maxChildSize: maxSize, 
-      builder: (_, controller) {
-        return Container(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-          decoration: BoxDecoration(color: surfaceColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
-          child: SingleChildScrollView(
-            controller: controller,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
-                const SizedBox(height: 24),
-                
-                if (isNameChanged)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2.0),
-                          child: Icon(Icons.history, size: 18, color: isDark ? Colors.orange[300] : Colors.orange[800]),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text("Extraído originalmente como:\n$snapshot", style: TextStyle(fontSize: 14, color: isDark ? Colors.orange[300] : Colors.orange[800], fontStyle: FontStyle.italic), maxLines: 4, overflow: TextOverflow.ellipsis),
-                        ),
-                      ],
-                    ),
+    return InteractiveSheetWrapper(
+      maxHeightFactor: maxSheetHeight,
+      applyEffectiveBottomPadding: false,
+      bottomAction: SizedBox(
+        width: double.infinity,
+        height: 54,
+        child: ElevatedButton(
+          onPressed: (_quantity > 0 && subtotal >= 0 && (!isClient || !exceedsStock)) ? _handleSave : null, 
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue[800], 
+            foregroundColor: Colors.white, 
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          child: const Text("CONFIRMAR PRODUCTO", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (isNameChanged)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2.0),
+                    child: Icon(Icons.history, size: 18, color: isDark ? Colors.orange[300] : Colors.orange[800]),
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text("Extraído originalmente como:\n$snapshot", style: TextStyle(fontSize: 14, color: isDark ? Colors.orange[300] : Colors.orange[800], fontStyle: FontStyle.italic), maxLines: 4, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+            ),
 
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  final img = _selectedPresentation.imagenUrl ?? productDisplay.imagenUrl;
+                  if (img != null && img.isNotEmpty) {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageUrl: img, tag: "matching_${_selectedPresentation.id}")));
+                  }
+                },
+                child: Hero(
+                  tag: "matching_${_selectedPresentation.id}",
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(width: 90, height: 90, decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade300), borderRadius: BorderRadius.circular(16)), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: UniversalImage(path: _selectedPresentation.imagenUrl ?? productDisplay.imagenUrl, fit: BoxFit.cover))),
+                      Container(width: 90, height: 90, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.black.withValues(alpha: 0.2))),
+                      const Icon(Icons.zoom_in, color: Colors.white, size: 36)
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    GestureDetector(
-                      onTap: () {
-                        final img = _selectedPresentation.imagenUrl ?? productDisplay.imagenUrl;
-                        if (img != null && img.isNotEmpty) {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageUrl: img, tag: "matching_${_selectedPresentation.id}")));
-                        }
-                      },
-                      child: Hero(
-                        tag: "matching_${_selectedPresentation.id}",
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Container(width: 90, height: 90, decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade300), borderRadius: BorderRadius.circular(16)), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: UniversalImage(path: _selectedPresentation.imagenUrl ?? productDisplay.imagenUrl, fit: BoxFit.cover))),
-                            Container(width: 90, height: 90, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.black.withValues(alpha: 0.2))),
-                            const Icon(Icons.zoom_in, color: Colors.white, size: 36)
-                          ],
+                    if (widget.brandName != null && widget.brandName!.isNotEmpty) 
+                      Text(widget.brandName!.toUpperCase(), style: TextStyle(fontSize: 12, color: isDark ? Colors.indigo[300] : Colors.indigo[800], fontWeight: FontWeight.w800, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    
+                    const SizedBox(height: 2),
+                    
+                    RichText(
+                       maxLines: 4,
+                       overflow: TextOverflow.ellipsis,
+                       text: TextSpan(
+                         children: [
+                           TextSpan(text: "${productDisplay.nombre} ", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor, height: 1.2)),
+                           if (_selectedPresentation.nombreEspecifico != null && _selectedPresentation.nombreEspecifico!.isNotEmpty)
+                             TextSpan(text: _selectedPresentation.nombreEspecifico!, style: TextStyle(fontSize: 18, color: isDark ? Colors.teal[300] : Colors.teal[700], height: 1.2)),
+                         ],
+                       ),
+                     ),
+                    
+                    const SizedBox(height: 10),
+                    
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                          child: Text("${_selectedPresentation.unidadVenta ?? 'Unidad'} (x${_selectedPresentation.unidadesPorVenta})", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[700])),
                         ),
-                      ),
+                        if (_currentCategoryName.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: isDark ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
+                            child: Text(_currentCategoryName, style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[700])),
+                          ),
+                      ],
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (widget.brandName != null && widget.brandName!.isNotEmpty) 
-                            Text(widget.brandName!.toUpperCase(), style: TextStyle(fontSize: 12, color: isDark ? Colors.indigo[300] : Colors.indigo[800], fontWeight: FontWeight.w800, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          
-                          const SizedBox(height: 2),
-                          
-                          RichText(
-                             maxLines: 4,
-                             overflow: TextOverflow.ellipsis,
-                             text: TextSpan(
-                               children: [
-                                 TextSpan(text: "${productDisplay.nombre} ", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor, height: 1.2)),
-                                 if (_selectedPresentation.nombreEspecifico != null && _selectedPresentation.nombreEspecifico!.isNotEmpty)
-                                   TextSpan(text: _selectedPresentation.nombreEspecifico!, style: TextStyle(fontSize: 18, color: isDark ? Colors.teal[300] : Colors.teal[700], height: 1.2)),
-                               ],
-                             ),
-                           ),
-                          
-                          const SizedBox(height: 10),
-                          
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
-                                child: Text("${_selectedPresentation.unidadVenta ?? 'Unidad'} (x${_selectedPresentation.unidadesPorVenta})", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue[700])),
-                              ),
-                              if (_currentCategoryName.isNotEmpty)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(color: isDark ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
-                                  child: Text(_currentCategoryName, style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[700])),
-                                ),
-                            ],
-                          ),
 
-                          const SizedBox(height: 8),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerRight,
-                            child: Text(isStockEmpty ? "Agotado (0)" : "Stock disponible: $realStock ${_selectedPresentation.unidadVenta ?? 'Unidad'}", style: textTheme.bodySmall?.copyWith(color: isStockEmpty ? (isDark ? Colors.red[400] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    )
+                    const SizedBox(height: 8),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(isStockEmpty ? "Agotado (0)" : "Stock disponible: $realStock ${_selectedPresentation.unidadVenta ?? 'Unidad'}", style: textTheme.bodySmall?.copyWith(color: isStockEmpty ? (isDark ? Colors.red[400] : Colors.red) : (isDark ? Colors.green[400] : Colors.green), fontWeight: FontWeight.bold)),
+                    ),
                   ],
                 ),
-                
-                const SizedBox(height: 24),
+              )
+            ],
+          ),
+          
+          const SizedBox(height: 24),
 
-                if (_isLoading) const Center(child: CircularProgressIndicator())
-                else if (_fullProduct != null && _fullProduct!.presentaciones.length > 1) ...[
-                  Text("Seleccionar Variante:", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[800])),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _fullProduct!.presentaciones.map((p) {
-                        final isSelected = p.id == _selectedPresentation.id;
-                        final realVariantStock = _getRealStock(p);
-                        final isOutOfStockVariant = realVariantStock <= 0;
-                        final isDisabled = isClient && isOutOfStockVariant;
+          if (_isLoading) const Center(child: CircularProgressIndicator())
+          else if (_fullProduct != null && _fullProduct!.presentaciones.length > 1) ...[
+            Text("Seleccionar Variante:", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[800])),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _fullProduct!.presentaciones.map((p) {
+                  final isSelected = p.id == _selectedPresentation.id;
+                  final realVariantStock = _getRealStock(p);
+                  final isOutOfStockVariant = realVariantStock <= 0;
+                  final isDisabled = isClient && isOutOfStockVariant;
 
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: ChoiceChip(
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text("${p.unidadVenta ?? 'Unidad'} - ${currency.format(p.precioVentaFinal)}", style: textTheme.bodyMedium?.copyWith(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-                                const SizedBox(width: 6),
-                                Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: isOutOfStockVariant ? Colors.red : (realVariantStock < 10 ? Colors.orange : Colors.green)))
-                              ],
-                            ), 
-                            selected: isSelected, 
-                            onSelected: isDisabled ? null : (v) {
-                              if (v) {
-                                setState(() {
-                                  _selectedPresentation = p;
-                                  _initializePricing();
-                                  
-                                  if (isClient && _quantity > realVariantStock) {
-                                     _quantity = realVariantStock > 0 ? realVariantStock : 1;
-                                     _qtyCtrl.text = _quantity.toString();
-                                  }
-                                });
-                              }
-                            }, 
-                            selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100],
-                            backgroundColor: isDark ? Colors.white10 : Colors.grey[100],
-                            labelStyle: TextStyle(
-                               color: isDisabled 
-                                   ? (isDark ? Colors.grey[600] : Colors.grey[400]) 
-                                   : (isSelected ? (isDark ? Colors.blue[300] : Colors.blue[900]) : textColor)
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          ),
-                        );
-                      }).toList(),
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: ChoiceChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text("${p.unidadVenta ?? 'Unidad'} - ${currency.format(p.precioVentaFinal)}", style: textTheme.bodyMedium?.copyWith(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                          const SizedBox(width: 6),
+                          Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: isOutOfStockVariant ? Colors.red : (realVariantStock < 10 ? Colors.orange : Colors.green)))
+                        ],
+                      ), 
+                      selected: isSelected, 
+                      onSelected: isDisabled ? null : (v) {
+                        if (v) {
+                          setState(() {
+                            _selectedPresentation = p;
+                            _initializePricing();
+                            
+                            if (isClient && _quantity > realVariantStock) {
+                               _quantity = realVariantStock > 0 ? realVariantStock : 1;
+                               _qtyCtrl.text = _quantity.toString();
+                            }
+                          });
+                        }
+                      }, 
+                      selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100],
+                      backgroundColor: isDark ? Colors.white10 : Colors.grey[100],
+                      labelStyle: TextStyle(
+                         color: isDisabled 
+                             ? (isDark ? Colors.grey[600] : Colors.grey[400]) 
+                             : (isSelected ? (isDark ? Colors.blue[300] : Colors.blue[900]) : textColor)
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
 
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  child: (!_isLoading && !isClient) ? _buildPricingSection(isDark, textTheme, currency) : const SizedBox.shrink(),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: (!_isLoading && !isClient) ? _buildPricingSection(isDark, textTheme, currency) : const SizedBox.shrink(),
+          ),
+
+          if (!isClient) const SizedBox(height: 24),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Cantidad", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey)),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 56, 
+                      decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.white, border: Border.all(color: (exceedsStock || isStockEmpty) ? (isDark ? Colors.orange[400]! : Colors.orange) : (isDark ? Colors.white24 : Colors.grey.shade300), width: 1.5), borderRadius: BorderRadius.circular(16)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(icon: Icon(Icons.remove, color: isDark ? Colors.red[400] : Colors.red, size: 24), onPressed: () => _qtyAction(-1, isClient)),
+                          Expanded(
+                            child: TextField(
+                              controller: _qtyCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center,
+                              style: textTheme.displayMedium?.copyWith(color: textColor),
+                              decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                              onChanged: (v) {
+                                if (isClient) {
+                                   int parsed = int.tryParse(v) ?? 1;
+                                   final realStock = _getRealStock(_selectedPresentation);
+                                   if (parsed > realStock) {
+                                      _qtyCtrl.text = realStock.toString();
+                                      CustomSnackBar.show(context, message: "Límite de stock alcanzado", isError: true);
+                                   }
+                                }
+                                setState(() => _quantity = int.tryParse(_qtyCtrl.text) ?? _quantity);
+                              },
+                            ),
+                          ),
+                          IconButton(icon: Icon(Icons.add, color: isDark ? Colors.green[400] : Colors.green, size: 24), onPressed: () => _qtyAction(1, isClient)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-
-                if (!isClient) const SizedBox(height: 30),
-
-                Row(
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                flex: 4,
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Expanded(
-                      flex: 3,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("Cantidad", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey)),
-                          const SizedBox(height: 8),
-                          Container(
-                            height: 60, 
-                            decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.white, border: Border.all(color: (exceedsStock || isStockEmpty) ? (isDark ? Colors.orange[400]! : Colors.orange) : (isDark ? Colors.white24 : Colors.grey.shade300), width: 1.5), borderRadius: BorderRadius.circular(16)),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(icon: Icon(Icons.remove, color: isDark ? Colors.red[400] : Colors.red, size: 28), onPressed: () => _qtyAction(-1, isClient)),
-                                Expanded(
-                                  child: TextField(
-                                    controller: _qtyCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center,
-                                    style: textTheme.displayMedium?.copyWith(color: textColor),
-                                    decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-                                    onChanged: (v) {
-                                      if (isClient) {
-                                         int parsed = int.tryParse(v) ?? 1;
-                                         final realStock = _getRealStock(_selectedPresentation);
-                                         if (parsed > realStock) {
-                                            _qtyCtrl.text = realStock.toString();
-                                            CustomSnackBar.show(context, message: "Límite de stock alcanzado", isError: true);
-                                         }
-                                      }
-                                      setState(() => _quantity = int.tryParse(_qtyCtrl.text) ?? _quantity);
-                                    },
-                                  ),
-                                ),
-                                IconButton(icon: Icon(Icons.add, color: isDark ? Colors.green[400] : Colors.green, size: 28), onPressed: () => _qtyAction(1, isClient)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                    if (savings > 0) FittedBox(fit: BoxFit.scaleDown, child: Text("Ahorro Múltiple: ${currency.format(savings)}", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.green[400] : Colors.green))),
+                    Text("Subtotal", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey)),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(currency.format(subtotal), style: textTheme.displayLarge?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue)),
                     ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      flex: 4,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (savings > 0) FittedBox(fit: BoxFit.scaleDown, child: Text("Ahorro Múltiple: ${currency.format(savings)}", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.green[400] : Colors.green))),
-                          Text("Subtotal", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey)),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerRight,
-                            child: Text(currency.format(subtotal), style: textTheme.displayLarge?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue)),
-                          ),
-                        ],
-                      ),
-                    )
                   ],
                 ),
-                
-                if (isStockEmpty) 
-                  Padding(padding: const EdgeInsets.only(top: 12), child: Text("⚠️ Producto agotado en inventario. Podrás guardar, pero se marcará como Pendiente de Stock.", style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.red[300] : Colors.red[700])))
-                else if (exceedsStock && !isClient) 
-                  Padding(padding: const EdgeInsets.only(top: 12), child: Text("⚠️ Supera el stock actual de $realStock. Se permitirá cotizar, pero requerirá reabastecimiento.", style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.orange[400] : Colors.orange[800]))),
-                
-                const SizedBox(height: 35),
-
-                SizedBox(
-                  height: 60,
-                  child: ElevatedButton(
-                    onPressed: (_quantity > 0 && subtotal >= 0 && (!isClient || !exceedsStock)) ? _handleSave : null, 
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                    child: const Text("CONFIRMAR PRODUCTO", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                  ),
-                ),
-              ],
-            ),
+              )
+            ],
           ),
-        );
-      }
+          
+          if (isStockEmpty) 
+            Padding(padding: const EdgeInsets.only(top: 12), child: Text("⚠️ Producto agotado en inventario. Podrás guardar, pero se marcará como Pendiente de Stock.", style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.red[300] : Colors.red[700])))
+          else if (exceedsStock && !isClient) 
+            Padding(padding: const EdgeInsets.only(top: 12), child: Text("⚠️ Supera el stock actual de $realStock. Se permitirá cotizar, pero requerirá reabastecimiento.", style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.orange[400] : Colors.orange[800]))),
+        ],
+      ),
     );
   }
 }

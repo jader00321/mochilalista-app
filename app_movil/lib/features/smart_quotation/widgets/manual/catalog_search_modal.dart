@@ -98,20 +98,16 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
     final provider = Provider.of<ManualQuoteProvider>(context, listen: false);
     final categoryName = provider.getCategoryName(prod.categoriaId);
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => ManualQuoteDetailModal(
-        product: matched,
-        initialQty: 1,
-        initialCustomName: null,
-        categoryName: categoryName,
-        isNewAddition: true, 
-        onConfirm: (finalProd, qty, price, name) {
-          widget.onAddProduct(finalProd, qty, price, name);
-        },
-      )
+    ManualQuoteDetailModal.show(
+      context,
+      product: matched,
+      initialQty: 1,
+      initialCustomName: null,
+      categoryName: categoryName,
+      isNewAddition: true, 
+      onConfirm: (finalProd, qty, price, name) {
+        widget.onAddProduct(finalProd, qty, price, name);
+      },
     );
   }
 
@@ -309,21 +305,17 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                                 unit: "Paquete",
                                 bundleId: bundle.id,
                               );
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (ctx) => ManualQuoteDetailModal(
-                                  product: matched,
-                                  initialQty: 1,
-                                  initialCustomName: bundle.nombrePaquete,
-                                  categoryName: "Paquetes y Ofertas",
-                                  isNewAddition: true, 
-                                  onConfirm: (finalProd, qty, price, name) {
-                                    widget.onAddProduct(finalProd, qty, price, name);
-                                    Navigator.pop(context); // Close the search modal
-                                  },
-                                )
+                              ManualQuoteDetailModal.show(
+                                context,
+                                product: matched,
+                                initialQty: 1,
+                                initialCustomName: bundle.nombrePaquete,
+                                categoryName: "Paquetes y Ofertas",
+                                isNewAddition: true, 
+                                onConfirm: (finalProd, qty, price, name) {
+                                  widget.onAddProduct(finalProd, qty, price, name);
+                                  Navigator.pop(context); // Close the search modal
+                                },
                               );
                             },
                           ),

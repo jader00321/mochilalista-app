@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 /// =========================================================================
 /// 🔧 TAREA 3.4: Widget reutilizable de Info Tooltip
@@ -28,10 +29,8 @@ class InfoTooltipButton extends StatelessWidget {
   void _showInfoSheet(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => _InfoBottomSheet(
         title: title,
         description: description,
@@ -80,33 +79,31 @@ class _InfoBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.65,
-      ),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A24) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.75,
+      backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
+      applyEffectiveBottomPadding: false,
+      bottomAction: SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            "Entendido",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.blue[300] : Colors.blue[700],
+            ),
+          ),
+        ),
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 50,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.grey[300],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
             // Header con ícono
             Row(
               children: [
@@ -205,23 +202,6 @@ class _InfoBottomSheet extends StatelessWidget {
                 ),
               ),
             ],
-
-            const SizedBox(height: 16),
-
-            // Botón cerrar
-            Center(
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  "Entendido",
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.blue[300] : Colors.blue[700],
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),

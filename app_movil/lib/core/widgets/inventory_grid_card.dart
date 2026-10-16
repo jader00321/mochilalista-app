@@ -53,7 +53,10 @@ class InventoryGridCard extends StatelessWidget {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                     child: Container(
                       color: isDark ? Colors.white10 : Colors.white,
-                      child: UniversalImage(path: displayImage)
+                      child: Hero(
+                        tag: 'inv_${product.id}_${presentation.id}',
+                        child: UniversalImage(path: displayImage),
+                      )
                     ),
                   ),
                   if (hasOffer)

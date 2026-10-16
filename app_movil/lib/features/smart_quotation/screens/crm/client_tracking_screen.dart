@@ -9,6 +9,7 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/client_filter_bar
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_card.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_profile_editor.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
 
 class ClientTrackingScreen extends StatefulWidget {
   const ClientTrackingScreen({super.key});
@@ -286,10 +287,12 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: RefreshIndicator(
-        onRefresh: _onRefresh,
-        color: Colors.blue[800],
-        child: GestureDetector(
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _onRefresh,
+            color: Colors.blue[800],
+            child: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(),
           behavior: HitTestBehavior.translucent,
           child: SafeArea(
@@ -303,6 +306,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                 pinned: false,
                 floating: true,
                 snap: true,
+                stretch: true,
                 actions: [
                   const InfoTooltipButton(
                     title: "Directorio de Clientes (CRM)",
@@ -474,6 +478,9 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
           ),
         ),
       ),
+      const DeepNavReturnPill(isBottom: true),
+    ],
+  ),
       
       floatingActionButton: _showScrollToTop 
         ? FloatingActionButton(

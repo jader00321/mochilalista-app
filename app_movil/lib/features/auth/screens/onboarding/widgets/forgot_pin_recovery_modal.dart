@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+
 class ForgotPinRecoveryModal extends StatefulWidget {
   final int userId;
   final VoidCallback onSuccess;
@@ -14,6 +16,23 @@ class ForgotPinRecoveryModal extends StatefulWidget {
     required this.userId,
     required this.onSuccess,
   });
+
+  static Future<void> show(
+    BuildContext context, {
+    required int userId,
+    required VoidCallback onSuccess,
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      builder: (_) => ForgotPinRecoveryModal(
+        userId: userId,
+        onSuccess: onSuccess,
+      ),
+    );
+  }
 
   @override
   State<ForgotPinRecoveryModal> createState() => _ForgotPinRecoveryModalState();
@@ -174,16 +193,13 @@ class _ForgotPinRecoveryModalState extends State<ForgotPinRecoveryModal> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final bgColor = isDark ? const Color(0xFF1E2235) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
+    return InteractiveSheetWrapper(
+      title: _currentStep == 2 ? "Nuevo PIN de Seguridad" : "Recuperar Acceso",
+      icon: Icons.security_rounded,
+      iconColor: Colors.blue,
+      maxHeightFactor: 0.85,
       child: AnimatedSize(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
@@ -191,40 +207,6 @@ class _ForgotPinRecoveryModalState extends State<ForgotPinRecoveryModal> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.security_rounded, color: Colors.blue, size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      _currentStep == 2 ? "Nuevo PIN de Seguridad" : "Recuperar Acceso",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                    ),
-                  ],
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Icon(Icons.close_rounded, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
             if (_errorMessage.isNotEmpty) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 16),

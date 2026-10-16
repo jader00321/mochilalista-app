@@ -4,13 +4,13 @@ import 'package:app_movil/features/scanner/services/scanner_cost_engine.dart';
 import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
 import 'package:app_movil/features/scanner/screens/barcode_scanner_screen.dart';
 import 'package:app_movil/core/widgets/smart_unit_selector.dart';
-import 'package:app_movil/core/services/unit_catalog_service.dart';part 'ui/modal_purchase_section.dart';
+import 'package:app_movil/core/services/unit_catalog_service.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+part 'ui/modal_purchase_section.dart';
 part 'ui/modal_sale_section.dart';
 part 'ui/modal_stock_section.dart';
 part 'ui/modal_discount_section.dart';
 part 'ui/modal_variant_cards.dart';
-
-
 
 // ============================================================================
 // WIDGET: SÚPER MODAL COMPARATIVO INTERACTIVO
@@ -32,6 +32,32 @@ class ComparativeUpdateModal extends StatefulWidget {
     required this.provider,
     required this.onConfirm,
   });
+
+  static Future<void> show(
+    BuildContext context, {
+    required StagingVariant variant,
+    required StagingProductGroup group,
+    required Map<String, dynamic> dbData,
+    required bool isDark,
+    required ScannerProvider provider,
+    required VoidCallback onConfirm,
+  }) {
+    variant.takeSnapshot();
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      builder: (_) => ComparativeUpdateModal(
+        variant: variant,
+        group: group,
+        dbData: dbData,
+        isDark: isDark,
+        provider: provider,
+        onConfirm: onConfirm,
+      ),
+    );
+  }
 
   @override
   State<ComparativeUpdateModal> createState() => _ComparativeUpdateModalState();
@@ -428,51 +454,61 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     String brand = widget.group.marcaTexto.isEmpty ? "Genérica" : widget.group.marcaTexto;
     String cat = widget.group.matchProducto.datos?.categoriaNombre ?? "Sin categoría";
 
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          height: MediaQuery.of(context).size.height * 0.90,
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-          decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF23232F) : Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-          child: Column(
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.92,
+      applyEffectiveBottomPadding: false,
+      titleWidget: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              "Control de ${isNuevo ? 'Creación' : 'Variante'}",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: widget.isDark ? Colors.white : Colors.black,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+          Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10)))),
-              const SizedBox(height: 20),
-              
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: Text("Control de ${isNuevo ? 'Creación' : 'Variante'}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: widget.isDark ? Colors.white : Colors.black, letterSpacing: -0.5))),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.variant.sourceVariantUuid == null && widget.variant.hasSnapshotBeenModified)
-                        IconButton(
-                          icon: const Icon(Icons.restore),
-                          color: Colors.blue,
-                          iconSize: 22,
-                          tooltip: "Restaurar cambios",
-                          onPressed: () {
-                            widget.variant.restoreFromSnapshot();
-                            _initControllers();
-                            updateState(() {});
-                          },
-                        ),
-                      IconButton(icon: Icon(Icons.close_rounded, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]), onPressed: () => Navigator.pop(context)),
-                    ],
-                  ),
-                ],
+              if (widget.variant.sourceVariantUuid == null && widget.variant.hasSnapshotBeenModified)
+                IconButton(
+                  icon: const Icon(Icons.restore),
+                  color: Colors.blue,
+                  iconSize: 22,
+                  tooltip: "Restaurar cambios",
+                  onPressed: () {
+                    widget.variant.restoreFromSnapshot();
+                    _initControllers();
+                    updateState(() {});
+                  },
+                ),
+              IconButton(
+                icon: Icon(Icons.close_rounded, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                onPressed: () => Navigator.pop(context),
               ),
-              
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
+            ],
+          ),
+        ],
+      ),
+      bottomAction: SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton(
+          onPressed: _applyChanges,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue[800],
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text("GUARDAR DECISIÓN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        ),
+      ),
+      child: Column(
+        children: [
                     Container(
                       margin: const EdgeInsets.only(top: 8, bottom: 16),
                       padding: const EdgeInsets.all(12),
@@ -650,23 +686,8 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity, height: 50,
-              child: ElevatedButton(
-                onPressed: _applyChanges,
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                child: const Text("GUARDAR DECISIÓN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-              ),
-            )
-          ],
-        ),
+        ],
       ),
-    ));
+    );
   }
 }

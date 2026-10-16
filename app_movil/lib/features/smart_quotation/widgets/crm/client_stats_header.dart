@@ -4,6 +4,7 @@ import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_full_stats_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_finance_actions_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_compliance_sparkline.dart';
 
 class ClientStatsHeader extends StatefulWidget {
   final ClientModel client;
@@ -11,6 +12,7 @@ class ClientStatsHeader extends StatefulWidget {
   final VoidCallback onWhatsAppTap;
   final VoidCallback onCallTap;
   final VoidCallback onGoToQuickSale;
+  final VoidCallback? onGoToQuotation;
   final VoidCallback onFinanceActionCompleted;
 
   const ClientStatsHeader({
@@ -20,6 +22,7 @@ class ClientStatsHeader extends StatefulWidget {
     required this.onWhatsAppTap,
     required this.onCallTap,
     required this.onGoToQuickSale,
+    this.onGoToQuotation,
     required this.onFinanceActionCompleted,
   });
 
@@ -166,49 +169,108 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                   child: Text(tag, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                 )).toList(),
               ),
-            )
+            ),
           ],
-          
-          const SizedBox(height: 16),
+          ClientComplianceSparkline(
+            client: widget.client,
+            isDark: widget.isDark,
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
-                flex: 5,
+                flex: 4,
                 child: ElevatedButton.icon(
                   onPressed: widget.onGoToQuickSale,
-                  icon: const Icon(Icons.point_of_sale, size: 18),
-                  label: const Text("Caja Rápida", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  icon: const Icon(Icons.point_of_sale, size: 16),
+                  label: const Text(
+                    "Caja Rápida",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.pinkAccent,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    elevation: 0
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 11,
+                      horizontal: 8,
+                    ),
+                    elevation: 0,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              if (widget.onGoToQuotation != null) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 3,
+                  child: ElevatedButton.icon(
+                    onPressed: widget.onGoToQuotation,
+                    icon: const Icon(Icons.request_quote_outlined, size: 16),
+                    label: const Text(
+                      "Cotizar",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.indigo,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 11,
+                        horizontal: 8,
+                      ),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 8),
               Expanded(
-                flex: 5,
+                flex: 3,
                 child: ElevatedButton.icon(
                   onPressed: () {
                     showModalBottomSheet(
                       context: context,
                       isScrollControlled: true,
                       backgroundColor: Colors.transparent,
-                      builder: (ctx) => ClientFinanceActionsModal(client: widget.client, isDark: widget.isDark),
+                      builder: (ctx) => ClientFinanceActionsModal(
+                        client: widget.client,
+                        isDark: widget.isDark,
+                      ),
                     ).then((_) {
                       widget.onFinanceActionCompleted();
                     });
                   },
-                  icon: const Icon(Icons.account_balance_wallet, size: 18),
-                  label: const Text("Operaciones", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  icon: const Icon(Icons.account_balance_wallet, size: 16),
+                  label: const Text(
+                    "Finanzas",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: widget.isDark ? Colors.blueGrey[800] : Colors.blueGrey[700],
+                    backgroundColor: widget.isDark
+                        ? Colors.blueGrey[800]
+                        : Colors.blueGrey[700],
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    elevation: 0
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 11,
+                      horizontal: 8,
+                    ),
+                    elevation: 0,
                   ),
                 ),
               ),

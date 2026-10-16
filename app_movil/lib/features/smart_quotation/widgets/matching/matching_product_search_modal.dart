@@ -12,6 +12,8 @@ import 'package:app_movil/core/services/master_data_cache.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+
 class MatchingProductSearchModal extends StatefulWidget {
   final String initialQuery;
   final bool isDark;
@@ -21,8 +23,27 @@ class MatchingProductSearchModal extends StatefulWidget {
     super.key,
     required this.initialQuery,
     required this.isDark,
-    required this.onProductSelected
+    required this.onProductSelected,
   });
+
+  static Future<void> show(
+    BuildContext context, {
+    required String initialQuery,
+    required bool isDark,
+    required Function(MatchedProduct, String) onProductSelected,
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      builder: (_) => MatchingProductSearchModal(
+        initialQuery: initialQuery,
+        isDark: isDark,
+        onProductSelected: onProductSelected,
+      ),
+    );
+  }
 
   @override
   State<MatchingProductSearchModal> createState() => _MatchingProductSearchModalState();
@@ -173,13 +194,12 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
     final textColor = widget.isDark ? Colors.white : Colors.black87;
     final textTheme = Theme.of(context).textTheme;
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.90,
-      decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF23232F) : Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.92,
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Row(
               children: [
                 Expanded(
@@ -198,8 +218,8 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
                     onChanged: _onSearchChanged,
                   ),
                 ),
-                const SizedBox(width: 12),
-                IconButton(icon: Icon(Icons.close, color: widget.isDark ? Colors.white : Colors.black54, size: 28), onPressed: () => Navigator.pop(context))
+                const SizedBox(width: 8),
+                IconButton(icon: Icon(Icons.close, color: widget.isDark ? Colors.white : Colors.black54, size: 26), onPressed: () => Navigator.pop(context))
               ],
             ),
           ),

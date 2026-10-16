@@ -87,6 +87,37 @@ class SmartQuotationProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// 🔄 Sincroniza inmediatamente precio y stock de un ítem en el borrador en memoria (0ms)
+  void syncItemPriceAndStock(int presentationId, {double? newPrice, int? newStock}) {
+    if (_currentState.draftManualItems != null) {
+      final index = _currentState.draftManualItems!.indexWhere((p) => p.presentationId == presentationId);
+      if (index != -1) {
+        final current = _currentState.draftManualItems![index];
+        final updated = MatchedProduct(
+          productId: current.productId,
+          presentationId: current.presentationId,
+          fullName: current.fullName,
+          productName: current.productName,
+          specificName: current.specificName,
+          brand: current.brand,
+          price: newPrice ?? current.price,
+          offerPrice: current.offerPrice,
+          stock: newStock ?? current.stock,
+          imageUrl: current.imageUrl,
+          unit: current.unit,
+          conversionFactor: current.conversionFactor,
+          bundleId: current.bundleId,
+        );
+        _currentState.draftManualItems![index] = updated;
+
+        if (newPrice != null && _currentState.draftManualPrices != null) {
+          _currentState.draftManualPrices![presentationId] = newPrice;
+        }
+        notifyListeners();
+      }
+    }
+  }
+
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
   File? get currentImage => _currentState.currentImage;

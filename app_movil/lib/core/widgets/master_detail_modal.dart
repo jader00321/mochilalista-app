@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class MasterDetailModal extends StatefulWidget {
   final String title;
@@ -28,6 +29,37 @@ class MasterDetailModal extends StatefulWidget {
     required this.onToggleActive,
   });
 
+  /// 🏆 Despliegue seguro con InteractiveSheetWrapper
+  static Future<void> show(
+    BuildContext context, {
+    required String title,
+    String subtitle = "Detalle del registro",
+    required IconData icon,
+    required Color color,
+    required bool isActive,
+    required List<Map<String, String>> dataRows,
+    int usageCount = 0,
+    required VoidCallback onEdit,
+    required VoidCallback onDelete,
+    required Function(bool) onToggleActive,
+  }) {
+    return InteractiveSheetWrapper.show(
+      context: context,
+      builder: (_) => MasterDetailModal(
+        title: title,
+        subtitle: subtitle,
+        icon: icon,
+        color: color,
+        isActive: isActive,
+        dataRows: dataRows,
+        usageCount: usageCount,
+        onEdit: onEdit,
+        onDelete: onDelete,
+        onToggleActive: onToggleActive,
+      ),
+    );
+  }
+
   @override
   State<MasterDetailModal> createState() => _MasterDetailModalState();
 }
@@ -49,40 +81,110 @@ class _MasterDetailModalState extends State<MasterDetailModal> {
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.88,
-      ),
-      padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.88,
+      backgroundColor: surfaceColor,
+      applyEffectiveBottomPadding: false,
+      bottomAction: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Barra de arrastre
-          Center(
-            child: Container(
-              width: 50,
-              height: 5,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white24 : Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context); // Cierra el bottomsheet
+                    widget.onEdit(); // Llama a la lógica principal de manera segura
+                  },
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text(
+                    "EDITAR",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
+                    side: BorderSide(
+                      color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade200,
+                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // BOTÓN ELIMINAR INTELIGENTE
+              Expanded(
+                child: canDelete
+                    ? OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context); // Cierra el bottomsheet
+                          widget.onDelete(); // Llama a la lógica principal de manera segura
+                        },
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text(
+                          "ELIMINAR",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          foregroundColor: isDark ? Colors.red[300] : Colors.red[700],
+                          side: BorderSide(
+                            color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade200,
+                          ),
+                          backgroundColor: isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.05),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isDark ? Colors.transparent : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(Icons.lock_outline, size: 18, color: isDark ? Colors.grey[400] : Colors.grey),
+                            const SizedBox(height: 2),
+                            Text(
+                              "En uso (${widget.usageCount})",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.grey[400] : Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
+            ],
+          ),
+          if (!canDelete)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(
+                "No se puede eliminar porque está asignado a ${widget.usageCount} productos. Suspéndalo para dejar de usarlo.",
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.red[300] : Colors.red,
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
               ),
             ),
-          ),
-
-          // Contenido scrollable
-          Flexible(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+        ],
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
                   // Cabecera
                   Row(
                     children: [
@@ -238,101 +340,6 @@ class _MasterDetailModalState extends State<MasterDetailModal> {
                 ],
               ),
             ),
-          ),
-
-          const SizedBox(height: 14),
-
-          // Botones Acción fijos en el fondo
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context); // Cierra el bottomsheet
-                    widget.onEdit(); // Llama a la lógica principal de manera segura
-                  },
-                  icon: const Icon(Icons.edit, size: 18),
-                  label: const Text(
-                    "EDITAR",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                    side: BorderSide(
-                      color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade200,
-                    ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // BOTÓN ELIMINAR INTELIGENTE
-              Expanded(
-                child: canDelete
-                    ? OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context); // Cierra el bottomsheet
-                          widget.onDelete(); // Llama a la lógica principal de manera segura
-                        },
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        label: const Text(
-                          "ELIMINAR",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          foregroundColor: isDark ? Colors.red[300] : Colors.red[700],
-                          side: BorderSide(
-                            color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade200,
-                          ),
-                          backgroundColor: isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.05),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                      )
-                    : Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.white10 : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isDark ? Colors.transparent : Colors.grey.shade300,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(Icons.lock_outline, size: 18, color: isDark ? Colors.grey[400] : Colors.grey),
-                            const SizedBox(height: 2),
-                            Text(
-                              "En uso (${widget.usageCount})",
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.grey[400] : Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
-            ],
-          ),
-          if (!canDelete)
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text(
-                "No se puede eliminar porque está asignado a ${widget.usageCount} productos. Suspéndalo para dejar de usarlo.",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? Colors.red[300] : Colors.red,
-                  fontStyle: FontStyle.italic,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-        ],
-      ),
     );
   }
 }

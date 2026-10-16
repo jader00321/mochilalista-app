@@ -45,6 +45,7 @@ class ManualQuotationScreen extends StatefulWidget {
   final SmartQuotationModel? quotationSnapshot; 
   final List<MatchedProduct>? initialItems; 
   final Map<int, int>? initialQuantities; 
+  final ClientModel? preselectedClient;
 
   const ManualQuotationScreen({
     super.key, 
@@ -52,6 +53,7 @@ class ManualQuotationScreen extends StatefulWidget {
     this.quotationSnapshot,
     this.initialItems,
     this.initialQuantities,
+    this.preselectedClient,
   });
 
   @override
@@ -98,6 +100,17 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
     super.initState();
     _currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     _currentQuotationId = widget.quotationId;
+
+    if (widget.preselectedClient != null) {
+      _selectedClient = widget.preselectedClient;
+      _clientNameCtrl.text = widget.preselectedClient!.fullName;
+      _clientPhoneCtrl.text = widget.preselectedClient!.phone;
+      _clientDniCtrl.text = widget.preselectedClient!.docNumber ?? "";
+      _clientAddressCtrl.text = widget.preselectedClient!.address ?? "";
+      _clientEmailCtrl.text = widget.preselectedClient!.email ?? "";
+      _clientNotesCtrl.text = widget.preselectedClient!.notes ?? "";
+      _isClientPanelExpanded = true;
+    }
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = Provider.of<AuthProvider>(context, listen: false);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ExportOption {
   final String id;
@@ -35,10 +36,8 @@ class ExportOptionsModal extends StatefulWidget {
     required Function(String selectedOptionId, String format, String? paymentMethod) onExport,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (_) => ExportOptionsModal(
         options: options, 
         onExport: onExport,
@@ -304,23 +303,17 @@ class _ExportOptionsModalState extends State<ExportOptionsModal> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.9,
-      ),
-      decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF1E1E2C) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SafeArea(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _step == 1 
-            ? _buildStep1() 
-            : (_step == 2 && _selectedOption!.requiresPaymentMethodSelection) 
-              ? _buildPaymentMethodSelection()
-              : _buildFormatSelection(),
-        ),
+    return InteractiveSheetWrapper(
+      maxHeightFactor: 0.90,
+      backgroundColor: widget.isDark ? const Color(0xFF1E1E2C) : Colors.white,
+      applyEffectiveBottomPadding: true,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _step == 1 
+          ? _buildStep1() 
+          : (_step == 2 && _selectedOption!.requiresPaymentMethodSelection) 
+            ? _buildPaymentMethodSelection()
+            : _buildFormatSelection(),
       ),
     );
   }

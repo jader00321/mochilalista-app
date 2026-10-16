@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
@@ -15,6 +16,7 @@ class MatchingItemRow extends StatefulWidget {
   final VoidCallback onChangeRequest;
   final VoidCallback onDelete;
   final VoidCallback onUnlink;
+  final VoidCallback? onSuggestedReplacements;
 
   const MatchingItemRow({
     super.key,
@@ -26,6 +28,7 @@ class MatchingItemRow extends StatefulWidget {
     required this.onChangeRequest,
     required this.onDelete,
     required this.onUnlink,
+    this.onSuggestedReplacements,
   });
 
   @override
@@ -34,6 +37,7 @@ class MatchingItemRow extends StatefulWidget {
 
 class _MatchingItemRowState extends State<MatchingItemRow> {
   bool _isExpanded = false;
+  bool _justMatched = false;
 
   void _toggleExpand() {
     setState(() {
@@ -47,6 +51,21 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
     if (widget.pair.selectedProduct == null && _isExpanded) {
       // Force collapse when product is unlinked
       _isExpanded = false;
+    }
+    final oldPresId = oldWidget.pair.selectedProduct?.presentationId;
+    final newPresId = widget.pair.selectedProduct?.presentationId;
+    if (newPresId != null && newPresId != oldPresId) {
+      HapticFeedback.lightImpact();
+      setState(() {
+        _justMatched = true;
+      });
+      Future.delayed(const Duration(milliseconds: 900), () {
+        if (mounted) {
+          setState(() {
+            _justMatched = false;
+          });
+        }
+      });
     }
   }
 
@@ -140,13 +159,27 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
   }
 
   Widget _buildLinkedState(bool isDark, Color borderColor, Color textColor, NumberFormat currency, bool noStock, bool exceedsStock, MatchedProduct product) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
       key: ValueKey('linked_${product.productId}'),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF23232F) : Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor, width: (noStock || (widget.isClient && exceedsStock)) ? 2.0 : 1.5),
-        boxShadow: [if (widget.pair.isModified && !isDark) BoxShadow(color: Colors.blue.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 2))],
+        border: Border.all(
+          color: _justMatched ? (isDark ? Colors.greenAccent : Colors.green) : borderColor,
+          width: _justMatched ? 2.5 : ((noStock || (widget.isClient && exceedsStock)) ? 2.0 : 1.5),
+        ),
+        boxShadow: [
+          if (_justMatched)
+            BoxShadow(
+              color: Colors.green.withValues(alpha: 0.35),
+              blurRadius: 10,
+              spreadRadius: 1.5,
+            )
+          else if (widget.pair.isModified && !isDark)
+            BoxShadow(color: Colors.blue.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 2)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -247,9 +280,53 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                                     )
                                   ),
 
-                                if (noStock)
-                                  Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: isDark ? Colors.red[800] : Colors.red, borderRadius: BorderRadius.circular(6)), child: const Text("AGOTADO", style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5))),
-                                
+                                if (noStock) ...[
+                                  InkWell(
+                                    onTap: widget.onSuggestedReplacements,
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: isDark ? Colors.red[800] : Colors.red, borderRadius: BorderRadius.circular(6)),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text("AGOTADO", style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                          SizedBox(width: 4),
+                                          Icon(Icons.swap_horiz, color: Colors.white, size: 12),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  if (widget.onSuggestedReplacements != null)
+                                    InkWell(
+                                      onTap: widget.onSuggestedReplacements,
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blueAccent.withValues(alpha: 0.2),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.4)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.auto_awesome, color: Colors.blueAccent, size: 10),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              "Reemplazos",
+                                              style: TextStyle(
+                                                color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                ],
+
                                 if (exceedsStock)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), 
@@ -295,10 +372,36 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                               ),
                             ),
                           ),
-                          if (widget.pair.hasDiscount && !_isExpanded) ...[
+                          if (widget.pair.hasDiscount) ...[
                             const SizedBox(width: 6),
-                            Icon(Icons.local_offer, size: 14, color: isDark ? Colors.green[400] : Colors.green[700]),
-                          ]
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.green.withValues(alpha: 0.2)
+                                    : Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.green.withValues(alpha: 0.3)
+                                      : Colors.green.shade200,
+                                ),
+                              ),
+                              child: Text(
+                                "-${currency.format((widget.pair.originalUnitPrice - widget.pair.effectiveUnitPrice) * widget.pair.selectedQuantity)}",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark
+                                      ? Colors.green[300]
+                                      : Colors.green[800],
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ],

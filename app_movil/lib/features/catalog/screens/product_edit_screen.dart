@@ -11,6 +11,7 @@ import 'package:app_movil/core/services/unit_catalog_service.dart';
 import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_general_info.dart';
 import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_presentation_list.dart';
 import 'package:app_movil/core/widgets/product_optional_info.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ProductEditScreen extends StatefulWidget {
   final Product productToEdit;
@@ -913,7 +914,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       ),
 
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          16,
+          20,
+          InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 16),
+        ),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1A1A24) : Colors.white,
           boxShadow: [
@@ -930,52 +936,50 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             ),
           ),
         ),
-        child: SafeArea(
-          child: SizedBox(
-            height: 50,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: provider.isLoading
-                    ? Colors.grey
-                    : (isDark ? Colors.blue[700] : Colors.blue[800]),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: isDark ? 0 : 4,
+        child: SizedBox(
+          height: 50,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: provider.isLoading
+                  ? Colors.grey
+                  : (isDark ? Colors.blue[700] : Colors.blue[800]),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-              onPressed: provider.isLoading ? null : _save,
-              child: provider.isLoading
-                  ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 3,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          "GUARDANDO...",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    )
-                  : const Text(
-                      "GUARDAR CAMBIOS",
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
-                      ),
-                    ),
+              elevation: isDark ? 0 : 4,
             ),
+            onPressed: provider.isLoading ? null : _save,
+            child: provider.isLoading
+                ? const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        "GUARDANDO...",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  )
+                : const Text(
+                    "GUARDAR CAMBIOS",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
           ),
         ),
       ),

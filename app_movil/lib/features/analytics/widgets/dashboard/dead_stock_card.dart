@@ -8,6 +8,8 @@ import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
+import 'package:app_movil/core/widgets/discount_intelligent_modal.dart';
+
 class DeadStockCard extends StatefulWidget {
   final AnalyticsData data;
   final bool isDark;
@@ -24,6 +26,74 @@ class DeadStockCard extends StatefulWidget {
 
 class _DeadStockCardState extends State<DeadStockCard> {
   bool _showAll = false;
+
+  Future<void> _openDirectDiscount(BuildContext context, Map<String, dynamic> productData) async {
+    final inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
+    final productId = productData['producto_id'];
+    final presentationId = productData['id'];
+
+    if (productId == null || presentationId == null) {
+      CustomSnackBar.show(context, message: "Error: No se pudo identificar el producto.", isError: true);
+      return;
+    }
+
+    final product = await inventoryProvider.getFullProductWithFallback(productId);
+    if (product == null) {
+      if (context.mounted) CustomSnackBar.show(context, message: "Error: El producto ya no existe.", isError: true);
+      return;
+    }
+
+    final presentation = product.presentaciones.where((p) => p.id == presentationId).firstOrNull;
+    if (presentation == null) {
+      if (context.mounted) CustomSnackBar.show(context, message: "Error: La presentación ya no existe.", isError: true);
+      return;
+    }
+
+    if (context.mounted) {
+      await DiscountIntelligentModal.show(
+        context: context,
+        presentation: presentation,
+        provider: inventoryProvider,
+        isDark: widget.isDark,
+      );
+    }
+  }
+
+  Future<void> _openBundleBuilder(BuildContext context, Map<String, dynamic> productData) async {
+    final inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
+    final productId = productData['producto_id'];
+    final presentationId = productData['id'];
+
+    if (productId == null || presentationId == null) {
+      CustomSnackBar.show(context, message: "Error: No se pudo identificar el producto.", isError: true);
+      return;
+    }
+
+    final product = await inventoryProvider.getFullProductWithFallback(productId);
+    if (product == null) {
+      if (context.mounted) CustomSnackBar.show(context, message: "Error: El producto ya no existe.", isError: true);
+      return;
+    }
+
+    final presentation = product.presentaciones.where((p) => p.id == presentationId).firstOrNull;
+    if (presentation == null) {
+      if (context.mounted) CustomSnackBar.show(context, message: "Error: La presentación ya no existe.", isError: true);
+      return;
+    }
+
+    final wrapper = InventoryWrapper(product: product, presentation: presentation);
+    if (context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BundleBuilderScreen(
+            initialItem: wrapper,
+            initialTipoPromocion: 'liquidez_costo',
+          ),
+        ),
+      );
+    }
+  }
 
   void _showOfferModal(BuildContext context, Map<String, dynamic> productData) {
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
@@ -43,7 +113,7 @@ class _DeadStockCardState extends State<DeadStockCard> {
       barrierLabel: 'Oferta',
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, anim1, anim2) {
-        return const SizedBox.shrink(); // No se usa el pageBuilder
+        return const SizedBox.shrink();
       },
       transitionBuilder: (context, anim1, anim2, child) {
         return ScaleTransition(
@@ -61,11 +131,11 @@ class _DeadStockCardState extends State<DeadStockCard> {
                       color: Colors.orange.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.local_offer, color: Colors.orange, size: 24),
+                    child: const Icon(Icons.bolt_rounded, color: Colors.orange, size: 24),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
-                    child: Text("Liquidar Producto", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                    child: Text("Acción Rápida BI", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
                   ),
                 ],
               ),
@@ -73,7 +143,7 @@ class _DeadStockCardState extends State<DeadStockCard> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("¿Deseas crear un Paquete de Oferta (Liquidación) para este producto estancado?", style: TextStyle(fontSize: 14)),
+                  const Text("Elige cómo deseas liquidar y liberar el capital retenido de este producto:", style: TextStyle(fontSize: 14)),
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -101,58 +171,49 @@ class _DeadStockCardState extends State<DeadStockCard> {
                         Text("Capital retenido: ${currency.format(stock * cost)}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
                       ],
                     ),
-                  )
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: const BorderSide(color: Colors.orange),
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.percent_rounded, size: 20),
+                      label: const Text("Poner en Oferta Directa", style: TextStyle(fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _openDirectDiscount(context, productData);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.inventory_2_outlined, size: 20),
+                      label: const Text("Crear Combo / Paquete", style: TextStyle(fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _openBundleBuilder(context, productData);
+                      },
+                    ),
+                  ),
                 ],
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancelar", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () async {
-                    Navigator.pop(context); // Cerrar modal
-                    // Cargar el producto y presentacion
-                    final inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
-                    final productId = productData['producto_id'];
-                    final presentationId = productData['id'];
-                    
-                    if (productId == null || presentationId == null) {
-                        CustomSnackBar.show(context, message: "Error: No se pudo identificar el producto.", isError: true);
-                        return;
-                    }
-                    
-                    CustomSnackBar.show(context, message: "Cargando datos del producto...", isError: false);
-                    final product = await inventoryProvider.getFullProductWithFallback(productId);
-                    if (product == null) {
-                        if (context.mounted) CustomSnackBar.show(context, message: "Error: El producto ya no existe.", isError: true);
-                        return;
-                    }
-                    
-                    final presentation = product.presentaciones.where((p) => p.id == presentationId).firstOrNull;
-                    if (presentation == null) {
-                        if (context.mounted) CustomSnackBar.show(context, message: "Error: La presentación ya no existe.", isError: true);
-                        return;
-                    }
-                    
-                    final wrapper = InventoryWrapper(product: product, presentation: presentation);
-                    if (context.mounted) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BundleBuilderScreen(
-                              initialItem: wrapper,
-                              initialTipoPromocion: 'liquidez_costo',
-                            ),
-                          ),
-                        );
-                    }
-                  },
-                  child: const Text("Crear Oferta", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text("Cerrar", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -328,7 +389,21 @@ class _DeadStockCardState extends State<DeadStockCard> {
                           ],
                         ),
                         const SizedBox(width: 8),
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+                        IconButton(
+                          icon: const Icon(Icons.percent_rounded, size: 18, color: Colors.orange),
+                          tooltip: "Poner en Oferta",
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          padding: EdgeInsets.zero,
+                          onPressed: () => _openDirectDiscount(context, p),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.inventory_2_outlined, size: 18, color: Colors.blueAccent),
+                          tooltip: "Crear Combo",
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          padding: EdgeInsets.zero,
+                          onPressed: () => _openBundleBuilder(context, p),
+                        ),
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
                       ],
                     ),
                   ),

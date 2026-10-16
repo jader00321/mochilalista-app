@@ -5,6 +5,7 @@ import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/general_preview_tab.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class PaymentEntryModal extends StatefulWidget {
   final ClientModel client;
@@ -81,7 +82,6 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final provider = Provider.of<TrackingProvider>(context);
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -99,7 +99,9 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.90, 
-      padding: EdgeInsets.only(bottom: bottomInset),
+      padding: EdgeInsets.only(
+        bottom: InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 16.0, includeKeyboard: true),
+      ),
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),

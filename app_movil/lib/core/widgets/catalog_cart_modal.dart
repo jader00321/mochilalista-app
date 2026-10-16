@@ -4,6 +4,8 @@ import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart'; 
 import 'package:app_movil/core/widgets/custom_snackbar.dart'; // 🔥 Importado para alertas de stock
 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+
 class CatalogCartModal extends StatelessWidget {
   final bool isCart;
   final bool isDark; 
@@ -28,51 +30,76 @@ class CatalogCartModal extends StatelessWidget {
         final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
         final textColor = isDark ? Colors.white : Colors.black87;
 
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.90, 
-          decoration: BoxDecoration(
-            color: surfaceColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))),
-                child: Column(
+        return InteractiveSheetWrapper(
+          maxHeightFactor: 0.92,
+          backgroundColor: surfaceColor,
+          applyEffectiveBottomPadding: false,
+          bottomAction: items.isEmpty
+              ? null
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
-                    const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Icon(isCart ? Icons.shopping_cart : Icons.playlist_add_check, color: color, size: 26),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  title, 
-                                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : (isCart ? Colors.green[800] : Colors.orange[800])),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (items.isNotEmpty)
-                          TextButton.icon(
-                            onPressed: () {
-                              isCart ? prov.clearCart() : prov.clearUtilityList();
-                            },
-                            icon: Icon(Icons.delete_sweep, size: 20, color: isDark ? Colors.red[300] : Colors.red),
-                            label: Text("Vaciar", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
-                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
-                          )
+                        Text("Total General:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+                        Text("S/ ${total.toStringAsFixed(2)}", style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: color)),
                       ],
                     ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton.icon(
+                        onPressed: onProcessTap, 
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark ? color.withValues(alpha: 0.9) : color,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: isDark ? 0 : 4,
+                        ),
+                        icon: Icon(isCart ? Icons.point_of_sale : Icons.arrow_forward_rounded, size: 24),
+                        label: Text(
+                          isCart ? "ENVIAR A CAJA RÁPIDA" : (isClient ? "CONTINUAR CON MI PEDIDO" : "IR A COTIZACIÓN MANUAL"),
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+                        ),
+                      ),
+                    )
+                  ],
+                ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(isCart ? Icons.shopping_cart : Icons.playlist_add_check, color: color, size: 26),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              title, 
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : (isCart ? Colors.green[800] : Colors.orange[800])),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (items.isNotEmpty)
+                      TextButton.icon(
+                        onPressed: () {
+                          isCart ? prov.clearCart() : prov.clearUtilityList();
+                        },
+                        icon: Icon(Icons.delete_sweep, size: 20, color: isDark ? Colors.red[300] : Colors.red),
+                        label: Text("Vaciar", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
+                        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                      )
                   ],
                 ),
               ),
@@ -81,7 +108,7 @@ class CatalogCartModal extends StatelessWidget {
                 child: items.isEmpty
                   ? Center(child: Text("Lista vacía", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400], fontSize: 20, fontWeight: FontWeight.bold)))
                   : ReorderableListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 80),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                       itemCount: items.length,
                       onReorder: (oldIndex, newIndex) {
                         isCart ? prov.reorderCart(oldIndex, newIndex) : prov.reorderUtilityList(oldIndex, newIndex);
@@ -218,45 +245,6 @@ class CatalogCartModal extends StatelessWidget {
                       },
                     ),
               ),
-              
-              if (items.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, -10))]
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text("Total General:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
-                          Text("S/ ${total.toStringAsFixed(2)}", style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: color)),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 60,
-                        child: ElevatedButton.icon(
-                          onPressed: onProcessTap, 
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isDark ? color.withValues(alpha: 0.9) : color,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            elevation: isDark ? 0 : 4,
-                          ),
-                          icon: Icon(isCart ? Icons.point_of_sale : Icons.arrow_forward_rounded, size: 26),
-                          label: Text(
-                            isCart ? "ENVIAR A CAJA RÁPIDA" : (isClient ? "CONTINUAR CON MI PEDIDO" : "IR A COTIZACIÓN MANUAL"),
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1),
-                          ),
-                        ),
-                      )
-                    ],
-                  ),
-                )
             ],
           ),
         );

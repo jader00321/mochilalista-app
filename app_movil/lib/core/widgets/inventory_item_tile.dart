@@ -1,8 +1,55 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+
+class PulsingStockBadge extends StatefulWidget {
+  final Widget child;
+  final bool isPulsing;
+  const PulsingStockBadge({super.key, required this.child, this.isPulsing = true});
+
+  @override
+  State<PulsingStockBadge> createState() => _PulsingStockBadgeState();
+}
+
+class _PulsingStockBadgeState extends State<PulsingStockBadge> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    _scale = Tween<double>(begin: 0.95, end: 1.05).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    if (widget.isPulsing) _ctrl.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(PulsingStockBadge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isPulsing && !_ctrl.isAnimating) {
+      _ctrl.repeat(reverse: true);
+    } else if (!widget.isPulsing && _ctrl.isAnimating) {
+      _ctrl.stop();
+      _ctrl.reset();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isPulsing) return widget.child;
+    return ScaleTransition(scale: _scale, child: widget.child);
+  }
+}
 
 class InventoryItemTile extends StatelessWidget {
   final InventoryWrapper item;
@@ -28,8 +75,14 @@ class InventoryItemTile extends StatelessWidget {
     final String statusText = isPublic ? "PÚBLICO" : "PRIVADO";
     
     final int stock = item.displayStock;
+    final int threshold = presentation.stockAlerta ?? 5;
     final bool isOutOfStock = stock <= 0;
-    final Color stockColor = isOutOfStock ? (isDark ? Colors.red[400]! : Colors.red) : (stock <= 5 ? (isDark ? Colors.orange[300]! : Colors.orange[800]!) : (isDark ? Colors.teal[300]! : Colors.teal[700]!));
+    final bool isCritical = stock > 0 && stock <= threshold;
+    final Color stockColor = isOutOfStock
+        ? (isDark ? Colors.red[400]! : Colors.red)
+        : (isCritical
+            ? (isDark ? Colors.orange[400]! : Colors.orange.shade800)
+            : (isDark ? Colors.teal[300]! : Colors.teal[700]!));
 
     final bool hasOffer = item.hasOffer;
     final double finalPrice = item.effectivePrice;
@@ -69,7 +122,10 @@ class InventoryItemTile extends StatelessWidget {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          UniversalImage(path: displayImage),
+                          Hero(
+                            tag: 'inv_${product.id}_${presentation.id}',
+                            child: UniversalImage(path: displayImage),
+                          ),
                           if (isOutOfStock)
                             Container(
                               color: isDark ? Colors.black.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.7),
@@ -175,24 +231,79 @@ class InventoryItemTile extends StatelessWidget {
                           ],
                         ),
 
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: stockColor.withValues(alpha: 0.15), 
-                            borderRadius: BorderRadius.circular(8), 
-                            border: Border.all(color: stockColor.withValues(alpha: 0.4))
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.inventory_2, size: 16, color: stockColor),
-                              const SizedBox(width: 6),
-                              Text(
-                                isOutOfStock ? "Agotado" : unidadVentaText, 
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: stockColor)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            InkWell(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                int factor = presentation.unidadesPorVenta;
+                                if (factor <= 0) factor = 1;
+                                int newBaseStock = math.max(0, presentation.stockActual - factor);
+                                provider.updatePresentation(presentation.id!, stock: newBaseStock);
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white12 : Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(Icons.remove, size: 14, color: isDark ? Colors.white70 : Colors.black87),
                               ),
-                            ],
-                          ),
-                        )
+                            ),
+                            const SizedBox(width: 6),
+                            PulsingStockBadge(
+                              isPulsing: isOutOfStock || isCritical,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: stockColor.withValues(alpha: 0.15), 
+                                  borderRadius: BorderRadius.circular(8), 
+                                  border: Border.all(
+                                    color: stockColor.withValues(alpha: (isOutOfStock || isCritical) ? 0.7 : 0.4),
+                                    width: (isOutOfStock || isCritical) ? 1.5 : 1.0,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      isOutOfStock
+                                          ? Icons.error_outline_rounded
+                                          : (isCritical ? Icons.warning_amber_rounded : Icons.inventory_2),
+                                      size: 16,
+                                      color: stockColor,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      isOutOfStock ? "Agotado" : (isCritical ? "Crítico ($stock)" : unidadVentaText), 
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: stockColor),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            InkWell(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                int factor = presentation.unidadesPorVenta;
+                                if (factor <= 0) factor = 1;
+                                int newBaseStock = presentation.stockActual + factor;
+                                provider.updatePresentation(presentation.id!, stock: newBaseStock);
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.blue.withValues(alpha: 0.25) : Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(Icons.add, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     )
                   ],
