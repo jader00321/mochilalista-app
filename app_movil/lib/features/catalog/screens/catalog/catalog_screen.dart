@@ -425,26 +425,32 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
       context,
       item: item,
       isStoreMode: _isStoreMode,
-      onAddToCart: (qty) {
+      onAddToCart: (qty, [selectedPres]) {
+        final targetWrapper = (selectedPres != null)
+            ? item.copyWith(presentation: selectedPres)
+            : item;
         Provider.of<CatalogProvider>(
           context,
           listen: false,
-        ).addToCart(item, qty);
+        ).addToCart(targetWrapper, qty);
         CustomSnackBar.show(
           context,
-          message: "Agregado al Carrito",
+          message: "Agregado al Carrito: ${targetWrapper.displayNameDetail}",
           isError: false,
         );
         setState(() => _isBottomMenuExpanded = true);
       },
-      onAddToList: (qty) {
+      onAddToList: (qty, [selectedPres]) {
+        final targetWrapper = (selectedPres != null)
+            ? item.copyWith(presentation: selectedPres)
+            : item;
         Provider.of<CatalogProvider>(
           context,
           listen: false,
-        ).addToUtilityList(item, qty);
+        ).addToUtilityList(targetWrapper, qty);
         CustomSnackBar.show(
           context,
-          message: "Agregado a tu Lista",
+          message: "Agregado a tu Lista: ${targetWrapper.displayNameDetail}",
           backgroundColor: Colors.orange[800]!,
         );
         setState(() => _isBottomMenuExpanded = true);
@@ -646,38 +652,6 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                           ),
                         ),
                       ),
-                    ),
-                    Consumer<CatalogProvider>(
-                      builder: (context, catProv, _) {
-                        final bool hasActiveFilters = catProv.hasActiveFilters;
-                        return Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                Icons.tune_rounded,
-                                color: isDark ? Colors.blue[300] : Colors.blue[800],
-                                size: 24,
-                              ),
-                              onPressed: () => LiveFilterBottomSheet.show(context),
-                              tooltip: "Filtros en Vivo",
-                            ),
-                            if (hasActiveFilters)
-                              Positioned(
-                                right: 10,
-                                top: 10,
-                                child: Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.tealAccent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        );
-                      },
                     ),
                     IconButton(
                       icon: Icon(
@@ -1097,6 +1071,10 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                             isStoreMode: _isStoreMode,
                             onDetails: () =>
                                 _showDetailModal(context, itemWrapper),
+                            onPresentationDetails: (pres) => _showDetailModal(
+                              context,
+                              itemWrapper.copyWith(presentation: pres),
+                            ),
                           );
                         },
                         childCount:

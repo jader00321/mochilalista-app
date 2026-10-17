@@ -13,15 +13,25 @@ class RestockSmartBanner extends StatefulWidget {
   State<RestockSmartBanner> createState() => _RestockSmartBannerState();
 }
 
-class _RestockSmartBannerState extends State<RestockSmartBanner> {
+class _RestockSmartBannerState extends State<RestockSmartBanner> with SingleTickerProviderStateMixin {
   int _alertCount = 0;
   bool _isLoading = true;
-  bool _isExpanded = false;
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
     _checkRestockAlerts();
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkRestockAlerts({bool forceRefresh = false}) async {
@@ -42,8 +52,7 @@ class _RestockSmartBannerState extends State<RestockSmartBanner> {
 
         if (lastCount != null && lastTimeStr != null) {
           final lastTime = DateTime.tryParse(lastTimeStr);
-          if (lastTime != null &&
-              DateTime.now().difference(lastTime).inHours < 4) {
+          if (lastTime != null && DateTime.now().difference(lastTime).inHours < 4) {
             if (mounted) {
               setState(() {
                 _alertCount = lastCount;
@@ -102,167 +111,173 @@ class _RestockSmartBannerState extends State<RestockSmartBanner> {
   Widget build(BuildContext context) {
     if (_isLoading || _alertCount == 0) return const SizedBox.shrink();
 
-    Widget childWidget;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final alertText = _alertCount == 1
+        ? "1 producto requiere reabastecimiento urgente"
+        : "$_alertCount productos requieren reabastecimiento";
 
-    if (!_isExpanded) {
-      // Modo Discreto (Píldora)
-      childWidget = Align(
-        alignment: Alignment.centerRight,
-        child: Container(
-          key: const ValueKey('discrete_chip'),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () {
-                setState(() => _isExpanded = true);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12.0,
-                  vertical: 8.0,
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final pulseValue = _pulseController.value;
+        final glowAlpha = 0.2 + (pulseValue * 0.25);
+        final borderAlpha = 0.35 + (pulseValue * 0.35);
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SmartRestockScreen(),
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.15),
-                  border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.3),
+              ).then((_) => _checkRestockAlerts(forceRefresh: true));
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isDark
+                      ? [
+                          const Color(0xFF2C1E08).withValues(alpha: 0.95),
+                          const Color(0xFF1B1408).withValues(alpha: 0.95),
+                        ]
+                      : [
+                          const Color(0xFFFFF8E7),
+                          const Color(0xFFFFECB3).withValues(alpha: 0.8),
+                        ],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.orange.withValues(alpha: borderAlpha),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.withValues(alpha: glowAlpha * 0.5),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.warning_amber_rounded,
-                      color: Colors.orange,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      "$_alertCount Alertas de Stock",
-                      style: const TextStyle(
-                        color: Colors.orange,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+                ],
               ),
-            ),
-          ),
-        ),
-      );
-    } else {
-      // Modo Expandido (Banner Completo)
-      childWidget = Container(
-        key: const ValueKey('expanded_banner'),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Colors.orangeAccent, Colors.deepOrange],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.orange.withValues(alpha: 0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SmartRestockScreen(),
-                    ),
-                  ).then((_) => _checkRestockAlerts(forceRefresh: true));
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 14.0,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.white,
-                        ),
+              child: Row(
+                children: [
+                  // Icono con micro-pulso y fondo suave ámbar
+                  Container(
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: isDark ? 0.25 : 0.2),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.orange.withValues(alpha: 0.4),
+                        width: 1,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                    child: Transform.scale(
+                      scale: 1.0 + (pulseValue * 0.08),
+                      child: const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.orangeAccent,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Textos informativos
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
                           children: [
-                            const Text(
+                            Text(
                               "Alerta de Reabastecimiento",
                               style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : const Color(0xFF4E2C00),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                                letterSpacing: -0.3,
                               ),
                             ),
-                            Text(
-                              "Tienes $_alertCount productos con stock crítico",
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.25),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                "$_alertCount",
+                                style: const TextStyle(
+                                  color: Colors.orangeAccent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(
-                        width: 32,
-                      ), // Espacio para el botón de cerrar
-                    ],
+                        const SizedBox(height: 2),
+                        Text(
+                          alertText,
+                          style: TextStyle(
+                            color: isDark ? Colors.orange[200] : const Color(0xFF8D5000),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  // Botón de acción rápido "Revisar"
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.orange.withValues(alpha: 0.35),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "Revisar",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(width: 3),
+                        Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          color: Colors.white,
+                          size: 10,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            Positioned(
-              top: 0,
-              right: 0,
-              bottom: 0,
-              child: Center(
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.keyboard_arrow_up,
-                    color: Colors.white,
-                  ),
-                  onPressed: () {
-                    setState(() => _isExpanded = false);
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOutCubic,
-      alignment: Alignment.centerRight,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        switchInCurve: Curves.easeIn,
-        switchOutCurve: Curves.easeOut,
-        child: childWidget,
-      ),
+          ),
+        );
+      },
     );
   }
 }

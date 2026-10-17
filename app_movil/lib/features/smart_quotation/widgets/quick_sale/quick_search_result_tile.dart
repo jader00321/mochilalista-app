@@ -73,7 +73,12 @@ class QuickSearchResultTile extends StatelessWidget {
                 decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.transparent, border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade300), borderRadius: BorderRadius.circular(10)),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10), 
-                  child: UniversalImage(path: item.presentation.imagenUrl ?? item.product.imagenUrl, fit: BoxFit.cover)
+                  child: UniversalImage(
+                    path: item.presentation.imagenUrl ?? item.product.imagenUrl,
+                    productName: item.product.nombre,
+                    categoryName: item.product.marcaNombre,
+                    fit: BoxFit.cover,
+                  )
                 ),
               ),
               const SizedBox(width: 16),

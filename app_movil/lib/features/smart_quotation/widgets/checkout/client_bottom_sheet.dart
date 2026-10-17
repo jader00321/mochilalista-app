@@ -1,9 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
-import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 
@@ -38,6 +38,7 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> with TickerProvid
   List<ClientModel> _searchResults = [];
   bool _isSearching = false;
   bool _isLoadingRecent = false;
+  Timer? _debounce;
 
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
@@ -80,6 +81,7 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> with TickerProvid
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _tabController.dispose();
     _searchFocusNode.dispose();
     _nameFocusNode.dispose();
@@ -109,14 +111,27 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> with TickerProvid
     }
   }
 
-  void _search(String query) async {
-    if (query.isNotEmpty) {
+  void _search(String query) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () async {
+      final q = query.trim();
+      if (q.isEmpty) {
+        _loadRecentClients();
+        return;
+      }
+      final authProv = Provider.of<AuthProvider>(context, listen: false);
+      final negocioId = authProv.activeBusinessId;
+      if (negocioId == null) return;
+
       setState(() => _isSearching = true);
-      final results = await Provider.of<SaleProvider>(context, listen: false).searchClients(query);
-      if (mounted) setState(() { _searchResults = results; _isSearching = false; });
-    } else {
-      _loadRecentClients();
-    }
+      final results = await ClientService().searchClients(q, negocioId);
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _isSearching = false;
+        });
+      }
+    });
   }
 
   void _returnNewClient() {
@@ -204,69 +219,172 @@ class _ClientBottomSheetState extends State<ClientBottomSheet> with TickerProvid
                               ? Center(child: Text("No se encontraron coincidencias", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 16)))
                               : ListView.separated(
                                   itemCount: _searchResults.length,
-                                  separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+                                  separatorBuilder: (_, __) => const SizedBox(height: 8),
                                   itemBuilder: (ctx, i) {
                                     final c = _searchResults[i];
                                     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-                                    return ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                                      leading: CircleAvatar(
-                                        backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[100], 
-                                        radius: 24, 
-                                        child: Text(
-                                          c.fullName.isNotEmpty ? c.fullName[0].toUpperCase() : "?",
-                                          style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 18)
-                                        )
-                                      ),
-                                      title: Row(
-                                        children: [
-                                          Expanded(child: Text(c.fullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                                          if (c.usuarioVinculadoId != null)
-                                            Container(
-                                              margin: const EdgeInsets.only(left: 6),
-                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                              decoration: BoxDecoration(color: Colors.teal.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.teal.withValues(alpha: 0.5))),
-                                              child: const Text("APP", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.teal)),
-                                            )
-                                        ],
-                                      ),
-                                      subtitle: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const SizedBox(height: 4),
-                                          Row(
+                                    final hasDebt = c.totalDebt > 0;
+                                    final hasSaldo = c.saldoAFavor > 0;
+
+                                    return Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () => Navigator.pop(context, c),
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? const Color(0xFF1B1B26) : Colors.grey[50],
+                                            borderRadius: BorderRadius.circular(14),
+                                            border: Border.all(
+                                              color: isDark ? Colors.white12 : Colors.grey.shade200,
+                                            ),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Icon(Icons.phone_android, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                                              const SizedBox(width: 4),
-                                              Text(c.phone, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                                            ],
-                                          )
-                                        ],
-                                      ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (c.totalDebt > 0 || c.saldoAFavor > 0)
-                                            Padding(
-                                              padding: const EdgeInsets.only(right: 8.0),
-                                              child: Column(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                crossAxisAlignment: CrossAxisAlignment.end,
+                                              Row(
                                                 children: [
-                                                  if (c.totalDebt > 0)
-                                                    Text("-${currency.format(c.totalDebt)}", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                                                  if (c.saldoAFavor > 0)
-                                                    Text("+${currency.format(c.saldoAFavor)}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+                                                  CircleAvatar(
+                                                    backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.25) : Colors.blue.shade100,
+                                                    radius: 20,
+                                                    child: Text(
+                                                      c.fullName.isNotEmpty ? c.fullName[0].toUpperCase() : "?",
+                                                      style: TextStyle(
+                                                        color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 16,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Row(
+                                                          children: [
+                                                            Flexible(
+                                                              child: Text(
+                                                                c.fullName,
+                                                                style: TextStyle(
+                                                                  fontWeight: FontWeight.bold,
+                                                                  fontSize: 15,
+                                                                  color: textColor,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                            ),
+                                                            if (c.usuarioVinculadoId != null) ...[
+                                                              const SizedBox(width: 6),
+                                                              Container(
+                                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                                                decoration: BoxDecoration(
+                                                                  color: Colors.teal.withValues(alpha: 0.15),
+                                                                  borderRadius: BorderRadius.circular(4),
+                                                                  border: Border.all(color: Colors.teal.withValues(alpha: 0.5)),
+                                                                ),
+                                                                child: const Text("APP", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.teal)),
+                                                              ),
+                                                            ],
+                                                          ],
+                                                        ),
+                                                        const SizedBox(height: 3),
+                                                        Row(
+                                                          children: [
+                                                            Icon(Icons.phone_android, size: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                                            const SizedBox(width: 4),
+                                                            Text(
+                                                              c.phone.isNotEmpty ? c.phone : "Sin teléfono",
+                                                              style: TextStyle(
+                                                                fontSize: 13,
+                                                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                              ),
+                                                            ),
+                                                            if (c.docNumber != null && c.docNumber!.isNotEmpty) ...[
+                                                              const SizedBox(width: 8),
+                                                              Icon(Icons.badge_outlined, size: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                                              const SizedBox(width: 4),
+                                                              Text(
+                                                                c.docNumber!,
+                                                                style: TextStyle(
+                                                                  fontSize: 12,
+                                                                  fontWeight: FontWeight.w500,
+                                                                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ],
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF00C853),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: const Text(
+                                                      "Asignar",
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ),
                                                 ],
                                               ),
-                                            ),
-                                          ElevatedButton(
-                                            onPressed: () => Navigator.pop(context, c),
-                                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                                            child: const Text("Asignar", style: TextStyle(fontWeight: FontWeight.bold)),
+                                              if (hasSaldo || hasDebt) ...[
+                                                const SizedBox(height: 8),
+                                                Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 4,
+                                                  children: [
+                                                    if (hasSaldo)
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFF00E676).withValues(alpha: 0.15),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: const Color(0xFF00E676).withValues(alpha: 0.4)),
+                                                        ),
+                                                        child: Text(
+                                                          "Saldo a favor: ${currency.format(c.saldoAFavor)}",
+                                                          style: const TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: Color(0xFF00C853),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    if (hasDebt)
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFFFF5252).withValues(alpha: 0.15),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: const Color(0xFFFF5252).withValues(alpha: 0.4)),
+                                                        ),
+                                                        child: Text(
+                                                          "Deuda pendiente: ${currency.format(c.totalDebt)}",
+                                                          style: const TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: Color(0xFFFF5252),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ],
                                           ),
-                                        ],
-                                      )
+                                        ),
+                                      ),
                                     );
                                   },
                                 ),

@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
-import 'package:app_movil/features/catalog/providers/catalog_provider.dart'; // 🔥 CAMBIO: Usamos CatalogProvider
+import 'package:app_movil/features/catalog/models/product_model.dart';
+import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart'; 
 import 'package:app_movil/core/widgets/universal_image.dart'; 
 import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
-
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/features/catalog/screens/product_detail_screen.dart';
 
 class ProductDetailModal extends StatefulWidget {
   final InventoryWrapper item;
-  final Function(int) onAddToCart;
-  final Function(int) onAddToList;
-
+  final void Function(int quantity, [ProductPresentation? presentation]) onAddToCart;
+  final void Function(int quantity, [ProductPresentation? presentation]) onAddToList;
   final bool isStoreMode;
 
   const ProductDetailModal({
@@ -28,8 +28,8 @@ class ProductDetailModal extends StatefulWidget {
   static Future<void> show(
     BuildContext context, {
     required InventoryWrapper item,
-    required Function(int) onAddToCart,
-    required Function(int) onAddToList,
+    required void Function(int quantity, [ProductPresentation? presentation]) onAddToCart,
+    required void Function(int quantity, [ProductPresentation? presentation]) onAddToList,
     bool isStoreMode = false,
   }) {
     return InteractiveSheetWrapper.show(
@@ -49,12 +49,27 @@ class ProductDetailModal extends StatefulWidget {
 
 class _ProductDetailModalState extends State<ProductDetailModal> {
   int _quantity = 1;
-  late final int _maxStock;
+  late ProductPresentation _currentPres;
+  late int _maxStock;
 
   @override
   void initState() {
     super.initState();
-    _maxStock = widget.item.displayStock;
+    _currentPres = widget.item.presentation;
+    final int factor = _currentPres.unidadesPorVenta <= 0 ? 1 : _currentPres.unidadesPorVenta;
+    _maxStock = _currentPres.stockActual ~/ factor;
+  }
+
+  void _selectPresentation(ProductPresentation pres) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _currentPres = pres;
+      final int factor = pres.unidadesPorVenta <= 0 ? 1 : pres.unidadesPorVenta;
+      _maxStock = pres.stockActual ~/ factor;
+      if (_quantity > _maxStock) {
+        _quantity = _maxStock > 0 ? _maxStock : 1;
+      }
+    });
   }
 
   void _increment() {
@@ -77,7 +92,6 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 CAMBIO: Consultamos la marca al provider del catálogo
     final catalogProv = Provider.of<CatalogProvider>(context, listen: false);
     final auth = Provider.of<AuthProvider>(context, listen: false); 
     final isClient = auth.isCommunityClient; 
@@ -87,26 +101,69 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
     final textTheme = theme.textTheme; 
     
     final prod = widget.item.product;
-    final pres = widget.item.presentation;
-    final brandName = catalogProv.getBrandName(prod.marcaId); // 🔥 Uso de catalogProv
+    final brandName = catalogProv.getBrandName(prod.marcaId);
     
     final bool isOutOfStock = _maxStock <= 0;
-    final bool hasOffer = widget.item.hasOffer;
-    final double unitPrice = widget.item.effectivePrice;
+    final bool hasOffer = _currentPres.precioOferta != null && _currentPres.precioOferta! > 0;
+    final double unitPrice = hasOffer ? _currentPres.precioOferta! : _currentPres.precioVentaFinal;
     final double subtotal = unitPrice * _quantity;
     
-    final String imageUrl = pres.imagenUrl ?? prod.imagenUrl ?? "";
-    final String imageTag = "modal_cat_${pres.id}"; 
+    final String imageUrl = _currentPres.imagenUrl ?? prod.imagenUrl ?? "";
+    final String imageTag = "modal_cat_${_currentPres.id}"; 
 
     double totalSavings = 0;
     if (hasOffer) {
-      totalSavings = (pres.precioVentaFinal - unitPrice) * _quantity;
+      totalSavings = (_currentPres.precioVentaFinal - unitPrice) * _quantity;
     }
 
-    String variantDisplay = pres.unidadVenta ?? "Unidad";
-
+    final String variantDisplay = _currentPres.unidadVenta ?? "Unidad";
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
+
+    // 🔥 CÁLCULO FINANCIERO FACTOR-AWARE (FASE 2)
+    final int factorVenta = _currentPres.unidadesPorVenta <= 0 ? 1 : _currentPres.unidadesPorVenta;
+    final double costoPresentacion = _currentPres.costoPresentacionFinal;
+    final bool tieneCosto = costoPresentacion > 0;
+    final double costoUnitarioBase = tieneCosto
+        ? ((_currentPres.costoUnitarioCalculado != null && _currentPres.costoUnitarioCalculado! > 0)
+            ? _currentPres.costoUnitarioCalculado!
+            : (costoPresentacion / factorVenta))
+        : 0.0;
+    final double gananciaUnitaria = tieneCosto ? (unitPrice - costoPresentacion) : 0.0;
+    final double gananciaTotal = gananciaUnitaria * _quantity;
+    final double margenPorcentual = (tieneCosto && unitPrice > 0)
+        ? ((unitPrice - costoPresentacion) / unitPrice * 100)
+        : 0.0;
+
+    // Semáforo de Rentabilidad
+    final Color profitColor;
+    final Color profitBg;
+    final IconData profitIcon;
+    final String profitLabel;
+
+    if (!tieneCosto) {
+      profitColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+      profitBg = isDark ? Colors.white10 : Colors.grey.shade100;
+      profitIcon = Icons.help_outline_rounded;
+      profitLabel = "Sin costo";
+    } else if (margenPorcentual >= 30) {
+      profitColor = isDark ? Colors.green[400]! : const Color(0xFF2E7D32);
+      profitBg = isDark ? Colors.green.withValues(alpha: 0.15) : const Color(0xFFE8F5E9);
+      profitIcon = Icons.trending_up_rounded;
+      profitLabel = "Excelente";
+    } else if (margenPorcentual >= 15) {
+      profitColor = isDark ? Colors.amber[300]! : const Color(0xFFE65100);
+      profitBg = isDark ? Colors.amber.withValues(alpha: 0.15) : const Color(0xFFFFF3E0);
+      profitIcon = Icons.trending_flat_rounded;
+      profitLabel = "Moderado";
+    } else {
+      profitColor = isDark ? Colors.red[400]! : const Color(0xFFC62828);
+      profitBg = isDark ? Colors.red.withValues(alpha: 0.15) : const Color(0xFFFFEBEE);
+      profitIcon = Icons.trending_down_rounded;
+      profitLabel = "Bajo";
+    }
+
+    final hasMultiplePresentations = prod.presentaciones.length > 1;
 
     return InteractiveSheetWrapper(
       maxHeightFactor: 0.92,
@@ -119,7 +176,10 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                   height: 54,
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () { widget.onAddToList(_quantity); Navigator.pop(context); },
+                    onPressed: () { 
+                      widget.onAddToList(_quantity, _currentPres); 
+                      Navigator.pop(context); 
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isDark ? Colors.orange[700] : Colors.orange[800],
                       foregroundColor: Colors.white,
@@ -136,7 +196,10 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                       child: SizedBox(
                         height: 54,
                         child: ElevatedButton.icon(
-                          onPressed: () { widget.onAddToList(_quantity); Navigator.pop(context); },
+                          onPressed: () { 
+                            widget.onAddToList(_quantity, _currentPres); 
+                            Navigator.pop(context); 
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: isDark ? const Color(0xFF2E2010) : const Color(0xFFFFF3E0),
                             foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800],
@@ -154,7 +217,10 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                       child: SizedBox(
                         height: 54,
                         child: ElevatedButton.icon(
-                          onPressed: () { widget.onAddToCart(_quantity); Navigator.pop(context); },
+                          onPressed: () { 
+                            widget.onAddToCart(_quantity, _currentPres); 
+                            Navigator.pop(context); 
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: isDark ? Colors.green[700] : const Color(0xFF2E7D32),
                             foregroundColor: Colors.white,
@@ -171,220 +237,576 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
       child: Stack(
         children: [
           SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            if (imageUrl.isNotEmpty) {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageUrl: imageUrl, tag: imageTag)));
-                            }
-                          },
-                          child: Hero(
-                            tag: imageTag,
-                            child: Container(
-                              width: 90, 
-                              height: 90,
-                              decoration: BoxDecoration(
-                                color: isDark ? Colors.white10 : Colors.grey[50],
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200)
+                // 1. CABECERA: IMAGEN + TÍTULOS (AISLADO DE LA 'X')
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        if (imageUrl.isNotEmpty) {
+                          Navigator.push(
+                            context, 
+                            MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageUrl: imageUrl, tag: imageTag)),
+                          );
+                        }
+                      },
+                      child: Hero(
+                        tag: imageTag,
+                        child: Container(
+                          width: 86, 
+                          height: 86,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white10 : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: UniversalImage(
+                              path: imageUrl,
+                              productName: prod.nombre,
+                              categoryName: catalogProv.getCategoryName(prod.categoriaId),
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    
+                    // 🔥 Margen derecho de 44dp garantiza 0 colisiones con el botón 'X'
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 44.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (brandName.isNotEmpty)
+                              Text(
+                                brandName.toUpperCase(), 
+                                style: textTheme.labelLarge?.copyWith(
+                                  color: isDark ? Colors.indigo[300] : Colors.indigo[800],
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: UniversalImage(
-                                  path: imageUrl,
-                                  fit: BoxFit.contain,
+                            const SizedBox(height: 4),
+                            
+                            RichText(
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis,
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: "${prod.nombre} ", 
+                                    style: textTheme.titleLarge?.copyWith(
+                                      color: textColor, 
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                  if (_currentPres.nombreEspecifico != null && _currentPres.nombreEspecifico!.isNotEmpty)
+                                    TextSpan(
+                                      text: _currentPres.nombreEspecifico!, 
+                                      style: textTheme.titleLarge?.copyWith(
+                                        color: isDark ? Colors.teal[300] : Colors.teal[700],
+                                        fontWeight: FontWeight.w800,
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                
+                if (prod.descripcion != null && prod.descripcion!.isNotEmpty) ...[
+                   const SizedBox(height: 12),
+                   Text(
+                     prod.descripcion!, 
+                     style: textTheme.bodyMedium?.copyWith(
+                       color: isDark ? Colors.grey[400] : Colors.grey[700],
+                       height: 1.3,
+                     ),
+                   ),
+                ],
+                const SizedBox(height: 16),
+
+                // 2. SELECTOR DE PRESENTACIONES DENTRO DEL MODAL (SI TIENE > 1)
+                if (hasMultiplePresentations) ...[
+                  Text(
+                    "PRESENTACIÓN SELECCIONADA",
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 36,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: prod.presentaciones.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (ctx, i) {
+                        final p = prod.presentaciones[i];
+                        final isSelected = p.id == _currentPres.id;
+                        final label = p.unidadVenta ?? p.nombreEspecifico ?? "P${i + 1}";
+                        return InkWell(
+                          onTap: () => _selectPresentation(p),
+                          borderRadius: BorderRadius.circular(10),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? (isDark ? Colors.blue[700] : Colors.blue[600])
+                                  : (isDark ? Colors.white10 : Colors.grey[100]),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected ? Colors.blue : (isDark ? Colors.white12 : Colors.grey.shade300),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                label.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                  color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        
-                        Expanded(
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // 3. FILA BENTO SIMÉTRICA (3 COLUMNAS: EMPAQUE, PRESENTACIÓN, STOCK)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DetailPill(
+                        icon: Icons.inventory_2_outlined,
+                        label: "Empaque",
+                        value: "${_currentPres.unidadesPorLote} u.",
+                        color: Colors.blue,
+                        isDark: isDark,
+                        textTheme: textTheme,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _DetailPill(
+                        icon: Icons.scale_outlined,
+                        label: "Presentación",
+                        value: variantDisplay,
+                        color: Colors.purple,
+                        isDark: isDark,
+                        textTheme: textTheme,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _DetailPill(
+                        icon: isOutOfStock ? Icons.cancel_outlined : Icons.check_circle_outline,
+                        label: "Stock",
+                        value: isOutOfStock ? "0" : "$_maxStock",
+                        color: isOutOfStock ? Colors.grey : Colors.green,
+                        isDark: isDark,
+                        textTheme: textTheme,
+                      ),
+                    ),
+                  ],
+                ),
+
+                // 4. BANDA FINANCIERA FACTOR-AWARE (SOLO MODO VENDEDOR)
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  child: widget.isStoreMode
+                      ? const SizedBox.shrink()
+                      : Container(
+                          margin: const EdgeInsets.only(top: 14),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E1E28) : const Color(0xFFF8F9FA),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isDark ? Colors.white12 : Colors.grey.shade300,
+                            ),
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (brandName.isNotEmpty)
-                                Text(brandName.toUpperCase(), style: textTheme.labelLarge?.copyWith(color: isDark ? Colors.indigo[300] : Colors.indigo[800])),
-                              const SizedBox(height: 4),
-                              
-                              RichText(
-                                maxLines: 4,
-                                overflow: TextOverflow.ellipsis,
-                                text: TextSpan(
-                                  children: [
-                                    TextSpan(text: "${prod.nombre} ", style: textTheme.titleLarge?.copyWith(color: textColor)),
-                                    if (pres.nombreEspecifico != null && pres.nombreEspecifico!.isNotEmpty)
-                                      TextSpan(text: pres.nombreEspecifico!, style: textTheme.titleLarge?.copyWith(color: isDark ? Colors.teal[300] : Colors.teal[700])),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      ],
-                    ),
-                    
-                    if (prod.descripcion != null && prod.descripcion!.isNotEmpty) ...[
-                       const SizedBox(height: 16),
-                       Text(prod.descripcion!, style: textTheme.bodyMedium?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey[700])),
-                    ],
-                    const SizedBox(height: 24),
-
-                    Wrap(
-                      spacing: 12, runSpacing: 12,
-                      children: [
-                        _DetailPill(icon: Icons.inventory_2, label: "Empaque", value: "${pres.unidadesPorLote} unid.", color: Colors.blue, isDark: isDark, textTheme: textTheme),
-                        _DetailPill(icon: Icons.scale, label: "Presentación", value: variantDisplay, color: Colors.purple, isDark: isDark, textTheme: textTheme),
-                        _DetailPill(
-                          icon: isOutOfStock ? Icons.cancel : Icons.check_circle, 
-                          label: "Stock", 
-                          value: isOutOfStock ? "0" : "$_maxStock", 
-                          color: isOutOfStock ? Colors.grey : Colors.green,
-                          isDark: isDark,
-                          textTheme: textTheme,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        icon: Icon(Icons.open_in_new, size: 16, color: isDark ? Colors.blue[300] : Colors.blue[800]),
-                        label: Text(
-                          "Ver Ficha Completa de Producto",
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.blue[300] : Colors.blue[800],
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.12) : Colors.blue[50],
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ProductDetailScreen(
-                                product: prod,
-                                initialPresentationId: pres.id!,
-                                heroTag: 'cat_${pres.id}',
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    Divider(height: 32, thickness: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-
-                    if (!isOutOfStock) ...[
-                      Wrap(
-                        alignment: WrapAlignment.spaceBetween,
-                        crossAxisAlignment: WrapCrossAlignment.end,
-                        runSpacing: 16,
-                        children: [
-                          Column(
-                             crossAxisAlignment: CrossAxisAlignment.start,
-                             children: [
-                                Text("Precio Unitario", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.grey[400] : Colors.grey)),
-                                const SizedBox(height: 4),
-                                if (hasOffer)
-                                   Text("S/ ${pres.precioVentaFinal.toStringAsFixed(2)}", style: textTheme.titleLarge?.copyWith(decoration: TextDecoration.lineThrough, color: isDark ? Colors.grey[600] : Colors.grey)),
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text("S/ ${unitPrice.toStringAsFixed(2)}", style: textTheme.displayMedium?.copyWith(color: hasOffer ? (isDark ? Colors.red[400] : Colors.red) : textColor)),
-                                ),
-                             ],
-                          ),
-                          
-                          Container(
-                            decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF14141C) : Colors.grey[50], borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300)
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(onPressed: _quantity > 1 ? _decrement : null, icon: const Icon(Icons.remove, size: 28), color: isDark ? Colors.red[300] : Colors.red),
-                                Container(
-                                  width: 50, alignment: Alignment.center,
-                                  child: Text("$_quantity", style: textTheme.displaySmall?.copyWith(color: textColor)),
-                                ),
-                                IconButton(onPressed: _quantity < _maxStock ? _increment : null, icon: const Icon(Icons.add, size: 28), color: isDark ? Colors.green[400] : Theme.of(context).primaryColor),
-                              ],
-                            ),
-                          )
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      
-                      Container(
-                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                         decoration: BoxDecoration(color: hasOffer ? (isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red[50]) : (isDark ? Colors.green.withValues(alpha: 0.15) : const Color(0xFFF0FDF4)), borderRadius: BorderRadius.circular(16)),
-                         child: Column(
-                            children: [
-                               Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                     Expanded(child: Text("Subtotal ($_quantity un.):", style: textTheme.titleMedium?.copyWith(color: hasOffer ? (isDark ? Colors.red[200] : Colors.red[900]) : (isDark ? Colors.green[200] : Colors.green[900])))),
-                                     Flexible(
-                                       child: FittedBox(
-                                         fit: BoxFit.scaleDown,
-                                         child: Text("S/ ${subtotal.toStringAsFixed(2)}", style: textTheme.displaySmall?.copyWith(color: hasOffer ? (isDark ? Colors.red[300] : Colors.red[900]) : (isDark ? Colors.green[300] : Colors.green[900]))),
-                                       ),
-                                     ),
-                                  ],
-                               ),
-                               if (hasOffer) ...[
-                                  const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
                                   Row(
                                     children: [
-                                      Icon(Icons.local_offer, color: isDark ? Colors.red[300] : Colors.red[700], size: 18),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text("¡Ahorras S/ ${totalSavings.toStringAsFixed(2)}!", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.red[300] : Colors.red[700])),
+                                      Icon(
+                                        Icons.query_stats_rounded, 
+                                        size: 16, 
+                                        color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        "DATOS FINANCIEROS (INTERNO)",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.5,
+                                          color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                        ),
                                       ),
                                     ],
-                                  )
-                               ]
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: profitBg,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(profitIcon, size: 14, color: profitColor),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          tieneCosto
+                                              ? "${margenPorcentual.toStringAsFixed(1)}% ($profitLabel)"
+                                              : "Sin costo registrado",
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: profitColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          factorVenta > 1 ? "Costo Presentación:" : "Costo Unitario:",
+                                          style: TextStyle(
+                                            fontSize: 10.5, 
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          tieneCosto
+                                              ? "S/ ${costoPresentacion.toStringAsFixed(2)}"
+                                              : "No registrado",
+                                          style: TextStyle(
+                                            fontSize: 13.5, 
+                                            fontWeight: FontWeight.bold, 
+                                            color: tieneCosto ? textColor : (isDark ? Colors.grey[500] : Colors.grey[600]),
+                                          ),
+                                        ),
+                                        if (factorVenta > 1 && tieneCosto)
+                                          Text(
+                                            "(S/ ${costoUnitarioBase.toStringAsFixed(2)}/u)",
+                                            style: TextStyle(
+                                              fontSize: 9.5, 
+                                              color: isDark ? Colors.grey[500] : Colors.grey[500],
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(height: 32, width: 1, color: isDark ? Colors.white10 : Colors.grey.shade300),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "Ganancia Neta ($_quantity un.):",
+                                          style: TextStyle(
+                                            fontSize: 10.5, 
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          tieneCosto ? "S/ ${gananciaTotal.toStringAsFixed(2)}" : "--",
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w900,
+                                            color: !tieneCosto
+                                                ? (isDark ? Colors.grey[500] : Colors.grey[600])
+                                                : (gananciaTotal >= 0
+                                                    ? (isDark ? Colors.green[400] : const Color(0xFF2E7D32))
+                                                    : (isDark ? Colors.red[400] : Colors.red[700])),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
-                         ),
-                      )
-                    ] else ...[
-                       Container(
-                         width: double.infinity,
-                         padding: const EdgeInsets.symmetric(vertical: 30),
-                         decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.grey[100], borderRadius: BorderRadius.circular(16)),
-                         child: Column(
-                            children: [
-                               Icon(Icons.production_quantity_limits, size: 50, color: isDark ? Colors.grey[500] : Colors.grey),
-                               const SizedBox(height: 12),
-                               Text("Temporalmente Agotado", style: textTheme.titleLarge?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[700])),
-                               const SizedBox(height: 4),
-                               Text("Intenta más tarde", style: textTheme.bodyMedium?.copyWith(color: isDark ? Colors.grey[500] : Colors.grey[600])),
-                            ],
-                         ),
-                       )
-                    ],
+                          ),
+                        ),
+                ),
 
-                    const SizedBox(height: 16),
-                  ],
+                // 5. BOTÓN FICHA COMPLETA (SOLO MODO VENDEDOR)
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  child: widget.isStoreMode
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              icon: Icon(Icons.open_in_new, size: 16, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                              label: Text(
+                                "Ver Ficha Completa de Producto",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                ),
+                              ),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.12) : Colors.blue[50],
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () async {
+                                final navigator = Navigator.of(context);
+                                navigator.pop();
+                                await navigator.push(
+                                  MaterialPageRoute(
+                                    builder: (_) => ProductDetailScreen(
+                                      product: prod.presentaciones.isNotEmpty
+                                          ? prod
+                                          : prod.copyWith(presentaciones: [_currentPres]),
+                                      initialPresentationId: _currentPres.id!,
+                                      heroTag: 'cat_${_currentPres.id}',
+                                    ),
+                                  ),
+                                );
+                                await catalogProv.initCatalog();
+                              },
+                            ),
+                          ),
+                        ),
+                ),
+
+                Divider(height: 28, thickness: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+
+                // 6. SELECTOR DE PRECIO Y CANTIDAD
+                if (!isOutOfStock) ...[
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.end,
+                    runSpacing: 16,
+                    children: [
+                      Column(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                            Text(
+                              "Precio Venta", 
+                              style: textTheme.titleMedium?.copyWith(
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            if (hasOffer)
+                               Text(
+                                 "S/ ${_currentPres.precioVentaFinal.toStringAsFixed(2)}", 
+                                 style: textTheme.titleLarge?.copyWith(
+                                   decoration: TextDecoration.lineThrough, 
+                                   color: isDark ? Colors.grey[600] : Colors.grey,
+                                   fontSize: 14,
+                                 ),
+                               ),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                "S/ ${unitPrice.toStringAsFixed(2)}", 
+                                style: textTheme.displayMedium?.copyWith(
+                                  color: hasOffer ? (isDark ? Colors.red[400] : Colors.red) : textColor,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                         ],
+                      ),
+                      
+                      Container(
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF14141C) : Colors.grey[50], 
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              onPressed: _quantity > 1 ? _decrement : null, 
+                              icon: const Icon(Icons.remove, size: 24), 
+                              color: isDark ? Colors.red[300] : Colors.red,
+                            ),
+                            Container(
+                              width: 44, 
+                              alignment: Alignment.center,
+                              child: Text(
+                                "$_quantity", 
+                                style: textTheme.titleLarge?.copyWith(
+                                  color: textColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: _quantity < _maxStock ? _increment : null, 
+                              icon: const Icon(Icons.add, size: 24), 
+                              color: isDark ? Colors.green[400] : Theme.of(context).primaryColor,
+                            ),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  
+                  // TARJETA DE SUBTOTAL
+                  Container(
+                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                     decoration: BoxDecoration(
+                       color: hasOffer 
+                           ? (isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red[50]) 
+                           : (isDark ? Colors.green.withValues(alpha: 0.15) : const Color(0xFFF0FDF4)), 
+                       borderRadius: BorderRadius.circular(16),
+                       border: Border.all(
+                         color: hasOffer 
+                             ? (isDark ? Colors.red.withValues(alpha: 0.3) : Colors.red.shade200) 
+                             : (isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.shade200),
+                       ),
+                     ),
+                     child: Column(
+                        children: [
+                           Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                 Expanded(
+                                   child: Text(
+                                     "Subtotal ($_quantity un.):", 
+                                     style: textTheme.titleMedium?.copyWith(
+                                       color: hasOffer ? (isDark ? Colors.red[200] : Colors.red[900]) : (isDark ? Colors.green[200] : Colors.green[900]),
+                                       fontWeight: FontWeight.bold,
+                                     ),
+                                   ),
+                                 ),
+                                 Flexible(
+                                   child: FittedBox(
+                                     fit: BoxFit.scaleDown,
+                                     child: Text(
+                                       "S/ ${subtotal.toStringAsFixed(2)}", 
+                                       style: textTheme.displaySmall?.copyWith(
+                                         color: hasOffer ? (isDark ? Colors.red[300] : Colors.red[900]) : (isDark ? Colors.green[300] : Colors.green[900]),
+                                         fontWeight: FontWeight.w900,
+                                       ),
+                                     ),
+                                   ),
+                                 ),
+                              ],
+                           ),
+                           if (hasOffer) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(Icons.local_offer, color: isDark ? Colors.red[300] : Colors.red[700], size: 16),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      "¡Ahorras S/ ${totalSavings.toStringAsFixed(2)}!", 
+                                      style: textTheme.bodyMedium?.copyWith(
+                                        color: isDark ? Colors.red[300] : Colors.red[700],
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                           ]
+                        ],
+                     ),
+                  )
+                ] else ...[
+                   Container(
+                     width: double.infinity,
+                     padding: const EdgeInsets.symmetric(vertical: 24),
+                     decoration: BoxDecoration(
+                       color: isDark ? Colors.white10 : Colors.grey[100], 
+                       borderRadius: BorderRadius.circular(16),
+                     ),
+                     child: Column(
+                        children: [
+                           Icon(Icons.production_quantity_limits, size: 44, color: isDark ? Colors.grey[500] : Colors.grey),
+                           const SizedBox(height: 10),
+                           Text("Temporalmente Agotado", style: textTheme.titleLarge?.copyWith(color: isDark ? Colors.grey[300] : Colors.grey[700])),
+                           const SizedBox(height: 4),
+                           Text("Intenta seleccionando otra presentación", style: textTheme.bodyMedium?.copyWith(color: isDark ? Colors.grey[500] : Colors.grey[600])),
+                        ],
+                     ),
+                   )
+                ],
+
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+          // BOTÓN DE CERRAR 'X' FLOTANTE CON HÁPTICA Y FONDO TRANSLÚCIDO
+          Positioned(
+            top: 8, 
+            right: 8, 
+            child: Material(
+              color: isDark ? Colors.white12 : Colors.grey[200],
+              shape: const CircleBorder(),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(6.0),
+                  child: Icon(Icons.close, color: isDark ? Colors.white : Colors.black87, size: 22),
                 ),
               ),
-            Positioned(top: 8, right: 12, child: IconButton(onPressed: ()=>Navigator.pop(context), icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.grey, size: 26))),
-          ],
-        ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -397,29 +819,57 @@ class _DetailPill extends StatelessWidget {
   final bool isDark;
   final TextTheme textTheme;
 
-  const _DetailPill({required this.icon, required this.label, required this.value, required this.color, required this.isDark, required this.textTheme});
+  const _DetailPill({
+    required this.icon, 
+    required this.label, 
+    required this.value, 
+    required this.color, 
+    required this.isDark, 
+    required this.textTheme,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
         color: isDark ? color.withValues(alpha: 0.15) : color[50],
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? color.withValues(alpha: 0.3) : color.withValues(alpha: 0.2))
+        border: Border.all(color: isDark ? color.withValues(alpha: 0.3) : color.withValues(alpha: 0.2)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16, color: isDark ? color[300] : color[700]),
-              const SizedBox(width: 6),
-              Text(label.toUpperCase(), style: textTheme.labelLarge?.copyWith(color: isDark ? color[200] : color[700])),
+              Icon(icon, size: 14, color: isDark ? color[300] : color[700]),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label.toUpperCase(), 
+                  style: TextStyle(
+                    fontSize: 10, 
+                    fontWeight: FontWeight.bold, 
+                    color: isDark ? color[200] : color[700],
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(value, style: textTheme.titleLarge?.copyWith(color: isDark ? Colors.white : color[900])),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value, 
+              style: TextStyle(
+                fontSize: 13.5, 
+                fontWeight: FontWeight.w900, 
+                color: isDark ? Colors.white : color[900],
+              ),
+            ),
+          ),
         ],
       ),
     );

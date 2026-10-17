@@ -41,6 +41,27 @@ class ClientRepository {
     }
   }
 
+  static String sqlUnaccent(String expr) {
+    return "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(IFNULL($expr, '')), 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'Á', 'a'), 'É', 'e'), 'Í', 'i'), 'Ó', 'o'), 'Ú', 'u'), 'ü', 'u'), 'Ü', 'u')";
+  }
+
+  static String normalizeDart(String text) {
+    String s = text.toLowerCase().trim();
+    return s
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('Á', 'a')
+        .replaceAll('É', 'e')
+        .replaceAll('Í', 'i')
+        .replaceAll('Ó', 'o')
+        .replaceAll('Ú', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('Ü', 'u');
+  }
+
   Future<List<Map<String, dynamic>>> searchClientsRaw(String query, int negocioId) async {
     try {
       final db = await _dbHelper.database;
@@ -51,9 +72,11 @@ class ClientRepository {
       if (query.trim().isNotEmpty) {
         final words = query.trim().split(RegExp(r'\s+'));
         for (final word in words) {
-          final term = '%$word%';
-          whereClause += ' AND (nombre_completo LIKE ? OR dni_ruc LIKE ? OR telefono LIKE ?)';
-          args.addAll([term, term, term]);
+          final normalizedWord = normalizeDart(word);
+          if (normalizedWord.isEmpty) continue;
+          final term = '%$normalizedWord%';
+          whereClause += ' AND (${sqlUnaccent("nombre_completo")} LIKE ? OR ${sqlUnaccent("dni_ruc")} LIKE ? OR ${sqlUnaccent("telefono")} LIKE ? OR ${sqlUnaccent("direccion")} LIKE ? OR ${sqlUnaccent("notas")} LIKE ?)';
+          args.addAll([term, term, term, term, term]);
         }
       }
 
@@ -61,7 +84,7 @@ class ClientRepository {
         'clientes', 
         where: whereClause, 
         whereArgs: args,
-        limit: 20
+        limit: 30
       );
     } catch (e, stack) {
       AppLogger.error('ClientRepository.searchClientsRaw', e, stack);

@@ -384,23 +384,23 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
 
   Widget _buildOperationsCarousel(WorkbenchProvider workbench, bool isDark) {
     String label = "";
-    String value = "";
+    double target = 0;
     Color color = Colors.orangeAccent;
     IconData icon = Icons.assignment_late_rounded;
 
     if (_kpiIndex == 0) {
       label = "Por Revisar";
-      value = "${workbench.inProcessList.length}";
+      target = workbench.inProcessList.length.toDouble();
       color = Colors.orangeAccent;
       icon = Icons.assignment_late_rounded;
     } else if (_kpiIndex == 1) {
-      label = "Listas Listas";
-      value = "${workbench.readyAndPacksList.length}";
+      label = "Listas Preparadas";
+      target = workbench.readyAndPacksList.length.toDouble();
       color = Colors.lightBlueAccent;
       icon = Icons.check_circle_outline_rounded;
     } else {
       label = "Vendidas";
-      value = "${workbench.soldList.length}";
+      target = workbench.soldList.length.toDouble();
       color = Colors.tealAccent;
       icon = Icons.monetization_on_outlined;
     }
@@ -409,7 +409,9 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
       keyId: "op_$_kpiIndex",
       icon: icon,
       label: label,
-      value: value,
+      value: "${target.toInt()}",
+      numericTarget: target,
+      formatter: (v) => "${v.toInt()}",
       color: color,
       isDark: isDark,
       isLoading: workbench.isLoading,
@@ -419,22 +421,34 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
   Widget _buildFinanceCarousel(SaleProvider salesProv, NumberFormat currency, bool isDark) {
     String label = "";
     String value = "";
+    double? target;
+    String Function(double)? formatter;
     Color color = Colors.greenAccent;
     IconData icon = Icons.trending_up_rounded;
 
     if (_kpiIndex == 0) {
       label = "Ventas Hoy";
-      value = currency.format(salesProv.todaySalesTotal);
+      target = salesProv.todaySalesTotal;
+      formatter = (v) => currency.format(v);
+      value = currency.format(target);
       color = Colors.greenAccent;
       icon = Icons.trending_up_rounded;
     } else if (_kpiIndex == 1) {
       label = "Operaciones Hoy";
-      value = "${salesProv.todaySalesCount}";
+      target = salesProv.todaySalesCount.toDouble();
+      formatter = (v) => "${v.toInt()}";
+      value = "${target.toInt()}";
       color = Colors.pinkAccent;
       icon = Icons.shopping_bag_outlined;
     } else {
       label = "Ventas Mes";
-      value = salesProv.currentMonthSalesTotal == null ? "..." : currency.format(salesProv.currentMonthSalesTotal);
+      if (salesProv.currentMonthSalesTotal == null) {
+        value = "...";
+      } else {
+        target = salesProv.currentMonthSalesTotal!;
+        formatter = (v) => currency.format(v);
+        value = currency.format(target);
+      }
       color = Colors.cyanAccent;
       icon = Icons.calendar_month_rounded;
     }
@@ -444,13 +458,25 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
       icon: icon,
       label: label,
       value: value,
+      numericTarget: target,
+      formatter: formatter,
       color: color,
       isDark: isDark,
       isLoading: salesProv.isLoading,
     );
   }
 
-  Widget _buildAnimatedKpi({required String keyId, required IconData icon, required String label, required String value, required Color color, required bool isDark, bool isLoading = false}) {
+  Widget _buildAnimatedKpi({
+    required String keyId,
+    required IconData icon,
+    required String label,
+    required String value,
+    double? numericTarget,
+    String Function(double)? formatter,
+    required Color color,
+    required bool isDark,
+    bool isLoading = false,
+  }) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 600),
       switchInCurve: Curves.easeOutCubic,
@@ -469,6 +495,8 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
         icon: icon,
         label: label,
         value: value,
+        numericTarget: numericTarget,
+        formatter: formatter,
         color: color,
         isDark: isDark,
         isLoading: isLoading,
@@ -476,7 +504,17 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
     );
   }
 
-  Widget _buildKpiCard({Key? key, required IconData icon, required String label, required String value, required Color color, required bool isDark, bool isLoading = false}) {
+  Widget _buildKpiCard({
+    Key? key,
+    required IconData icon,
+    required String label,
+    required String value,
+    double? numericTarget,
+    String Function(double)? formatter,
+    required Color color,
+    required bool isDark,
+    bool isLoading = false,
+  }) {
     return Container(
       key: key,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -503,13 +541,47 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      value, 
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
-                    ),
+                    child: numericTarget != null && formatter != null
+                        ? TweenAnimationBuilder<double>(
+                            key: ValueKey(numericTarget),
+                            tween: Tween<double>(begin: 0.0, end: numericTarget),
+                            duration: const Duration(milliseconds: 650),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, val, _) {
+                              return Text(
+                                formatter(val),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 18,
+                                ),
+                                maxLines: 1,
+                              );
+                            },
+                          )
+                        : Text(
+                            value,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 18,
+                            ),
+                          ),
                   ),
                 const SizedBox(height: 4),
-                Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.w600)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ],
             ),
           )

@@ -104,7 +104,17 @@ class QuickSaleCartItem extends StatelessWidget {
                       border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200), 
                       borderRadius: BorderRadius.circular(12)
                     ),
-                    child: ClipRRect(borderRadius: BorderRadius.circular(12), child: UniversalImage(path: product.imageUrl, fit: BoxFit.contain)),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: UniversalImage(
+                        path: product.imageUrl,
+                        productName: product.productName.trim().isNotEmpty
+                            ? product.productName.trim()
+                            : (product.fullName.trim().isNotEmpty ? product.fullName.trim() : "Producto"),
+                        categoryName: brandName.isNotEmpty ? brandName : (product.specificName ?? "Artículo"),
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 14),
 

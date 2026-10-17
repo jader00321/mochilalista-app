@@ -103,7 +103,14 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
-              width: _isExpanded ? 50.0 : MediaQuery.of(context).size.width * 0.30, // Approx flex 30
+              width: _isExpanded
+                  ? 50.0
+                  : () {
+                      final double screenW = MediaQuery.of(context).size.width;
+                      final double maxLeft = (screenW - 56) * 0.42;
+                      final double minLeft = 110.0 <= maxLeft ? 110.0 : maxLeft;
+                      return (screenW * 0.35).clamp(minLeft, maxLeft);
+                    }(),
               child: _buildSourceInfo(isDark),
             ),
             
@@ -204,7 +211,15 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                         child: Container(
                           width: 50, height: 50,
                           decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.grey[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200)),
-                          child: ClipRRect(borderRadius: BorderRadius.circular(10), child: UniversalImage(path: product.imageUrl, fit: BoxFit.contain)),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: UniversalImage(
+                              path: product.imageUrl,
+                              productName: product.productName,
+                              categoryName: product.brand,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         ),
                       ),
                       secondChild: const SizedBox.shrink(),
@@ -537,7 +552,13 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
           Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade100, borderRadius: BorderRadius.circular(6)), child: Text("#${widget.index + 1}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.orange[300] : Colors.orange.shade900))),
           if (!_isExpanded) ...[
             const SizedBox(height: 8),
-            Text(widget.pair.sourceItem.fullName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87), maxLines: 4, overflow: TextOverflow.ellipsis),
+            Text(
+              widget.pair.sourceItem.fullName,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87, height: 1.25),
+              softWrap: true,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
             const SizedBox(height: 6),
             FittedBox(
               fit: BoxFit.scaleDown,

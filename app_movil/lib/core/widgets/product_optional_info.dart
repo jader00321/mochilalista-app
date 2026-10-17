@@ -28,6 +28,7 @@ class ProductOptionalInfo extends StatelessWidget {
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
+          initiallyExpanded: barcodeCtrl.text.isNotEmpty || descCtrl.text.isNotEmpty || imgCtrl.text.isNotEmpty,
           iconColor: isDark ? Colors.white : Colors.black87,
           collapsedIconColor: isDark ? Colors.white70 : Colors.grey,
           title: Text("Detalles Globales (Opcional)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),

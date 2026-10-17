@@ -6,6 +6,7 @@ import 'package:app_movil/features/promotions/providers/promotion_provider.dart'
 import 'package:app_movil/features/promotions/models/bundle_model.dart';
 
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart'; 
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
 class QuickSaleState {
@@ -13,6 +14,7 @@ class QuickSaleState {
   final Map<int, int> quantities = {}; 
   final Map<int, double> overridePrices = {}; 
 
+  ClientModel? selectedClient;
   int? clientId; 
   String? clientName;
   String? clientPhone;
@@ -57,6 +59,7 @@ class QuickSaleProvider with ChangeNotifier {
   }
 
   List<MatchedProduct> get cartItems => _currentState.cart;
+  ClientModel? get selectedClient => _currentState.selectedClient;
   int? get clientId => _currentState.clientId;
   String? get clientName => _currentState.clientName;
   String? get clientPhone => _currentState.clientPhone;
@@ -121,13 +124,43 @@ class QuickSaleProvider with ChangeNotifier {
     }
   }
 
-  void setClientInfo({int? id, String? name, String? phone, String? clientNote, String? saleNote, double? saldo}) {
-    _currentState.clientId = id;
-    _currentState.clientName = name;
-    _currentState.clientPhone = phone;
-    if (clientNote != null) _currentState.clientNote = clientNote;
+  void setClientInfo({
+    ClientModel? client,
+    int? id,
+    String? name,
+    String? phone,
+    String? clientNote,
+    String? saleNote,
+    double? saldo,
+  }) {
+    if (client != null) {
+      _currentState.selectedClient = client;
+      _currentState.clientId = client.id == 0 ? null : client.id;
+      _currentState.clientName = client.fullName;
+      _currentState.clientPhone = client.phone;
+      _currentState.clientNote = client.notes;
+      _currentState.clientSaldo = client.saldoAFavor;
+    } else {
+      if (id == null && name == null && phone == null) {
+        _currentState.selectedClient = null;
+      }
+      _currentState.clientId = id;
+      _currentState.clientName = name;
+      _currentState.clientPhone = phone;
+      if (clientNote != null) _currentState.clientNote = clientNote;
+      if (saldo != null) _currentState.clientSaldo = saldo;
+    }
     if (saleNote != null) _currentState.saleNote = saleNote;
-    if (saldo != null) _currentState.clientSaldo = saldo;
+    notifyListeners();
+  }
+
+  void updateSelectedClientData(ClientModel client) {
+    _currentState.selectedClient = client;
+    _currentState.clientId = client.id == 0 ? null : client.id;
+    _currentState.clientName = client.fullName;
+    _currentState.clientPhone = client.phone;
+    _currentState.clientNote = client.notes;
+    _currentState.clientSaldo = client.saldoAFavor;
     notifyListeners();
   }
 
@@ -210,13 +243,42 @@ class QuickSaleProvider with ChangeNotifier {
   String? updateItemFromModal(int oldPresentationId, MatchedProduct product, int newQty, double? newOverridePrice) {
     final index = _currentState.cart.indexWhere((p) => p.presentationId == oldPresentationId);
     if (index != -1) {
-      if (newQty > product.stock) {
-        return "Solo hay ${product.stock} unidades disponibles en stock.";
-      }
-
       if (oldPresentationId != product.presentationId) {
+        // Chequear si la nueva variante ya está presente en el carrito
+        final existingTargetIndex = _currentState.cart.indexWhere((p) => p.presentationId == product.presentationId);
+        if (existingTargetIndex != -1 && existingTargetIndex != index) {
+          if (product.stock <= 0) {
+            return "No hay unidades disponibles en stock para esta presentación.";
+          }
+          final existingQty = _currentState.quantities[product.presentationId] ?? 1;
+          final maxStock = product.stock > 0 ? product.stock : 1;
+          final combinedQty = (existingQty + newQty).clamp(1, maxStock);
+          
+          // Remover el ítem viejo y sus propiedades
+          _currentState.cart.removeAt(index);
+          _currentState.quantities.remove(oldPresentationId);
+          _currentState.overridePrices.remove(oldPresentationId);
+          
+          // Actualizar la cantidad del ítem existente
+          _currentState.quantities[product.presentationId] = combinedQty;
+          if (newOverridePrice != null) {
+            _currentState.overridePrices[product.presentationId] = newOverridePrice;
+          }
+          notifyListeners();
+
+          if (existingQty + newQty > maxStock) {
+            return "Se fusionaron las presentaciones. Cantidad ajustada al stock máximo disponible ($maxStock).";
+          }
+          return null;
+        }
+
+        // Si no existía previamente, removemos el id anterior de las estructuras
         _currentState.quantities.remove(oldPresentationId);
         _currentState.overridePrices.remove(oldPresentationId);
+      }
+
+      if (newQty > product.stock) {
+        return "Solo hay ${product.stock} unidades disponibles en stock.";
       }
 
       _currentState.cart[index] = product; 

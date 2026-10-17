@@ -15,6 +15,7 @@ import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/models/whatsapp_config_model.dart';
 
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/widgets/manual/client_search_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_client_section.dart';
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_config_section.dart';
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_business_section.dart';
@@ -405,114 +406,24 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                 ),
               ),
             ),
-          )
+          ),
         ],
       ),
     );
   }
 
   void _showClientSelectorModal(bool isDark) {
-    final clientService = ClientService();
-    final authProv = Provider.of<AuthProvider>(context, listen: false);
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        Future<List<ClientModel>>? searchFuture;
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return DraggableScrollableSheet(
-              initialChildSize: 0.8,
-              minChildSize: 0.5,
-              maxChildSize: 0.95,
-              expand: false,
-              builder: (_, scrollController) {
-                return Container(
-                  decoration: BoxDecoration(color: isDark ? const Color(0xFF23232F) : Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                            const SizedBox(height: 20),
-                            Text("Seleccionar Cliente", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87)),
-                            const SizedBox(height: 8),
-                            Text("Escribe un nombre o teléfono para buscar", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 14)),
-                            const SizedBox(height: 20),
-                            TextField(
-                              autofocus: true,
-                              style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16),
-                              decoration: InputDecoration(
-                                hintText: "Ej: Juan Perez...",
-                                hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey),
-                                prefixIcon: Icon(Icons.search, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                                filled: true,
-                                fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100]
-                              ),
-                              onChanged: (val) {
-                                if (val.isNotEmpty) { 
-                                  setModalState(() {
-                                    // 🔥 CORRECCIÓN 1: Enviar activeBusinessId
-                                    if (authProv.activeBusinessId != null) {
-                                      searchFuture = clientService.searchClients(val, authProv.activeBusinessId!);
-                                    }
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: searchFuture == null
-                          ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.touch_app, size: 60, color: isDark ? Colors.white10 : Colors.grey[300]), const SizedBox(height: 16), Text("Escribe para comenzar la búsqueda", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 16))]))
-                          : FutureBuilder<List<ClientModel>>(
-                              future: searchFuture,
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                                if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red)));
-                                if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text("No se encontraron coincidencias", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.black87)));
-
-                                return ListView.separated(
-                                  controller: scrollController,
-                                  itemCount: snapshot.data!.length,
-                                  separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-                                  itemBuilder: (context, index) {
-                                    final client = snapshot.data![index];
-                                    return ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                                      leading: CircleAvatar(backgroundColor: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange[100], child: Text(client.fullName.isNotEmpty ? client.fullName[0].toUpperCase() : "?", style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange, fontWeight: FontWeight.bold, fontSize: 18))),
-                                      title: Text(client.fullName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                                      subtitle: Text(client.phone, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 14)),
-                                      onTap: () {
-                                        setState(() {
-                                          _selectedClient = client;
-                                          _isUsingSelectedClient = true;
-                                          _clientNameCtrl.text = client.fullName;
-                                          _clientPhoneCtrl.text = client.phone;
-                                          _regenerateMessage();
-                                        });
-                                        Navigator.pop(ctx);
-                                      },
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                      )
-                    ],
-                  ),
-                );
-              }
-            );
-          }
-        );
-      }
+    ClientSearchModal.show(
+      context,
+      onClientSelected: (client) {
+        setState(() {
+          _selectedClient = client;
+          _isUsingSelectedClient = true;
+          _clientNameCtrl.text = client.fullName;
+          _clientPhoneCtrl.text = client.phone;
+          _regenerateMessage();
+        });
+      },
     );
   }
 

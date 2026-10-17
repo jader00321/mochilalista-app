@@ -3,6 +3,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
 import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/features/scanner/widgets/barcode_not_found_dialog.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/screens/product_detail_screen.dart';
 import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
@@ -50,7 +52,11 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       return;
     }
 
+    final auth = Provider.of<AuthProvider>(context, listen: false);
     final provider = Provider.of<ScannerProvider>(context, listen: false);
+    if (auth.activeBusinessId != null) {
+      provider.updateContext(auth.activeBusinessId, auth.user?.id, null);
+    }
 
     try {
       final result = await provider.scanBarcode(code);
@@ -108,7 +114,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
         }
 
         // ========================================================
-        // FLUJO B: FLUJO NORMAL (INVENTARIO)
+        // FLUJO B: FLUJO NORMAL (INVENTARIO / BUSCADOR HOME)
         // ========================================================
         Navigator.pushReplacement(
           context,
@@ -134,22 +140,39 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           );
           setState(() => _isProcessing = false);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                "Producto no encontrado. Creando nuevo...",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
-            ),
+          // Modal interactivo moderno: BarcodeNotFoundDialog
+          try {
+            await _cameraController.stop();
+          } catch (_) {}
+
+          if (!mounted) return;
+          bool navigatedToCreate = false;
+
+          await BarcodeNotFoundDialog.show(
+            context: context,
+            barcode: code,
+            onRegister: () {
+              navigatedToCreate = true;
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProductCreateScreen(initialBarcode: code),
+                ),
+              );
+            },
+            onScanAgain: () {
+              // El diálogo se cierra y el bloque posterior reanuda la cámara
+            },
           );
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProductCreateScreen(initialBarcode: code),
-            ),
-          );
+
+          // Si el usuario cerró el diálogo por cualquier medio (arrastre, tap fuera, atrás)
+          // y no navegó a crear producto, reanudar siempre la cámara
+          if (!navigatedToCreate && mounted) {
+            try {
+              await _cameraController.start();
+            } catch (_) {}
+            setState(() => _isProcessing = false);
+          }
         }
       }
     } catch (e) {

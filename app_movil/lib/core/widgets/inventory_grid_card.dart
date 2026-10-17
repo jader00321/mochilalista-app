@@ -55,7 +55,12 @@ class InventoryGridCard extends StatelessWidget {
                       color: isDark ? Colors.white10 : Colors.white,
                       child: Hero(
                         tag: 'inv_${product.id}_${presentation.id}',
-                        child: UniversalImage(path: displayImage),
+                        child: UniversalImage(
+                          path: displayImage,
+                          productName: product.nombre,
+                          categoryName: provider.getCategoryName(product.categoriaId),
+                          fit: BoxFit.cover,
+                        ),
                       )
                     ),
                   ),

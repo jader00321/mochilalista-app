@@ -439,7 +439,14 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                           Container(
                             width: 90, height: 90, 
                             decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300), borderRadius: BorderRadius.circular(16)), 
-                            child: ClipRRect(borderRadius: BorderRadius.circular(16), child: UniversalImage(path: _currentSelection.imageUrl, fit: BoxFit.cover))
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: UniversalImage(
+                                path: _currentSelection.imageUrl,
+                                productName: _currentSelection.productName,
+                                fit: BoxFit.cover,
+                              ),
+                            )
                           ),
                           if (_currentSelection.imageUrl != null && _currentSelection.imageUrl!.isNotEmpty) ...[
                             Container(width: 90, height: 90, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.black.withValues(alpha: 0.3))),

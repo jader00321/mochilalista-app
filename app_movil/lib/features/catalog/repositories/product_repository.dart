@@ -253,6 +253,28 @@ class ProductRepository {
     return fullJson;
   }
 
+  Future<Map<int, List<Map<String, dynamic>>>> fetchPresentationsForProductIdsRaw(
+    List<int> productIds,
+  ) async {
+    if (productIds.isEmpty) return {};
+    final db = await _dbHelper.database;
+    final placeholders = List.filled(productIds.length, '?').join(',');
+    final prRows = await db.query(
+      'presentaciones_producto',
+      where: 'producto_id IN ($placeholders) AND activo = 1',
+      whereArgs: productIds,
+      orderBy: 'es_default DESC, id ASC',
+    );
+
+    final Map<int, List<Map<String, dynamic>>> result = {};
+    for (var row in prRows) {
+      final prodId = row['producto_id'] as int;
+      result.putIfAbsent(prodId, () => []);
+      result[prodId]!.add(row);
+    }
+    return result;
+  }
+
   Future<void> deleteProductRaw(int id) async {
     final db = await _dbHelper.database;
     await db.delete('productos', where: 'id = ?', whereArgs: [id]);

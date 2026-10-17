@@ -100,13 +100,49 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                   onTap: widget.onFilterTap,
                   borderRadius: BorderRadius.circular(14),
                   child: Container(
-                    height: 48, width: 48,
+                    height: 48,
+                    width: 48,
                     decoration: BoxDecoration(
                       color: isDark ? Colors.blue[800] : theme.primaryColor,
                       borderRadius: BorderRadius.circular(14),
-                      boxShadow: [if (!isDark) BoxShadow(color: theme.primaryColor.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 3))]
+                      border: provider.hasActiveFilters
+                          ? Border.all(
+                              color: Colors.tealAccent,
+                              width: 1.5,
+                            )
+                          : null,
+                      boxShadow: [
+                        if (!isDark)
+                          BoxShadow(
+                            color: theme.primaryColor.withValues(alpha: 0.3),
+                            blurRadius: 6,
+                            offset: const Offset(0, 3),
+                          ),
+                      ],
                     ),
-                    child: const Icon(Icons.tune, color: Colors.white, size: 26),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const Icon(Icons.tune, color: Colors.white, size: 26),
+                        if (provider.hasActiveFilters)
+                          Positioned(
+                            right: 7,
+                            top: 7,
+                            child: Container(
+                              width: 9,
+                              height: 9,
+                              decoration: BoxDecoration(
+                                color: Colors.tealAccent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isDark ? const Color(0xFF14141C) : Colors.white,
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ],

@@ -14,6 +14,7 @@ import 'package:app_movil/features/smart_quotation/screens/crm/client_tracking_s
 import 'package:app_movil/features/smart_quotation/screens/workbench_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/client_orders_screen.dart'; 
 import 'package:app_movil/features/scanner/screens/scan_screen.dart'; 
+import 'package:app_movil/features/scanner/screens/barcode_scanner_screen.dart'; 
 import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
 import 'package:app_movil/features/auth/screens/onboarding/lock_screen.dart';
 import 'package:app_movil/features/profile/screens/profile_screen.dart';
@@ -192,6 +193,8 @@ class _HomeDashboardView extends StatefulWidget {
 
 class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTickerProviderStateMixin {
   late AnimationController _bgAnimController;
+  bool _isDockBubble = false;
+  bool _hasActiveTasks = false;
 
   @override
   void initState() {
@@ -247,7 +250,7 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const ScanScreen(),
+                            builder: (_) => const BarcodeScannerScreen(),
                           ),
                         );
                       },
@@ -278,23 +281,15 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                         onGoToWorkbench: () {},
                       ),
 
-                    const SizedBox(height: 24), 
-                    Text(
-                      isGuest ? "Explora nuestras herramientas" : (auth.isCommunityClient ? "Servicios de la Tienda" : "Gestión Operativa"), 
-                      style: TextStyle(
-                        fontSize: 18, 
-                        fontWeight: FontWeight.w900, 
-                        letterSpacing: -0.5,
-                        color: isDark ? Colors.white : Colors.black87 
-                      )
-                    ),
-                    const SizedBox(height: 16), 
+                    const SizedBox(height: 24),
                     const SmartActionGrid(),
                     if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                       const SizedBox(height: 32),
                       const RecentActivityList(),
                     ],
-                    const SizedBox(height: 100), 
+                    SizedBox(
+                      height: _hasActiveTasks ? (_isDockBubble ? 40 : 150) : 30,
+                    ), 
                   ],
                 ),
               ),
@@ -347,11 +342,14 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
           ),
         ),
         mainContent,
-        const Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: PersistentWorkDock(isFloating: true),
+        PersistentWorkDock(
+          isFloating: true,
+          onBubbleModeChanged: (isBubble) {
+            if (mounted) setState(() => _isDockBubble = isBubble);
+          },
+          onTasksChanged: (hasTasks) {
+            if (mounted) setState(() => _hasActiveTasks = hasTasks);
+          },
         ),
       ],
     );

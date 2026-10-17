@@ -32,13 +32,9 @@ extension _ManualQuoteClientExt on _ManualQuotationScreenState {
   }
 
   void _showClientSearch() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => ClientSearchModal(
-        onClientSelected: (client) => _selectClient(client),
-      ),
+    ClientSearchModal.show(
+      context,
+      onClientSelected: (client) => _selectClient(client),
     );
   }
 

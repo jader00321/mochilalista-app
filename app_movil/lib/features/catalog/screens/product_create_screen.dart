@@ -47,6 +47,9 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
       Provider.of<InventoryProvider>(context, listen: false).loadMasterData();
     });
     _addPresentation(isDefault: true);
+    if (widget.initialBarcode != null && widget.initialBarcode!.isNotEmpty && _controllers.isNotEmpty) {
+      (_controllers.first['barcode'] as TextEditingController).text = widget.initialBarcode!;
+    }
   }
 
   void _disposeControllerMap(Map<String, dynamic> map) {

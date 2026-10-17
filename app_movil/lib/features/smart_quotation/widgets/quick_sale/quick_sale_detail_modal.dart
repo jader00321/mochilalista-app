@@ -98,7 +98,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
   Future<void> _loadVariants() async {
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
     try {
-      final prod = await invProv.fetchProductById(_currentSelection.productId);
+      final prod = await invProv.getFullProductWithFallback(_currentSelection.productId);
       if (mounted) setState(() { _fullProduct = prod; _isLoadingVariants = false; });
     } catch (e) {
       if (mounted) setState(() => _isLoadingVariants = false);
@@ -241,6 +241,9 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     bool exceedsStock = currentQty > _currentSelection.stock && !_currentSelection.stock.isNegative;
     
     bool showBrand = brandName.isNotEmpty && !_currentSelection.productName.toUpperCase().contains(brandName.toUpperCase());
+    final bool hasRealImage = _currentSelection.imageUrl != null &&
+        _currentSelection.imageUrl!.isNotEmpty &&
+        _currentSelection.imageUrl != 'null';
 
     return InteractiveSheetWrapper(
       maxHeightFactor: 0.92,
@@ -270,13 +273,55 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   GestureDetector(
-                    onTap: () => showDialog(context: context, builder: (ctx) => Dialog(backgroundColor: Colors.transparent, child: ClipRRect(borderRadius: BorderRadius.circular(16), child: UniversalImage(path: _currentSelection.imageUrl, fit: BoxFit.contain)))),
+                    onTap: hasRealImage
+                        ? () => showDialog(
+                            context: context,
+                            builder: (ctx) => Dialog(
+                              backgroundColor: Colors.transparent,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: UniversalImage(
+                                  path: _currentSelection.imageUrl,
+                                  productName: _currentSelection.productName,
+                                  categoryName: brandName,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                          )
+                        : null,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        Container(width: 90, height: 90, decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300), borderRadius: BorderRadius.circular(12)), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: UniversalImage(path: _currentSelection.imageUrl, fit: BoxFit.cover))),
-                        Container(width: 90, height: 90, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.black.withValues(alpha: 0.3))),
-                        const Icon(Icons.zoom_in, color: Colors.white, size: 30)
+                        Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white10 : Colors.white,
+                            border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: UniversalImage(
+                              path: _currentSelection.imageUrl,
+                              productName: _currentSelection.productName,
+                              categoryName: brandName,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        if (hasRealImage) ...[
+                          Container(
+                            width: 90,
+                            height: 90,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              color: Colors.black.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          const Icon(Icons.zoom_in, color: Colors.white, size: 28),
+                        ],
                       ],
                     ),
                   ),
@@ -285,7 +330,6 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-
                         if (showBrand)
                           Text(brandName.toUpperCase(), style: TextStyle(fontSize: 12, color: isDark ? Colors.indigo[300] : Colors.indigo[700], fontWeight: FontWeight.w800, letterSpacing: 0.5), maxLines: 1, overflow: TextOverflow.ellipsis),
                         
@@ -436,96 +480,144 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                 const SizedBox(height: 24),
               ],
 
-              // 3. SECCIÓN DE DESCUENTO
+              // 3. SECCIÓN DE DESCUENTO (2 TIERS ANTI-COLISIÓN)
               Container(
-                decoration: BoxDecoration(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50]) : (isDark ? Colors.white10 : Colors.grey[50]), borderRadius: BorderRadius.circular(16), border: Border.all(color: _isManualPrice ? (isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300) : (isDark ? Colors.transparent : Colors.grey.shade300))),
+                decoration: BoxDecoration(
+                  color: _isManualPrice
+                      ? (isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50])
+                      : (isDark ? Colors.white10 : Colors.grey[50]),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _isManualPrice
+                        ? (isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300)
+                        : (isDark ? Colors.transparent : Colors.grey.shade300),
+                  ),
+                ),
                 child: Column(
                   children: [
-                    SwitchListTile(
-                      title: Text("Aplicar Descuento", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _isManualPrice ? (isDark ? Colors.orange[300] : Colors.orange[900]) : textColor)),
-                      subtitle: Row(
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            "Precio Base: ${currency.format(_systemPrice)}",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.grey[400] : Colors.grey[700],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          InkWell(
-                            onTap: () async {
-                              final invProv = Provider.of<InventoryProvider>(context, listen: false);
-                              ProductPresentation? targetPres;
-                              if (_fullProduct != null) {
-                                targetPres = _fullProduct!.presentaciones.where(
-                                  (p) => p.id == _currentSelection.presentationId,
-                                ).firstOrNull ?? _fullProduct!.presentaciones.firstOrNull;
-                              }
-                              if (targetPres != null) {
-                                await PriceUpdateModal.show(
-                                  context: context,
-                                  presentation: targetPres,
-                                  provider: invProv,
-                                  isDark: isDark,
-                                );
-                                await _loadVariants();
-                                if (_fullProduct != null) {
-                                  final updatedPres = _fullProduct!.presentaciones.where(
-                                    (p) => p.id == _currentSelection.presentationId,
-                                  ).firstOrNull ?? targetPres;
-                                  setState(() {
-                                    _systemPrice = updatedPres.precioVentaFinal;
-                                    _priceCtrl.text = _systemPrice.toStringAsFixed(2);
-                                    _discountCtrl.clear();
-                                  });
-                                  if (context.mounted) {
-                                    final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
-                                    quickProv.syncItemPriceAndStock(
-                                      _currentSelection.presentationId,
-                                      newPrice: updatedPres.precioVentaFinal,
-                                    );
-                                  }
-                                }
-                              }
-                            },
-                            borderRadius: BorderRadius.circular(4),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                          // Nivel 1: Título a la izquierda + Switch a la derecha
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
                                 children: [
-                                  Icon(Icons.edit, size: 13, color: isDark ? Colors.blue[300] : Colors.blue[700]),
-                                  const SizedBox(width: 2),
+                                  Icon(
+                                    Icons.local_offer_outlined,
+                                    size: 18,
+                                    color: _isManualPrice
+                                        ? (isDark ? Colors.orange[300] : Colors.orange[800])
+                                        : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                  ),
+                                  const SizedBox(width: 8),
                                   Text(
-                                    "Editar Catálogo",
+                                    "Aplicar Descuento",
                                     style: TextStyle(
-                                      fontSize: 11,
                                       fontWeight: FontWeight.bold,
-                                      color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                      fontSize: 15,
+                                      color: _isManualPrice
+                                          ? (isDark ? Colors.orange[300] : Colors.orange[900])
+                                          : textColor,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
+                              Switch(
+                                value: _isManualPrice,
+                                activeThumbColor: Colors.orange,
+                                onChanged: (v) => setState(() {
+                                  _isManualPrice = v;
+                                  if (!v) { 
+                                    _priceCtrl.text = _systemPrice.toStringAsFixed(2); 
+                                    _discountCtrl.text = ""; 
+                                  } else {
+                                    if (_currentSelection.offerPrice != null && _currentSelection.offerPrice! > 0) {
+                                      _priceCtrl.text = _currentSelection.offerPrice!.toStringAsFixed(2);
+                                      double disc = _systemPrice - _currentSelection.offerPrice!;
+                                      _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
+                                    }
+                                  }
+                                }),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          // Nivel 2: Precio Base + Botón Editar Catálogo (Garantiza 0 colisiones en pantallas angostas)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                "Precio Base: ${currency.format(_systemPrice)}",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[700],
+                                ),
+                              ),
+                              InkWell(
+                                onTap: () async {
+                                  final invProv = Provider.of<InventoryProvider>(context, listen: false);
+                                  ProductPresentation? targetPres;
+                                  if (_fullProduct != null) {
+                                    targetPres = _fullProduct!.presentaciones.where(
+                                      (p) => p.id == _currentSelection.presentationId,
+                                    ).firstOrNull ?? _fullProduct!.presentaciones.firstOrNull;
+                                  }
+                                  if (targetPres != null) {
+                                    await PriceUpdateModal.show(
+                                      context: context,
+                                      presentation: targetPres,
+                                      provider: invProv,
+                                      isDark: isDark,
+                                    );
+                                    await _loadVariants();
+                                    if (_fullProduct != null) {
+                                      final updatedPres = _fullProduct!.presentaciones.where(
+                                        (p) => p.id == _currentSelection.presentationId,
+                                      ).firstOrNull ?? targetPres;
+                                      setState(() {
+                                        _systemPrice = updatedPres.precioVentaFinal;
+                                        _priceCtrl.text = _systemPrice.toStringAsFixed(2);
+                                        _discountCtrl.clear();
+                                      });
+                                      if (context.mounted) {
+                                        final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
+                                        quickProv.syncItemPriceAndStock(
+                                          _currentSelection.presentationId,
+                                          newPrice: updatedPres.precioVentaFinal,
+                                        );
+                                      }
+                                    }
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(4),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.edit_outlined, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        "Editar Catálogo",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      value: _isManualPrice,
-                      activeThumbColor: Colors.orange,
-                      onChanged: (v) => setState(() {
-                        _isManualPrice = v;
-                        if (!v) { 
-                          _priceCtrl.text = _systemPrice.toStringAsFixed(2); 
-                          _discountCtrl.text = ""; 
-                        } else {
-                          if (_currentSelection.offerPrice != null && _currentSelection.offerPrice! > 0) {
-                            _priceCtrl.text = _currentSelection.offerPrice!.toStringAsFixed(2);
-                            double disc = _systemPrice - _currentSelection.offerPrice!;
-                            _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
-                          }
-                        }
-                      }),
                     ),
                     if (_isManualPrice) ...[
                       Divider(height: 1, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[200]),

@@ -242,7 +242,12 @@ class _SuggestedReplacementsModalState extends State<SuggestedReplacementsModal>
                           child: SizedBox(
                             width: 44,
                             height: 44,
-                            child: UniversalImage(path: alt.imageUrl, fit: BoxFit.cover),
+                            child: UniversalImage(
+                              path: alt.imageUrl,
+                              productName: alt.fullName,
+                              categoryName: alt.brand,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),

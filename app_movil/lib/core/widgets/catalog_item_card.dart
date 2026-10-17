@@ -11,12 +11,14 @@ import 'package:app_movil/core/widgets/custom_snackbar.dart';
 class CatalogItemCard extends StatefulWidget {
   final InventoryWrapper item;
   final VoidCallback onDetails;
+  final void Function(ProductPresentation selectedPres)? onPresentationDetails;
   final bool isStoreMode;
 
   const CatalogItemCard({
     super.key,
     required this.item,
     required this.onDetails,
+    this.onPresentationDetails,
     this.isStoreMode = false,
   });
 
@@ -80,11 +82,24 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
     final int factor = pres.unidadesPorVenta <= 0 ? 1 : pres.unidadesPorVenta;
     final bool isOutOfStock = (pres.stockActual ~/ factor) <= 0;
 
+    // 🔥 CÁLCULO FINANCIERO FACTOR-AWARE (FASE 3)
+    final double costoPresentacion = pres.costoPresentacionFinal;
+    final bool tieneCosto = costoPresentacion > 0;
+    final double margenPorcentual = (tieneCosto && effectivePrice > 0)
+        ? ((effectivePrice - costoPresentacion) / effectivePrice * 100)
+        : 0.0;
+
     String salesUnitBadge = pres.unidadVenta ?? pres.umpCompra ?? "Unidad";
     final hasMultiplePresentations = prod.presentaciones.length > 1;
 
     return GestureDetector(
-      onTap: widget.onDetails,
+      onTap: () {
+        if (widget.onPresentationDetails != null) {
+          widget.onPresentationDetails!(pres);
+        } else {
+          widget.onDetails();
+        }
+      },
       child: Stack(
         children: [
           Card(
@@ -111,6 +126,8 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                         tag: "cat_${pres.id}",
                         child: UniversalImage(
                           path: pres.imagenUrl ?? prod.imagenUrl,
+                          productName: prod.nombre,
+                          categoryName: catalogProv.getCategoryName(prod.categoriaId),
                           fit: BoxFit.contain,
                         ),
                       ),
@@ -227,6 +244,52 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // 🔥 Píldora Financiera Factor-Aware (Solo Modo Comerciante)
+                                  AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 200),
+                                    child: widget.isStoreMode
+                                        ? const SizedBox.shrink(key: ValueKey('store_mode_empty'))
+                                        : Padding(
+                                            key: ValueKey('cost_${pres.id}_${costoPresentacion}_$tieneCosto'),
+                                            padding: const EdgeInsets.only(bottom: 2),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Container(
+                                                  width: 5,
+                                                  height: 5,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    color: tieneCosto
+                                                        ? (margenPorcentual >= 30
+                                                            ? (isDark ? Colors.green[400] : Colors.green[700])
+                                                            : (margenPorcentual >= 15
+                                                                ? (isDark ? Colors.amber[400] : Colors.orange[800])
+                                                                : (isDark ? Colors.red[400] : Colors.red[700])))
+                                                        : (isDark ? Colors.grey[500] : Colors.grey[400]),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Flexible(
+                                                  child: Text(
+                                                    tieneCosto
+                                                        ? "C: S/ ${costoPresentacion.toStringAsFixed(2)} · ${margenPorcentual.toStringAsFixed(0)}%"
+                                                        : "Costo: S/ 0.00 · Sin costo",
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: tieneCosto
+                                                          ? (isDark ? Colors.grey[400] : Colors.grey[600])
+                                                          : (isDark ? Colors.grey[500] : Colors.grey[500]),
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                  ),
                                   if (hasOffer)
                                     Text(
                                       "S/ ${pres.precioVentaFinal.toStringAsFixed(2)}",

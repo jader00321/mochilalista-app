@@ -159,6 +159,33 @@ class ProductPresentation {
       'activo': activo ? 1 : 0,
     };
   }
+
+  /// Factor de empaque de compra (unidadesPorLote)
+  int get factorUmp => unidadesPorLote > 0 ? unidadesPorLote : 1;
+
+  /// Costo directo registrado de la presentación si existe (precio de proveedor o lote), o 0.0 si no existe.
+  double get costoCompraPresentacion {
+    if (precioUmpProveedor != null && precioUmpProveedor! > 0) {
+      return precioUmpProveedor!;
+    }
+    return 0.0;
+  }
+
+  /// Costo factor-aware exacto de la presentación:
+  /// 1. Si tiene costoUnitarioCalculado > 0, lo multiplica por factorVenta.
+  /// 2. Si no, deriva el costo unitario desde (precioUmpProveedor / factorUmp) y lo multiplica por factorVenta.
+  /// 3. Si no tiene costo registrado, retorna 0.0.
+  double get costoPresentacionFinal {
+    final int factorVenta = unidadesPorVenta <= 0 ? 1 : unidadesPorVenta;
+    if (costoUnitarioCalculado != null && costoUnitarioCalculado! > 0) {
+      return costoUnitarioCalculado! * factorVenta;
+    }
+    if (precioUmpProveedor != null && precioUmpProveedor! > 0) {
+      final int factorCompra = factorUmp;
+      return (precioUmpProveedor! / factorCompra) * factorVenta;
+    }
+    return 0.0;
+  }
 }
 
 class Product {
@@ -209,6 +236,36 @@ class Product {
       presentaciones: presentationList,
       stockTotalCalculado: json['stock_total_calculado'] ?? 0,
       fechaActualizacion: json['fecha_actualizacion'],
+    );
+  }
+
+  Product copyWith({
+    int? id,
+    String? nombre,
+    int? marcaId,
+    String? marcaNombre,
+    String? descripcion,
+    int? categoriaId,
+    String? imagenUrl,
+    String? codigoBarras,
+    String? estado,
+    List<ProductPresentation>? presentaciones,
+    int? stockTotalCalculado,
+    String? fechaActualizacion,
+  }) {
+    return Product(
+      id: id ?? this.id,
+      nombre: nombre ?? this.nombre,
+      marcaId: marcaId ?? this.marcaId,
+      marcaNombre: marcaNombre ?? this.marcaNombre,
+      descripcion: descripcion ?? this.descripcion,
+      categoriaId: categoriaId ?? this.categoriaId,
+      imagenUrl: imagenUrl ?? this.imagenUrl,
+      codigoBarras: codigoBarras ?? this.codigoBarras,
+      estado: estado ?? this.estado,
+      presentaciones: presentaciones ?? this.presentaciones,
+      stockTotalCalculado: stockTotalCalculado ?? this.stockTotalCalculado,
+      fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
     );
   }
 

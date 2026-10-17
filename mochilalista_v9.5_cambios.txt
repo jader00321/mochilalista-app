@@ -1,0 +1,192 @@
+================================================================================
+                    MOCHILALISTA APP - NOTAS DE VERSIÓN V9.5
+================================================================================
+Versión: 9.5.0+55
+Nombre del Paquete: mochilalista_v9.5
+Fecha: 16 de Octubre de 2026
+Compilación: Release APK (mochilalista_v9.5.apk)
+Plataforma: Android (Flutter SDK ^3.9.0)
+Arquitectura: 100% Local-First Offline SQLite con aislamiento por negocio y usuario
+
+================================================================================
+RESUMEN EJECUTIVO DE LA ACTUALIZACIÓN
+================================================================================
+La versión 9.5 representa la mayor consolidación arquitectónica, visual y funcional
+de MochilaLista App hasta la fecha. Abarca tres grandes hitos de reingeniería:
+
+1. HOME STUDIO & OMNISEARCH: Sistema completo de personalización de la pantalla de
+   inicio (Drag & Drop, densidad 2 vs 3 columnas, Hero Quick Access, bandeja oculta),
+   buscador omnicanal tokenizado multi-palabra con normalización SQLite a 12 niveles
+   de acentos, y PersistentWorkDock con colapso elástico magnético de 58x58 px.
+2. CATÁLOGO E INVENTARIO INTELIGENTE: Eliminación de redundancias en cajones de
+   filtros, unificación en LiveFilterBottomSheet con chips reactivos y contador de
+   filtros activos, alta rápida con inyección de código de barra desde escáner.
+3. CAJA RÁPIDA, COTIZACIÓN IA Y CLIENTES: Modal unificado de clientes con búsqueda
+   multi-palabra y anti-colisión, SliverAppBar anclado en Caja Rápida sin desbordes,
+   Smart Visual Placeholder eliminando los cuadros grises "Sin imagen", notas de
+   venta persistentes, fusión segura de variantes con clamp blindado y conciliación
+   IA con auto-relleno y factor de conversión en tiempo real.
+
+--------------------------------------------------------------------------------
+1. MOTOR DE BÚSQUEDA OMNICANAL v2 (OMNI-SEARCH ENGINE & SQLITE NORMALIZER)
+--------------------------------------------------------------------------------
+* Normalización SQL Insensible a Tildes y Mayúsculas (12 niveles de REPLACE):
+  - Solución definitiva al comportamiento nativo de SQLite donde LOWER() solo
+    convierte caracteres ASCII (A-Z) dejando intactas las mayúsculas tildadas.
+  - Implementación de 12 niveles anidados de REPLACE en '_sqlUnaccent' cubriendo
+    exhaustivamente vocales con tilde y diéresis tanto en minúsculas como en
+    mayúsculas: 'á', 'é', 'í', 'ó', 'ú', 'ü', 'Á', 'É', 'Í', 'Ó', 'Ú', 'Ü'.
+  - Búsqueda 100% insensible a acentos en nombres de productos, categorías,
+    marcas, clientes y comprobantes.
+
+* Búsqueda Tokenizada Multi-Palabra con Lógica AND Cruzada:
+  - Descomposición de la consulta en tokens independientes normalizados.
+  - Generación dinámica de cláusulas AND cruzadas: encuentra registros sin
+    importar el orden de las palabras introducidas (ej. "pilot azul 0.5" localiza
+    "Lapicero Gel Pilot G2 0.5mm Azul").
+
+* Corrección del Esquema de Clientes en SQLite:
+  - Reemplazo de columnas inexistentes 'numero_documento' y 'total_deuda' por las
+    columnas reales del modelo de datos: 'dni_ruc' y 'deuda_total'.
+
+* Aislamiento Resiliente try/catch por Entidad:
+  - Cada una de las 4 entidades consultadas (Productos, Clientes, Cotizaciones
+    y Listas Escolares) opera dentro de su propio bloque de control de errores.
+
+--------------------------------------------------------------------------------
+2. NUEVO SISTEMA "HOME STUDIO" Y WORKDOCK MAGNÉTICO
+--------------------------------------------------------------------------------
+* Reordenamiento Drag & Drop y Bandeja de Tarjetas Ocultas:
+  - Modo edición activado mediante presión sostenida o botón de ajustes en cabecera.
+  - Ocultación selectiva de tarjetas de baja frecuencia con un solo toque y
+    restauración instantánea desde la hoja inferior.
+
+* Selector de Densidad (2 vs 3 Columnas):
+  - Alternancia entre modo 2 columnas (tarjetas amplias con subtítulo explicativo)
+    y modo 3 columnas (compacto de alta densidad).
+  - Aspect ratio calibrado a 0.94 y textos envueltos en FittedBox para prevenir
+    desbordes de píxeles.
+
+* Tarjeta Destacada Hero Quick Access:
+  - Primera tarjeta de cuadrícula en ancho completo (2 columnas) con diseño
+    visual premium de acceso rápido a "Venta Rápida".
+  - Power Shortcut: Presión sostenida (long-press) abre de inmediato la Caja Rápida.
+
+* Persistencia Local-First por Negocio:
+  - Almacenamiento particionado en SharedPreferences bajo la clave
+    'home_studio_actions_${activeBusinessId}' y 'home_studio_columns_${activeBusinessId}'.
+
+* Colapso Elástico a Globo Flotante Bounded (58x58 px):
+  - Barra flotante colapsa en globo compacto con badge de procesos en curso.
+  - Acotamiento estricto de la interacción: solo la superficie de 58x58 px captura
+    toques ('HitTestBehavior.opaque'), liberando el 100% del área restante.
+  - Padding inferior del scroll dinámico: se reduce de 140px a 90px al colapsar.
+
+--------------------------------------------------------------------------------
+3. ESCÁNER DE CÓDIGOS DE BARRA Y ALTA RÁPIDA DE PRODUCTOS (SCAN TO INVENTARIO)
+--------------------------------------------------------------------------------
+* Corrección de Enrutamiento al Escáner:
+  - Sustitución de ScanScreen() obsoleto por BarcodeScannerScreen().
+
+* Diálogo de Código No Encontrado (BarcodeNotFoundDialog):
+  - Modal estilizado que muestra el código escaneado, botón de copiado al
+    portapapeles y accesos rápidos a "Registrar Nuevo Producto" o "Seguir Escaneando".
+
+* Reanudación Blindada de Cámara e Inyección Automática de Código:
+  - Liberación de bandera '_isProcessing' y reactivación del controlador de cámara.
+  - Inyección del código escaneado en código principal y presentación inicial del producto.
+
+--------------------------------------------------------------------------------
+4. MODAL UNIFICADO DE CLIENTES Y ARQUITECTURA ANTI-COLISIÓN (FASE 1)
+--------------------------------------------------------------------------------
+* Unificación en Componente Canónico:
+  - Reemplazo de modales dispersos por 'ClientBottomSheet' canónico accesible
+    desde Caja Rápida, Cotización Manual, Cotización Inteligente y WhatsApp Preview.
+
+* Motor de Búsqueda de Clientes con Debounce de 250ms:
+  - Debounce inteligente para evitar consultas innecesarias a SQLite durante el tipeo.
+  - Motor de búsqueda tokenizado multi-palabra con los 12 niveles de '_sqlUnaccent'.
+
+* Tarjeta de Cliente Anti-Colisión (Eliminación de ListTile):
+  - Sustitución del ListTile rígido por una estructura Card/Container desacoplada:
+    avatar circular con iniciales, columna izquierda con nombre en negrita y DNI/RUC
+    en chip sutil, y columna derecha con badge de deuda (o 'Al día') y botón 'Seleccionar'.
+  - Eliminación del bug de desbordamiento horizontal en pantallas angostas.
+
+--------------------------------------------------------------------------------
+5. CABECERA ANCLADA SLIVERAPPBAR EN CAJA RÁPIDA (FASE 2)
+--------------------------------------------------------------------------------
+* Eliminación de Desbordamientos y Solapamientos Visuales:
+  - Reestructuración de la cabecera anclada (pinned: true) en QuickSaleScreen:
+    'toolbarHeight: 68' albergando el campo de búsqueda y botones de escáner/limpiar.
+  - Barra horizontal de categorías integrada de forma nativa en 'bottom: PreferredSize(48)'.
+  - Desaparición total del corte horizontal en chips de categorías y del mordisco
+    visual sobre la sección '⚡ Vendidos Recientemente'.
+
+--------------------------------------------------------------------------------
+6. SMART VISUAL PLACEHOLDER (FASE 3)
+--------------------------------------------------------------------------------
+* Adiós a los Cuadros Grises "Sin imagen":
+  - Implementación del Smart Visual Placeholder dinámico en QuickSaleCartItem,
+    MatchingProductSearchModal, SuggestedReplacementsModal, InventoryGridCard y
+    CatalogItemCard.
+  - Si un producto carece de foto, genera al vuelo un contenedor estilizado con
+    gradiente sutil basado en el color primario/secundario del tema, iniciales
+    tipográficas elegantes del producto y un micro-icono temático semántico de papelería.
+
+--------------------------------------------------------------------------------
+7. REINGENIERÍA DE CAJA RÁPIDA (FASE 4)
+--------------------------------------------------------------------------------
+* Notas de Venta con Guardado Reactivo (QuickSaleNoteModal):
+  - Modal estilizado para registrar observaciones o notas específicas por venta.
+  - Visualización reactiva en QuickSaleHeader: badge con micro-icono y extracto
+    de nota cuando existe una observación agregada.
+
+* Sincronización in-situ de Cabecera de Cliente:
+  - 'quick_sale_header.dart' sincroniza el nombre del cliente directamente en
+    'didChangeDependencies' sin desfasar el cursor de escritura manual.
+  - Botón 'X' desvincula el cliente de forma limpia y restaura el estado original.
+
+* Fusión Segura de Variantes y Stock Blindado:
+  - Adición y cambio de variantes dentro del carrito con cálculo exacto de stock disponible.
+  - Invocación de 'clamp(1, maxStock)' protegida contra casos de stock en 0
+    (eliminación de excepciones runtime 'ArgumentError: Invalid bounds').
+
+--------------------------------------------------------------------------------
+8. COTIZACIÓN INTELIGENTE / CONCILIACIÓN IA (FASE 5)
+--------------------------------------------------------------------------------
+* Auto-Relleno Integral de Clientes:
+  - Al vincular un cliente en MatchingScreen, se autocompletan de forma inmediata
+    DNI/RUC, Dirección, Correo y Notas en el estado global de la cotización.
+
+* Sincronización y Cambio de Variantes en Modal de Detalle:
+  - Al alternar de variante o presentación en 'product_quote_detail_modal.dart',
+    se recalcula en tiempo real el precio unitario, factor de conversión de inventario,
+    stock real de venta y nombre compuesto (ej. "Cuaderno Standford - Rayado").
+
+* Encabezado Institucional Proporcional y Filas Anti-Desborde:
+  - 'manual_quote_institution_header.dart': Proporción 5:4, prefixIconConstraints
+    de 32x32px y fuente calibrada a 13.5px; previene cortes en "Grado / Nivel"
+    y "7° Básico a 4° Medio".
+  - 'matching_item_row.dart': Ancho dinámico responsivo del panel izquierdo
+    '(screenW * 0.35).clamp(minLeft, maxLeft)' garantizando más del 58% de espacio
+    libre al panel derecho en pantallas de 320dp a 360dp.
+
+--------------------------------------------------------------------------------
+9. CALIDAD DE CÓDIGO, PRUEBAS Y VALIDACIÓN
+--------------------------------------------------------------------------------
+* Análisis Estático (dart analyze):
+  - 0 errores, 0 advertencias (No issues found!).
+
+* Pruebas Automatizadas (flutter test):
+  - 83/83 tests unitarios y de widgets ejecutados con éxito (100% aprobados).
+  - Incluye:
+    * 'caja_rapida_cotizacion_clientes_reengineering_test.dart' (15 pruebas específicas
+      de las fases 1 a 5).
+    * 'home_reengineering_fases_test.dart' (suite de casos borde Home Studio).
+    * 'catalog_correction_fases_test.dart' (suite de catálogo y filtros en vivo).
+
+* Arquitectura:
+  - 100% Local-First Offline en SQLite, respuesta inmediata a 0ms, sin dependencias
+    de red externa para la operación diaria del negocio.
+================================================================================

@@ -50,6 +50,22 @@ class ProductService {
     }
   }
 
+  Future<Map<int, List<ProductPresentation>>> fetchPresentationsForProductIds(
+    List<int> productIds,
+  ) async {
+    try {
+      final rawMap = await _repository.fetchPresentationsForProductIdsRaw(productIds);
+      final Map<int, List<ProductPresentation>> result = {};
+      rawMap.forEach((prodId, rows) {
+        result[prodId] = rows.map((r) => ProductPresentation.fromJson(r)).toList();
+      });
+      return result;
+    } catch (e, stack) {
+      AppLogger.error('ProductService.fetchPresentationsForProductIds', e, stack);
+      return {};
+    }
+  }
+
   Future<bool> deleteProduct(int id) async {
     try {
       final prod = await _repository.getProductImagesRaw(id);

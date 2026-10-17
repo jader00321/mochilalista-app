@@ -37,8 +37,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     _currentProduct = widget.product;
     _updateSelectedPresentation(widget.initialPresentationId);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<InventoryProvider>(context, listen: false).loadMasterData();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (_currentProduct.presentaciones.isEmpty) {
+        await _refreshData();
+      }
+      if (mounted) {
+        Provider.of<InventoryProvider>(context, listen: false).loadMasterData();
+      }
     });
   }
 
@@ -50,6 +55,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     } catch (e) {
       if (_currentProduct.presentaciones.isNotEmpty) {
         _selectedPresentation = _currentProduct.presentaciones.first;
+      } else {
+        // 🔥 Fallback seguro de emergencia para garantizar 0 LateInitializationError
+        _selectedPresentation = ProductPresentation(
+          id: id,
+          unidadVenta: "Unidad",
+          precioVentaFinal: 0.0,
+          stockActual: 0,
+        );
       }
     }
   }
@@ -129,6 +142,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               child: Center(
                 child: UniversalImage(
                   path: imagePath,
+                  productName: _currentProduct.nombre,
+                  categoryName: Provider.of<InventoryProvider>(context, listen: false).getCategoryName(_currentProduct.categoriaId),
                   fit: BoxFit.contain,
                   height: MediaQuery.of(context).size.height,
                   width: MediaQuery.of(context).size.width,
@@ -349,18 +364,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     children: [
                       Container(
                         color: isDark ? const Color(0xFF14141C) : Colors.white,
-                        child: (displayImage != null && displayImage.isNotEmpty)
-                            ? Hero(
-                                tag: widget.heroTag ?? 'inv_${_currentProduct.id}_${_selectedPresentation.id}',
-                                child: UniversalImage(path: displayImage),
-                              )
-                            : Icon(
-                                Icons.image_not_supported,
-                                size: 80,
-                                color: isDark
-                                    ? Colors.grey[800]
-                                    : Colors.grey[300],
-                              ),
+                        child: Hero(
+                          tag: widget.heroTag ?? 'inv_${_currentProduct.id}_${_selectedPresentation.id}',
+                          child: UniversalImage(
+                            path: displayImage,
+                            productName: _currentProduct.nombre,
+                            categoryName: categoryName,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                       ),
                       const DecoratedBox(
                         decoration: BoxDecoration(

@@ -401,7 +401,12 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(10),
-                                    child: UniversalImage(path: pres.imagenUrl ?? prod.imagenUrl, fit: BoxFit.contain),
+                                    child: UniversalImage(
+                                      path: pres.imagenUrl ?? prod.imagenUrl,
+                                      productName: prod.nombre,
+                                      categoryName: brandName,
+                                      fit: BoxFit.contain,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 16),

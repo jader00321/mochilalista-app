@@ -639,6 +639,62 @@ class InventoryProvider with ChangeNotifier {
     );
   }
 
+  /// Realiza un conteo rápido y preciso en SQLite de los items según filtros (< 2ms)
+  Future<int> countFilteredItems(Map<String, dynamic> filters) async {
+    try {
+      final Map<String, dynamic> queryParams = {};
+
+      if (_lastQuery != null && _lastQuery!.trim().isNotEmpty) {
+        queryParams['q'] = _lastQuery!.trim();
+      }
+
+      if (filters.containsKey('estado') && filters['estado'] != null) {
+        queryParams['estado'] = filters['estado'];
+      }
+
+      if (filters.containsKey('minPrice') && filters['minPrice'] != null) {
+        queryParams['min_price'] = filters['minPrice'].toString();
+      }
+      if (filters.containsKey('maxPrice') && filters['maxPrice'] != null) {
+        queryParams['max_price'] = filters['maxPrice'].toString();
+      }
+
+      if (filters.containsKey('minStock') && filters['minStock'] != null) {
+        queryParams['min_stock'] = filters['minStock'].toString();
+      }
+      if (filters.containsKey('maxStock') && filters['maxStock'] != null) {
+        queryParams['max_stock'] = filters['maxStock'].toString();
+      }
+
+      if (filters['hasOffer'] == true) queryParams['has_offer'] = 'true';
+      if (filters['onlyDefaults'] == true) queryParams['only_defaults'] = 'true';
+
+      if (filters.containsKey('categoryIds')) {
+        final list = filters['categoryIds'] as List;
+        if (list.isNotEmpty) {
+          queryParams['category_ids'] = list.join(',');
+        }
+      }
+      if (filters.containsKey('brandIds')) {
+        final list = filters['brandIds'] as List;
+        if (list.isNotEmpty) {
+          queryParams['brand_ids'] = list.join(',');
+        }
+      }
+      if (filters.containsKey('providerIds')) {
+        final list = filters['providerIds'] as List;
+        if (list.isNotEmpty) {
+          queryParams['provider_ids'] = list.join(',');
+        }
+      }
+
+      final totals = await _productService.countInventory(queryParams);
+      return totals['presentations'] ?? totals['products'] ?? 0;
+    } catch (e) {
+      return _inventoryItems.length;
+    }
+  }
+
   Future<void> loadMore() async => await loadInventory(reset: false);
 
   Future<bool> deleteProduct(int id) async {

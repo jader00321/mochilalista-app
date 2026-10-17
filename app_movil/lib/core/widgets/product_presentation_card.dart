@@ -1587,6 +1587,7 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
                     context,
                   ).copyWith(dividerColor: Colors.transparent),
                   child: ExpansionTile(
+                    initiallyExpanded: (widget.controllerMap['barcode'] as TextEditingController?)?.text.isNotEmpty == true,
                     title: Text(
                       "Detalles Avanzados (Foto, Código, Proveedor)",
                       style: TextStyle(

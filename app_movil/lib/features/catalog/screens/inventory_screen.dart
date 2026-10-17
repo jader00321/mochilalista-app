@@ -14,7 +14,6 @@ import 'package:app_movil/features/promotions/screens/offers_tab.dart';
 import 'package:app_movil/features/scanner/screens/invoice_history_screen.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
-import 'package:app_movil/core/widgets/live_filter_bottom_sheet.dart';
 
 class PlaceholderTab extends StatelessWidget {
   final String title;
@@ -230,33 +229,6 @@ class _InventoryScreenState extends State<InventoryScreen>
               InfoTip(icon: Icons.local_offer, text: 'Crea ofertas y combos en la pestaña de Ofertas para atraer más clientes.'),
               InfoTip(icon: Icons.find_replace, text: 'Usa el botón de Detectar Duplicados (🔄) en cada pestaña para fusionar registros repetidos.'),
             ],
-          ),
-          IconButton(
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.filter_list_rounded, size: 24),
-                Consumer<InventoryProvider>(
-                  builder: (_, inv, __) {
-                    if (!inv.hasActiveFilters) return const SizedBox.shrink();
-                    return Positioned(
-                      top: -2,
-                      right: -2,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.orange,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-            tooltip: 'Filtros en Vivo',
-            onPressed: () => LiveFilterBottomSheet.show(context),
           ),
         ],
 

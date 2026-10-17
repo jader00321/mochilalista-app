@@ -7,7 +7,6 @@ import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart'; 
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
-import 'package:app_movil/core/widgets/marquee_text.dart';
 import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
@@ -46,7 +45,7 @@ class MatchingScreen extends StatefulWidget {
   State<MatchingScreen> createState() => _MatchingScreenState();
 }
 
-class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProviderStateMixin {
+class _MatchingScreenState extends State<MatchingScreen> {
   late TextEditingController _schoolCtrl;
   late TextEditingController _gradeCtrl;
   
@@ -58,11 +57,7 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
   final _clientNotesCtrl = TextEditingController();
   
   bool _updateClientData = true; 
-  bool _isClientPanelExpanded = false; 
-
-  bool _isFabOpen = false;
-  late AnimationController _fabAnimationCtrl;
-  late Animation<double> _fabRotateAnim;
+  bool _isClientPanelExpanded = false;
 
   @override
   void initState() {
@@ -113,8 +108,6 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
     _gradeCtrl = TextEditingController(text: initGrade);
     _clientNameCtrl = TextEditingController(text: initClient);
 
-    _fabAnimationCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
-    _fabRotateAnim = Tween<double>(begin: 0.0, end: 0.5).animate(_fabAnimationCtrl);
   }
 
   @override
@@ -122,19 +115,7 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
     _schoolCtrl.dispose(); _gradeCtrl.dispose();
     _clientNameCtrl.dispose(); _clientPhoneCtrl.dispose(); _clientDniCtrl.dispose();
     _clientAddressCtrl.dispose(); _clientEmailCtrl.dispose(); _clientNotesCtrl.dispose();
-    _fabAnimationCtrl.dispose();
     super.dispose();
-  }
-
-  void _toggleFab() {
-    setState(() {
-      _isFabOpen = !_isFabOpen;
-      if (_isFabOpen) {
-        _fabAnimationCtrl.forward();
-      } else {
-        _fabAnimationCtrl.reverse();
-      }
-    });
   }
 
   void _updateHeader() {
@@ -170,18 +151,11 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
   }
 
   void _showClientSearch(bool isDark) async {
-    // 💡 NOTA: Este modal reutiliza el componente `ClientSearchModal` de la Cotización Manual.
-    // Esto garantiza un diseño consistente, lógica independiente (estado aislado por widget)
-    // y carga automática de clientes recientes sin conflictos de estado entre pantallas.
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => ClientSearchModal(
-        onClientSelected: (client) {
-          _selectClient(client);
-        }
-      ),
+    ClientSearchModal.show(
+      context,
+      onClientSelected: (client) {
+        _selectClient(client);
+      },
     );
   }
 
@@ -269,7 +243,6 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
     );
 
     if (confirm != true) return;
-    if (_isFabOpen) _toggleFab();
 
     // 🔥 CORRECCIÓN 3: Se quitó widget.token de esta función
     int? newId = await provider.saveQuotation(
@@ -414,19 +387,26 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
           onSave: (newPres, newQty, newPrice, _) { 
             final provider = Provider.of<MatchingProvider>(context, listen: false);
             
+            final String variantFullName = (newPres.nombreEspecifico != null && newPres.nombreEspecifico!.isNotEmpty)
+                ? "${capturedProduct.nombre} ${newPres.nombreEspecifico}".trim()
+                : capturedProduct.nombre;
+
+            final int factor = newPres.unidadesPorVenta > 0 ? newPres.unidadesPorVenta : 1;
+            final int displayStock = newPres.stockActual ~/ factor;
+
             final newMatched = MatchedProduct(
               productId: capturedProduct.id, 
               presentationId: newPres.id!, 
-              fullName: capturedProduct.nombre, 
+              fullName: variantFullName, 
               productName: capturedProduct.nombre, 
               specificName: newPres.nombreEspecifico, 
               brand: brandName, 
               price: newPres.precioVentaFinal, 
               offerPrice: newPres.precioOferta, 
-              stock: newPres.stockActual, 
+              stock: displayStock, 
               imageUrl: newPres.imagenUrl ?? capturedProduct.imagenUrl, 
               unit: newPres.unidadVenta ?? "Unidad",
-              conversionFactor: newPres.unidadesPorVenta 
+              conversionFactor: factor,
             );
 
             provider.updatePairProduct(pair.sourceItem.id, newMatched);
@@ -524,16 +504,22 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
       child: Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
-          title: SizedBox(
-            width: double.infinity,
-            child: MarqueeText(
-              text: isClient ? "Completar mi Pedido" : "Cotización Inteligente", 
-              style: textTheme.displayMedium?.copyWith(color: textColor, fontSize: 18),
+          titleSpacing: 0,
+          title: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              isClient ? "Completar mi Pedido" : "Cotización Inteligente",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.white,
+              ),
             ),
           ),
           backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
           foregroundColor: Colors.white,
-          iconTheme: IconThemeData(color: textColor),
+          iconTheme: const IconThemeData(color: Colors.white),
           elevation: 0,
           actions: [
             if (matchingProvider.hasModifications)
@@ -727,73 +713,33 @@ class _MatchingScreenState extends State<MatchingScreen> with SingleTickerProvid
                           ),
                         ),
                         
-                      const SliverToBoxAdapter(child: SizedBox(height: 100)), 
+                      const SliverToBoxAdapter(child: SizedBox(height: 20)), 
                     ],
                   ),
                 ),
-                MatchingSmartBottomBar(provider: matchingProvider, isDark: isDark, theme: textTheme), 
+                MatchingSmartBottomBar(
+                  provider: matchingProvider,
+                  isDark: isDark,
+                  theme: textTheme,
+                  isClient: isClient,
+                  isEnabled: !matchingProvider.isLoading && matchingProvider.pairs.isNotEmpty,
+                  onActionTap: () {
+                    if (isClient) {
+                      _handleActionWithConfirmation('client_send', isDark);
+                    } else {
+                      MatchingActionsBottomSheet.show(
+                        context,
+                        isDark: isDark,
+                        onActionSelected: (actionType) => _handleActionWithConfirmation(actionType, isDark),
+                      );
+                    }
+                  },
+                ), 
               ],
             ),
             
             if (matchingProvider.isSaving)
               Container(color: Colors.black54, child: const Center(child: CircularProgressIndicator(color: Colors.white))),
-            
-            IgnorePointer(
-              ignoring: !_isFabOpen,
-              child: FadeTransition(
-                opacity: _fabAnimationCtrl,
-                child: GestureDetector(
-                  onTap: _toggleFab, 
-                  child: Container(color: Colors.black87, width: double.infinity, height: double.infinity)
-                ),
-              ),
-            ),
-            
-            Positioned(
-              bottom: 190, right: 16,
-              child: IgnorePointer(
-                ignoring: !_isFabOpen,
-                child: FadeTransition(
-                  opacity: _fabAnimationCtrl,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (isClient) ...[
-                        MatchingSpeedDialButton(
-                          icon: Icons.send, label: "Confirmar y Enviar Pedido", color: isDark ? Colors.green[400]! : Colors.green[700]!, isDark: isDark, theme: textTheme,
-                          onTap: () => _handleActionWithConfirmation('client_send', isDark)
-                        )
-                      ] else ...[
-                        MatchingSpeedDialButton(
-                          icon: Icons.list_alt, label: "Guardar y ver Mesa de Trabajo", color: isDark ? Colors.blue[400]! : Colors.blue[800]!, isDark: isDark, theme: textTheme,
-                          onTap: () => _handleActionWithConfirmation('save', isDark)
-                        ),
-                        const SizedBox(height: 20),
-                        MatchingSpeedDialButton(
-                          icon: Icons.picture_as_pdf, label: "Generar PDF Directo", color: isDark ? Colors.red[400]! : Colors.red[700]!, isDark: isDark, theme: textTheme,
-                          onTap: () => _handleActionWithConfirmation('pdf', isDark)
-                        ),
-                        const SizedBox(height: 20),
-                        MatchingSpeedDialButton(
-                          icon: Icons.chat, label: "Enviar por WhatsApp", color: isDark ? Colors.green[400]! : Colors.green[600]!, isDark: isDark, theme: textTheme,
-                          onTap: () => _handleActionWithConfirmation('whatsapp', isDark)
-                        ),
-                      ]
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            Positioned(
-              bottom: 115, right: 16,
-              child: FloatingActionButton(
-                onPressed: _toggleFab,
-                backgroundColor: _isFabOpen ? (isDark ? Colors.red[800] : Colors.red) : (isDark ? Colors.green[700] : Colors.green[700]),
-                elevation: 6,
-                child: RotationTransition(turns: _fabRotateAnim, child: Icon(_isFabOpen ? Icons.close : (isClient ? Icons.send : Icons.save), size: 30, color: Colors.white)),
-              ),
-            ),
           ],
         ),
       ),

@@ -13,6 +13,16 @@ class InventoryWrapper {
     );
   }
 
+  InventoryWrapper copyWith({
+    Product? product,
+    ProductPresentation? presentation,
+  }) {
+    return InventoryWrapper(
+      product: product ?? this.product,
+      presentation: presentation ?? this.presentation,
+    );
+  }
+
   String get displayName {
     String unidad = presentation.unidadVenta ?? "Unidad";
     return "${product.nombre} - $unidad";

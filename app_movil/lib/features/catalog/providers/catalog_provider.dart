@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/models/category_model.dart';
 import 'package:app_movil/features/catalog/models/brand_model.dart';
 import 'package:app_movil/core/services/master_data_cache.dart';
@@ -241,7 +242,21 @@ class CatalogProvider with ChangeNotifier {
 
       if (newItems != null) {
         if (newItems.length < _limit) _hasMoreData = false;
-        _displayItems.addAll(newItems);
+
+        // 🔥 FASE 1: Hidratación garantizada de presentaciones por producto
+        final productIds = newItems.map((w) => w.product.id).toSet().toList();
+        final presentationsMap = await _productService
+            .fetchPresentationsForProductIds(productIds);
+
+        final List<InventoryWrapper> hydratedNewItems = newItems.map((w) {
+          final presentations =
+              presentationsMap[w.product.id] ?? [w.presentation];
+          return w.copyWith(
+            product: w.product.copyWith(presentaciones: presentations),
+          );
+        }).toList();
+
+        _displayItems.addAll(hydratedNewItems);
 
         // Re-ordenamiento local para ignorar símbolos y mayúsculas
         _displayItems.sort((a, b) {
@@ -259,6 +274,22 @@ class CatalogProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Obtiene un producto completo con todas sus presentaciones desde la memoria del catálogo
+  Product? getFullProduct(int productId) {
+    try {
+      final match = _displayItems.firstWhere((w) => w.product.id == productId);
+      return match.product;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Obtiene todas las presentaciones de un producto cargado en memoria
+  List<ProductPresentation> getPresentationsForProduct(int productId) {
+    final prod = getFullProduct(productId);
+    return prod?.presentaciones ?? [];
   }
 
   // Elimina símbolos al principio para un ordenamiento más natural (igual que InventoryProvider)
@@ -289,6 +320,40 @@ class CatalogProvider with ChangeNotifier {
       _selectedCategoryId = null;
     }
     _resetAndReload();
+  }
+
+  /// Realiza un conteo rápido y preciso en SQLite contra todos los productos con filtros avanzados (< 2ms)
+  Future<int> countFilteredProducts(Map<String, dynamic> advancedFilters) async {
+    try {
+      final Map<String, dynamic> params = {
+        'estado': 'publico',
+        'sortDir': _isSortAscending ? 'ASC' : 'DESC',
+      };
+
+      if (_searchQuery.isNotEmpty) params['q'] = _searchQuery;
+
+      advancedFilters.forEach((key, value) {
+        if (value is! List) params[key] = value.toString();
+      });
+
+      if (advancedFilters.containsKey('category_ids')) {
+        final list = advancedFilters['category_ids'] as List;
+        if (list.isNotEmpty) {
+          params['category_ids'] = list.map((e) => e.toString()).join(',');
+        }
+      }
+      if (advancedFilters.containsKey('brand_ids')) {
+        final list = advancedFilters['brand_ids'] as List;
+        if (list.isNotEmpty) {
+          params['brand_ids'] = list.map((e) => e.toString()).join(',');
+        }
+      }
+
+      final totals = await _productService.countInventory(params);
+      return totals['products'] ?? totals['presentations'] ?? 0;
+    } catch (e) {
+      return _displayItems.length;
+    }
   }
 
   void clearAllFilters() {

@@ -320,11 +320,22 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
                       );
 
                       return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(vertical: 4),
                         leading: Container(
-                          width: 60, height: 60, 
-                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: widget.isDark ? Colors.white10 : Colors.grey[100]), 
-                          child: ClipRRect(borderRadius: BorderRadius.circular(12), child: UniversalImage(path: matched.imageUrl, fit: BoxFit.contain))
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: widget.isDark ? Colors.white10 : Colors.grey[100],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: UniversalImage(
+                              path: matched.imageUrl,
+                              productName: matched.productName.isNotEmpty ? matched.productName : matched.fullName,
+                              categoryName: catName.isNotEmpty ? catName : matched.brand,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         ),
                         title: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

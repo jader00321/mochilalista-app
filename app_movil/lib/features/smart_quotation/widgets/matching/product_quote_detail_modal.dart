@@ -155,7 +155,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
 
   Future<void> _loadFullProductDetails() async {
     final inventoryProv = Provider.of<InventoryProvider>(context, listen: false);
-    final product = await inventoryProv.fetchProductById(widget.wrapper.product.id);
+    final product = await inventoryProv.getFullProductWithFallback(widget.wrapper.product.id);
 
     if (mounted) {
       setState(() {
@@ -573,6 +573,8 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                          currentBuiltName.toLowerCase() != snapshot.toLowerCase() &&
                          !snapshot.toLowerCase().contains("nuevo ítem");
 
+    final img = _selectedPresentation.imagenUrl ?? productDisplay.imagenUrl;
+    final bool hasRealImage = img != null && img.isNotEmpty && img != 'null';
     final double maxSheetHeight = isClient ? 0.82 : 0.90;
 
     return InteractiveSheetWrapper(
@@ -591,52 +593,87 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
           child: const Text("CONFIRMAR PRODUCTO", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (isNameChanged)
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2.0),
-                    child: Icon(Icons.history, size: 18, color: isDark ? Colors.orange[300] : Colors.orange[800]),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text("Extraído originalmente como:\n$snapshot", style: TextStyle(fontSize: 14, color: isDark ? Colors.orange[300] : Colors.orange[800], fontStyle: FontStyle.italic), maxLines: 4, overflow: TextOverflow.ellipsis),
-                  ),
-                ],
-              ),
-            ),
-
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              GestureDetector(
-                onTap: () {
-                  final img = _selectedPresentation.imagenUrl ?? productDisplay.imagenUrl;
-                  if (img != null && img.isNotEmpty) {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageUrl: img, tag: "matching_${_selectedPresentation.id}")));
-                  }
-                },
-                child: Hero(
-                  tag: "matching_${_selectedPresentation.id}",
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(width: 90, height: 90, decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade300), borderRadius: BorderRadius.circular(16)), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: UniversalImage(path: _selectedPresentation.imagenUrl ?? productDisplay.imagenUrl, fit: BoxFit.cover))),
-                      Container(width: 90, height: 90, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.black.withValues(alpha: 0.2))),
-                      const Icon(Icons.zoom_in, color: Colors.white, size: 36)
-                    ],
-                  ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (isNameChanged)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2.0),
+                      child: Icon(Icons.history, size: 18, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text("Extraído originalmente como:\n$snapshot", style: TextStyle(fontSize: 14, color: isDark ? Colors.orange[300] : Colors.orange[800], fontStyle: FontStyle.italic), maxLines: 4, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
                 ),
               ),
+
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: hasRealImage
+                      ? () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FullScreenImageViewer(
+                                imageUrl: img,
+                                tag: "matching_${_selectedPresentation.id}",
+                              ),
+                            ),
+                          );
+                        }
+                      : null,
+                  child: Hero(
+                    tag: "matching_${_selectedPresentation.id}",
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white10 : Colors.white,
+                            border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: UniversalImage(
+                              path: img,
+                              productName: productDisplay.nombre,
+                              categoryName: _currentCategoryName.isNotEmpty ? _currentCategoryName : widget.brandName,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        if (hasRealImage) ...[
+                          Container(
+                            width: 90,
+                            height: 90,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              color: Colors.black.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          const Icon(Icons.zoom_in, color: Colors.white, size: 32),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -821,6 +858,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
           else if (exceedsStock && !isClient) 
             Padding(padding: const EdgeInsets.only(top: 12), child: Text("⚠️ Supera el stock actual de $realStock. Se permitirá cotizar, pero requerirá reabastecimiento.", style: textTheme.titleSmall?.copyWith(color: isDark ? Colors.orange[400] : Colors.orange[800]))),
         ],
+        ),
       ),
     );
   }

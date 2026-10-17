@@ -5,6 +5,7 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart'; // 🔥 Importado para alertas de stock
 
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/universal_image.dart';
 
 class CatalogCartModal extends StatelessWidget {
   final bool isCart;
@@ -142,6 +143,20 @@ class CatalogCartModal extends StatelessWidget {
                                 ReorderableDragStartListener(
                                   index: i,
                                   child: Icon(Icons.drag_indicator, color: isDark ? Colors.white24 : Colors.grey, size: 28),
+                                ),
+                                const SizedBox(width: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: SizedBox(
+                                    width: 44,
+                                    height: 44,
+                                    child: UniversalImage(
+                                      path: pres.imagenUrl ?? prod.imagenUrl,
+                                      productName: prod.nombre,
+                                      categoryName: prov.getCategoryName(prod.categoriaId),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
                                 
