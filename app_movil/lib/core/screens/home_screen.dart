@@ -258,7 +258,6 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                     const SizedBox(height: 16),
                     if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                       const RestockSmartBanner(),
-                      const SizedBox(height: 16),
                       // 🔧 Recordatorio amigable de PIN de seguridad con snooze inteligente de 7 días
                       if (!auth.hasPinCache && !auth.isPinReminderSnoozed) ...[
                         _buildSecurityPinBanner(context, isDark, auth),
@@ -341,7 +340,11 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
             ],
           ),
         ),
-        mainContent,
+        SafeArea(
+          top: true,
+          bottom: false,
+          child: mainContent,
+        ),
         PersistentWorkDock(
           isFloating: true,
           onBubbleModeChanged: (isBubble) {

@@ -8,8 +8,11 @@ class SaleActionFooter extends StatelessWidget {
   final int cotizacionId;
   final int? saleId;
   final bool isQuickSale;
+  final bool isLoan;
+  final double pendingDebt;
   final VoidCallback onSellAgainQuickSale;
   final VoidCallback onDuplicateOptions;
+  final VoidCallback? onRegisterPayment;
 
   const SaleActionFooter({
     super.key,
@@ -18,8 +21,11 @@ class SaleActionFooter extends StatelessWidget {
     required this.cotizacionId,
     required this.saleId,
     required this.isQuickSale,
+    this.isLoan = false,
+    this.pendingDebt = 0.0,
     required this.onSellAgainQuickSale,
     required this.onDuplicateOptions,
+    this.onRegisterPayment,
   });
 
   Widget _buildIconButton(IconData icon, Color color, String label, bool isDark, VoidCallback onTap) {
@@ -73,7 +79,34 @@ class SaleActionFooter extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             
-            if (isQuickSale)
+            if (isLoan)
+              Expanded(
+                flex: 2,
+                child: pendingDebt > 0.01
+                    ? ElevatedButton.icon(
+                        onPressed: onRegisterPayment,
+                        icon: const Icon(Icons.payments_outlined, size: 22),
+                        label: const Text("Cobrar Deuda", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 18), 
+                          backgroundColor: isDark ? (Colors.tealAccent[400] ?? Colors.teal) : Colors.teal[700], 
+                          foregroundColor: Colors.white, 
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                        ),
+                      )
+                    : ElevatedButton.icon(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PdfPreviewScreen(quotationId: cotizacionId, saleId: saleId))),
+                        icon: const Icon(Icons.verified, size: 22),
+                        label: const Text("Liquidado", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 18), 
+                          backgroundColor: isDark ? Colors.green[700] : Colors.green[800], 
+                          foregroundColor: Colors.white, 
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                        ),
+                      ),
+              )
+            else if (isQuickSale)
               Expanded(
                 flex: 2,
                 child: ElevatedButton.icon(
@@ -98,6 +131,21 @@ class SaleActionFooter extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 18), 
                     backgroundColor: isDark ? Colors.blue[400] : Colors.blue[800], 
+                    foregroundColor: Colors.white, 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                  ),
+                ),
+              )
+            else if (pendingDebt > 0.01)
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  onPressed: onRegisterPayment,
+                  icon: const Icon(Icons.payments_outlined, size: 22),
+                  label: const Text("Cobrar Deuda", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 18), 
+                    backgroundColor: isDark ? (Colors.tealAccent[400] ?? Colors.teal) : Colors.teal[700], 
                     foregroundColor: Colors.white, 
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
                   ),

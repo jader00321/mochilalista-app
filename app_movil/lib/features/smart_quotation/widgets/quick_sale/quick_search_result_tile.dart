@@ -97,15 +97,27 @@ class QuickSearchResultTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    Text(item.product.nombre, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.2), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(
+                      item.product.nombre, 
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.25), 
+                      maxLines: 3, 
+                      overflow: TextOverflow.ellipsis
+                    ),
                     if (variantDisplay.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: Text(variantDisplay, style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontSize: 14, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          variantDisplay, 
+                          style: TextStyle(color: isDark ? Colors.teal[300] : Colors.teal[700], fontSize: 13.5, fontWeight: FontWeight.w600), 
+                          maxLines: 2, 
+                          overflow: TextOverflow.ellipsis
+                        ),
                       ),
                   ],
                 ),
               ),
+
+              const SizedBox(width: 12),
 
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,

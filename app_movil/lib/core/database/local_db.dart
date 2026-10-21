@@ -20,7 +20,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 22, // Upgrade to v22 to add numero_secuencial to facturas_carga
+      version: 24, // Upgrade to v24 to support explicit presentation ordering (orden INTEGER DEFAULT 0)
       onCreate: _createDB,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -104,6 +104,58 @@ class LocalDatabase {
       } catch (e) {
         debugPrint("Error recalculando secuenciales de facturas_carga: $e");
       }
+    }
+
+    // Migración V22 -> V23: Saneamiento y garantía de es_default = 1 en la primera presentación de cada producto
+    if (oldVersion < 23) {
+      await sanitizePresentacionesDefault(db);
+    }
+
+    // Migración V23 -> V24: Soporte de orden secuencial explícito en presentaciones
+    if (oldVersion < 24) {
+      try {
+        final tableInfo = await db.rawQuery("PRAGMA table_info(presentaciones_producto)");
+        final hasOrden = tableInfo.any((col) => col['name'] == 'orden');
+        if (!hasOrden) {
+          await db.execute("ALTER TABLE presentaciones_producto ADD COLUMN orden INTEGER DEFAULT 0");
+          debugPrint("✅ Columna orden agregada a presentaciones_producto");
+        }
+      } catch (e) {
+        debugPrint("Error asegurando columna orden en presentaciones_producto: $e");
+      }
+    }
+  }
+
+  /// 🛡️ Saneamiento automático idempotente: Garantiza que cada producto registrado en la base de datos
+  /// tenga exactamente una presentación principal (es_default = 1) asignando la primera creada si no tiene ninguna.
+  static Future<void> sanitizePresentacionesDefault(Database db) async {
+    try {
+      final candidates = await db.rawQuery('''
+        SELECT MIN(id) as target_id
+        FROM presentaciones_producto
+        WHERE activo = 1
+        GROUP BY producto_id
+        HAVING SUM(CASE WHEN es_default = 1 THEN 1 ELSE 0 END) = 0
+      ''');
+
+      if (candidates.isNotEmpty) {
+        final targetIds = candidates
+            .map((c) => c['target_id'] as int?)
+            .whereType<int>()
+            .toList();
+
+        if (targetIds.isNotEmpty) {
+          final placeholders = List.filled(targetIds.length, '?').join(',');
+          await db.rawUpdate('''
+            UPDATE presentaciones_producto
+            SET es_default = 1
+            WHERE id IN ($placeholders)
+          ''', targetIds);
+          debugPrint("✅ Saneadas ${targetIds.length} presentaciones como principales (es_default = 1)");
+        }
+      }
+    } catch (e) {
+      debugPrint("Advertencia en sanitizePresentacionesDefault: $e");
     }
   }
 
@@ -240,7 +292,7 @@ class LocalDatabase {
       '''CREATE TABLE facturas_carga (id $idType, numero_secuencial $intNullable, negocio_id $intType, imagen_url $textType, estado $textNullable DEFAULT 'procesando', fecha_carga $textNullable, proveedor_id $intNullable, monto_total_factura $realNullable, fecha_emision $textNullable, cantidad_items_extraidos $intNullable, datos_crudos_ia_json $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (proveedor_id) REFERENCES proveedores (id) ON DELETE SET NULL)''',
     );
     await db.execute(
-      '''CREATE TABLE presentaciones_producto (id $idType, producto_id $intType, proveedor_id $intNullable, nombre_especifico $textNullable, descripcion $textNullable, imagen_url $textNullable, codigo_barras $textNullable, ump_compra $textNullable, precio_ump_proveedor $realNullable, cantidad_ump_comprada $realNullable, total_pago_lote $realNullable, unidades_por_lote $intType DEFAULT 1, factura_carga_id $intNullable, unidad_venta $textNullable DEFAULT 'Unidad', unidades_por_venta $intType DEFAULT 1, costo_unitario_calculado $realNullable, factor_ganancia_venta $realNullable, precio_venta_final $realType DEFAULT 0.00, precio_oferta $realNullable, tipo_descuento $textNullable, valor_descuento $realNullable, stock_actual $intNullable DEFAULT 0, estado $textNullable DEFAULT 'publico', stock_alerta $intNullable DEFAULT 5, es_default $boolTypeFalse, activo $boolType, FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE CASCADE, FOREIGN KEY (proveedor_id) REFERENCES proveedores (id), FOREIGN KEY (factura_carga_id) REFERENCES facturas_carga (id) ON DELETE SET NULL)''',
+      '''CREATE TABLE presentaciones_producto (id $idType, producto_id $intType, proveedor_id $intNullable, nombre_especifico $textNullable, descripcion $textNullable, imagen_url $textNullable, codigo_barras $textNullable, ump_compra $textNullable, precio_ump_proveedor $realNullable, cantidad_ump_comprada $realNullable, total_pago_lote $realNullable, unidades_por_lote $intType DEFAULT 1, factura_carga_id $intNullable, unidad_venta $textNullable DEFAULT 'Unidad', unidades_por_venta $intType DEFAULT 1, costo_unitario_calculado $realNullable, factor_ganancia_venta $realNullable, precio_venta_final $realType DEFAULT 0.00, precio_oferta $realNullable, tipo_descuento $textNullable, valor_descuento $realNullable, stock_actual $intNullable DEFAULT 0, estado $textNullable DEFAULT 'publico', stock_alerta $intNullable DEFAULT 5, es_default $boolTypeFalse, orden $intType DEFAULT 0, activo $boolType, FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE CASCADE, FOREIGN KEY (proveedor_id) REFERENCES proveedores (id), FOREIGN KEY (factura_carga_id) REFERENCES facturas_carga (id) ON DELETE SET NULL)''',
     );
 
     // 3. CRM y Cotizaciones

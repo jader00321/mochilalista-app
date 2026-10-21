@@ -4,6 +4,7 @@ import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/models/category_model.dart';
 import 'package:app_movil/features/catalog/models/brand_model.dart';
 import 'package:app_movil/features/catalog/models/provider_model.dart';
+import 'package:app_movil/features/catalog/models/product_create_draft.dart';
 
 import 'package:app_movil/core/services/master_data_cache.dart';
 import 'package:app_movil/core/database/local_db.dart';
@@ -50,6 +51,24 @@ class InventoryProvider with ChangeNotifier {
   bool _lastHasOffer = false;
   bool _lastOnlyDefaults = false;
 
+  // 📝 Borrador en memoria de Crear Producto
+  ProductCreateDraft? _creationDraft;
+  ProductCreateDraft? get creationDraft => _creationDraft;
+  bool get hasCreationDraft =>
+      _creationDraft != null && _creationDraft!.hasMeaningfulData;
+
+  void setCreationDraft(ProductCreateDraft draft) {
+    _creationDraft = draft;
+    notifyListeners();
+  }
+
+  void clearCreationDraft() {
+    _creationDraft = null;
+    notifyListeners();
+  }
+
+  void clearProductCreationDraft() => clearCreationDraft();
+
   List<int> get activeCategoryIds => _lastCategoryIds ?? [];
   List<int> get activeBrandIds => _lastBrandIds ?? [];
   List<int> get activeProviderIds => _lastProviderIds ?? [];
@@ -78,6 +97,13 @@ class InventoryProvider with ChangeNotifier {
 
   int _realTotalProductsCount = 0;
   int _realTotalPresentationsCount = 0;
+  int _orphanCategoriesCount = 0;
+  int _orphanBrandsCount = 0;
+
+  int get orphanCategoriesCount => _orphanCategoriesCount;
+  int get orphanBrandsCount => _orphanBrandsCount;
+  bool get hasOrphanCategories => _orphanCategoriesCount > 0;
+  bool get hasOrphanBrands => _orphanBrandsCount > 0;
 
   int get totalPresentationsCount => _realTotalPresentationsCount;
   int get totalProductsCount => _realTotalProductsCount;
@@ -331,6 +357,9 @@ class InventoryProvider with ChangeNotifier {
   Future<void> loadMasterData({bool showAll = true}) async {
     try {
       await _masterDataCache.load(true, showAll: showAll);
+      final orphans = await _productService.countOrphans(estado: _lastEstado);
+      _orphanCategoriesCount = orphans['orphan_categories'] ?? 0;
+      _orphanBrandsCount = orphans['orphan_brands'] ?? 0;
       notifyListeners();
     } catch (e) {
       debugPrint("Error loading master data: $e");
@@ -596,6 +625,10 @@ class InventoryProvider with ChangeNotifier {
         final totals = await _productService.countInventory(queryParams);
         _realTotalProductsCount = totals['products'] ?? 0;
         _realTotalPresentationsCount = totals['presentations'] ?? 0;
+
+        final orphans = await _productService.countOrphans(estado: _lastEstado);
+        _orphanCategoriesCount = orphans['orphan_categories'] ?? 0;
+        _orphanBrandsCount = orphans['orphan_brands'] ?? 0;
       }
 
       if (newItems != null) {
@@ -666,8 +699,12 @@ class InventoryProvider with ChangeNotifier {
         queryParams['max_stock'] = filters['maxStock'].toString();
       }
 
-      if (filters['hasOffer'] == true) queryParams['has_offer'] = 'true';
-      if (filters['onlyDefaults'] == true) queryParams['only_defaults'] = 'true';
+      if (filters['hasOffer'] == true || filters['has_offer'] == true) {
+        queryParams['has_offer'] = 'true';
+      }
+      if (filters['onlyDefaults'] == true || filters['only_defaults'] == true) {
+        queryParams['only_defaults'] = 'true';
+      }
 
       if (filters.containsKey('categoryIds')) {
         final list = filters['categoryIds'] as List;
@@ -689,6 +726,9 @@ class InventoryProvider with ChangeNotifier {
       }
 
       final totals = await _productService.countInventory(queryParams);
+      if (queryParams['only_defaults'] == 'true') {
+        return totals['products'] ?? totals['presentations'] ?? 0;
+      }
       return totals['presentations'] ?? totals['products'] ?? 0;
     } catch (e) {
       return _inventoryItems.length;
@@ -715,8 +755,11 @@ class InventoryProvider with ChangeNotifier {
   Future<bool> createFullProduct({
     required String nombre,
     int? marcaId,
+    String? deferredBrandName,
     int? categoriaId,
+    String? deferredCategoryName,
     int? proveedorId,
+    String? deferredProviderName,
     required String estado,
     String? descripcion,
     String? imagenUrl,
@@ -729,15 +772,25 @@ class InventoryProvider with ChangeNotifier {
       bool ok = await _productService.createFullProduct(
         nombre: nombre,
         marcaId: marcaId,
+        deferredBrandName: deferredBrandName,
         categoriaId: categoriaId,
+        deferredCategoryName: deferredCategoryName,
         proveedorId: proveedorId,
+        deferredProviderName: deferredProviderName,
         estado: estado,
         descripcion: descripcion,
         imagenUrl: imagenUrl,
         codigoBarras: codigoBarras,
         presentaciones: presentaciones,
       );
-      if (ok) await loadInventory(reset: true);
+      if (ok) {
+        _errorMessage = '';
+        _masterDataCache.clearCache();
+        await loadMasterData(showAll: true);
+        await loadInventory(reset: true);
+      } else {
+        _errorMessage = _productService.lastError ?? "Error al registrar el producto";
+      }
       return ok;
     } finally {
       _isLoading = false;
@@ -749,8 +802,11 @@ class InventoryProvider with ChangeNotifier {
     required int productId,
     required String nombre,
     int? marcaId,
+    String? deferredBrandName,
     int? categoriaId,
+    String? deferredCategoryName,
     int? proveedorId,
+    String? deferredProviderName,
     required String estado,
     String? descripcion,
     String? imagenUrl,
@@ -765,8 +821,11 @@ class InventoryProvider with ChangeNotifier {
         productId: productId,
         nombre: nombre,
         marcaId: marcaId,
+        deferredBrandName: deferredBrandName,
         categoriaId: categoriaId,
+        deferredCategoryName: deferredCategoryName,
         proveedorId: proveedorId,
+        deferredProviderName: deferredProviderName,
         estado: estado,
         descripcion: descripcion,
         imagenUrl: imagenUrl,
@@ -774,7 +833,14 @@ class InventoryProvider with ChangeNotifier {
         presentaciones: presentaciones,
         idsToDelete: idsToDelete,
       );
-      if (ok) await loadInventory(reset: true);
+      if (ok) {
+        _errorMessage = '';
+        _masterDataCache.clearCache();
+        await loadMasterData(showAll: true);
+        await loadInventory(reset: true);
+      } else {
+        _errorMessage = _productService.lastError ?? "Error al actualizar el producto";
+      }
       return ok;
     } finally {
       _isLoading = false;
@@ -887,9 +953,11 @@ class InventoryProvider with ChangeNotifier {
           precioVentaFinal: precioVentaFinal ?? oldPres.precioVentaFinal,
 
           stockActual: stock ?? oldPres.stockActual,
-          precioOferta: oferta ?? oldPres.precioOferta,
-          tipoDescuento: tipoDesc ?? oldPres.tipoDescuento,
-          valorDescuento: valorDesc ?? oldPres.valorDescuento,
+          precioOferta: oferta == -1 ? null : (oferta ?? oldPres.precioOferta),
+          tipoDescuento:
+              oferta == -1 ? null : (tipoDesc ?? oldPres.tipoDescuento),
+          valorDescuento:
+              oferta == -1 ? null : (valorDesc ?? oldPres.valorDescuento),
           estado: estado ?? oldPres.estado,
           activo: oldPres.activo,
         );

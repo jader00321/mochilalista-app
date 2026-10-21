@@ -138,23 +138,29 @@ class CatalogCartModal extends StatelessWidget {
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                ReorderableDragStartListener(
-                                  index: i,
-                                  child: Icon(Icons.drag_indicator, color: isDark ? Colors.white24 : Colors.grey, size: 28),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: ReorderableDragStartListener(
+                                    index: i,
+                                    child: Icon(Icons.drag_indicator, color: isDark ? Colors.white24 : Colors.grey, size: 28),
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: SizedBox(
-                                    width: 44,
-                                    height: 44,
-                                    child: UniversalImage(
-                                      path: pres.imagenUrl ?? prod.imagenUrl,
-                                      productName: prod.nombre,
-                                      categoryName: prov.getCategoryName(prod.categoriaId),
-                                      fit: BoxFit.cover,
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2.0),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: SizedBox(
+                                      width: 46,
+                                      height: 46,
+                                      child: UniversalImage(
+                                        path: pres.imagenUrl ?? prod.imagenUrl,
+                                        productName: prod.nombre,
+                                        categoryName: prov.getCategoryName(prod.categoriaId),
+                                        fit: BoxFit.cover,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -169,7 +175,7 @@ class CatalogCartModal extends StatelessWidget {
                                          Text(brandName.toUpperCase(), style: textTheme.labelMedium?.copyWith(color: isDark ? Colors.indigo[300] : Colors.indigo[800])),
                                       
                                       RichText(
-                                        maxLines: 2,
+                                        maxLines: 3,
                                         overflow: TextOverflow.ellipsis,
                                         text: TextSpan(
                                           children: [

@@ -1,6 +1,4 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
@@ -8,8 +6,18 @@ import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 class InventoryCompactTile extends StatelessWidget {
   final InventoryWrapper item;
   final VoidCallback onTap;
+  final VoidCallback? onTapPrice;
+  final VoidCallback? onTapStock;
+  final VoidCallback? onMoreOptions;
 
-  const InventoryCompactTile({super.key, required this.item, required this.onTap});
+  const InventoryCompactTile({
+    super.key,
+    required this.item,
+    required this.onTap,
+    this.onTapPrice,
+    this.onTapStock,
+    this.onMoreOptions,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22,12 +30,25 @@ class InventoryCompactTile extends StatelessWidget {
     
     final int stock = item.displayStock;
     final bool isOut = stock <= 0;
-    final Color stockColor = isOut ? (isDark ? Colors.red[400]! : Colors.red) : (stock <= 5 ? (isDark ? Colors.orange[300]! : Colors.orange) : (isDark ? Colors.green[400]! : Colors.green[700]!));
+    final Color stockColor = isOut
+        ? (isDark ? Colors.red[400]! : Colors.red)
+        : (stock <= 5
+            ? (isDark ? Colors.orange[300]! : Colors.orange)
+            : (isDark ? Colors.green[400]! : Colors.green[700]!));
     
     final bool isPublic = presentation.estado == 'publico';
-    final Color statusColor = isPublic ? (isDark ? Colors.green[400]! : Colors.green) : (isDark ? Colors.orange[400]! : Colors.orange);
+    final Color statusColor = isPublic
+        ? (isDark ? Colors.green[400]! : Colors.green)
+        : (isDark ? Colors.orange[400]! : Colors.orange);
 
-    final String unidadVentaText = presentation.unidadVenta ?? presentation.umpCompra ?? "Unidad";
+    final bool hasOffer = item.hasOffer;
+
+    String discountBadgeText = "OFERTA";
+    if (hasOffer && presentation.tipoDescuento == 'porcentaje' && presentation.valorDescuento != null) {
+      discountBadgeText = "-${presentation.valorDescuento!.toStringAsFixed(0)}%";
+    } else if (hasOffer && presentation.discountPercentRounded > 0) {
+      discountBadgeText = "-${presentation.discountPercentRounded}%";
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -35,20 +56,22 @@ class InventoryCompactTile extends StatelessWidget {
       ),
       child: InkWell(
         onTap: onTap,
+        onLongPress: onMoreOptions,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16), 
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), 
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // 1. ESTADO 
               Container(
-                width: 14, height: 14,
+                width: 12, height: 12,
                 decoration: BoxDecoration(
                   color: statusColor,
                   shape: BoxShape.circle,
                   boxShadow: [BoxShadow(color: statusColor.withValues(alpha: 0.5), blurRadius: 4)]
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               
               // 2. INFO PRINCIPAL 
               Expanded(
@@ -60,28 +83,28 @@ class InventoryCompactTile extends StatelessWidget {
                         Flexible( 
                           child: Text(
                             product.nombre, 
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (brandName.isNotEmpty) ...[
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           Text(
                             brandName.toUpperCase(), 
-                            style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.grey[500], fontSize: 12, fontWeight: FontWeight.bold)
+                            style: TextStyle(color: isDark ? Colors.indigo[300] : Colors.grey[500], fontSize: 11, fontWeight: FontWeight.bold),
                           ),
                         ]
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     // 🔥 Nombre de Variante
                     if (presentation.nombreEspecifico != null && presentation.nombreEspecifico!.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 2, bottom: 2),
+                        padding: const EdgeInsets.only(bottom: 2),
                         child: Text(
                           presentation.nombreEspecifico!, 
                           style: TextStyle(
-                            fontSize: 14, 
+                            fontSize: 13, 
                             color: isDark ? Colors.teal[300] : Colors.teal[700],
                             fontWeight: FontWeight.w600
                           ),
@@ -90,85 +113,148 @@ class InventoryCompactTile extends StatelessWidget {
                         ),
                       ),
                     
-                    // 🔥 Unidad de Venta como Badge
+                    // 🔥 Unidad de Venta como Chip de Factor
                     Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      margin: const EdgeInsets.only(top: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                       decoration: BoxDecoration(
                         color: isDark ? Colors.blueGrey.withValues(alpha: 0.3) : Colors.blueGrey.shade50,
-                        borderRadius: BorderRadius.circular(6)
+                        borderRadius: BorderRadius.circular(4)
                       ),
                       child: Text(
-                        unidadVentaText.toUpperCase(),
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700], letterSpacing: 0.5)
+                        item.presentationFactorChip,
+                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700], letterSpacing: 0.5)
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // 3. PRECIO, STOCK Y QUICK STEPPER
-              SizedBox(
-                width: 110, 
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      "S/ ${item.effectivePrice.toStringAsFixed(2)}", 
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: isDark ? Colors.blue[300] : Colors.black87)
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isOut ? "Agotado" : item.displayStockText, 
-                      style: TextStyle(color: stockColor, fontWeight: FontWeight.bold, fontSize: 13)
-                    ),
-                    const SizedBox(height: 4),
-                    // Quick Stepper
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        InkWell(
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            int factor = presentation.unidadesPorVenta;
-                            if (factor <= 0) factor = 1;
-                            int newBaseStock = math.max(0, presentation.stockActual - factor);
-                            provider.updatePresentation(presentation.id!, stock: newBaseStock);
-                          },
-                          borderRadius: BorderRadius.circular(6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: isDark ? Colors.white12 : Colors.grey[200],
-                              borderRadius: BorderRadius.circular(6),
+              const SizedBox(width: 10),
+
+              // 3. COLUMNA DERECHA: PRECIO ARRIBA, STOCK ABAJO (Alineados, Ultra-Limpio, Sin Steppers)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ZONA PRECIO (Tocable)
+                  InkWell(
+                    onTap: onTapPrice ?? onTap,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (hasOffer) ...[
+                            Text(
+                              "S/ ${presentation.precioVentaFinal.toStringAsFixed(2)}",
+                              style: TextStyle(
+                                fontSize: 10,
+                                decoration: TextDecoration.lineThrough,
+                                color: isDark ? Colors.red[300] : Colors.red[700],
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            child: Icon(Icons.remove, size: 14, color: isDark ? Colors.white70 : Colors.black87),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        InkWell(
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            int factor = presentation.unidadesPorVenta;
-                            if (factor <= 0) factor = 1;
-                            int newBaseStock = presentation.stockActual + factor;
-                            provider.updatePresentation(presentation.id!, stock: newBaseStock);
-                          },
-                          borderRadius: BorderRadius.circular(6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: isDark ? Colors.blue.withValues(alpha: 0.25) : Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(6),
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: isDark ? Colors.red[900]!.withValues(alpha: 0.4) : Colors.red[50],
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                discountBadgeText,
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.red[300] : Colors.red[800],
+                                ),
+                              ),
                             ),
-                            child: Icon(Icons.add, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                            const SizedBox(width: 4),
+                          ],
+                          Text(
+                            "S/ ${item.effectivePrice.toStringAsFixed(2)}", 
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                              color: hasOffer
+                                  ? (isDark ? Colors.orange[300] : Colors.orange[800])
+                                  : (isDark ? Colors.blue[300] : Colors.black87),
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 3),
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 11,
+                            color: isDark ? Colors.grey[500] : Colors.grey[400],
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-              )
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  // ZONA BADGE DE STOCK (Tocable - Único Punto de Ajuste)
+                  InkWell(
+                    onTap: onTapStock ?? onTap,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: item.hasLooseUnits
+                            ? (isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50)
+                            : stockColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: item.hasLooseUnits
+                              ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
+                              : stockColor.withValues(alpha: (isOut || stock <= 5) ? 0.7 : 0.4),
+                          width: (isOut || stock <= 5 || item.hasLooseUnits) ? 1.2 : 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isOut
+                                ? Icons.error_outline_rounded
+                                : (stock <= 5
+                                    ? Icons.warning_amber_rounded
+                                    : (item.hasLooseUnits ? Icons.tune_rounded : Icons.inventory_2_rounded)),
+                            size: 13,
+                            color: item.hasLooseUnits
+                                ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
+                                : stockColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            item.displayStockText,
+                            style: TextStyle(
+                              color: item.hasLooseUnits
+                                  ? (isDark ? Colors.amber[300]! : Colors.amber[900]!)
+                                  : stockColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.edit_note_rounded,
+                            size: 13,
+                            color: (item.hasLooseUnits
+                                    ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
+                                    : stockColor)
+                                .withValues(alpha: 0.7),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

@@ -34,6 +34,9 @@ class QuickSaleCartItem extends StatelessWidget {
     
     final double baseSystemPrice = product.price; 
     final bool isDiscounted = effectivePrice < baseSystemPrice;
+    final int discountPct = (isDiscounted && baseSystemPrice > 0)
+        ? (((baseSystemPrice - effectivePrice) / baseSystemPrice) * 100).round()
+        : 0;
     
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
     String brandName = "";
@@ -137,7 +140,7 @@ class QuickSaleCartItem extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        Text(product.productName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.2), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        Text(product.productName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.25), maxLines: 3, overflow: TextOverflow.ellipsis),
                         
                         if (product.specificName != null && product.specificName!.isNotEmpty && product.specificName != "Paquete")
                           Padding(
@@ -246,11 +249,43 @@ class QuickSaleCartItem extends StatelessWidget {
                           spacing: 6, 
                           runSpacing: 4, 
                           children: [
-                            if (isDiscounted) 
-                              Text(currency.format(baseSystemPrice), style: TextStyle(decoration: TextDecoration.lineThrough, fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey, fontWeight: FontWeight.bold)),
+                            if (isDiscounted) ...[
+                              Text(
+                                currency.format(baseSystemPrice), 
+                                style: TextStyle(
+                                  decoration: TextDecoration.lineThrough, 
+                                  fontSize: 12, 
+                                  color: isDark ? Colors.grey[500] : Colors.grey, 
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (discountPct > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.red[900]!.withValues(alpha: 0.35) : Colors.red[50],
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: isDark ? Colors.red[700]! : Colors.red.shade300),
+                                  ),
+                                  child: Text(
+                                    "-$discountPct%",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.red[300] : Colors.red[800],
+                                    ),
+                                  ),
+                                ),
+                            ],
                             Text(
                               currency.format(effectivePrice), 
-                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: isDiscounted ? (isDark ? Colors.orange[300] : Colors.orange[800]) : textColor)
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900, 
+                                fontSize: 16, 
+                                color: isDiscounted 
+                                    ? (isDark ? Colors.orange[300] : Colors.orange[800]) 
+                                    : textColor,
+                              ),
                             ),
                           ],
                         ),

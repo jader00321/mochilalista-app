@@ -149,6 +149,55 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
     }
   }
 
+  Future<void> _handlePullToRefresh() async {
+    try {
+      final invProv = Provider.of<InventoryProvider>(context, listen: false);
+      final promoProv = Provider.of<PromotionProvider>(context, listen: false);
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+
+      if (auth.activeBusinessId != null) {
+        await promoProv.loadPromotions(auth.activeBusinessId!);
+      }
+
+      for (int i = 0; i < _items.length; i++) {
+        final item = _items[i];
+        if (item.bundleId == null) {
+          final prod = await invProv.fetchProductById(item.productId);
+          if (prod != null) {
+            final pres = prod.presentaciones.where((p) => p.id == item.presentationId).firstOrNull;
+            if (pres != null) {
+              final factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+              final newOffer = pres.hasOffer ? pres.effectivePrice : null;
+              final updatedItem = item.copyWith(
+                stock: pres.stockActual ~/ factor,
+                price: pres.precioVentaFinal,
+                offerPrice: newOffer,
+              );
+              _items[i] = updatedItem;
+              if (_overriddenPrices.containsKey(item.presentationId)) {
+                if ((_overriddenPrices[item.presentationId]! - item.effectivePrice).abs() < 0.01) {
+                  _overriddenPrices[item.presentationId] = updatedItem.effectivePrice;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+        CustomSnackBar.show(
+          context,
+          message: "Catálogo y cotización sincronizados.",
+          isError: false,
+          icon: Icons.sync,
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() {});
+    }
+  }
+
   void _showExplorationModal(BuildContext context, bool isDark) {
     showDialog(
       context: context,
@@ -393,9 +442,12 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                   ),
 
                 Expanded(
-                  child: _items.isEmpty
-                    ? CustomScrollView(
-                        slivers: [
+                  child: RefreshIndicator(
+                    onRefresh: _handlePullToRefresh,
+                    child: _items.isEmpty
+                      ? CustomScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          slivers: [
                           if (!isClient)
                             SliverToBoxAdapter(
                               child: ManualQuoteHeadersSection(
@@ -432,6 +484,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                         ],
                       )
                     : ReorderableListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
                         header: Column(
                           children: [
                             ManualQuoteHeadersSection(
@@ -504,6 +557,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                           );
                         },
                       ),
+                  ),
                 ),
               ],
             ),

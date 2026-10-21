@@ -1,40 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:app_movil/features/catalog/models/brand_model.dart';
-import 'package:app_movil/features/catalog/models/category_model.dart';
-import 'package:app_movil/features/catalog/models/provider_model.dart';
 import 'package:app_movil/core/widgets/custom_text_field.dart';
-import 'package:app_movil/core/widgets/safe_dropdown.dart';
+import 'package:app_movil/core/widgets/modern_entity_selector_field.dart';
 
 class ProductGeneralInfo extends StatelessWidget {
   final TextEditingController nameCtrl;
-  final int? selectedBrandId;
-  final int? selectedCategoryId;
-  final int? generalProviderId;
+  final String brandDisplay;
+  final bool isBrandDeferred;
+  final VoidCallback onSelectBrand;
+  final String categoryDisplay;
+  final bool isCategoryDeferred;
+  final VoidCallback onSelectCategory;
+  final String generalProviderDisplay;
+  final bool isGeneralProviderDeferred;
+  final VoidCallback onSelectGeneralProvider;
   final int generalState;
-  final List<Brand> brandListForDropdown;
-  final List<Category> categoryListForDropdown;
-  final List<ProviderModel> providerListForDropdown;
   final bool isDark;
-
-  final Function(int?) onBrandChanged;
-  final Function(int?) onCategoryChanged;
-  final Function(int?) onProviderChanged;
   final Function(int) onStateChanged;
 
   const ProductGeneralInfo({
     super.key,
     required this.nameCtrl,
-    required this.selectedBrandId,
-    required this.selectedCategoryId,
-    required this.generalProviderId,
+    required this.brandDisplay,
+    required this.isBrandDeferred,
+    required this.onSelectBrand,
+    required this.categoryDisplay,
+    required this.isCategoryDeferred,
+    required this.onSelectCategory,
+    required this.generalProviderDisplay,
+    required this.isGeneralProviderDeferred,
+    required this.onSelectGeneralProvider,
     required this.generalState,
-    required this.brandListForDropdown,
-    required this.categoryListForDropdown,
-    required this.providerListForDropdown,
     required this.isDark,
-    required this.onBrandChanged,
-    required this.onCategoryChanged,
-    required this.onProviderChanged,
     required this.onStateChanged,
   });
 
@@ -105,42 +101,36 @@ class ProductGeneralInfo extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: SafeDropdown<Brand>(
+                      child: ModernEntitySelectorField(
                         label: "Marca",
+                        valueText: brandDisplay,
                         icon: Icons.branding_watermark_outlined,
-                        value: selectedBrandId,
-                        items: brandListForDropdown,
-                        getId: (b) => b.id,
-                        getName: (b) => b.nombre,
-                        isActive: (b) => b.activo == true,
-                        onChanged: onBrandChanged,
+                        isDeferred: isBrandDeferred,
+                        isDark: isDark,
+                        onTap: onSelectBrand,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: SafeDropdown<Category>(
+                      child: ModernEntitySelectorField(
                         label: "Categoría",
+                        valueText: categoryDisplay,
                         icon: Icons.category_outlined,
-                        value: selectedCategoryId,
-                        items: categoryListForDropdown,
-                        getId: (c) => c.id,
-                        getName: (c) => c.nombre,
-                        isActive: (c) => c.activo == true,
-                        onChanged: onCategoryChanged,
+                        isDeferred: isCategoryDeferred,
+                        isDark: isDark,
+                        onTap: onSelectCategory,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                SafeDropdown<ProviderModel>(
+                ModernEntitySelectorField(
                   label: "Proveedor General",
+                  valueText: generalProviderDisplay,
                   icon: Icons.local_shipping_outlined,
-                  value: generalProviderId,
-                  items: providerListForDropdown,
-                  getId: (p) => p.id,
-                  getName: (p) => p.nombreEmpresa,
-                  isActive: (p) => p.activo == true,
-                  onChanged: onProviderChanged,
+                  isDeferred: isGeneralProviderDeferred,
+                  isDark: isDark,
+                  onTap: onSelectGeneralProvider,
                 ),
                 const SizedBox(height: 16),
                 Container(

@@ -2,12 +2,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:intl/intl.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart'; 
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/utils/receipt_manager.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
 
 import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';
@@ -36,6 +39,54 @@ class SaleActionBottomSheet extends StatefulWidget {
 class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
   bool _isLoading = false;
 
+  Future<void> _handlePayment() async {
+    final sale = widget.sale;
+    final nav = Navigator.of(context);
+    final saleProv = Provider.of<SaleProvider>(context, listen: false);
+
+    if (sale.clientId == null || sale.clientId! <= 0) {
+      CustomSnackBar.show(
+        context,
+        message: "Esta operación no tiene un cliente asociado para registrar abonos.",
+        isError: true,
+      );
+      return;
+    }
+
+    nav.pop();
+
+    try {
+      final client = await saleProv.getClientById(sale.clientId!);
+      if (client == null) {
+        if (mounted) {
+          CustomSnackBar.show(context, message: "No se encontró el registro del cliente.", isError: true);
+        }
+        return;
+      }
+
+      if (mounted) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (ctx) => PaymentEntryModal(
+            client: client,
+            initialTargetType: 'venta',
+            initialTargetId: sale.id,
+            initialAmount: sale.pendingDebt,
+            onPaymentSuccess: () {
+              saleProv.silentRefresh();
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackBar.show(context, message: "Error al abrir registro de abono: $e", isError: true);
+      }
+    }
+  }
+
   Future<void> _handleReceipt(bool isShare) async {
     setState(() => _isLoading = true);
     
@@ -45,11 +96,28 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
       
       final saleData = await saleProv.getSaleDetail(widget.sale.id);
       
-      if (saleData == null || saleData['cotizacion'] == null) {
-        throw Exception("Los detalles de los productos no están disponibles.");
+      if (saleData == null) {
+        throw Exception("Los detalles de la operación no están disponibles.");
       }
 
-      final quotation = SmartQuotationModel.fromJson(saleData['cotizacion']);
+      SmartQuotationModel quotation;
+      if (saleData['cotizacion'] != null) {
+        quotation = SmartQuotationModel.fromJson(saleData['cotizacion']);
+      } else {
+        quotation = SmartQuotationModel(
+          id: 0,
+          negocioId: widget.sale.negocioId,
+          creadoPorUsuarioId: widget.sale.creadoPorUsuarioId,
+          clientId: widget.sale.clientId,
+          clientName: widget.sale.clientName ?? "Cliente",
+          totalAmount: widget.sale.trueTotalAmount,
+          totalSavings: 0.0,
+          status: 'aprobado',
+          type: widget.sale.origenVenta,
+          createdAt: widget.sale.saleDate,
+          items: const [],
+        );
+      }
 
       if (isShare) {
         await ReceiptManager.shareReceipt(quotation, authProvider.user, saleData: saleData);
@@ -69,6 +137,7 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
 
   Future<void> _toggleArchive() async {
     final provider = Provider.of<SaleProvider>(context, listen: false);
+    final trackingProv = Provider.of<TrackingProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     if (!widget.sale.isArchived) {
@@ -159,6 +228,11 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
       setState(() => _isLoading = true);
       try {
         await provider.voidSale(widget.sale.id, selectedReason);
+        if (widget.sale.clientId != null) {
+          try {
+            await trackingProv.loadClients();
+          } catch (_) {}
+        }
         if (mounted) CustomSnackBar.show(context, message: widget.sale.origenVenta == 'prestamo_personal' ? "Préstamo anulado exitosamente." : "Venta Anulada y stock devuelto.", isError: false);
       } catch (e) {
         if (mounted) CustomSnackBar.show(context, message: e.toString().replaceAll("Exception: ", ""), isError: true);
@@ -237,6 +311,11 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
       setState(() => _isLoading = true);
       try {
         await provider.restoreSale(widget.sale.id);
+        if (widget.sale.clientId != null) {
+          try {
+            await trackingProv.loadClients();
+          } catch (_) {}
+        }
         if (mounted) CustomSnackBar.show(context, message: widget.sale.origenVenta == 'prestamo_personal' ? "Préstamo Restaurado exitosamente." : "Venta Restaurada exitosamente.", isError: false);
       } catch (e) {
         if (mounted) CustomSnackBar.show(context, message: e.toString().replaceAll("Exception: ", ""), isError: true);
@@ -254,6 +333,8 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
     final bool isArchived = widget.sale.isArchived;
     final bool isQuickSale = widget.sale.origenVenta == 'pos_rapido';
     final bool isLoan = widget.sale.origenVenta == 'prestamo_personal';
+    final bool hasPendingDebt = widget.sale.pendingDebt > 0.01 && !isArchived;
+    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
@@ -277,82 +358,123 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
                 ),
               ),
             )
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isLoan ? "Opciones de Préstamo #${widget.sale.displayId}" : "Opciones de Venta #${widget.sale.displayId}",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  isLoan ? "Préstamo Personal" : (isQuickSale ? "Venta de Caja Rápida" : "Lista Cotizada Vendida"),
-                  style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 14),
-                ),
-                const SizedBox(height: 18),
-
-                _buildActionTile(
-                  icon: Icons.visibility,
-                  color: isDark ? Colors.indigo[300]! : Colors.indigo[800]!,
-                  title: isLoan ? "Ver Detalle de Préstamo" : "Ver Detalle de Venta",
-                  subtitle: isLoan ? "Fechas, cuotas y abonos" : "Productos, Cliente y Auditoría",
-                  isDark: isDark,
-                  onTap: () {
-                    Navigator.pop(context); 
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => SaleHistoryDetailScreen(saleId: widget.sale.id)));
-                  },
-                ),
-                Divider(height: 1, indent: 70, color: isDark ? Colors.white10 : Colors.grey[200]),
-
-                _buildActionTile(
-                  icon: Icons.edit_document,
-                  color: isDark ? Colors.orange[300]! : Colors.orange[800]!,
-                  title: "Editar Diseño PDF",
-                  subtitle: "Personaliza el comprobante",
-                  isDark: isDark,
-                  onTap: () {
-                    Navigator.pop(context); 
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => PdfPreviewScreen(saleId: widget.sale.id)));
-                  },
-                ),
-                Divider(height: 1, indent: 70, color: isDark ? Colors.white10 : Colors.grey[200]),
-
-                _buildActionTile(
-                  icon: Icons.receipt_long,
-                  color: isDark ? Colors.blue[300]! : Colors.blue,
-                  title: "Descarga Rápida (Boleta)",
-                  subtitle: null,
-                  isDark: isDark,
-                  onTap: () => _handleReceipt(false),
-                ),
-                Divider(height: 1, indent: 70, color: isDark ? Colors.white10 : Colors.grey[200]),
-                
-                _buildActionTile(
-                  icon: Icons.share,
-                  color: isDark ? Colors.green[400]! : Colors.green,
-                  title: "Compartir Comprobante",
-                  subtitle: null,
-                  isDark: isDark,
-                  onTap: () => _handleReceipt(true),
-                ),
-                Divider(height: 1, indent: 70, color: isDark ? Colors.white10 : Colors.grey[200]),
-                
-                Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  decoration: BoxDecoration(
-                    color: isArchived ? Colors.teal.withValues(alpha: 0.05) : Colors.red.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(16)
+          : SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isLoan ? "Opciones de Préstamo #${widget.sale.displayId}" : "Opciones de Venta #${widget.sale.displayId}",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
                   ),
-                  child: _buildActionTile(
-                    icon: isArchived ? Icons.unarchive : Icons.auto_delete,
-                    color: isArchived ? (isDark ? Colors.teal[300]! : Colors.teal) : (isDark ? Colors.red[400]! : Colors.red),
-                    title: isArchived ? (isLoan ? "Restaurar Préstamo" : "Restaurar Venta") : (isLoan ? "Anular Préstamo" : "Anular Venta"),
-                    subtitle: null,
+                  const SizedBox(height: 6),
+                  Text(
+                    isLoan ? "Préstamo Personal" : (isQuickSale ? "Venta de Caja Rápida" : "Lista Cotizada Vendida"),
+                    style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (hasPendingDebt) ...[
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: isDark ? 0.15 : 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Deuda Pendiente: ${currency.format(widget.sale.pendingDebt)}",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.amber[300] : Colors.amber[900],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildActionTile(
+                      icon: Icons.payments_outlined,
+                      color: isDark ? (Colors.tealAccent[400] ?? Colors.teal) : Colors.teal[700]!,
+                      title: "💸 Registrar Abono / Cobrar Deuda",
+                      subtitle: "Amortizar saldo o cancelar cuotas",
+                      isDark: isDark,
+                      onTap: _handlePayment,
+                    ),
+                    Divider(height: 1, indent: 70, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  ],
+
+                  _buildActionTile(
+                    icon: Icons.visibility,
+                    color: isDark ? Colors.indigo[300]! : Colors.indigo[800]!,
+                    title: isLoan ? "Ver Detalle del Préstamo" : "Ver Detalle de Venta",
+                    subtitle: isLoan ? "Fechas, cuotas y abonos" : "Productos, Cliente y Auditoría",
                     isDark: isDark,
-                    onTap: _toggleArchive,
+                    onTap: () {
+                      Navigator.pop(context); 
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => SaleHistoryDetailScreen(saleId: widget.sale.id)));
+                    },
                   ),
-                ),
-              ],
+                  Divider(height: 1, indent: 70, color: isDark ? Colors.white10 : Colors.grey[200]),
+
+                  if (!isLoan) ...[
+                    _buildActionTile(
+                      icon: Icons.edit_document,
+                      color: isDark ? Colors.orange[300]! : Colors.orange[800]!,
+                      title: "Editar Diseño PDF",
+                      subtitle: "Personaliza el comprobante",
+                      isDark: isDark,
+                      onTap: () {
+                        Navigator.pop(context); 
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => PdfPreviewScreen(saleId: widget.sale.id)));
+                      },
+                    ),
+                    Divider(height: 1, indent: 70, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  ],
+
+                  _buildActionTile(
+                    icon: isLoan ? Icons.description_outlined : Icons.receipt_long,
+                    color: isDark ? Colors.blue[300]! : Colors.blue,
+                    title: isLoan ? "Descargar Constancia PDF" : "Descarga Rápida (Boleta)",
+                    subtitle: isLoan ? "Comprobante de desembolso" : null,
+                    isDark: isDark,
+                    onTap: () => _handleReceipt(false),
+                  ),
+                  Divider(height: 1, indent: 70, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  
+                  _buildActionTile(
+                    icon: Icons.share,
+                    color: isDark ? Colors.green[400]! : Colors.green,
+                    title: isLoan ? "Compartir Constancia" : "Compartir Comprobante",
+                    subtitle: isLoan ? "Enviar constancia del préstamo" : null,
+                    isDark: isDark,
+                    onTap: () => _handleReceipt(true),
+                  ),
+                  Divider(height: 1, indent: 70, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    decoration: BoxDecoration(
+                      color: isArchived ? Colors.teal.withValues(alpha: 0.05) : Colors.red.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(16)
+                    ),
+                    child: _buildActionTile(
+                      icon: isArchived ? Icons.unarchive : Icons.auto_delete,
+                      color: isArchived ? (isDark ? Colors.teal[300]! : Colors.teal) : (isDark ? Colors.red[400]! : Colors.red),
+                      title: isArchived ? (isLoan ? "Restaurar Préstamo" : "Restaurar Venta") : (isLoan ? "Anular Préstamo" : "Anular Venta"),
+                      subtitle: null,
+                      isDark: isDark,
+                      onTap: _toggleArchive,
+                    ),
+                  ),
+                ],
+              ),
             ),
       ),
     );

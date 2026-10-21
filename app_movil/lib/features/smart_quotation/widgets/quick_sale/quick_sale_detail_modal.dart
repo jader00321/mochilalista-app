@@ -59,6 +59,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
   final _qtyCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
+  final _discountFocusNode = FocusNode();
 
   bool _isManualPrice = false;
   bool _isSyncing = false;
@@ -92,6 +93,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     _qtyCtrl.dispose();
     _priceCtrl.dispose();
     _discountCtrl.dispose();
+    _discountFocusNode.dispose();
     super.dispose();
   }
 
@@ -199,13 +201,9 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     
     double? overridePrice;
     if (!_isManualPrice) {
-      // FASE 3 FIX: Si el usuario apaga el toggle, forzamos el precio base original
-      // para sobrescribir cualquier precio de oferta (offerPrice) que tenga el producto.
-      overridePrice = _systemPrice;
+      // Si el usuario no aplica descuento manual, el precio efectivo es la oferta de catálogo o el precio regular
+      overridePrice = _currentSelection.hasOffer ? _currentSelection.effectivePrice : _systemPrice;
     } else {
-      // Si el toggle está encendido, usamos el precio modificado.
-      // Si por alguna razón es igual al _systemPrice, igual lo pasamos para ser consistentes,
-      // o podemos pasarlo como null si no hay diferencia, pero es más seguro pasar el valor.
       overridePrice = finalPrice;
     }
     
@@ -397,12 +395,28 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                                     isDark: isDark,
                                   );
                                   await _loadVariants();
-                                  if (context.mounted) {
-                                    final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
-                                    quickProv.syncItemPriceAndStock(
-                                      _currentSelection.presentationId,
-                                      newStock: _currentSelection.stock,
-                                    );
+                                  if (_fullProduct != null) {
+                                    final updatedPres = _fullProduct!.presentaciones.where(
+                                      (p) => p.id == _currentSelection.presentationId,
+                                    ).firstOrNull ?? currentPres;
+                                    final factor = updatedPres.unidadesPorVenta > 0 ? updatedPres.unidadesPorVenta : 1;
+                                    final newStockInSalesUnits = updatedPres.stockActual ~/ factor;
+
+                                    setState(() {
+                                      _currentSelection = _currentSelection.copyWith(stock: newStockInSalesUnits);
+                                      int currentQty = int.tryParse(_qtyCtrl.text) ?? 1;
+                                      if (currentQty > newStockInSalesUnits && newStockInSalesUnits > 0) {
+                                        _qtyCtrl.text = newStockInSalesUnits.toString();
+                                      }
+                                    });
+
+                                    if (context.mounted) {
+                                      final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
+                                      quickProv.syncItemPriceAndStock(
+                                        _currentSelection.presentationId,
+                                        newStock: newStockInSalesUnits,
+                                      );
+                                    }
                                   }
                                 }
                               },
@@ -529,19 +543,34 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                               Switch(
                                 value: _isManualPrice,
                                 activeThumbColor: Colors.orange,
-                                onChanged: (v) => setState(() {
-                                  _isManualPrice = v;
-                                  if (!v) { 
-                                    _priceCtrl.text = _systemPrice.toStringAsFixed(2); 
-                                    _discountCtrl.text = ""; 
-                                  } else {
-                                    if (_currentSelection.offerPrice != null && _currentSelection.offerPrice! > 0) {
-                                      _priceCtrl.text = _currentSelection.offerPrice!.toStringAsFixed(2);
-                                      double disc = _systemPrice - _currentSelection.offerPrice!;
-                                      _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
+                                onChanged: (v) {
+                                  setState(() {
+                                    _isManualPrice = v;
+                                    if (!v) {
+                                      final effPrice = _currentSelection.hasOffer
+                                          ? _currentSelection.effectivePrice
+                                          : _systemPrice;
+                                      _priceCtrl.text = effPrice.toStringAsFixed(2);
+                                      _discountCtrl.clear();
+                                    } else {
+                                      if (_currentSelection.hasOffer) {
+                                        _priceCtrl.text = _currentSelection.effectivePrice.toStringAsFixed(2);
+                                        final disc = _systemPrice - _currentSelection.effectivePrice;
+                                        _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
+                                      } else {
+                                        _priceCtrl.text = _systemPrice.toStringAsFixed(2);
+                                        _discountCtrl.clear();
+                                      }
                                     }
+                                  });
+                                  if (v) {
+                                    Future.microtask(() {
+                                      if (mounted) {
+                                        _discountFocusNode.requestFocus();
+                                      }
+                                    });
                                   }
-                                }),
+                                },
                               ),
                             ],
                           ),
@@ -550,12 +579,64 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                "Precio Base: ${currency.format(_systemPrice)}",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: isDark ? Colors.grey[400] : Colors.grey[700],
+                              Expanded(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_currentSelection.hasOffer) ...[
+                                      Text(
+                                        "Base: ",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                                        ),
+                                      ),
+                                      Text(
+                                        currency.format(_systemPrice),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: isDark ? Colors.grey[500] : Colors.grey[500],
+                                          decoration: TextDecoration.lineThrough,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        currency.format(_currentSelection.effectivePrice),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: isDark ? Colors.green[300] : Colors.green[700],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green[100],
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          "-${_currentSelection.discountPercentRounded}%",
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark ? Colors.green[300] : Colors.green[800],
+                                          ),
+                                        ),
+                                      ),
+                                    ] else ...[
+                                      Text(
+                                        "Precio Base: ${currency.format(_systemPrice)}",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                               InkWell(
@@ -579,16 +660,30 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                                       final updatedPres = _fullProduct!.presentaciones.where(
                                         (p) => p.id == _currentSelection.presentationId,
                                       ).firstOrNull ?? targetPres;
+                                      final newOfferPrice = updatedPres.hasOffer ? updatedPres.effectivePrice : null;
                                       setState(() {
                                         _systemPrice = updatedPres.precioVentaFinal;
-                                        _priceCtrl.text = _systemPrice.toStringAsFixed(2);
-                                        _discountCtrl.clear();
+                                        _currentSelection = _currentSelection.copyWith(
+                                          price: updatedPres.precioVentaFinal,
+                                          offerPrice: newOfferPrice,
+                                        );
+                                        if (!_isManualPrice) {
+                                          final eff = _currentSelection.effectivePrice;
+                                          _priceCtrl.text = eff.toStringAsFixed(2);
+                                          _discountCtrl.clear();
+                                        } else {
+                                          final currP = double.tryParse(_priceCtrl.text) ?? _systemPrice;
+                                          final d = _systemPrice - currP;
+                                          _discountCtrl.text = d > 0 ? d.toStringAsFixed(2) : "";
+                                        }
                                       });
                                       if (context.mounted) {
                                         final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
                                         quickProv.syncItemPriceAndStock(
                                           _currentSelection.presentationId,
                                           newPrice: updatedPres.precioVentaFinal,
+                                          newOfferPrice: newOfferPrice,
+                                          clearOffer: !updatedPres.hasOffer,
                                         );
                                       }
                                     }
@@ -622,42 +717,104 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                     if (_isManualPrice) ...[
                       Divider(height: 1, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[200]),
                       Padding(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("S/ a Descontar", style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange[900], fontWeight: FontWeight.bold, fontSize: 14)),
-                                  TextField(
-                                    controller: _discountCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor),
-                                    decoration: InputDecoration(prefixText: "- ", prefixStyle: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange[900], fontSize: 24, fontWeight: FontWeight.bold), isDense: true, border: InputBorder.none),
-                                    onChanged: _onDiscountChanged,
+                                  Text(
+                                    "S/ a Descontar",
+                                    style: TextStyle(
+                                      color: isDark ? Colors.orange[300] : Colors.orange[900],
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF14141C) : Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: TextField(
+                                      focusNode: _discountFocusNode,
+                                      controller: _discountCtrl,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
+                                      decoration: InputDecoration(
+                                        prefixText: "- S/ ",
+                                        prefixStyle: TextStyle(
+                                          color: isDark ? Colors.orange[300] : Colors.orange[900],
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        hintText: "0.00",
+                                        hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400]),
+                                        isDense: true,
+                                        border: InputBorder.none,
+                                      ),
+                                      onChanged: _onDiscountChanged,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                            Container(width: 1, height: 50, color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[300]),
-                            const SizedBox(width: 20),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("Precio Final Unit.", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[900], fontWeight: FontWeight.bold, fontSize: 14)),
-                                  TextField(
-                                    controller: _priceCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue),
-                                    decoration: InputDecoration(prefixText: "S/ ", prefixStyle: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontSize: 24, fontWeight: FontWeight.bold), isDense: true, border: InputBorder.none),
-                                    onChanged: _onPriceChanged,
+                                  Text(
+                                    "Precio Final Unit.",
+                                    style: TextStyle(
+                                      color: isDark ? Colors.blue[300] : Colors.blue[900],
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF14141C) : Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade300,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: TextField(
+                                      controller: _priceCtrl,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                                      decoration: InputDecoration(
+                                        prefixText: "S/ ",
+                                        prefixStyle: TextStyle(
+                                          color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        hintText: "0.00",
+                                        hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400]),
+                                        isDense: true,
+                                        border: InputBorder.none,
+                                      ),
+                                      onChanged: _onPriceChanged,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
                           ],
                         ),
-                      )
+                      ),
                     ]
                   ],
                 ),

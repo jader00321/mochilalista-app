@@ -27,6 +27,7 @@ class InfoTooltipButton extends StatelessWidget {
   });
 
   void _showInfoSheet(BuildContext context) {
+    FocusManager.instance.primaryFocus?.unfocus();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     InteractiveSheetWrapper.show(
@@ -37,7 +38,9 @@ class InfoTooltipButton extends StatelessWidget {
         tips: tips,
         isDark: isDark,
       ),
-    );
+    ).whenComplete(() {
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
   }
 
   @override

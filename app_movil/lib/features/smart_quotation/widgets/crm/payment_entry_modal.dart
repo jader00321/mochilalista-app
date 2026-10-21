@@ -7,10 +7,23 @@ import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/general_preview_tab.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+
 class PaymentEntryModal extends StatefulWidget {
   final ClientModel client;
+  final String? initialTargetType; 
+  final int? initialTargetId;
+  final double? initialAmount;
+  final VoidCallback? onPaymentSuccess;
 
-  const PaymentEntryModal({super.key, required this.client});
+  const PaymentEntryModal({
+    super.key, 
+    required this.client,
+    this.initialTargetType,
+    this.initialTargetId,
+    this.initialAmount,
+    this.onPaymentSuccess,
+  });
 
   @override
   State<PaymentEntryModal> createState() => _PaymentEntryModalState();
@@ -32,6 +45,15 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+
+    if (widget.initialTargetId != null) {
+      _selectedTargetType = widget.initialTargetType;
+      _selectedTargetId = widget.initialTargetId;
+      _tabController.index = 1;
+    }
+    if (widget.initialAmount != null && widget.initialAmount! > 0) {
+      _amountCtrl.text = widget.initialAmount!.toStringAsFixed(2);
+    }
     
     _amountCtrl.addListener(() {
       setState(() {}); 
@@ -444,6 +466,10 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
 
       if (mounted) {
         if (success) {
+          try {
+            Provider.of<SaleProvider>(context, listen: false).silentRefresh();
+          } catch (_) {}
+          widget.onPaymentSuccess?.call();
           Navigator.pop(context);
           CustomSnackBar.show(context, message: "¡Abono registrado exitosamente!", isError: false);
         } else {

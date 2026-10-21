@@ -5,6 +5,7 @@ class ProductPresentation {
   final String? descripcion;
   final String? imagenUrl;
   final int? proveedorId;
+  final String? deferredProviderName;
 
   final String? umpCompra;
   final double? precioUmpProveedor;
@@ -23,6 +24,7 @@ class ProductPresentation {
   final int stockActual;
   final int? stockAlerta;
   final bool esDefault;
+  final int orden;
   final double? precioOferta;
   final String? tipoDescuento;
   final double? valorDescuento;
@@ -36,6 +38,7 @@ class ProductPresentation {
     this.descripcion,
     this.imagenUrl,
     this.proveedorId,
+    this.deferredProviderName,
     this.umpCompra,
     this.precioUmpProveedor,
     this.cantidadUmpComprada,
@@ -50,12 +53,74 @@ class ProductPresentation {
     required this.stockActual,
     this.stockAlerta = 5,
     this.esDefault = false,
+    this.orden = 0,
     this.precioOferta,
     this.tipoDescuento,
     this.valorDescuento,
     this.estado = 'publico',
     this.activo = true,
   });
+
+  ProductPresentation copyWith({
+    int? id,
+    String? nombreEspecifico,
+    String? codigoBarras,
+    String? descripcion,
+    String? imagenUrl,
+    int? proveedorId,
+    String? deferredProviderName,
+    String? umpCompra,
+    double? precioUmpProveedor,
+    double? cantidadUmpComprada,
+    double? totalPagoLote,
+    int? unidadesPorLote,
+    int? facturaCargaId,
+    String? unidadVenta,
+    int? unidadesPorVenta,
+    double? costoUnitarioCalculado,
+    double? factorGananciaVenta,
+    double? precioVentaFinal,
+    int? stockActual,
+    int? stockAlerta,
+    bool? esDefault,
+    int? orden,
+    double? precioOferta,
+    String? tipoDescuento,
+    double? valorDescuento,
+    String? estado,
+    bool? activo,
+  }) {
+    return ProductPresentation(
+      id: id ?? this.id,
+      nombreEspecifico: nombreEspecifico ?? this.nombreEspecifico,
+      codigoBarras: codigoBarras ?? this.codigoBarras,
+      descripcion: descripcion ?? this.descripcion,
+      imagenUrl: imagenUrl ?? this.imagenUrl,
+      proveedorId: proveedorId ?? this.proveedorId,
+      deferredProviderName: deferredProviderName ?? this.deferredProviderName,
+      umpCompra: umpCompra ?? this.umpCompra,
+      precioUmpProveedor: precioUmpProveedor ?? this.precioUmpProveedor,
+      cantidadUmpComprada: cantidadUmpComprada ?? this.cantidadUmpComprada,
+      totalPagoLote: totalPagoLote ?? this.totalPagoLote,
+      unidadesPorLote: unidadesPorLote ?? this.unidadesPorLote,
+      facturaCargaId: facturaCargaId ?? this.facturaCargaId,
+      unidadVenta: unidadVenta ?? this.unidadVenta,
+      unidadesPorVenta: unidadesPorVenta ?? this.unidadesPorVenta,
+      costoUnitarioCalculado:
+          costoUnitarioCalculado ?? this.costoUnitarioCalculado,
+      factorGananciaVenta: factorGananciaVenta ?? this.factorGananciaVenta,
+      precioVentaFinal: precioVentaFinal ?? this.precioVentaFinal,
+      stockActual: stockActual ?? this.stockActual,
+      stockAlerta: stockAlerta ?? this.stockAlerta,
+      esDefault: esDefault ?? this.esDefault,
+      orden: orden ?? this.orden,
+      precioOferta: precioOferta ?? this.precioOferta,
+      tipoDescuento: tipoDescuento ?? this.tipoDescuento,
+      valorDescuento: valorDescuento ?? this.valorDescuento,
+      estado: estado ?? this.estado,
+      activo: activo ?? this.activo,
+    );
+  }
 
   factory ProductPresentation.fromJson(Map<String, dynamic> json) {
     return ProductPresentation(
@@ -84,6 +149,7 @@ class ProductPresentation {
       stockActual: json['stock_actual'] ?? 0,
       stockAlerta: json['stock_alerta'],
       esDefault: json['es_default'] == 1 || json['es_default'] == true,
+      orden: (json['orden'] as num?)?.toInt() ?? 0,
       activo:
           json['activo'] == 1 ||
           json['activo'] == true ||
@@ -108,6 +174,7 @@ class ProductPresentation {
       'descripcion': descripcion,
       'imagen_url': imagenUrl,
       'proveedor_id': proveedorId,
+      'deferred_provider_name': deferredProviderName,
       'ump_compra': umpCompra,
       'precio_ump_proveedor': precioUmpProveedor,
       'cantidad_ump_comprada': cantidadUmpComprada,
@@ -122,6 +189,7 @@ class ProductPresentation {
       'stock_actual': stockActual,
       'stock_alerta': stockAlerta,
       'es_default': esDefault ? 1 : 0,
+      'orden': orden,
       'estado': estado,
       'activo': activo ? 1 : 0,
       'precio_oferta': precioOferta,
@@ -152,6 +220,7 @@ class ProductPresentation {
       'stock_actual': stockActual,
       'stock_alerta': stockAlerta,
       'es_default': esDefault ? 1 : 0,
+      'orden': orden,
       'precio_oferta': precioOferta,
       'tipo_descuento': tipoDescuento,
       'valor_descuento': valorDescuento,
@@ -172,19 +241,72 @@ class ProductPresentation {
   }
 
   /// Costo factor-aware exacto de la presentación:
-  /// 1. Si tiene costoUnitarioCalculado > 0, lo multiplica por factorVenta.
-  /// 2. Si no, deriva el costo unitario desde (precioUmpProveedor / factorUmp) y lo multiplica por factorVenta.
+  /// 1. Si tiene costoUnitarioCalculado > 0, retorna directamente ese valor
+  ///    (en la arquitectura de MochilaLista, costoUnitarioCalculado en presentaciones_producto ya es el costo de esa presentación).
+  /// 2. Si no, deriva el costo unitario desde (precioUmpProveedor / factorCompra) y lo multiplica por factorVenta.
   /// 3. Si no tiene costo registrado, retorna 0.0.
   double get costoPresentacionFinal {
-    final int factorVenta = unidadesPorVenta <= 0 ? 1 : unidadesPorVenta;
     if (costoUnitarioCalculado != null && costoUnitarioCalculado! > 0) {
-      return costoUnitarioCalculado! * factorVenta;
+      return costoUnitarioCalculado!;
     }
     if (precioUmpProveedor != null && precioUmpProveedor! > 0) {
+      final int factorVenta = unidadesPorVenta <= 0 ? 1 : unidadesPorVenta;
       final int factorCompra = factorUmp;
       return (precioUmpProveedor! / factorCompra) * factorVenta;
     }
     return 0.0;
+  }
+
+  /// Indica si la presentación tiene una oferta o descuento válido activo
+  bool get hasOffer {
+    final hasPromoPrice = precioOferta != null &&
+        precioOferta! > 0 &&
+        precioOferta! < precioVentaFinal;
+    final hasActiveDiscount = valorDescuento != null &&
+        valorDescuento! > 0 &&
+        tipoDescuento != null &&
+        tipoDescuento!.isNotEmpty &&
+        tipoDescuento != 'ninguno';
+    return hasPromoPrice || hasActiveDiscount;
+  }
+
+  /// Retorna el precio efectivo de venta (precio_oferta si es válido, o calculado desde valor_descuento)
+  double get effectivePrice {
+    if (precioOferta != null &&
+        precioOferta! > 0 &&
+        precioOferta! < precioVentaFinal) {
+      return precioOferta!;
+    }
+    if (valorDescuento != null &&
+        valorDescuento! > 0 &&
+        tipoDescuento != null &&
+        tipoDescuento!.isNotEmpty &&
+        tipoDescuento != 'ninguno') {
+      if (tipoDescuento == 'porcentaje') {
+        final discounted = precioVentaFinal *
+            (1.0 - (valorDescuento! / 100.0));
+        return discounted > 0 ? discounted : 0.0;
+      } else {
+        final discounted = precioVentaFinal - valorDescuento!;
+        return discounted > 0 ? discounted : 0.0;
+      }
+    }
+    return precioVentaFinal;
+  }
+
+  /// Retorna el porcentaje de descuento redondeado a entero limpio (-10%, -14%)
+  int get discountPercentRounded {
+    if (precioVentaFinal <= 0) return 0;
+    if (tipoDescuento == 'porcentaje' &&
+        valorDescuento != null &&
+        valorDescuento! > 0) {
+      return valorDescuento!.round();
+    }
+    final eff = effectivePrice;
+    if (eff < precioVentaFinal) {
+      return (((precioVentaFinal - eff) / precioVentaFinal) * 100).round();
+    }
+    return 0;
   }
 }
 

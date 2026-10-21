@@ -51,6 +51,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
       maxLength: widget.maxLength,
       inputFormatters: widget.inputFormatters,
       validator: widget.validator,
+      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
       style: textTheme.bodyLarge?.copyWith(color: isDark ? Colors.white : Colors.black87),
       decoration: InputDecoration(
         counterText: "", 

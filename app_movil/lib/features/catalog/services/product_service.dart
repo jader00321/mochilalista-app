@@ -8,6 +8,9 @@ import 'package:app_movil/features/catalog/repositories/product_repository.dart'
 class ProductService {
   int? _negocioId;
   final _repository = ProductRepository();
+  String? _lastError;
+
+  String? get lastError => _lastError;
 
   void updateContext(int? negocioId) => _negocioId = negocioId;
 
@@ -36,6 +39,16 @@ class ProductService {
     } catch (e, stack) {
       AppLogger.error('ProductService.countInventory', e, stack);
       return {'products': 0, 'presentations': 0};
+    }
+  }
+
+  Future<Map<String, int>> countOrphans({String? estado}) async {
+    if (_negocioId == null) return {'orphan_categories': 0, 'orphan_brands': 0};
+    try {
+      return await _repository.countOrphansRaw(_negocioId!, estado: estado);
+    } catch (e, stack) {
+      AppLogger.error('ProductService.countOrphans', e, stack);
+      return {'orphan_categories': 0, 'orphan_brands': 0};
     }
   }
 
@@ -91,15 +104,22 @@ class ProductService {
   Future<bool> createFullProduct({
     required String nombre,
     int? marcaId,
+    String? deferredBrandName,
     int? categoriaId,
+    String? deferredCategoryName,
     int? proveedorId,
+    String? deferredProviderName,
     required String estado,
     String? descripcion,
     String? imagenUrl,
     String? codigoBarras,
     required List<ProductPresentation> presentaciones,
   }) async {
-    if (_negocioId == null) return false;
+    if (_negocioId == null) {
+      _lastError = "No hay negocio seleccionado.";
+      return false;
+    }
+    _lastError = null;
     try {
       String? finalParentUrl = await ImageService.processAndSaveImage(
         imagenUrl,
@@ -109,7 +129,11 @@ class ProductService {
         'negocio_id': _negocioId,
         'nombre': nombre,
         'marca_id': marcaId,
+        'deferred_brand_name': deferredBrandName,
         'categoria_id': categoriaId,
+        'deferred_category_name': deferredCategoryName,
+        'proveedor_id': proveedorId,
+        'deferred_provider_name': deferredProviderName,
         'descripcion': descripcion,
         'imagen_url': finalParentUrl,
         'codigo_barras': codigoBarras,
@@ -118,7 +142,8 @@ class ProductService {
       };
 
       List<Map<String, dynamic>> presentationsData = [];
-      for (var pres in presentaciones) {
+      for (int i = 0; i < presentaciones.length; i++) {
+        var pres = presentaciones[i];
         String? finalPresUrl = await ImageService.processAndSaveImage(
           pres.imagenUrl,
         );
@@ -126,10 +151,21 @@ class ProductService {
         Map<String, dynamic> sqliteMap = pres.toSqlite(0);
         sqliteMap['imagen_url'] = finalPresUrl;
         sqliteMap.remove('id');
-        if (sqliteMap['proveedor_id'] == null) {
+        sqliteMap['orden'] = i;
+        if (sqliteMap['proveedor_id'] == null &&
+            sqliteMap['deferred_provider_name'] == null) {
           sqliteMap['proveedor_id'] = proveedorId;
+          sqliteMap['deferred_provider_name'] = deferredProviderName;
         }
         presentationsData.add(sqliteMap);
+      }
+
+      // Blindaje: Asegurar que exactamente una presentación tenga es_default = 1
+      final bool hasDefault = presentationsData.any(
+        (p) => p['es_default'] == 1 || p['es_default'] == true,
+      );
+      if (!hasDefault && presentationsData.isNotEmpty) {
+        presentationsData.first['es_default'] = 1;
       }
 
       await _repository.createFullProductTransaction(
@@ -138,6 +174,7 @@ class ProductService {
       );
       return true;
     } catch (e, stack) {
+      _lastError = e.toString();
       AppLogger.error('ProductService.createFullProduct', e, stack);
       return false;
     }
@@ -147,8 +184,11 @@ class ProductService {
     required int productId,
     required String nombre,
     int? marcaId,
+    String? deferredBrandName,
     int? categoriaId,
+    String? deferredCategoryName,
     int? proveedorId,
+    String? deferredProviderName,
     required String estado,
     String? descripcion,
     String? imagenUrl,
@@ -167,34 +207,37 @@ class ProductService {
         'nombre': nombre,
         'marca_id': marcaId,
         'categoria_id': categoriaId,
+        'proveedor_id': proveedorId,
         'descripcion': descripcion,
         'imagen_url': finalParentUrl,
         'codigo_barras': codigoBarras,
         'estado': estado,
         'fecha_actualizacion': DateTime.now().toIso8601String(),
+        if (deferredBrandName != null) 'deferred_brand_name': deferredBrandName,
+        if (deferredCategoryName != null)
+          'deferred_category_name': deferredCategoryName,
+        if (deferredProviderName != null)
+          'deferred_provider_name': deferredProviderName,
       };
-
-      // Manejo optimizado de imágenes eliminadas (la transacción maneja el DB, pero las imágenes físicas se deberían borrar)
-      // Si se requiere borrar imágenes viejas, debe iterarse sobre idsToDelete y buscar en el storage.
-      // Revertiré un poco la lógica de las imágenes a algo más robusto, o puedo dejarlo como estaba en la BD.
-      // Voy a arreglar el fetching de la imagen vieja de la presentación en el Service.
 
       List<Map<String, dynamic>> presToUpdate = [];
       List<Map<String, dynamic>> presToInsert = [];
 
-      for (var pres in presentaciones) {
+      for (int i = 0; i < presentaciones.length; i++) {
+        final pres = presentaciones[i];
         if (pres.id != null) {
-          // old image management would go here
           String? finalPresUrl = await ImageService.processAndSaveImage(
             pres.imagenUrl,
-          ); // Simplificado por seguridad
+          );
 
           Map<String, dynamic> updateMap = pres.toSqlite(productId);
           updateMap['imagen_url'] = finalPresUrl;
-          if (updateMap['proveedor_id'] == null) {
+          if (updateMap['proveedor_id'] == null &&
+              pres.deferredProviderName == null) {
             updateMap['proveedor_id'] = proveedorId;
           }
-          updateMap['id'] = pres.id; // Maintain ID to update
+          updateMap['id'] = pres.id;
+          updateMap['orden'] = i;
           presToUpdate.add(updateMap);
         } else {
           String? finalPresUrl = await ImageService.processAndSaveImage(
@@ -203,10 +246,27 @@ class ProductService {
           Map<String, dynamic> insertMap = pres.toSqlite(productId);
           insertMap['imagen_url'] = finalPresUrl;
           insertMap.remove('id');
-          if (insertMap['proveedor_id'] == null) {
+          if (insertMap['proveedor_id'] == null &&
+              pres.deferredProviderName == null) {
             insertMap['proveedor_id'] = proveedorId;
           }
+          insertMap['orden'] = i;
           presToInsert.add(insertMap);
+        }
+      }
+
+      // Blindaje: Asegurar que al menos una presentación tenga es_default = 1
+      final bool hasDefaultInPres = presToUpdate.any(
+            (p) => p['es_default'] == 1 || p['es_default'] == true,
+          ) ||
+          presToInsert.any(
+            (p) => p['es_default'] == 1 || p['es_default'] == true,
+          );
+      if (!hasDefaultInPres) {
+        if (presToUpdate.isNotEmpty) {
+          presToUpdate.first['es_default'] = 1;
+        } else if (presToInsert.isNotEmpty) {
+          presToInsert.first['es_default'] = 1;
         }
       }
 
@@ -219,6 +279,7 @@ class ProductService {
       );
       return true;
     } catch (e, stack) {
+      _lastError = e.toString();
       AppLogger.error('ProductService.editFullProduct', e, stack);
       return false;
     }

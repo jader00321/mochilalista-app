@@ -66,12 +66,18 @@ class CatalogProvider with ChangeNotifier {
 
   int _realTotalProductsCount = 0;
   int _realTotalPresentationsCount = 0;
+  int _orphanCategoriesCount = 0;
+  int _orphanBrandsCount = 0;
 
   bool get isLoading => _isLoading;
   int? get selectedCategoryId => _selectedCategoryId;
   int get totalLoadedCount => _displayItems.length;
   int get realTotalProductsCount => _realTotalProductsCount;
   int get realTotalPresentationsCount => _realTotalPresentationsCount;
+  bool get hasOrphanCategories => _orphanCategoriesCount > 0;
+  bool get hasOrphanBrands => _orphanBrandsCount > 0;
+  int get orphanCategoriesCount => _orphanCategoriesCount;
+  int get orphanBrandsCount => _orphanBrandsCount;
   bool get isSortAscending => _isSortAscending;
   String get searchQuery => _searchQuery;
   String get errorMessage => _errorMessage;
@@ -218,6 +224,10 @@ class CatalogProvider with ChangeNotifier {
         if (value is! List) params[key] = value.toString();
       });
 
+      if (_advancedFilters['has_offer'] == true || _advancedFilters['hasOffer'] == true) {
+        params['has_offer'] = 'true';
+      }
+
       if (_advancedFilters.containsKey('category_ids')) {
         final list = _advancedFilters['category_ids'] as List;
         if (list.isNotEmpty) {
@@ -235,6 +245,10 @@ class CatalogProvider with ChangeNotifier {
         final totals = await _productService.countInventory(params);
         _realTotalProductsCount = totals['products'] ?? 0;
         _realTotalPresentationsCount = totals['presentations'] ?? 0;
+
+        final orphans = await _productService.countOrphans(estado: 'publico');
+        _orphanCategoriesCount = orphans['orphan_categories'] ?? 0;
+        _orphanBrandsCount = orphans['orphan_brands'] ?? 0;
       }
 
       final List<InventoryWrapper>? newItems = await _productService
@@ -336,6 +350,10 @@ class CatalogProvider with ChangeNotifier {
         if (value is! List) params[key] = value.toString();
       });
 
+      if (advancedFilters['has_offer'] == true || advancedFilters['hasOffer'] == true) {
+        params['has_offer'] = 'true';
+      }
+
       if (advancedFilters.containsKey('category_ids')) {
         final list = advancedFilters['category_ids'] as List;
         if (list.isNotEmpty) {
@@ -350,7 +368,10 @@ class CatalogProvider with ChangeNotifier {
       }
 
       final totals = await _productService.countInventory(params);
-      return totals['products'] ?? totals['presentations'] ?? 0;
+      if (params['only_defaults'] == 'true') {
+        return totals['products'] ?? totals['presentations'] ?? 0;
+      }
+      return totals['presentations'] ?? totals['products'] ?? 0;
     } catch (e) {
       return _displayItems.length;
     }
@@ -529,5 +550,58 @@ class CatalogProvider with ChangeNotifier {
       debugPrint("Error searching products offline: $e");
     }
     return [];
+  }
+
+  /// 🔄 Sincronización en caliente 360° para reflejar cambios inmediatos de stock y precio
+  void syncPresentation(
+    int presentationId, {
+    int? newStock,
+    double? newPrice,
+    double? newOfferPrice,
+    String? newDiscountType,
+    double? newDiscountValue,
+  }) {
+    bool updated = false;
+    for (int i = 0; i < _displayItems.length; i++) {
+      final item = _displayItems[i];
+      if (item.presentation.id == presentationId) {
+        final updatedPres = item.presentation.copyWith(
+          stockActual: newStock ?? item.presentation.stockActual,
+          precioVentaFinal: newPrice ?? item.presentation.precioVentaFinal,
+          precioOferta: newOfferPrice == -1
+              ? null
+              : (newOfferPrice ?? item.presentation.precioOferta),
+          tipoDescuento: newOfferPrice == -1
+              ? null
+              : (newDiscountType ?? item.presentation.tipoDescuento),
+          valorDescuento: newOfferPrice == -1
+              ? null
+              : (newDiscountValue ?? item.presentation.valorDescuento),
+        );
+        _displayItems[i] = item.copyWith(presentation: updatedPres);
+        updated = true;
+      }
+    }
+    for (int i = 0; i < _shoppingCart.length; i++) {
+      if (_shoppingCart[i].item.presentation.id == presentationId) {
+        final updatedPres = _shoppingCart[i].item.presentation.copyWith(
+          stockActual:
+              newStock ?? _shoppingCart[i].item.presentation.stockActual,
+          precioVentaFinal:
+              newPrice ?? _shoppingCart[i].item.presentation.precioVentaFinal,
+          precioOferta: newOfferPrice == -1
+              ? null
+              : (newOfferPrice ?? _shoppingCart[i].item.presentation.precioOferta),
+        );
+        _shoppingCart[i] = CartItem(
+          item: _shoppingCart[i].item.copyWith(presentation: updatedPres),
+          quantity: _shoppingCart[i].quantity,
+        );
+        updated = true;
+      }
+    }
+    if (updated) {
+      notifyListeners();
+    }
   }
 }

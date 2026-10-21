@@ -28,6 +28,10 @@ class QuickRestockModal extends StatefulWidget {
 class _QuickRestockModalState extends State<QuickRestockModal> {
   // Modo: 0 = Sumar mercancía recibida, 1 = Fijar stock total exacto
   int _selectedMode = 0;
+  
+  // Granularidad: 0 = Por Unidad de Venta (xFactor), 1 = Por Unidad Base (x1)
+  int _unitGranularity = 0;
+
   final TextEditingController _qtyCtrl = TextEditingController();
   bool _isSaving = false;
 
@@ -44,18 +48,72 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
     super.dispose();
   }
 
-  int get _currentStock => widget.presentation.stockActual;
+  int get _factor => widget.presentation.unidadesPorVenta > 0
+      ? widget.presentation.unidadesPorVenta
+      : 1;
+
+  String get _unidadVenta => widget.presentation.unidadVenta ?? 'Unidad';
+
+  bool get _hasFactor => _factor > 1;
+
+  int get _currentStockBase => widget.presentation.stockActual;
+
+  int get _currentStockSalesUnits => _currentStockBase ~/ _factor;
+
+  int get _currentStockRemainder => _currentStockBase % _factor;
 
   int get _parsedInput => int.tryParse(_qtyCtrl.text.trim()) ?? 0;
 
-  int get _calculatedNewStock {
+  int get _calculatedNewStockBase {
     if (_selectedMode == 0) {
       // Sumar nuevo stock
-      return _currentStock + _parsedInput;
+      if (_unitGranularity == 0 && _hasFactor) {
+        return _currentStockBase + (_parsedInput * _factor);
+      } else {
+        return _currentStockBase + _parsedInput;
+      }
     } else {
       // Fijar stock exacto
-      return _parsedInput;
+      if (_unitGranularity == 0 && _hasFactor) {
+        return _parsedInput * _factor;
+      } else {
+        return _parsedInput;
+      }
     }
+  }
+
+  int get _calculatedNewStockSalesUnits => _calculatedNewStockBase ~/ _factor;
+
+  int get _calculatedNewStockRemainder => _calculatedNewStockBase % _factor;
+
+  void _onModeChanged(int mode) {
+    if (_selectedMode == mode) return;
+    setState(() {
+      _selectedMode = mode;
+      if (mode == 0) {
+        _qtyCtrl.text = "1";
+      } else {
+        if (_unitGranularity == 0 && _hasFactor) {
+          _qtyCtrl.text = _currentStockSalesUnits.toString();
+        } else {
+          _qtyCtrl.text = _currentStockBase.toString();
+        }
+      }
+    });
+  }
+
+  void _onGranularityChanged(int gran) {
+    if (_unitGranularity == gran) return;
+    setState(() {
+      _unitGranularity = gran;
+      if (_selectedMode == 0) {
+        _qtyCtrl.text = gran == 0 ? "1" : _factor.toString();
+      } else {
+        _qtyCtrl.text = gran == 0
+            ? _currentStockSalesUnits.toString()
+            : _currentStockBase.toString();
+      }
+    });
   }
 
   void _addQuickAmount(int amount) {
@@ -67,9 +125,29 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
     }
   }
 
+  void _squareToExactMultiple(int targetMultipleBase) {
+    setState(() {
+      if (_selectedMode == 0) {
+        int diff = targetMultipleBase - _currentStockBase;
+        if (diff < 0) diff = 0;
+        if (_unitGranularity == 0 && _hasFactor) {
+          _qtyCtrl.text = (diff / _factor).ceil().toString();
+        } else {
+          _qtyCtrl.text = diff.toString();
+        }
+      } else {
+        if (_unitGranularity == 0 && _hasFactor) {
+          _qtyCtrl.text = (targetMultipleBase ~/ _factor).toString();
+        } else {
+          _qtyCtrl.text = targetMultipleBase.toString();
+        }
+      }
+    });
+  }
+
   Future<void> _submitRestock() async {
-    final newStock = _calculatedNewStock;
-    if (newStock < 0) {
+    final newStockBase = _calculatedNewStockBase;
+    if (newStockBase < 0) {
       CustomSnackBar.show(context, message: "El stock no puede ser negativo", isError: true);
       return;
     }
@@ -85,15 +163,19 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
     try {
       final success = await invProvider.updatePresentation(
         widget.presentation.id!,
-        stock: newStock,
+        stock: newStockBase,
       );
 
       if (!mounted) return;
 
       if (success) {
+        final summaryMsg = _hasFactor
+            ? "Stock actualizado: $_calculatedNewStockSalesUnits $_unidadVenta ($newStockBase u. base)"
+            : "Stock actualizado: $newStockBase unidades disponibles";
+
         CustomSnackBar.show(
           context,
-          message: "Stock actualizado: $newStock unidades disponibles",
+          message: summaryMsg,
           isError: false,
         );
         widget.onRestockSuccess();
@@ -117,11 +199,14 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
     final textColor = isDark ? Colors.white : Colors.black87;
     final cardBg = isDark ? const Color(0xFF1A1A24) : Colors.grey[100]!;
 
-    final factorVenta = widget.presentation.unidadesPorVenta;
     final variantLabel = widget.presentation.nombreEspecifico != null &&
             widget.presentation.nombreEspecifico!.isNotEmpty
         ? widget.presentation.nombreEspecifico!
-        : "${widget.presentation.unidadVenta ?? 'Unidad'} (x$factorVenta)";
+        : "$_unidadVenta (x$_factor)";
+
+    final isOddStock = _hasFactor && (_calculatedNewStockRemainder != 0);
+    final nextMultipleBase = ((_calculatedNewStockBase ~/ _factor) + 1) * _factor;
+    final targetSalesUnits = nextMultipleBase ~/ _factor;
 
     return Container(
       padding: EdgeInsets.only(
@@ -197,9 +282,9 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
               ],
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Selector de modo (Sumar compra recibida vs Fijar exacto)
+            // Selector de modo principal (Sumar compra recibida vs Fijar exacto)
             Container(
               decoration: BoxDecoration(
                 color: cardBg,
@@ -210,12 +295,7 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
                 children: [
                   Expanded(
                     child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedMode = 0;
-                          _qtyCtrl.text = "1";
-                        });
-                      },
+                      onTap: () => _onModeChanged(0),
                       borderRadius: BorderRadius.circular(10),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -241,12 +321,7 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
                   ),
                   Expanded(
                     child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedMode = 1;
-                          _qtyCtrl.text = _currentStock.toString();
-                        });
-                      },
+                      onTap: () => _onModeChanged(1),
                       borderRadius: BorderRadius.circular(10),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -274,9 +349,122 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
               ),
             ),
 
-            const SizedBox(height: 20),
+            // Selector secundario de granularidad (Solo si factor > 1)
+            if (_hasFactor) ...[
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white10 : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isDark ? Colors.white12 : Colors.grey.shade300,
+                  ),
+                ),
+                padding: const EdgeInsets.all(3),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _onGranularityChanged(0),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          decoration: BoxDecoration(
+                            color: _unitGranularity == 0
+                                ? (isDark ? const Color(0xFF2C324A) : Colors.white)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: _unitGranularity == 0
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.1),
+                                      blurRadius: 4,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          alignment: Alignment.center,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.all_inbox,
+                                size: 14,
+                                color: _unitGranularity == 0
+                                    ? Colors.blue[400]
+                                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                "Por $_unidadVenta (x$_factor)",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: _unitGranularity == 0
+                                      ? (isDark ? Colors.blue[300] : Colors.blue[900])
+                                      : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _onGranularityChanged(1),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          decoration: BoxDecoration(
+                            color: _unitGranularity == 1
+                                ? (isDark ? const Color(0xFF2C324A) : Colors.white)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: _unitGranularity == 1
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.1),
+                                      blurRadius: 4,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          alignment: Alignment.center,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.format_list_numbered,
+                                size: 14,
+                                color: _unitGranularity == 1
+                                    ? Colors.blue[400]
+                                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                "Por Unidad base (x1)",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: _unitGranularity == 1
+                                      ? (isDark ? Colors.blue[300] : Colors.blue[900])
+                                      : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
-            // Tarjeta de balance y comparativa
+            const SizedBox(height: 16),
+
+            // Tarjeta de balance y comparativa dual inteligente
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -289,6 +477,7 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
+                  // Stock Actual
                   Column(
                     children: [
                       Text(
@@ -301,15 +490,30 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "$_currentStock",
+                        _hasFactor
+                            ? "$_currentStockSalesUnits"
+                            : "$_currentStockBase",
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
-                          color: _currentStock <= 5
+                          color: _currentStockBase <= 5
                               ? (isDark ? Colors.orange[300] : Colors.orange[800])
                               : textColor,
                         ),
                       ),
+                      if (_hasFactor)
+                        Text(
+                          _currentStockRemainder > 0
+                              ? "$_unidadVenta (+${_currentStockRemainder}u)\n($_currentStockBase u.)"
+                              : "$_unidadVenta\n($_currentStockBase u.)",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            height: 1.1,
+                          ),
+                        ),
                     ],
                   ),
                   Icon(
@@ -317,6 +521,7 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
                     color: Colors.blue[400],
                     size: 24,
                   ),
+                  // Nuevo Ingreso / Ajuste
                   Column(
                     children: [
                       Text(
@@ -336,9 +541,23 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
                           color: Colors.blue[400],
                         ),
                       ),
+                      if (_hasFactor)
+                        Text(
+                          _unitGranularity == 0
+                              ? "$_unidadVenta\n(+${_parsedInput * _factor} u.)"
+                              : "Unidades base\n(+$_parsedInput u.)",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue[300],
+                            height: 1.1,
+                          ),
+                        ),
                     ],
                   ),
                   const Text("=", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  // Stock Resultante
                   Column(
                     children: [
                       Text(
@@ -351,26 +570,105 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "$_calculatedNewStock",
+                        _hasFactor
+                            ? "$_calculatedNewStockSalesUnits"
+                            : "$_calculatedNewStockBase",
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
                           color: isDark ? Colors.green[300] : Colors.green[700],
                         ),
                       ),
+                      if (_hasFactor)
+                        Text(
+                          _calculatedNewStockRemainder > 0
+                              ? "$_unidadVenta (+${_calculatedNewStockRemainder}u)\n($_calculatedNewStockBase u.)"
+                              : "$_unidadVenta\n($_calculatedNewStockBase u.)",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.green[300] : Colors.green[700],
+                            height: 1.1,
+                          ),
+                        ),
                     ],
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 20),
+            // Alerta inteligente de stock impar y botón de cuadratura rápida
+            if (isOddStock) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.orange.withValues(alpha: 0.15)
+                      : Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.shade300,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange[400]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Stock con residuo impar: $_calculatedNewStockBase u. equivalen a ${(_calculatedNewStockBase / _factor).toStringAsFixed(1)} $_unidadVenta. Quedan $_calculatedNewStockRemainder u. suelta(s) fuera de empaque.",
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: isDark ? Colors.orange[200] : Colors.orange[900],
+                              fontWeight: FontWeight.w600,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _squareToExactMultiple(nextMultipleBase),
+                        icon: const Icon(Icons.bolt, size: 16),
+                        label: Text(
+                          "Cuadrar a $targetSalesUnits $_unidadVenta ($nextMultipleBase u.)",
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800],
+                          side: BorderSide(
+                            color: isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade400,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 18),
 
             // Campo de entrada y botones de incremento rápido
             Text(
               _selectedMode == 0
-                  ? "Cantidad de unidades compradas / recibidas:"
-                  : "Nuevo stock total disponible:",
+                  ? (_hasFactor && _unitGranularity == 0
+                      ? "Cantidad de ${_unidadVenta}s compradas / recibidas:"
+                      : "Cantidad de unidades compradas / recibidas:")
+                  : (_hasFactor && _unitGranularity == 0
+                      ? "Nuevo stock total disponible (en ${_unidadVenta}s):"
+                      : "Nuevo stock total disponible (en unidades base):"),
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
@@ -394,6 +692,7 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
                   child: TextField(
                     controller: _qtyCtrl,
                     keyboardType: TextInputType.number,
+                    scrollPadding: const EdgeInsets.only(bottom: 90),
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -429,6 +728,7 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                _buildQuickChip("+1", 1, isDark),
                 _buildQuickChip("+5", 5, isDark),
                 _buildQuickChip("+10", 10, isDark),
                 _buildQuickChip("+20", 20, isDark),

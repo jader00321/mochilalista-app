@@ -118,8 +118,14 @@ class _FilterDrawerState extends State<FilterDrawer> {
       filters['maxStock'] = _stockRange.end.toInt();
     }
 
-    if (_onlyOffers) filters['hasOffer'] = true;
-    if (_onlyDefaults) filters['onlyDefaults'] = true;
+    if (_onlyOffers) {
+      filters['hasOffer'] = true;
+      filters['has_offer'] = true;
+    }
+    if (_onlyDefaults) {
+      filters['onlyDefaults'] = true;
+      filters['only_defaults'] = true;
+    }
     return filters;
   }
 
@@ -455,7 +461,7 @@ class _FilterDrawerState extends State<FilterDrawer> {
                   const SizedBox(height: 12),
 
                   // CARD 5: CATEGORÍAS (ACORDEÓN COLAPSABLE)
-                  if (provider.categories.isNotEmpty)
+                  if (provider.categories.isNotEmpty || provider.hasOrphanCategories)
                     _buildAccordionCard(
                       title: "Categorías",
                       icon: Icons.category_outlined,
@@ -468,26 +474,41 @@ class _FilterDrawerState extends State<FilterDrawer> {
                       child: Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: provider.categories.map((Category cat) {
-                          final isSelected = _selectedCategories.contains(cat.id);
-                          return _buildFilterChip(
-                            label: cat.nombre,
-                            isSelected: isSelected,
-                            onTap: () {
-                              _updateFilter(() {
-                                isSelected ? _selectedCategories.remove(cat.id) : _selectedCategories.add(cat.id);
-                              });
-                            },
-                            isDark: isDark,
-                          );
-                        }).toList(),
+                        children: [
+                          if (provider.hasOrphanCategories)
+                            _buildFilterChip(
+                              label: '[ Sin Categoría ]',
+                              isSelected: _selectedCategories.contains(0),
+                              onTap: () {
+                                _updateFilter(() {
+                                  _selectedCategories.contains(0)
+                                      ? _selectedCategories.remove(0)
+                                      : _selectedCategories.add(0);
+                                });
+                              },
+                              isDark: isDark,
+                            ),
+                          ...provider.categories.map((Category cat) {
+                            final isSelected = _selectedCategories.contains(cat.id);
+                            return _buildFilterChip(
+                              label: cat.nombre,
+                              isSelected: isSelected,
+                              onTap: () {
+                                _updateFilter(() {
+                                  isSelected ? _selectedCategories.remove(cat.id) : _selectedCategories.add(cat.id);
+                                });
+                              },
+                              isDark: isDark,
+                            );
+                          }),
+                        ],
                       ),
                     ),
 
                   const SizedBox(height: 12),
 
                   // CARD 6: MARCAS (ACORDEÓN COLAPSABLE)
-                  if (provider.brands.isNotEmpty)
+                  if (provider.brands.isNotEmpty || provider.hasOrphanBrands)
                     _buildAccordionCard(
                       title: "Marcas",
                       icon: Icons.branding_watermark_outlined,
@@ -500,19 +521,34 @@ class _FilterDrawerState extends State<FilterDrawer> {
                       child: Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: provider.brands.map((Brand brand) {
-                          final isSelected = _selectedBrands.contains(brand.id);
-                          return _buildFilterChip(
-                            label: brand.nombre,
-                            isSelected: isSelected,
-                            onTap: () {
-                              _updateFilter(() {
-                                isSelected ? _selectedBrands.remove(brand.id) : _selectedBrands.add(brand.id);
-                              });
-                            },
-                            isDark: isDark,
-                          );
-                        }).toList(),
+                        children: [
+                          if (provider.hasOrphanBrands)
+                            _buildFilterChip(
+                              label: '[ Sin Marca ]',
+                              isSelected: _selectedBrands.contains(0),
+                              onTap: () {
+                                _updateFilter(() {
+                                  _selectedBrands.contains(0)
+                                      ? _selectedBrands.remove(0)
+                                      : _selectedBrands.add(0);
+                                });
+                              },
+                              isDark: isDark,
+                            ),
+                          ...provider.brands.map((Brand brand) {
+                            final isSelected = _selectedBrands.contains(brand.id);
+                            return _buildFilterChip(
+                              label: brand.nombre,
+                              isSelected: isSelected,
+                              onTap: () {
+                                _updateFilter(() {
+                                  isSelected ? _selectedBrands.remove(brand.id) : _selectedBrands.add(brand.id);
+                                });
+                              },
+                              isDark: isDark,
+                            );
+                          }),
+                        ],
                       ),
                     ),
 

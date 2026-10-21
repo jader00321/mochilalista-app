@@ -28,6 +28,7 @@ class HistoryExportService {
     required String dateRangeText,
     String reportTitle = "REPORTE GLOBAL DE VENTAS",
     ExportHistoryScope scope = ExportHistoryScope.currentView,
+    Directory? outputDirectory,
   }) async {
     final pdf = pw.Document();
     
@@ -53,14 +54,14 @@ class HistoryExportService {
           decoration: pw.BoxDecoration(
             color: bgColor,
             borderRadius: pw.BorderRadius.circular(8),
-            border: pw.Border.all(color: textColor.withAlpha(50), width: 1)
+            border: pw.Border.all(color: textColor.withAlpha(0.2), width: 1)
           ),
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(label, style: pw.TextStyle(fontSize: 10, color: textColor.withAlpha(200))),
+              pw.Text(label, style: pw.TextStyle(fontSize: 10, color: textColor.withAlpha(0.8))),
               pw.SizedBox(height: 4),
-              pw.Text(value, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: textColor)),
+              pw.Text(value, style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold, color: textColor)),
             ]
           )
         )
@@ -70,10 +71,10 @@ class HistoryExportService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(40),
+        margin: const pw.EdgeInsets.all(36),
         header: (pw.Context context) {
           return pw.Container(
-            padding: const pw.EdgeInsets.only(bottom: 20),
+            padding: const pw.EdgeInsets.only(bottom: 16),
             decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: PdfColors.blue900, width: 3))),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -82,21 +83,21 @@ class HistoryExportService {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text(reportTitle, style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
-                    pw.SizedBox(height: 6),
-                    pw.Text(businessName.toUpperCase(), style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
-                    pw.SizedBox(height: 4),
-                    pw.Text("Período: $dateRangeText", style: const pw.TextStyle(fontSize: 12, color: PdfColors.blue700)),
+                    pw.Text(reportTitle, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                    pw.SizedBox(height: 5),
+                    pw.Text(businessName.toUpperCase(), style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
+                    pw.SizedBox(height: 3),
+                    pw.Text("Período: $dateRangeText", style: const pw.TextStyle(fontSize: 11, color: PdfColors.blue700)),
                   ],
                 ),
                 pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: pw.BoxDecoration(color: PdfColors.blue50, borderRadius: pw.BorderRadius.circular(6)),
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
                       pw.Text("Emitido el", style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
-                      pw.Text(dateFmt.format(DateTime.now()), style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                      pw.Text(dateFmt.format(DateTime.now()), style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
                     ]
                   )
                 )
@@ -115,35 +116,44 @@ class HistoryExportService {
           );
         },
         build: (pw.Context context) {
-          // If stats is missing, recalculate from the sales list provided
-          double totalIncome = stats?.totalIngresos ?? sales.fold(0.0, (sum, s) => sum + s.totalAmount);
-          double avgTicket = sales.isNotEmpty ? totalIncome / sales.length : 0.0;
-          int totalItems = stats?.totalProductosVendidos ?? sales.length; // Not perfectly accurate without items details, but fallback
-          
+          // Exactitud matemática: excluir anuladas de ingresos y deudas activas
+          final activeSales = sales.where((s) => !s.isArchived).toList();
+          final double totalAmount = activeSales.fold(0.0, (sum, s) => sum + s.totalAmount);
+          final double totalCollected = activeSales.fold(0.0, (sum, s) => sum + s.totalPaid);
+          final double totalDebt = activeSales.fold(0.0, (sum, s) => sum + s.pendingDebt);
+          final int opCount = scope == ExportHistoryScope.archivedOnly ? sales.length : activeSales.length;
+
           return [
-            buildSectionTitle("Resumen de Desempeño", PdfColors.blue800),
+            buildSectionTitle("Resumen de Desempeño Financiero", PdfColors.blue800),
             pw.Row(
               children: [
-                buildMetricCard(scope == ExportHistoryScope.loansOnly ? "TOTAL PRESTADO" : "INGRESOS TOTALES", currencyFmt.format(totalIncome), PdfColors.blue50, PdfColors.blue900),
-                buildMetricCard(scope == ExportHistoryScope.loansOnly ? "N° PRÉSTAMOS" : "N° DE VENTAS", "${sales.length}", PdfColors.teal50, PdfColors.teal900),
-                buildMetricCard("TICKET PROMEDIO", currencyFmt.format(avgTicket), PdfColors.purple50, PdfColors.purple900),
-                if (scope != ExportHistoryScope.loansOnly)
-                  buildMetricCard("PRODS. VENDIDOS", "$totalItems", PdfColors.orange50, PdfColors.orange900),
+                buildMetricCard(
+                  scope == ExportHistoryScope.loansOnly ? "TOTAL PRESTADO" : "TOTAL FACTURADO", 
+                  currencyFmt.format(totalAmount), 
+                  PdfColors.blue50, 
+                  PdfColors.blue900
+                ),
+                buildMetricCard(
+                  "TOTAL COBRADO", 
+                  currencyFmt.format(totalCollected), 
+                  PdfColors.green50, 
+                  PdfColors.green900
+                ),
+                buildMetricCard(
+                  "POR COBRAR", 
+                  currencyFmt.format(totalDebt), 
+                  PdfColors.red50, 
+                  PdfColors.red900
+                ),
+                buildMetricCard(
+                  "OPERACIONES", 
+                  "$opCount", 
+                  PdfColors.purple50, 
+                  PdfColors.purple900
+                ),
               ]
             ),
             
-            pw.SizedBox(height: 10),
-            if (stats != null && scope != ExportHistoryScope.specificPaymentMethod) ...[
-              pw.Row(
-                children: [
-                  buildMetricCard("VENTAS EFECTIVO", currencyFmt.format(stats.totalEfectivo), PdfColors.green50, PdfColors.green900),
-                  buildMetricCard("VENTAS TRANSF.", currencyFmt.format(stats.totalTransferencia), PdfColors.indigo50, PdfColors.indigo900),
-                  buildMetricCard("POR COBRAR", currencyFmt.format(stats.totalDeuda), PdfColors.red50, PdfColors.red900),
-                  buildMetricCard("BILLETERA DIGITAL", currencyFmt.format(stats.totalDigital), PdfColors.pink50, PdfColors.pink900),
-                ]
-              )
-            ],
-
             if (scope == ExportHistoryScope.byPaymentMethodGrouped) ...[
               ..._buildGroupedTables(context, sales, buildSectionTitle),
             ] else ...[
@@ -155,7 +165,7 @@ class HistoryExportService {
       ),
     );
 
-    final output = await getTemporaryDirectory();
+    final output = outputDirectory ?? await getTemporaryDirectory();
     final String path = '${output.path}/Historial_Ventas_${DateTime.now().millisecondsSinceEpoch}.pdf';
     final file = File(path);
     await file.writeAsBytes(await pdf.save());
@@ -171,8 +181,8 @@ class HistoryExportService {
 
     List<pw.Widget> widgets = [];
     grouped.forEach((method, list) {
-      double total = list.fold(0.0, (sum, s) => sum + s.totalAmount);
-      widgets.add(buildTitle("Transacciones: $method (Total: ${currencyFmt.format(total)})", PdfColors.blueGrey800));
+      double total = list.where((s) => !s.isArchived).fold(0.0, (sum, s) => sum + s.totalAmount);
+      widgets.add(buildTitle("Método: $method (Total Facturado: ${currencyFmt.format(total)})", PdfColors.blueGrey800));
       widgets.add(_buildSalesTable(context, list));
     });
 
@@ -186,26 +196,37 @@ class HistoryExportService {
     return pw.TableHelper.fromTextArray(
       context: context,
       headerDecoration: const pw.BoxDecoration(color: PdfColors.blue800),
-      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-      cellStyle: const pw.TextStyle(fontSize: 9),
-      cellPadding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
+      cellStyle: const pw.TextStyle(fontSize: 8),
+      cellPadding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 6),
       rowDecoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey200))),
       data: [
-        ['N°', 'Fecha', 'Cliente', 'Origen', 'Método', 'Total'],
+        ['#ID', 'Fecha', 'Cliente', 'Origen', 'Método', 'Total', 'Cobrado', 'Deuda'],
         ...sales.map((sale) {
           String client = sale.clientName ?? "Cliente de Mostrador";
           String date = sale.saleDate.isNotEmpty ? shortDateFmt.format(DateTime.tryParse(sale.saleDate) ?? DateTime.now()) : "-";
-          String origin = sale.origenVenta == 'pos_rapido' ? 'Caja Rápida' : 
-                         sale.origenVenta == 'ai_scan' ? 'IA Escáner' : 
-                         sale.origenVenta == 'prestamo_personal' ? 'Préstamo' : 'Cotización';
+          String origin = sale.isLoan ? 'Préstamo' : 
+                         sale.isQuickSale ? 'Caja Rápida' : 
+                         sale.isQuotationSale ? 'Cotización' : 'Venta';
           
+          String debtCol;
+          if (sale.isArchived) {
+            debtCol = 'ANULADO';
+          } else if (sale.pendingDebt > 0.01) {
+            debtCol = currencyFmt.format(sale.pendingDebt);
+          } else {
+            debtCol = 'PAGADO';
+          }
+
           return [
             '#${sale.displayId}', 
             date, 
-            client.length > 25 ? '${client.substring(0, 22)}...' : client, 
+            client.length > 20 ? '${client.substring(0, 18)}...' : client, 
             origin,
             sale.paymentMethod.toUpperCase(),
-            currencyFmt.format(sale.totalAmount)
+            currencyFmt.format(sale.totalAmount),
+            currencyFmt.format(sale.totalPaid),
+            debtCol,
           ];
         }),
       ],
@@ -219,8 +240,9 @@ class HistoryExportService {
     required String dateRangeText,
     String reportTitle = "REPORTE GLOBAL DE VENTAS",
     ExportHistoryScope scope = ExportHistoryScope.currentView,
+    Directory? outputDirectory,
   }) async {
-    final output = await getTemporaryDirectory();
+    final output = outputDirectory ?? await getTemporaryDirectory();
     final String path = '${output.path}/Historial_Ventas_${DateTime.now().millisecondsSinceEpoch}.csv';
     final file = File(path);
     
@@ -231,22 +253,26 @@ class HistoryExportService {
     buffer.writeln("Período: $dateRangeText");
     buffer.writeln("");
     
-    if (stats != null && scope != ExportHistoryScope.specificPaymentMethod) {
-      buffer.writeln("--- RESUMEN DE MÉTODOS DE PAGO Y DEUDA ---");
-      buffer.writeln("Métrica,Total");
-      buffer.writeln("Efectivo,${stats.totalEfectivo}");
-      buffer.writeln("Transferencia,${stats.totalTransferencia}");
-      buffer.writeln("Yape/Plin,${stats.totalDigital}");
-      buffer.writeln("Por Cobrar (Deuda Pendiente),${stats.totalDeuda}");
-      buffer.writeln("");
-    }
+    // Exactitud contable en resumen
+    final activeSales = sales.where((s) => !s.isArchived).toList();
+    final double totalAmount = activeSales.fold(0.0, (sum, s) => sum + s.totalAmount);
+    final double totalCollected = activeSales.fold(0.0, (sum, s) => sum + s.totalPaid);
+    final double totalDebt = activeSales.fold(0.0, (sum, s) => sum + s.pendingDebt);
+
+    buffer.writeln("--- TOTALES CONSOLIDADOS ---");
+    buffer.writeln("Métrica,Monto (S/)");
+    buffer.writeln("Total Exigible / Facturado,${totalAmount.toStringAsFixed(2)}");
+    buffer.writeln("Total Cobrado / Ingreso Caja,${totalCollected.toStringAsFixed(2)}");
+    buffer.writeln("Por Cobrar (Deuda Activa),${totalDebt.toStringAsFixed(2)}");
+    buffer.writeln("Cantidad de Operaciones,${activeSales.length}");
+    buffer.writeln("");
 
     if (scope == ExportHistoryScope.loansOnly) {
       buffer.writeln("--- DETALLE DE PRÉSTAMOS ---");
-      buffer.writeln("ID Préstamo,Fecha,Cliente,Origen,Método de Pago,Estado Entrega,Total");
+      buffer.writeln("ID Préstamo,Fecha,Cliente,Origen,Método de Pago,Importe Total,Monto Cobrado,Deuda Pendiente,Estado Financiero,Motivo");
     } else {
       buffer.writeln("--- DETALLE DE VENTAS ---");
-      buffer.writeln("ID Venta,Fecha,Cliente,Origen,Método de Pago,Estado Entrega,Total");
+      buffer.writeln("ID Venta,Fecha,Cliente,Origen,Método de Pago,Estado Entrega,Importe Total,Monto Cobrado,Deuda Pendiente,Estado Financiero");
     }
     
     if (scope == ExportHistoryScope.byPaymentMethodGrouped) {
@@ -261,23 +287,34 @@ class HistoryExportService {
         buffer.writeln(">>> GRUPO: $method <<<");
         for (var sale in list) {
           String client = sale.clientName ?? "Cliente de Mostrador";
-          client = client.replaceAll(',', ' '); 
-          buffer.writeln("${sale.displayId},${sale.saleDate},$client,${sale.origenVenta},${sale.paymentMethod},${sale.deliveryStatus},${sale.totalAmount}");
+          client = client.replaceAll(',', ' ');
+          final statusStr = sale.isArchived 
+              ? 'ANULADO' 
+              : (sale.isFullyPaid ? 'PAGADO' : (sale.isPartialPayment ? 'PARCIAL' : 'PENDIENTE'));
+          
+          if (sale.isLoan) {
+            final noteClean = sale.notes?.replaceAll('"', "'").replaceAll('\n', ' ') ?? '';
+            buffer.writeln("${sale.displayId},${sale.saleDate},$client,Préstamo Personal,${sale.paymentMethod},${sale.totalAmount},${sale.totalPaid},${sale.pendingDebt},$statusStr,\"$noteClean\"");
+          } else {
+            buffer.writeln("${sale.displayId},${sale.saleDate},$client,${sale.origenVenta},${sale.paymentMethod},${sale.deliveryStatus},${sale.totalAmount},${sale.totalPaid},${sale.pendingDebt},$statusStr");
+          }
         }
       });
     } else {
-      if (scope == ExportHistoryScope.loansOnly) {
-        buffer.writeln("\n===== HISTORIAL COMPLETO DE PRÉSTAMOS =====");
-        buffer.writeln("ID,Fecha Préstamo,Cliente,Origen,Metodo Pago,Estado Entrega,Total");
-      } else {
-        buffer.writeln("\n===== HISTORIAL COMPLETO DE VENTAS =====");
-        buffer.writeln("ID,Fecha Venta,Cliente,Origen Venta,Metodo Pago,Estado Entrega,Total");
-      }
       for (var sale in sales) {
         String client = (sale.clientName != null && sale.clientName!.isNotEmpty) 
                       ? sale.clientName!.replaceAll(',', ' ') 
                       : 'Anónimo';
-        buffer.writeln("${sale.displayId},${sale.saleDate},$client,${sale.origenVenta},${sale.paymentMethod},${sale.deliveryStatus},${sale.totalAmount}");
+        final statusStr = sale.isArchived 
+            ? 'ANULADO' 
+            : (sale.isFullyPaid ? 'PAGADO' : (sale.isPartialPayment ? 'PARCIAL' : 'PENDIENTE'));
+        
+        if (sale.isLoan) {
+          final noteClean = sale.notes?.replaceAll('"', "'").replaceAll('\n', ' ') ?? '';
+          buffer.writeln("${sale.displayId},${sale.saleDate},$client,Préstamo Personal,${sale.paymentMethod},${sale.totalAmount},${sale.totalPaid},${sale.pendingDebt},$statusStr,\"$noteClean\"");
+        } else {
+          buffer.writeln("${sale.displayId},${sale.saleDate},$client,${sale.origenVenta},${sale.paymentMethod},${sale.deliveryStatus},${sale.totalAmount},${sale.totalPaid},${sale.pendingDebt},$statusStr");
+        }
       }
     }
 

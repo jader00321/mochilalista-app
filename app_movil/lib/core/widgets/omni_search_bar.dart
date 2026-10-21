@@ -115,12 +115,16 @@ enum OmniSortOption {
 
 class _OmniSearchSheetState extends State<_OmniSearchSheet> {
   final TextEditingController _searchCtrl = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
-
-  List<Map<String, dynamic>> _productResults = [];
+  final FocusNode _focusNode = FocusNode();  List<Map<String, dynamic>> _productResults = [];
   List<Map<String, dynamic>> _clientResults = [];
   List<Map<String, dynamic>> _quoteResults = [];
   List<Map<String, dynamic>> _saleResults = [];
+
+  // Conteos reales en SQLite
+  int _dbCountProducts = 0;
+  int _dbCountClients = 0;
+  int _dbCountQuotes = 0;
+  int _dbCountSales = 0;
 
   bool _isSearching = false;
   String _activeCategory = 'all'; // all, products, clients, quotes, sales
@@ -132,6 +136,7 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
+      _loadDatabaseCounts();
       _loadRecentDefaults();
     });
   }
@@ -141,6 +146,60 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
     _searchCtrl.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  /// 📊 Consulta a SQLite para obtener los conteos reales totales de cada categoría
+  Future<void> _loadDatabaseCounts() async {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final businessId = auth.activeBusinessId ?? 1;
+      final db = await LocalDatabase.instance.database;
+
+      // 1. Total real de variantes / presentaciones registradas activas
+      final prodsCountRes = await db.rawQuery('''
+        SELECT COUNT(*) as c
+        FROM presentaciones_producto pr
+        JOIN productos p ON pr.producto_id = p.id
+        WHERE p.negocio_id = ? AND pr.activo = 1
+      ''', [businessId]);
+      final int countProds = (prodsCountRes.first['c'] as num?)?.toInt() ?? 0;
+
+      // 2. Total real de clientes en el directorio
+      final clientsCountRes = await db.rawQuery('''
+        SELECT COUNT(*) as c
+        FROM clientes
+        WHERE negocio_id = ?
+      ''', [businessId]);
+      final int countClients = (clientsCountRes.first['c'] as num?)?.toInt() ?? 0;
+
+      // 3. Total real de cotizaciones activas (omitiendo las que ya fueron vendidas o anuladas)
+      final quotesCountRes = await db.rawQuery('''
+        SELECT COUNT(*) as c
+        FROM smart_quotations
+        WHERE negocio_id = ? 
+          AND LOWER(IFNULL(status, '')) NOT IN ('vendida', 'sold', 'annulled', 'anulada')
+      ''', [businessId]);
+      final int countQuotes = (quotesCountRes.first['c'] as num?)?.toInt() ?? 0;
+
+      // 4. Total real de ventas registradas en el sistema (ventas de caja rápida + cotizaciones convertidas)
+      final salesCountRes = await db.rawQuery('''
+        SELECT COUNT(*) as c
+        FROM ventas
+        WHERE negocio_id = ? AND is_archived = 0
+      ''', [businessId]);
+      final int countSales = (salesCountRes.first['c'] as num?)?.toInt() ?? 0;
+
+      if (mounted) {
+        setState(() {
+          _dbCountProducts = countProds;
+          _dbCountClients = countClients;
+          _dbCountQuotes = countQuotes;
+          _dbCountSales = countSales;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error cargando conteos reales en omnicanal: $e");
+    }
   }
 
   /// Helper SQL para normalizar y eliminar tildes directamente en SQLite.
@@ -177,62 +236,80 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
       final businessId = auth.activeBusinessId ?? 1;
       final db = await LocalDatabase.instance.database;
 
-      // 1. Productos recientes
+      final bool loadProds = _activeCategory == 'all' || _activeCategory == 'products';
+      final bool loadClients = _activeCategory == 'all' || _activeCategory == 'clients';
+      final bool loadQuotes = _activeCategory == 'all' || _activeCategory == 'quotes';
+      final bool loadSales = _activeCategory == 'all' || _activeCategory == 'sales';
+
+      // 1. Productos recientes (hasta 1000 si la categoría es específica, 30 si es 'all')
       List<Map<String, dynamic>> prods = [];
-      try {
-        prods = await db.rawQuery('''
-          SELECT pr.id as presentation_id, pr.nombre_especifico, pr.precio_venta_final, pr.precio_oferta,
-                 pr.stock_actual, pr.stock_alerta, pr.unidad_venta, pr.unidades_por_venta, pr.codigo_barras,
-                 pr.imagen_url as pres_img, p.id as product_id, p.nombre as producto_nombre,
-                 p.imagen_url as prod_img, m.nombre as marca_nombre, c.nombre as categoria_nombre
-          FROM presentaciones_producto pr
-          JOIN productos p ON pr.producto_id = p.id
-          LEFT JOIN marcas m ON p.marca_id = m.id
-          LEFT JOIN categorias c ON p.categoria_id = c.id
-          WHERE p.negocio_id = ? AND pr.activo = 1
-          ORDER BY pr.id DESC
-          LIMIT 10
-        ''', [businessId]);
-      } catch (_) {}
+      if (loadProds) {
+        try {
+          final int limit = _activeCategory == 'products' ? 1000 : 30;
+          prods = await db.rawQuery('''
+            SELECT pr.id as presentation_id, pr.nombre_especifico, pr.precio_venta_final, pr.precio_oferta,
+                   pr.stock_actual, pr.stock_alerta, pr.unidad_venta, pr.unidades_por_venta, pr.codigo_barras,
+                   pr.imagen_url as pres_img, p.id as product_id, p.nombre as producto_nombre,
+                   p.imagen_url as prod_img, m.nombre as marca_nombre, c.nombre as categoria_nombre
+            FROM presentaciones_producto pr
+            JOIN productos p ON pr.producto_id = p.id
+            LEFT JOIN marcas m ON p.marca_id = m.id
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            WHERE p.negocio_id = ? AND pr.activo = 1
+            ORDER BY pr.id DESC
+            LIMIT ?
+          ''', [businessId, limit]);
+        } catch (_) {}
+      }
 
       // 2. Clientes recientes
       List<Map<String, dynamic>> clients = [];
-      try {
-        clients = await db.rawQuery('''
-          SELECT id, nombre_completo, telefono, dni_ruc, saldo_a_favor, deuda_total, nivel_confianza, notas
-          FROM clientes
-          WHERE negocio_id = ?
-          ORDER BY id DESC
-          LIMIT 10
-        ''', [businessId]);
-      } catch (_) {}
+      if (loadClients) {
+        try {
+          final int limit = _activeCategory == 'clients' ? 1000 : 25;
+          clients = await db.rawQuery('''
+            SELECT id, nombre_completo, telefono, dni_ruc, saldo_a_favor, deuda_total, nivel_confianza, notas
+            FROM clientes
+            WHERE negocio_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+          ''', [businessId, limit]);
+        } catch (_) {}
+      }
 
-      // 3. Cotizaciones recientes
+      // 3. Cotizaciones recientes (omitiendo las que ya fueron vendidas o anuladas)
       List<Map<String, dynamic>> quotes = [];
-      try {
-        quotes = await db.rawQuery('''
-          SELECT sq.id, sq.numero_secuencial, sq.client_name, sq.client_id, sq.institution_name,
-                 sq.grade_level, sq.total_amount, sq.status, sq.created_at
-          FROM smart_quotations sq
-          WHERE sq.negocio_id = ?
-          ORDER BY sq.id DESC
-          LIMIT 10
-        ''', [businessId]);
-      } catch (_) {}
+      if (loadQuotes) {
+        try {
+          final int limit = _activeCategory == 'quotes' ? 1000 : 25;
+          quotes = await db.rawQuery('''
+            SELECT sq.id, sq.numero_secuencial, sq.client_name, sq.client_id, sq.institution_name,
+                   sq.grade_level, sq.total_amount, sq.status, sq.created_at
+            FROM smart_quotations sq
+            WHERE sq.negocio_id = ? 
+              AND LOWER(IFNULL(sq.status, '')) NOT IN ('vendida', 'sold', 'annulled', 'anulada')
+            ORDER BY sq.id DESC
+            LIMIT ?
+          ''', [businessId, limit]);
+        } catch (_) {}
+      }
 
       // 4. Ventas recientes
       List<Map<String, dynamic>> sales = [];
-      try {
-        sales = await db.rawQuery('''
-          SELECT v.id, v.numero_secuencial, v.monto_total, v.fecha_venta, v.metodo_pago, v.estado_pago,
-                 c.nombre_completo as cliente_nombre
-          FROM ventas v
-          LEFT JOIN clientes c ON v.cliente_id = c.id
-          WHERE v.negocio_id = ?
-          ORDER BY v.id DESC
-          LIMIT 10
-        ''', [businessId]);
-      } catch (_) {}
+      if (loadSales) {
+        try {
+          final int limit = _activeCategory == 'sales' ? 1000 : 25;
+          sales = await db.rawQuery('''
+            SELECT v.id, v.numero_secuencial, v.monto_total, v.fecha_venta, v.metodo_pago, v.estado_pago,
+                   c.nombre_completo as cliente_nombre
+            FROM ventas v
+            LEFT JOIN clientes c ON v.cliente_id = c.id
+            WHERE v.negocio_id = ? AND v.is_archived = 0
+            ORDER BY v.id DESC
+            LIMIT ?
+          ''', [businessId, limit]);
+        } catch (_) {}
+      }
 
       if (mounted && _searchCtrl.text.trim().isEmpty) {
         setState(() {
@@ -264,175 +341,202 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
 
       final tokens = term.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
 
+      final bool searchProds = _activeCategory == 'all' || _activeCategory == 'products';
+      final bool searchClients = _activeCategory == 'all' || _activeCategory == 'clients';
+      final bool searchQuotes = _activeCategory == 'all' || _activeCategory == 'quotes';
+      final bool searchSales = _activeCategory == 'all' || _activeCategory == 'sales';
+
       // ==========================================
       // 1. PRODUCTOS (PRESENTACIONES INDIVIDUALES)
       // ==========================================
       List<Map<String, dynamic>> prods = [];
-      try {
-        List<String> prodConditions = [];
-        List<dynamic> prodArgs = [businessId];
+      if (searchProds) {
+        try {
+          List<String> prodConditions = [];
+          List<dynamic> prodArgs = [businessId];
 
-        for (final token in tokens) {
-          final norm = _normalizeDart(token);
-          final lem = SpanishLemmatizer.lemmatize(norm);
+          for (final token in tokens) {
+            final norm = _normalizeDart(token);
+            final lem = SpanishLemmatizer.lemmatize(norm);
 
-          if (norm == lem) {
-            prodConditions.add('''
-              (
-                ${_sqlUnaccent('p.nombre')} LIKE ? OR
-                ${_sqlUnaccent('pr.nombre_especifico')} LIKE ? OR
-                ${_sqlUnaccent('m.nombre')} LIKE ? OR
-                ${_sqlUnaccent('c.nombre')} LIKE ? OR
-                IFNULL(pr.codigo_barras, '') LIKE ? OR
-                IFNULL(p.codigo_barras, '') LIKE ?
-              )
-            ''');
-            final pArg = '%$norm%';
-            prodArgs.addAll([pArg, pArg, pArg, pArg, pArg, pArg]);
-          } else {
-            prodConditions.add('''
-              (
-                ${_sqlUnaccent('p.nombre')} LIKE ? OR ${_sqlUnaccent('p.nombre')} LIKE ? OR
-                ${_sqlUnaccent('pr.nombre_especifico')} LIKE ? OR ${_sqlUnaccent('pr.nombre_especifico')} LIKE ? OR
-                ${_sqlUnaccent('m.nombre')} LIKE ? OR ${_sqlUnaccent('m.nombre')} LIKE ? OR
-                ${_sqlUnaccent('c.nombre')} LIKE ? OR ${_sqlUnaccent('c.nombre')} LIKE ? OR
-                IFNULL(pr.codigo_barras, '') LIKE ? OR
-                IFNULL(p.codigo_barras, '') LIKE ?
-              )
-            ''');
-            final pArg1 = '%$norm%';
-            final pArg2 = '%$lem%';
-            prodArgs.addAll([pArg1, pArg2, pArg1, pArg2, pArg1, pArg2, pArg1, pArg2, pArg1, pArg1]);
+            if (norm == lem) {
+              prodConditions.add('''
+                (
+                  ${_sqlUnaccent('p.nombre')} LIKE ? OR
+                  ${_sqlUnaccent('pr.nombre_especifico')} LIKE ? OR
+                  ${_sqlUnaccent('m.nombre')} LIKE ? OR
+                  ${_sqlUnaccent('c.nombre')} LIKE ? OR
+                  IFNULL(pr.codigo_barras, '') LIKE ? OR
+                  IFNULL(p.codigo_barras, '') LIKE ?
+                )
+              ''');
+              final pArg = '%$norm%';
+              prodArgs.addAll([pArg, pArg, pArg, pArg, pArg, pArg]);
+            } else {
+              prodConditions.add('''
+                (
+                  ${_sqlUnaccent('p.nombre')} LIKE ? OR ${_sqlUnaccent('p.nombre')} LIKE ? OR
+                  ${_sqlUnaccent('pr.nombre_especifico')} LIKE ? OR ${_sqlUnaccent('pr.nombre_especifico')} LIKE ? OR
+                  ${_sqlUnaccent('m.nombre')} LIKE ? OR ${_sqlUnaccent('m.nombre')} LIKE ? OR
+                  ${_sqlUnaccent('c.nombre')} LIKE ? OR ${_sqlUnaccent('c.nombre')} LIKE ? OR
+                  IFNULL(pr.codigo_barras, '') LIKE ? OR
+                  IFNULL(p.codigo_barras, '') LIKE ?
+                )
+              ''');
+              final pArg1 = '%$norm%';
+              final pArg2 = '%$lem%';
+              prodArgs.addAll([pArg1, pArg2, pArg1, pArg2, pArg1, pArg2, pArg1, pArg2, pArg1, pArg1]);
+            }
           }
+
+          final int limit = _activeCategory == 'products' ? 1000 : 35;
+          prodArgs.add(limit);
+
+          final prodsRaw = await db.rawQuery('''
+            SELECT pr.id as presentation_id, pr.nombre_especifico, pr.precio_venta_final, pr.precio_oferta,
+                   pr.stock_actual, pr.stock_alerta, pr.unidad_venta, pr.unidades_por_venta, pr.codigo_barras,
+                   pr.imagen_url as pres_img, p.id as product_id, p.nombre as producto_nombre,
+                   p.imagen_url as prod_img, m.nombre as marca_nombre, c.nombre as categoria_nombre
+            FROM presentaciones_producto pr
+            JOIN productos p ON pr.producto_id = p.id
+            LEFT JOIN marcas m ON p.marca_id = m.id
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            WHERE p.negocio_id = ? AND pr.activo = 1 AND ${prodConditions.join(' AND ')}
+            LIMIT ?
+          ''', prodArgs);
+
+          prods = List.from(prodsRaw);
+        } catch (e) {
+          debugPrint("Error buscando productos omnicanal: $e");
         }
-
-        final prodsRaw = await db.rawQuery('''
-          SELECT pr.id as presentation_id, pr.nombre_especifico, pr.precio_venta_final, pr.precio_oferta,
-                 pr.stock_actual, pr.stock_alerta, pr.unidad_venta, pr.unidades_por_venta, pr.codigo_barras,
-                 pr.imagen_url as pres_img, p.id as product_id, p.nombre as producto_nombre,
-                 p.imagen_url as prod_img, m.nombre as marca_nombre, c.nombre as categoria_nombre
-          FROM presentaciones_producto pr
-          JOIN productos p ON pr.producto_id = p.id
-          LEFT JOIN marcas m ON p.marca_id = m.id
-          LEFT JOIN categorias c ON p.categoria_id = c.id
-          WHERE p.negocio_id = ? AND pr.activo = 1 AND ${prodConditions.join(' AND ')}
-          LIMIT 20
-        ''', prodArgs);
-
-        prods = List.from(prodsRaw);
-      } catch (e) {
-        debugPrint("Error buscando productos omnicanal: $e");
       }
 
       // ==========================================
       // 2. CLIENTES
       // ==========================================
       List<Map<String, dynamic>> clients = [];
-      try {
-        List<String> clientConditions = [];
-        List<dynamic> clientArgs = [businessId];
+      if (searchClients) {
+        try {
+          List<String> clientConditions = [];
+          List<dynamic> clientArgs = [businessId];
 
-        for (final token in tokens) {
-          final norm = _normalizeDart(token);
-          clientConditions.add('''
-            (
-              ${_sqlUnaccent('c.nombre_completo')} LIKE ? OR
-              IFNULL(c.telefono, '') LIKE ? OR
-              IFNULL(c.dni_ruc, '') LIKE ? OR
-              ${_sqlUnaccent('c.notas')} LIKE ?
-            )
-          ''');
-          final cArg = '%$norm%';
-          clientArgs.addAll([cArg, cArg, cArg, cArg]);
+          for (final token in tokens) {
+            final norm = _normalizeDart(token);
+            clientConditions.add('''
+              (
+                ${_sqlUnaccent('c.nombre_completo')} LIKE ? OR
+                IFNULL(c.telefono, '') LIKE ? OR
+                IFNULL(c.dni_ruc, '') LIKE ? OR
+                ${_sqlUnaccent('c.notas')} LIKE ?
+              )
+            ''');
+            final cArg = '%$norm%';
+            clientArgs.addAll([cArg, cArg, cArg, cArg]);
+          }
+
+          final int limit = _activeCategory == 'clients' ? 1000 : 35;
+          clientArgs.add(limit);
+
+          final clientsRaw = await db.rawQuery('''
+            SELECT id, nombre_completo, telefono, dni_ruc, saldo_a_favor, deuda_total, nivel_confianza, notas
+            FROM clientes c
+            WHERE c.negocio_id = ? AND ${clientConditions.join(' AND ')}
+            LIMIT ?
+          ''', clientArgs);
+
+          clients = List.from(clientsRaw);
+        } catch (e) {
+          debugPrint("Error buscando clientes omnicanal: $e");
         }
-
-        final clientsRaw = await db.rawQuery('''
-          SELECT id, nombre_completo, telefono, dni_ruc, saldo_a_favor, deuda_total, nivel_confianza, notas
-          FROM clientes c
-          WHERE c.negocio_id = ? AND ${clientConditions.join(' AND ')}
-          LIMIT 15
-        ''', clientArgs);
-
-        clients = List.from(clientsRaw);
-      } catch (e) {
-        debugPrint("Error buscando clientes omnicanal: $e");
       }
 
       // ==========================================
-      // 3. COTIZACIONES
+      // 3. COTIZACIONES (Omitiendo vendidas y anuladas)
       // ==========================================
       List<Map<String, dynamic>> quotes = [];
-      try {
-        List<String> quoteConditions = [];
-        List<dynamic> quoteArgs = [businessId];
+      if (searchQuotes) {
+        try {
+          List<String> quoteConditions = [];
+          List<dynamic> quoteArgs = [businessId];
 
-        for (final token in tokens) {
-          final norm = _normalizeDart(token);
-          quoteConditions.add('''
-            (
-              ${_sqlUnaccent('sq.client_name')} LIKE ? OR
-              ${_sqlUnaccent('sq.institution_name')} LIKE ? OR
-              ${_sqlUnaccent('sq.grade_level')} LIKE ? OR
-              CAST(sq.id AS TEXT) LIKE ? OR
-              CAST(IFNULL(sq.numero_secuencial, sq.id) AS TEXT) LIKE ? OR
-              ${_sqlUnaccent('sq.status')} LIKE ?
-            )
-          ''');
-          final qArg = '%$norm%';
-          quoteArgs.addAll([qArg, qArg, qArg, qArg, qArg, qArg]);
+          for (final token in tokens) {
+            final norm = _normalizeDart(token);
+            quoteConditions.add('''
+              (
+                ${_sqlUnaccent('sq.client_name')} LIKE ? OR
+                ${_sqlUnaccent('sq.institution_name')} LIKE ? OR
+                ${_sqlUnaccent('sq.grade_level')} LIKE ? OR
+                CAST(sq.id AS TEXT) LIKE ? OR
+                CAST(IFNULL(sq.numero_secuencial, sq.id) AS TEXT) LIKE ? OR
+                ${_sqlUnaccent('sq.status')} LIKE ?
+              )
+            ''');
+            final qArg = '%$norm%';
+            quoteArgs.addAll([qArg, qArg, qArg, qArg, qArg, qArg]);
+          }
+
+          final int limit = _activeCategory == 'quotes' ? 1000 : 35;
+          quoteArgs.add(limit);
+
+          final quotesRaw = await db.rawQuery('''
+            SELECT sq.id, sq.numero_secuencial, sq.client_name, sq.client_id, sq.institution_name,
+                   sq.grade_level, sq.total_amount, sq.status, sq.created_at
+            FROM smart_quotations sq
+            WHERE sq.negocio_id = ? 
+              AND LOWER(IFNULL(sq.status, '')) NOT IN ('vendida', 'sold', 'annulled', 'anulada') 
+              AND ${quoteConditions.join(' AND ')}
+            ORDER BY sq.id DESC
+            LIMIT ?
+          ''', quoteArgs);
+
+          quotes = List.from(quotesRaw);
+        } catch (e) {
+          debugPrint("Error buscando cotizaciones omnicanal: $e");
         }
-
-        final quotesRaw = await db.rawQuery('''
-          SELECT sq.id, sq.numero_secuencial, sq.client_name, sq.client_id, sq.institution_name,
-                 sq.grade_level, sq.total_amount, sq.status, sq.created_at
-          FROM smart_quotations sq
-          WHERE sq.negocio_id = ? AND ${quoteConditions.join(' AND ')}
-          ORDER BY sq.id DESC
-          LIMIT 15
-        ''', quoteArgs);
-
-        quotes = List.from(quotesRaw);
-      } catch (e) {
-        debugPrint("Error buscando cotizaciones omnicanal: $e");
       }
 
       // ==========================================
       // 4. VENTAS
       // ==========================================
       List<Map<String, dynamic>> sales = [];
-      try {
-        List<String> saleConditions = [];
-        List<dynamic> saleArgs = [businessId];
+      if (searchSales) {
+        try {
+          List<String> saleConditions = [];
+          List<dynamic> saleArgs = [businessId];
 
-        for (final token in tokens) {
-          final norm = _normalizeDart(token);
-          saleConditions.add('''
-            (
-              ${_sqlUnaccent('c.nombre_completo')} LIKE ? OR
-              CAST(v.id AS TEXT) LIKE ? OR
-              CAST(IFNULL(v.numero_secuencial, v.id) AS TEXT) LIKE ? OR
-              ${_sqlUnaccent('v.metodo_pago')} LIKE ? OR
-              ${_sqlUnaccent('v.estado_pago')} LIKE ? OR
-              CAST(v.monto_total AS TEXT) LIKE ?
-            )
-          ''');
-          final sArg = '%$norm%';
-          saleArgs.addAll([sArg, sArg, sArg, sArg, sArg, sArg]);
+          for (final token in tokens) {
+            final norm = _normalizeDart(token);
+            saleConditions.add('''
+              (
+                ${_sqlUnaccent('c.nombre_completo')} LIKE ? OR
+                CAST(v.id AS TEXT) LIKE ? OR
+                CAST(IFNULL(v.numero_secuencial, v.id) AS TEXT) LIKE ? OR
+                ${_sqlUnaccent('v.metodo_pago')} LIKE ? OR
+                ${_sqlUnaccent('v.estado_pago')} LIKE ? OR
+                CAST(v.monto_total AS TEXT) LIKE ?
+              )
+            ''');
+            final sArg = '%$norm%';
+            saleArgs.addAll([sArg, sArg, sArg, sArg, sArg, sArg]);
+          }
+
+          final int limit = _activeCategory == 'sales' ? 1000 : 35;
+          saleArgs.add(limit);
+
+          final salesRaw = await db.rawQuery('''
+            SELECT v.id, v.numero_secuencial, v.monto_total, v.fecha_venta, v.metodo_pago, v.estado_pago,
+                   c.nombre_completo as cliente_nombre
+            FROM ventas v
+            LEFT JOIN clientes c ON v.cliente_id = c.id
+            WHERE v.negocio_id = ? AND v.is_archived = 0 AND ${saleConditions.join(' AND ')}
+            ORDER BY v.id DESC
+            LIMIT ?
+          ''', saleArgs);
+
+          sales = List.from(salesRaw);
+        } catch (e) {
+          debugPrint("Error buscando ventas omnicanal: $e");
         }
-
-        final salesRaw = await db.rawQuery('''
-          SELECT v.id, v.numero_secuencial, v.monto_total, v.fecha_venta, v.metodo_pago, v.estado_pago,
-                 c.nombre_completo as cliente_nombre
-          FROM ventas v
-          LEFT JOIN clientes c ON v.cliente_id = c.id
-          WHERE v.negocio_id = ? AND ${saleConditions.join(' AND ')}
-          ORDER BY v.id DESC
-          LIMIT 15
-        ''', saleArgs);
-
-        sales = List.from(salesRaw);
-      } catch (e) {
-        debugPrint("Error buscando ventas omnicanal: $e");
       }
 
       if (mounted) {
@@ -656,6 +760,43 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
 
     final bool isQueryEmpty = _searchCtrl.text.trim().isEmpty;
 
+    final List<_OmniListItem> listItems = [];
+    if ((_activeCategory == 'all' || _activeCategory == 'products') &&
+        sortedProducts.isNotEmpty) {
+      listItems.add(_HeaderItem("📦 PRODUCTOS", sortedProducts.length));
+      for (final p in sortedProducts) {
+        listItems.add(_ProductItem(p));
+      }
+      listItems.add(_SpacerItem());
+    }
+
+    if ((_activeCategory == 'all' || _activeCategory == 'clients') &&
+        sortedClients.isNotEmpty) {
+      listItems.add(_HeaderItem("👤 CLIENTES", sortedClients.length));
+      for (final c in sortedClients) {
+        listItems.add(_ClientItem(c));
+      }
+      listItems.add(_SpacerItem());
+    }
+
+    if ((_activeCategory == 'all' || _activeCategory == 'quotes') &&
+        sortedQuotes.isNotEmpty) {
+      listItems.add(_HeaderItem("📝 COTIZACIONES", sortedQuotes.length));
+      for (final q in sortedQuotes) {
+        listItems.add(_QuoteItem(q));
+      }
+      listItems.add(_SpacerItem());
+    }
+
+    if ((_activeCategory == 'all' || _activeCategory == 'sales') &&
+        sortedSales.isNotEmpty) {
+      listItems.add(_HeaderItem("🧾 VENTAS", sortedSales.length));
+      for (final s in sortedSales) {
+        listItems.add(_SaleItem(s));
+      }
+      listItems.add(_SpacerItem());
+    }
+
     return InteractiveSheetWrapper(
       title: "Búsqueda Omnicanal Local",
       maxHeightFactor: 0.92,
@@ -709,34 +850,38 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
             ),
           ),
 
-          // Chips de segmentos
+          // Chips de segmentos con conteos reales consolidados de SQLite
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildCategoryChip('all', 'Todos ($totalMatches)', isDark),
+                _buildCategoryChip(
+                  'all',
+                  'Todos (${_dbCountProducts + _dbCountClients + _dbCountQuotes + _dbCountSales})',
+                  isDark,
+                ),
                 const SizedBox(width: 8),
                 _buildCategoryChip(
                   'products',
-                  '📦 Productos (${_productResults.length})',
+                  '📦 Productos ($_dbCountProducts)',
                   isDark,
                 ),
                 const SizedBox(width: 8),
                 _buildCategoryChip(
                   'clients',
-                  '👤 Clientes (${_clientResults.length})',
+                  '👤 Clientes ($_dbCountClients)',
                   isDark,
                 ),
                 const SizedBox(width: 8),
                 _buildCategoryChip(
                   'quotes',
-                  '📝 Cotizaciones (${_quoteResults.length})',
+                  '📝 Cotizaciones ($_dbCountQuotes)',
                   isDark,
                 ),
                 const SizedBox(width: 8),
                 _buildCategoryChip(
                   'sales',
-                  '🧾 Ventas (${_saleResults.length})',
+                  '🧾 Ventas ($_dbCountSales)',
                   isDark,
                 ),
               ],
@@ -833,67 +978,67 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
           ),
           const SizedBox(height: 8),
 
-          // Contenido de resultados
-          if (_isSearching)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (totalMatches == 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 40),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.search_off_rounded,
-                      size: 48,
-                      color: isDark ? Colors.white24 : Colors.grey[400],
+          // Contenido de resultados virtualizado y con scroll desacoplado
+          Expanded(
+            child: _isSearching
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: CircularProgressIndicator(),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      "No se encontraron resultados para '${_searchCtrl.text}'",
-                      style: TextStyle(
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                        fontWeight: FontWeight.w500,
+                  )
+                : totalMatches == 0
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.search_off_rounded,
+                                size: 48,
+                                color: isDark ? Colors.white24 : Colors.grey[400],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                "No se encontraron resultados para '${_searchCtrl.text}'",
+                                style: TextStyle(
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.only(bottom: 24),
+                        itemCount: listItems.length,
+                        itemBuilder: (context, index) {
+                          final item = listItems[index];
+                          if (item is _HeaderItem) {
+                            return _buildSectionHeader(item.title, item.count, isDark);
+                          }
+                          if (item is _ProductItem) {
+                            return _buildProductCard(item.data, isDark);
+                          }
+                          if (item is _ClientItem) {
+                            return _buildClientCard(item.data, isDark);
+                          }
+                          if (item is _QuoteItem) {
+                            return _buildQuoteCard(item.data, isDark);
+                          }
+                          if (item is _SaleItem) {
+                            return _buildSaleCard(item.data, isDark);
+                          }
+                          if (item is _SpacerItem) {
+                            return const SizedBox(height: 12);
+                          }
+                          return const SizedBox.shrink();
+                        },
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else ...[
-            // Sección Productos
-            if ((_activeCategory == 'all' || _activeCategory == 'products') &&
-                sortedProducts.isNotEmpty) ...[
-              _buildSectionHeader("📦 PRODUCTOS", sortedProducts.length, isDark),
-              ...sortedProducts.map((p) => _buildProductCard(p, isDark)),
-              const SizedBox(height: 12),
-            ],
-
-            // Sección Clientes
-            if ((_activeCategory == 'all' || _activeCategory == 'clients') &&
-                sortedClients.isNotEmpty) ...[
-              _buildSectionHeader("👤 CLIENTES", sortedClients.length, isDark),
-              ...sortedClients.map((c) => _buildClientCard(c, isDark)),
-              const SizedBox(height: 12),
-            ],
-
-            // Sección Cotizaciones
-            if ((_activeCategory == 'all' || _activeCategory == 'quotes') &&
-                sortedQuotes.isNotEmpty) ...[
-              _buildSectionHeader("📝 COTIZACIONES", sortedQuotes.length, isDark),
-              ...sortedQuotes.map((q) => _buildQuoteCard(q, isDark)),
-              const SizedBox(height: 12),
-            ],
-
-            // Sección Ventas
-            if ((_activeCategory == 'all' || _activeCategory == 'sales') &&
-                sortedSales.isNotEmpty) ...[
-              _buildSectionHeader("🧾 VENTAS", sortedSales.length, isDark),
-              ...sortedSales.map((s) => _buildSaleCard(s, isDark)),
-            ],
-          ],
+          ),
         ],
       ),
     );
@@ -905,6 +1050,11 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
       onTap: () {
         HapticFeedback.selectionClick();
         setState(() => _activeCategory = id);
+        if (_searchCtrl.text.trim().isEmpty) {
+          _loadRecentDefaults();
+        } else {
+          _performSearch(_searchCtrl.text);
+        }
       },
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
@@ -1690,3 +1840,38 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
     );
   }
 }
+
+// =========================================================================
+// CLASES AUXILIARES PARA RENDERIZADO VIRTUALIZADO PLANO (60 FPS)
+// =========================================================================
+
+abstract class _OmniListItem {}
+
+class _HeaderItem extends _OmniListItem {
+  final String title;
+  final int count;
+  _HeaderItem(this.title, this.count);
+}
+
+class _ProductItem extends _OmniListItem {
+  final Map<String, dynamic> data;
+  _ProductItem(this.data);
+}
+
+class _ClientItem extends _OmniListItem {
+  final Map<String, dynamic> data;
+  _ClientItem(this.data);
+}
+
+class _QuoteItem extends _OmniListItem {
+  final Map<String, dynamic> data;
+  _QuoteItem(this.data);
+}
+
+class _SaleItem extends _OmniListItem {
+  final Map<String, dynamic> data;
+  _SaleItem(this.data);
+}
+
+class _SpacerItem extends _OmniListItem {}
+

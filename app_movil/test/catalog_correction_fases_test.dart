@@ -265,19 +265,19 @@ void main() {
       // Debe devolver 0.60, JAMÁS 9.00 (que causaría falso margen negativo)
       expect(presUnidad.costoPresentacionFinal, 0.60);
 
-      // Si la presentación es Six Pack (unidadesPorVenta = 6)
+      // Si la presentación es Six Pack (unidadesPorVenta = 6) con costo de presentación guardado
       final presSixPack = ProductPresentation(
         id: 203,
         unidadVenta: 'Six Pack',
         unidadesPorVenta: 6,
         unidadesPorLote: 15,
-        costoUnitarioCalculado: 0.60,
+        costoUnitarioCalculado: 3.60, // En SQLite costo_unitario_calculado es el costo de esa presentación
         precioUmpProveedor: 9.00,
         precioVentaFinal: 5.00,
         stockActual: 30,
       );
 
-      expect(presSixPack.costoPresentacionFinal, closeTo(3.60, 0.001)); // 0.60 * 6
+      expect(presSixPack.costoPresentacionFinal, closeTo(3.60, 0.001));
 
       // Fallback cuando costoUnitarioCalculado es 0/null pero existe precioUmpProveedor
       final presFallback = ProductPresentation(

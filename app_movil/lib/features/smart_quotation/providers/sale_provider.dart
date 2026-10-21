@@ -32,6 +32,7 @@ class SaleProvider with ChangeNotifier {
   String _currentOrder = "desc";
   String _searchQuery = "";
   String _currentTab = "todas"; 
+  String _financialStatus = "todos"; // 'todos', 'pagados', 'con_deuda'
 
   SaleProvider() {
     _initDefaultTimeFilter();
@@ -57,6 +58,7 @@ class SaleProvider with ChangeNotifier {
   String get currentSortBy => _currentSortBy;
   String get currentOrder => _currentOrder;
   String get searchQuery => _searchQuery; 
+  String get financialStatus => _financialStatus;
   String? get currentStartDate => _currentStartDate;
   String? get currentEndDate => _currentEndDate;
 
@@ -346,6 +348,13 @@ class SaleProvider with ChangeNotifier {
     _searchQuery = "";
     _currentSortBy = "fecha_venta";
     _currentOrder = "desc";
+    _financialStatus = "todos";
+  }
+
+  void setFinancialFilter(String status) {
+    if (_financialStatus == status) return;
+    _financialStatus = status;
+    loadFilteredHistory(reset: true);
   }
 
   Future<void> silentRefresh() async {
@@ -367,6 +376,7 @@ class SaleProvider with ChangeNotifier {
         origenVenta: origen,
         sortBy: _currentSortBy,
         order: _currentOrder,
+        financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
       );
 
       _salesHistory = newSales;
@@ -379,6 +389,7 @@ class SaleProvider with ChangeNotifier {
         endDate: _currentEndDate,
         isArchived: isArchivedTab,
         origenVenta: origen,
+        financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
       );
       
       await loadRecentHomeActivity();
@@ -424,6 +435,7 @@ class SaleProvider with ChangeNotifier {
         origenVenta: origen,
         sortBy: _currentSortBy,
         order: _currentOrder,
+        financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
       );
 
       if (newSales.length < _limit) _hasMoreData = false;
@@ -457,6 +469,7 @@ class SaleProvider with ChangeNotifier {
         endDate: _currentEndDate,
         isArchived: isArchivedTab,
         origenVenta: origen,
+        financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
       );
       notifyListeners(); 
     } catch (e) {
@@ -467,12 +480,25 @@ class SaleProvider with ChangeNotifier {
   Future<List<SaleModel>> loadAllForExport({
     bool ignoreDateFilter = false,
     bool onlyArchived = false,
+    String? origenVenta,
+    String? financialStatus,
+    String? paymentMethod,
+    String? sortBy,
+    String? order,
   }) async {
     if (_negocioId == null) return [];
     
     try {
       String? startDate = ignoreDateFilter ? null : _currentStartDate;
       String? endDate = ignoreDateFilter ? null : _currentEndDate;
+
+      final effectiveOrigen = (origenVenta != null && origenVenta != 'todas')
+          ? origenVenta
+          : null;
+
+      final effectiveFinancial = (financialStatus != null && financialStatus != 'todos')
+          ? financialStatus
+          : (_financialStatus != 'todos' ? _financialStatus : null);
       
       return await _salesService.getHistory(
         _negocioId!,
@@ -480,16 +506,35 @@ class SaleProvider with ChangeNotifier {
         limit: 999999, // Un límite muy alto para traer todo sin paginar
         startDate: startDate,
         endDate: endDate,
-        searchQuery: _searchQuery, // Mantenemos la búsqueda actual si existe
+        searchQuery: _searchQuery,
         isArchived: onlyArchived, 
-        origenVenta: null, // Todas las pestañas juntas (excepto según archived)
-        sortBy: _currentSortBy,
-        order: _currentOrder,
+        origenVenta: effectiveOrigen,
+        sortBy: sortBy ?? _currentSortBy,
+        order: order ?? _currentOrder,
+        financialStatus: effectiveFinancial,
+        paymentMethod: paymentMethod,
       );
     } catch (e) {
       _handleException(e);
       return [];
     }
+  }
+
+  Future<int> countForExport({
+    bool ignoreDateFilter = false,
+    bool onlyArchived = false,
+    String? origenVenta,
+    String? financialStatus,
+    String? paymentMethod,
+  }) async {
+    final list = await loadAllForExport(
+      ignoreDateFilter: ignoreDateFilter,
+      onlyArchived: onlyArchived,
+      origenVenta: origenVenta,
+      financialStatus: financialStatus,
+      paymentMethod: paymentMethod,
+    );
+    return list.length;
   }
 
   Future<bool> updateDeliveryStatus(int saleId, String newStatus, {String? fotoPath}) async {
@@ -633,6 +678,7 @@ class SaleProvider with ChangeNotifier {
         origenVenta: origen,
         sortBy: _currentSortBy,
         order: _currentOrder,
+        financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
       );
 
       if (allSales.isEmpty) return "";

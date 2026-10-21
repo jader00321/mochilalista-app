@@ -92,7 +92,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     );
   }
 
-  Future<void> _handleExport(String optionId, String format, String? paymentMethod) async {
+  Future<void> _handleExportCombinable(ExportFilterSelection sel) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -102,17 +102,18 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Generando reporte ${format.toUpperCase()}... esto puede tardar."), duration: const Duration(seconds: 2))
+      SnackBar(content: Text("Generando reporte ${sel.format.toUpperCase()}... esto puede tardar."), duration: const Duration(seconds: 2))
     );
 
     final provider = Provider.of<SaleProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    
+
     try {
       final businessName = authProvider.currentBusiness?.commercialName ?? authProvider.user?.fullName ?? 'Mi Negocio';
-      
+
       String periodText = "Últimos datos";
-      if (provider.currentStartDate != null && provider.currentEndDate != null) {
+      bool ignoreDate = sel.scope == 'full_history';
+      if (!ignoreDate && provider.currentStartDate != null && provider.currentEndDate != null) {
         final start = DateTime.tryParse(provider.currentStartDate!);
         final end = DateTime.tryParse(provider.currentEndDate!);
         if (start != null && end != null) {
@@ -123,51 +124,48 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
             periodText = "Del ${df.format(start)} al ${df.format(end)}";
           }
         }
+      } else if (ignoreDate) {
+        periodText = "Todo el histórico";
       }
 
-      String currentTitle = "REPORTE GLOBAL DE VENTAS";
-      List<SaleModel> salesToExport = [];
-      ExportHistoryScope scope = ExportHistoryScope.currentView;
-      
-      if (optionId == 'current') {
-        salesToExport = provider.salesHistory;
-        if (provider.currentTab == 'smart_quotation') currentTitle = "REPORTE DE COTIZACIONES VENDIDAS";
-        if (provider.currentTab == 'pos_rapido') currentTitle = "REPORTE DE CAJA RÁPIDA";
-        if (provider.currentTab == 'archivadas') currentTitle = "REPORTE DE VENTAS ANULADAS";
-      } else if (optionId == 'full_period') {
-        salesToExport = await provider.loadAllForExport(ignoreDateFilter: false, onlyArchived: false);
-        scope = ExportHistoryScope.fullPeriod;
-      } else if (optionId == 'full_history') {
-        salesToExport = await provider.loadAllForExport(ignoreDateFilter: true, onlyArchived: false);
-        periodText = "Todo el histórico";
-        scope = ExportHistoryScope.fullHistory;
-      } else if (optionId == 'archived') {
-        salesToExport = await provider.loadAllForExport(ignoreDateFilter: true, onlyArchived: true);
-        periodText = "Todo el histórico";
-        currentTitle = "REPORTE DE VENTAS ANULADAS";
-        scope = ExportHistoryScope.archivedOnly;
-      } else if (optionId == 'grouped_payment') {
-        salesToExport = await provider.loadAllForExport(ignoreDateFilter: false, onlyArchived: false);
-        currentTitle = "VENTAS POR MÉTODO DE PAGO";
-        scope = ExportHistoryScope.byPaymentMethodGrouped;
-      } else if (optionId == 'loans') {
-        salesToExport = await provider.loadAllForExport(ignoreDateFilter: true, onlyArchived: false);
-        salesToExport = salesToExport.where((s) => s.origenVenta == 'prestamo_personal').toList();
-        periodText = "Todo el histórico";
-        currentTitle = "REPORTE DE PRÉSTAMOS";
-        scope = ExportHistoryScope.loansOnly;
-      } else if (optionId == 'specific_payment' && paymentMethod != null) {
-        final pm = paymentMethod;
-        salesToExport = await provider.loadAllForExport(ignoreDateFilter: false, onlyArchived: false);
-        salesToExport = salesToExport.where((s) {
-          if (pm == 'efectivo') return s.paymentMethod == 'efectivo';
-          if (pm == 'transferencia') return s.paymentMethod == 'transferencia';
-          if (pm == 'billetera_digital') return s.paymentMethod == 'yape_plin';
-          if (pm == 'credito') return s.paymentMethod == 'credito';
-          return false;
-        }).toList();
-        currentTitle = "VENTAS: ${pm.toUpperCase()}";
-        scope = ExportHistoryScope.specificPaymentMethod;
+      String currentTitle = "REPORTE GLOBAL DE TRANSACCIONES";
+      if (sel.operationType == 'prestamo_personal') currentTitle = "REPORTE DE PRÉSTAMOS";
+      if (sel.operationType == 'smart_quotation') currentTitle = "REPORTE DE COTIZACIONES VENDIDAS";
+      if (sel.operationType == 'pos_rapido') currentTitle = "REPORTE DE CAJA RÁPIDA";
+      if (sel.operationType == 'archived') currentTitle = "REPORTE DE VENTAS ANULADAS";
+
+      List<SaleModel> salesToExport;
+      if (sel.scope == 'current') {
+        salesToExport = List<SaleModel>.from(provider.salesHistory);
+        if (sel.operationType != 'all_active') {
+          if (sel.operationType == 'archived') {
+            salesToExport = salesToExport.where((s) => s.isArchived).toList();
+          } else {
+            salesToExport = salesToExport.where((s) => s.origenVenta == sel.operationType).toList();
+          }
+        }
+        if (sel.financialStatus != 'todos') {
+          if (sel.financialStatus == 'pagados') {
+            salesToExport = salesToExport.where((s) => s.isFullyPaid).toList();
+          } else if (sel.financialStatus == 'con_deuda') {
+            salesToExport = salesToExport.where((s) => s.pendingDebt > 0.01).toList();
+          }
+        }
+        if (sel.grouping == 'specific_method' && sel.specificPaymentMethod != null) {
+          salesToExport = salesToExport.where((s) {
+            final pm = sel.specificPaymentMethod!;
+            if (pm == 'yape_plin') return s.paymentMethod == 'yape' || s.paymentMethod == 'plin' || s.paymentMethod == 'yape_plin';
+            return s.paymentMethod == pm;
+          }).toList();
+        }
+      } else {
+        salesToExport = await provider.loadAllForExport(
+          ignoreDateFilter: ignoreDate,
+          onlyArchived: sel.operationType == 'archived',
+          origenVenta: sel.operationType == 'archived' || sel.operationType == 'all_active' ? null : sel.operationType,
+          financialStatus: sel.financialStatus != 'todos' ? sel.financialStatus : null,
+          paymentMethod: sel.grouping == 'specific_method' ? sel.specificPaymentMethod : null,
+        );
       }
 
       if (salesToExport.isEmpty) {
@@ -175,11 +173,22 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
         return;
       }
 
+      ExportHistoryScope scope = ExportHistoryScope.currentView;
+      if (sel.operationType == 'prestamo_personal') {
+        scope = ExportHistoryScope.loansOnly;
+      } else if (sel.operationType == 'archived') {
+        scope = ExportHistoryScope.archivedOnly;
+      } else if (sel.grouping == 'grouped_by_method') {
+        scope = ExportHistoryScope.byPaymentMethodGrouped;
+      } else if (sel.grouping == 'specific_method') {
+        scope = ExportHistoryScope.specificPaymentMethod;
+      }
+
       File file;
-      if (format == 'pdf') {
+      if (sel.format == 'pdf') {
         file = await HistoryExportService.exportToPdf(
           sales: salesToExport,
-          stats: optionId == 'current' ? provider.currentStats : null, 
+          stats: null,
           businessName: businessName,
           dateRangeText: periodText,
           reportTitle: currentTitle,
@@ -188,14 +197,14 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
       } else {
         file = await HistoryExportService.exportToCsv(
           sales: salesToExport,
-          stats: optionId == 'current' ? provider.currentStats : null,
+          stats: null,
           businessName: businessName,
           dateRangeText: periodText,
           reportTitle: currentTitle,
           scope: scope,
         );
       }
-      
+
       if (!mounted) return;
       // ignore: deprecated_member_use
       await Share.shareXFiles([XFile(file.path)], text: 'Adjunto el reporte de ventas.');
@@ -295,54 +304,50 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
                     icon: const Icon(Icons.file_download, size: 26),
                     tooltip: "Exportar Reportes",
                     onPressed: () {
-                      ExportOptionsModal.show(
+                      final provider = Provider.of<SaleProvider>(context, listen: false);
+                      ExportOptionsModal.showCombinable(
                         context,
-                        options: [
-                          const ExportOption(
-                            id: 'current',
-                            title: 'Exportar Vista Actual',
-                            description: 'Solo las ventas visibles según filtros y paginación.',
-                            icon: Icons.filter_list,
-                          ),
-                          const ExportOption(
-                            id: 'full_period',
-                            title: 'Todo el Periodo',
-                            description: 'Todas las ventas del rango de fechas sin paginación.',
-                            icon: Icons.date_range,
-                          ),
-                          const ExportOption(
-                            id: 'full_history',
-                            title: 'Histórico Completo (Sin Anuladas)',
-                            description: 'Todas las ventas hechas históricamente.',
-                            icon: Icons.history,
-                          ),
-                          const ExportOption(
-                            id: 'archived',
-                            title: 'Solo Ventas Anuladas',
-                            description: 'Reporte histórico de ventas anuladas.',
-                            icon: Icons.delete_outline,
-                          ),
-                          const ExportOption(
-                            id: 'loans',
-                            title: 'Solo Préstamos',
-                            description: 'Reporte de todos los préstamos registrados.',
-                            icon: Icons.account_balance_wallet,
-                          ),
-                          const ExportOption(
-                            id: 'grouped_payment',
-                            title: 'Agrupado por Método',
-                            description: 'Ventas divididas en secciones por método de pago.',
-                            icon: Icons.account_tree,
-                          ),
-                          const ExportOption(
-                            id: 'specific_payment',
-                            title: 'Por Método Específico',
-                            description: 'Elige un método (Efectivo, Transferencia, etc).',
-                            icon: Icons.payment,
-                            requiresPaymentMethodSelection: true,
-                          ),
-                        ],
-                        onExport: _handleExport,
+                        initialTab: provider.currentTab,
+                        initialFinancialFilter: provider.financialStatus,
+                        activePeriodLabel: provider.activeQuickFilter == 'seis_meses'
+                            ? '6 Meses'
+                            : (provider.activeQuickFilter == 'hoy' ? 'Hoy' : 'Periodo Activo'),
+                        onCountRequest: (sel) async {
+                          if (sel.scope == 'current') {
+                            var list = List<SaleModel>.from(provider.salesHistory);
+                            if (sel.operationType != 'all_active') {
+                              if (sel.operationType == 'archived') {
+                                list = list.where((s) => s.isArchived).toList();
+                              } else {
+                                list = list.where((s) => s.origenVenta == sel.operationType).toList();
+                              }
+                            }
+                            if (sel.financialStatus != 'todos') {
+                              if (sel.financialStatus == 'pagados') {
+                                list = list.where((s) => s.isFullyPaid).toList();
+                              } else if (sel.financialStatus == 'con_deuda') {
+                                list = list.where((s) => s.pendingDebt > 0.01).toList();
+                              }
+                            }
+                            if (sel.grouping == 'specific_method' && sel.specificPaymentMethod != null) {
+                              list = list.where((s) {
+                                final pm = sel.specificPaymentMethod!;
+                                if (pm == 'yape_plin') return s.paymentMethod == 'yape' || s.paymentMethod == 'plin' || s.paymentMethod == 'yape_plin';
+                                return s.paymentMethod == pm;
+                              }).toList();
+                            }
+                            return list.length;
+                          } else {
+                            return await provider.countForExport(
+                              ignoreDateFilter: sel.scope == 'full_history',
+                              onlyArchived: sel.operationType == 'archived',
+                              origenVenta: sel.operationType == 'archived' || sel.operationType == 'all_active' ? null : sel.operationType,
+                              financialStatus: sel.financialStatus != 'todos' ? sel.financialStatus : null,
+                              paymentMethod: sel.grouping == 'specific_method' ? sel.specificPaymentMethod : null,
+                            );
+                          }
+                        },
+                        onExport: _handleExportCombinable,
                       );
                     },
                   ),
@@ -397,7 +402,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
                 backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
                 toolbarHeight: 0,
                 bottom: const PreferredSize(
-                  preferredSize: Size.fromHeight(50),
+                  preferredSize: Size.fromHeight(56),
                   child: HistorySearchBar(),
                 ),
               ),
@@ -411,7 +416,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
                 backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
                 toolbarHeight: 0,
                 bottom: const PreferredSize(
-                  preferredSize: Size.fromHeight(50),
+                  preferredSize: Size.fromHeight(92),
                   child: HistoryFilterChips(),
                 ),
               ),
@@ -430,8 +435,8 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
       ),
       const DeepNavReturnPill(isBottom: true),
     ],
-  ),
-    ),
-  );
-}
+        ),
+      ),
+    );
+  }
 }

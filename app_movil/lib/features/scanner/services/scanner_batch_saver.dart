@@ -245,6 +245,16 @@ class ScannerBatchSaver {
                 });
               }
             } else {
+              // Asegurar que la primera presentación del producto sea la default principal
+              final existingDefaults = await txn.query(
+                'presentaciones_producto',
+                columns: ['id'],
+                where: 'producto_id = ? AND es_default = 1',
+                whereArgs: [idProducto],
+                limit: 1,
+              );
+              final int esDefaultValue = existingDefaults.isEmpty ? 1 : 0;
+
               int newPresId = await txn.insert('presentaciones_producto', {
                 'producto_id': idProducto,
                 'proveedor_id': idProveedor,
@@ -264,7 +274,7 @@ class ScannerBatchSaver {
                 'stock_actual': cantidadSumar,
                 'estado': 'publico',
                 'activo': 1,
-                'es_default': 0,
+                'es_default': esDefaultValue,
               });
 
               if (cantidadSumar > 0) {

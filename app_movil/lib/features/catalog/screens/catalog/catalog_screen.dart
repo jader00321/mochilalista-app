@@ -534,9 +534,18 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                   controller: _scrollController,
                   slivers: [
                 SliverAppBar(
-                  title: Text(
-                    "Catálogo de Ventas",
-                    style: textTheme.displayMedium?.copyWith(color: textColor),
+                  title: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "Catálogo de Ventas",
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                        color: textColor,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
                   ),
                   backgroundColor: isDark
                       ? const Color(0xFF14141C)
@@ -544,7 +553,8 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                   elevation: 0,
                   floating: true,
                   snap: true,
-                  centerTitle: true,
+                  centerTitle: false,
+                  titleSpacing: canPop ? 4 : 16,
                   leading: canPop
                       ? IconButton(
                           icon: const Icon(Icons.arrow_back_ios_new, size: 22),
@@ -1048,7 +1058,7 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
-                            childAspectRatio: 0.63,
+                            childAspectRatio: 0.60,
                             crossAxisSpacing: 12,
                             mainAxisSpacing: 12,
                           ),

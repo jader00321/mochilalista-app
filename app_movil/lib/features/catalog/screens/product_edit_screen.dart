@@ -1,27 +1,29 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-
-import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
-import 'package:app_movil/features/catalog/models/provider_model.dart';
-import 'package:app_movil/features/catalog/models/category_model.dart';
-import 'package:app_movil/features/catalog/models/brand_model.dart';
-import 'package:app_movil/core/services/unit_catalog_service.dart';
-
-import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_general_info.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_presentation_list.dart';
+import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_general_info.dart';
+import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_edit_change_detector.dart';
+import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_edit_operations.dart';
+import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_edit_snapshot.dart';
+import 'package:app_movil/features/catalog/widgets/form/product_controller_factory.dart';
+import 'package:app_movil/features/catalog/widgets/form/product_entity_pickers.dart';
+import 'package:app_movil/features/catalog/widgets/form/product_form_bottom_bar.dart';
+import 'package:app_movil/features/catalog/widgets/form/product_unsaved_changes_dialog.dart';
+import 'package:app_movil/features/catalog/widgets/variants/variant_jump_bar.dart';
+import 'package:app_movil/features/catalog/widgets/variants/variant_reorder_modal.dart';
+import 'package:app_movil/features/catalog/widgets/variants/variant_section_header.dart';
 import 'package:app_movil/core/widgets/product_optional_info.dart';
-import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class ProductEditScreen extends StatefulWidget {
   final Product productToEdit;
   final int? initialPresentationId;
 
-  const ProductEditScreen({
-    super.key,
-    required this.productToEdit,
-    this.initialPresentationId,
-  });
+  const ProductEditScreen({super.key, required this.productToEdit, this.initialPresentationId});
 
   @override
   State<ProductEditScreen> createState() => _ProductEditScreenState();
@@ -29,1003 +31,721 @@ class ProductEditScreen extends StatefulWidget {
 
 class _ProductEditScreenState extends State<ProductEditScreen> {
   final _formKey = GlobalKey<FormState>();
-
-  late TextEditingController _nameCtrl;
-  late TextEditingController _descCtrl;
-  late TextEditingController _imgUrlCtrl;
-  late TextEditingController _parentBarcodeCtrl;
+  final TextEditingController _nameCtrl = TextEditingController();
+  final TextEditingController _descCtrl = TextEditingController();
+  final TextEditingController _imgUrlCtrl = TextEditingController();
+  final TextEditingController _parentBarcodeCtrl = TextEditingController();
 
   int? _selectedCategoryId;
+  String? _selectedCategoryName;
   int? _selectedBrandId;
+  String? _selectedBrandName;
+  final Map<int, String> _deferredProviderNames = {};
 
   final List<Map<String, dynamic>> _presentationControllers = [];
   final List<int> _idsToDelete = [];
-
+  final Map<String, GlobalKey> _presentationKeys = {};
+  bool _allExpanded = true;
   bool _isLoading = true;
+  bool _isInitializing = true;
+  ProductEditSnapshot? _initialSnapshot;
+  final List<ProductEditSnapshot> _undoStack = [];
+  Timer? _debounceTimer;
 
   @override
   void initState() {
     super.initState();
+    _nameCtrl.addListener(_onFormChangedWithDebounce);
+    _descCtrl.addListener(_onFormChangedWithDebounce);
+    _imgUrlCtrl.addListener(_onFormChangedWithDebounce);
+    _parentBarcodeCtrl.addListener(_onFormChangedWithDebounce);
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Provider.of<InventoryProvider>(
-        context,
-        listen: false,
-      ).loadMasterData(showAll: true);
-      _loadExistingData();
-      if (mounted) setState(() => _isLoading = false);
+      final invProv = Provider.of<InventoryProvider>(context, listen: false);
+      await invProv.loadMasterData(showAll: true);
+      if (!mounted) return;
+      final data = ProductEditOperations.loadInitialData(
+        product: widget.productToEdit,
+        invProv: invProv,
+        nameCtrl: _nameCtrl,
+        descCtrl: _descCtrl,
+        imgUrlCtrl: _imgUrlCtrl,
+        parentBarcodeCtrl: _parentBarcodeCtrl,
+        presentationControllers: _presentationControllers,
+        presentationKeys: _presentationKeys,
+        initialPresentationId: widget.initialPresentationId,
+      );
+      setState(() {
+        _selectedCategoryId = data.categoryId;
+        _selectedCategoryName = data.categoryName;
+        _selectedBrandId = data.brandId;
+        _selectedBrandName = data.brandName;
+        _isLoading = false;
+      });
+
+      for (var map in _presentationControllers) {
+        _attachPresentationListeners(map);
+      }
+
+      // Post-frame callback asegurando que los widgets hijos y motores se hayan montado
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _captureInitialSnapshot();
+          if (data.targetKeyToScroll != null) {
+            final key = _presentationKeys[data.targetKeyToScroll];
+            if (key?.currentContext != null) {
+              Scrollable.ensureVisible(key!.currentContext!, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+            }
+          }
+        });
+      });
     });
   }
 
-  void _loadExistingData() {
-    final p = widget.productToEdit;
-    final invProv = Provider.of<InventoryProvider>(context, listen: false);
-
-    _nameCtrl = TextEditingController(text: p.nombre);
-    _descCtrl = TextEditingController(text: p.descripcion ?? "");
-    _imgUrlCtrl = TextEditingController(text: p.imagenUrl ?? "");
-    _parentBarcodeCtrl = TextEditingController(text: p.codigoBarras ?? "");
-
-    _selectedCategoryId = invProv.categories.any((c) => c.id == p.categoriaId)
-        ? p.categoriaId
-        : null;
-    _selectedBrandId =
-        p.marcaId != null && invProv.brands.any((b) => b.id == p.marcaId)
-        ? p.marcaId
-        : null;
-
-    List<ProductPresentation> sortedList = List.from(p.presentaciones);
-    if (widget.initialPresentationId != null) {
-      int idx = sortedList.indexWhere(
-        (pres) => pres.id == widget.initialPresentationId,
-      );
-      if (idx != -1) {
-        final selected = sortedList.removeAt(idx);
-        sortedList.insert(0, selected);
+  void _attachPresentationListeners(Map<String, dynamic> map) {
+    for (var entry in map.entries) {
+      if (entry.value is TextEditingController) {
+        (entry.value as TextEditingController).addListener(_onFormChangedWithDebounce);
       }
-    }
-
-    for (var pres in sortedList) {
-      int? safeProvId = pres.proveedorId;
-      if (safeProvId != null &&
-          !invProv.providers.any((pr) => pr.id == safeProvId)) {
-        safeProvId = null;
-      }
-
-      // 🔥 CARGA DE LA MATEMÁTICA SEPARADA (Igual a Creación)
-      _presentationControllers.add({
-        'id': pres.id
-            .toString(), // Convertimos el ID a String para la lógica de residuos
-        'db_id': pres.id, // Guardamos el ID real de la BD
-        'isEditMode': true,
-        'stockBaseOriginal': pres.stockActual,
-        'costoBaseOriginal':
-            pres.costoUnitarioCalculado != null && pres.unidadesPorVenta > 0
-            ? pres.costoUnitarioCalculado! / pres.unidadesPorVenta
-            : 0.0,
-        'childId': null,
-        'leftoverCreated': false,
-
-        'specific': TextEditingController(text: pres.nombreEspecifico ?? ""),
-        'unidadVenta': TextEditingController(
-          text: pres.unidadVenta ?? "Unidad",
-        ),
-        'unidadesVenta': TextEditingController(
-          text: pres.unidadesPorVenta.toString(),
-        ),
-
-        'costoPres': TextEditingController(
-          text: pres.costoUnitarioCalculado?.toStringAsFixed(2) ?? "0.00",
-        ),
-        'margen': TextEditingController(
-          text: pres.factorGananciaVenta?.toStringAsFixed(2) ?? "1.35",
-        ),
-        'precioVenta': TextEditingController(
-          text: pres.precioVentaFinal.toStringAsFixed(2),
-        ),
-        'precioVentaOriginal': pres.precioVentaFinal,
-
-        // Stock visual = Stock base / Factor venta
-        'stockActualBase': pres.stockActual,
-        'stockInicial': TextEditingController(
-          text: (pres.stockActual ~/ pres.unidadesPorVenta).toString(),
-        ),
-        'nuevoIngreso': TextEditingController(text: ""),
-        'stockDescuento': TextEditingController(text: "0"),
-        'stockFinal': TextEditingController(
-          text: (pres.stockActual ~/ pres.unidadesPorVenta).toString(),
-        ),
-
-        'descuentoActivo': pres.precioOferta != null && pres.precioOferta! > 0,
-        'tipoDescuento': pres.tipoDescuento ?? 'porcentaje',
-        'valorDescuento': TextEditingController(
-          text: pres.valorDescuento?.toStringAsFixed(2) ?? "",
-        ),
-
-        'umpCompra': TextEditingController(text: pres.umpCompra ?? ""),
-        'unidadesLote': TextEditingController(
-          text: pres.unidadesPorLote.toString(),
-        ),
-        'cantCompra': TextEditingController(
-          text: pres.cantidadUmpComprada?.toStringAsFixed(2) ?? "",
-        ),
-        'totalPago': TextEditingController(
-          text: pres.totalPagoLote?.toStringAsFixed(2) ?? "",
-        ),
-
-        'barcode': TextEditingController(text: pres.codigoBarras ?? ""),
-        'desc': TextEditingController(text: pres.descripcion ?? ""),
-        'image': TextEditingController(text: pres.imagenUrl ?? ""),
-        'ajusteBase': TextEditingController(),
-        'providerId': safeProvId,
-        'isDefault': pres.esDefault,
-        'estado': pres.estado,
-      });
     }
   }
 
-  void _disposeControllerMap(Map<String, dynamic> map) {
-    (map['specific'] as TextEditingController).dispose();
-    (map['unidadVenta'] as TextEditingController).dispose();
-    (map['unidadesVenta'] as TextEditingController).dispose();
-    (map['costoPres'] as TextEditingController).dispose();
-    (map['margen'] as TextEditingController).dispose();
-    (map['precioVenta'] as TextEditingController).dispose();
-    (map['stockInicial'] as TextEditingController).dispose();
-    (map['nuevoIngreso'] as TextEditingController).dispose();
-    (map['stockDescuento'] as TextEditingController).dispose();
-    (map['stockFinal'] as TextEditingController).dispose();
-    (map['valorDescuento'] as TextEditingController).dispose();
-    (map['umpCompra'] as TextEditingController).dispose();
-    (map['unidadesLote'] as TextEditingController).dispose();
-    (map['cantCompra'] as TextEditingController).dispose();
-    (map['totalPago'] as TextEditingController).dispose();
-    (map['barcode'] as TextEditingController).dispose();
-    (map['desc'] as TextEditingController).dispose();
-    (map['image'] as TextEditingController).dispose();
-    (map['ajusteBase'] as TextEditingController).dispose();
+  void _detachPresentationListeners(Map<String, dynamic> map) {
+    for (var entry in map.entries) {
+      if (entry.value is TextEditingController) {
+        (entry.value as TextEditingController).removeListener(_onFormChangedWithDebounce);
+      }
+    }
   }
 
   @override
   void dispose() {
-    if (!_isLoading) {
-      _nameCtrl.dispose();
-      _descCtrl.dispose();
-      _imgUrlCtrl.dispose();
-      _parentBarcodeCtrl.dispose();
-      for (var map in _presentationControllers) {
-        _disposeControllerMap(map);
-      }
+    _debounceTimer?.cancel();
+    _nameCtrl.removeListener(_onFormChangedWithDebounce);
+    _descCtrl.removeListener(_onFormChangedWithDebounce);
+    _imgUrlCtrl.removeListener(_onFormChangedWithDebounce);
+    _parentBarcodeCtrl.removeListener(_onFormChangedWithDebounce);
+    for (var map in _presentationControllers) {
+      _detachPresentationListeners(map);
+      ProductControllerFactory.disposeControllerMap(map);
     }
+    _nameCtrl.dispose();
+    _descCtrl.dispose();
+    _imgUrlCtrl.dispose();
+    _parentBarcodeCtrl.dispose();
     super.dispose();
   }
 
-  // ==========================================================
-  // 🔥 LÓGICA DE ESTADOS Y PROVEEDOR GENERAL (REDISEÑO) 🔥
-  // ==========================================================
+  void _captureInitialSnapshot() {
+    _initialSnapshot = ProductEditSnapshot.capture(
+      nameCtrl: _nameCtrl,
+      descCtrl: _descCtrl,
+      imgUrlCtrl: _imgUrlCtrl,
+      parentBarcodeCtrl: _parentBarcodeCtrl,
+      selectedCategoryId: _selectedCategoryId,
+      selectedCategoryName: _selectedCategoryName,
+      selectedBrandId: _selectedBrandId,
+      selectedBrandName: _selectedBrandName,
+      generalProviderId: _generalProviderId,
+      generalProviderName: _generalProviderName,
+      generalState: _generalState,
+      idsToDelete: _idsToDelete,
+      presentationControllers: _presentationControllers,
+    );
+    _isInitializing = false;
+    _undoStack.clear();
+    _undoStack.add(_initialSnapshot!);
+    if (mounted) setState(() {});
+  }
+
+  bool get _hasUnsavedChanges {
+    if (_isInitializing || _initialSnapshot == null) return false;
+    final current = ProductEditSnapshot.capture(
+      nameCtrl: _nameCtrl,
+      descCtrl: _descCtrl,
+      imgUrlCtrl: _imgUrlCtrl,
+      parentBarcodeCtrl: _parentBarcodeCtrl,
+      selectedCategoryId: _selectedCategoryId,
+      selectedCategoryName: _selectedCategoryName,
+      selectedBrandId: _selectedBrandId,
+      selectedBrandName: _selectedBrandName,
+      generalProviderId: _generalProviderId,
+      generalProviderName: _generalProviderName,
+      generalState: _generalState,
+      idsToDelete: _idsToDelete,
+      presentationControllers: _presentationControllers,
+    );
+    return !current.isIdenticalTo(_initialSnapshot!);
+  }
+
+  void _recordUndoSnapshot() {
+    if (_isInitializing || _initialSnapshot == null) return;
+    final current = ProductEditSnapshot.capture(
+      nameCtrl: _nameCtrl,
+      descCtrl: _descCtrl,
+      imgUrlCtrl: _imgUrlCtrl,
+      parentBarcodeCtrl: _parentBarcodeCtrl,
+      selectedCategoryId: _selectedCategoryId,
+      selectedCategoryName: _selectedCategoryName,
+      selectedBrandId: _selectedBrandId,
+      selectedBrandName: _selectedBrandName,
+      generalProviderId: _generalProviderId,
+      generalProviderName: _generalProviderName,
+      generalState: _generalState,
+      idsToDelete: _idsToDelete,
+      presentationControllers: _presentationControllers,
+    );
+    if (_undoStack.isNotEmpty && _undoStack.last.isIdenticalTo(current)) {
+      return;
+    }
+    _undoStack.add(current);
+    if (_undoStack.length > 25) {
+      _undoStack.removeAt(0);
+    }
+  }
+
+  void _onFormChangedWithDebounce() {
+    if (_isInitializing) return;
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+      if (mounted) {
+        _recordUndoSnapshot();
+        setState(() {});
+      }
+    });
+  }
+
+  void _undoLastChange() {
+    if (_undoStack.length <= 1) return;
+    HapticFeedback.lightImpact();
+    _undoStack.removeLast();
+    final target = _undoStack.last;
+    _applySnapshot(target);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("↶ Cambio deshecho"),
+        duration: Duration(milliseconds: 900),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _restoreOriginalSavedState(bool isDark) async {
+    if (_initialSnapshot == null || !_hasUnsavedChanges) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.restore_rounded, color: isDark ? Colors.tealAccent : Colors.teal),
+            const SizedBox(width: 8),
+            Text(
+              "¿Restaurar original?",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
+                fontSize: 17,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          "Se revertirán todas las modificaciones y se recuperará el producto exactamente como está guardado en catálogo.",
+          style: TextStyle(
+            color: isDark ? Colors.white70 : Colors.black87,
+            fontSize: 13,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text("Cancelar", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? const Color(0xFF00897B) : Colors.teal,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text("Restaurar"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      HapticFeedback.mediumImpact();
+      _applySnapshot(_initialSnapshot!);
+      _undoStack.clear();
+      _undoStack.add(_initialSnapshot!);
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("↺ Estado original restaurado"),
+          backgroundColor: Color(0xFF00796B),
+          duration: Duration(milliseconds: 1400),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _applySnapshot(ProductEditSnapshot snapshot) {
+    setState(() {
+      _selectedCategoryId = snapshot.categoryId;
+      _selectedCategoryName = snapshot.categoryName;
+      _selectedBrandId = snapshot.brandId;
+      _selectedBrandName = snapshot.brandName;
+
+      _deferredProviderNames.clear();
+      if (snapshot.generalProviderId != null &&
+          snapshot.generalProviderId! < 0 &&
+          snapshot.generalProviderName != null) {
+        _deferredProviderNames[snapshot.generalProviderId!] =
+            snapshot.generalProviderName!;
+      }
+      for (var p in snapshot.presentations) {
+        if (p.providerId != null &&
+            p.providerId! < 0 &&
+            p.deferredProviderName != null) {
+          _deferredProviderNames[p.providerId!] = p.deferredProviderName!;
+        }
+      }
+
+      for (var map in _presentationControllers) {
+        _detachPresentationListeners(map);
+      }
+
+      snapshot.restoreInto(
+        nameCtrl: _nameCtrl,
+        descCtrl: _descCtrl,
+        imgUrlCtrl: _imgUrlCtrl,
+        parentBarcodeCtrl: _parentBarcodeCtrl,
+        targetControllers: _presentationControllers,
+        targetKeys: _presentationKeys,
+        targetIdsToDelete: _idsToDelete,
+      );
+
+      for (var map in _presentationControllers) {
+        _attachPresentationListeners(map);
+      }
+    });
+  }
+
   int get _generalState {
     if (_presentationControllers.isEmpty) return 2;
-    bool allPublic = _presentationControllers.every(
-      (c) => c['estado'] == 'publico',
-    );
-    bool allPrivate = _presentationControllers.every(
-      (c) => c['estado'] == 'privado',
-    );
-    if (allPublic) return 2;
-    if (allPrivate) return 0;
+    if (_presentationControllers.every((c) => c['estado'] == 'publico')) return 2;
+    if (_presentationControllers.every((c) => c['estado'] == 'privado')) return 0;
     return 1;
   }
 
   void _setGeneralState(int stateIndex) {
     if (stateIndex == 1) return;
-    String newState = stateIndex == 2 ? 'publico' : 'privado';
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
+    final newState = stateIndex == 2 ? 'publico' : 'privado';
     setState(() {
       for (var c in _presentationControllers) {
         c['estado'] = newState;
       }
     });
+    _recordUndoSnapshot();
   }
 
   int? get _generalProviderId {
     if (_presentationControllers.isEmpty) return null;
-    int? firstId = _presentationControllers.first['providerId'];
+    int? norm(int? id) => (id == null || id == 0) ? null : id;
+    int? firstNorm = norm(_presentationControllers.first['providerId']);
     for (var c in _presentationControllers) {
-      if (c['providerId'] != firstId) return -2;
+      if (norm(c['providerId']) != firstNorm) return -2;
     }
-    return firstId;
+    return firstNorm;
   }
 
-  Future<void> _handleGeneralProviderChange(int? newId, bool isDark) async {
-    if (newId == -1) {
-      newId = await _handleCreateProvider(isDark);
-      if (newId == null) return;
+  String? get _generalProviderName {
+    if (_generalProviderId == null || _generalProviderId == -2) return null;
+    if (_presentationControllers.isEmpty) return null;
+    return _presentationControllers.first['deferredProviderName'] as String?;
+  }
+
+  Future<void> _handleGeneralProviderChange(int? newId, String? newName, bool isDark) async {
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
+    if (newId != null && newId < 0 && newName != null) {
+      _deferredProviderNames[newId] = newName;
     }
-    if (_generalProviderId != -2 && _presentationControllers.length <= 1) {
-      setState(() {
-        for (var c in _presentationControllers) {
-          c['providerId'] = newId;
-        }
-      });
-      return;
-    }
-    if (!mounted) return;
-    bool? confirm = await showDialog<bool>(
+    final updated = await ProductEditOperations.updateGeneralProvider(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          "¿Sobreescribir Proveedores?",
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(
-          "Esta acción cambiará el proveedor de TODAS las presentaciones, perdiendo cualquier proveedor específico.",
-          style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700]),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancelar"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Sí, Aplicar"),
-          ),
-        ],
-      ),
+      newId: newId,
+      newName: newName,
+      isDark: isDark,
+      currentGeneralProviderId: _generalProviderId,
+      controllers: _presentationControllers,
     );
-    if (confirm == true) {
-      setState(() {
-        for (var c in _presentationControllers) {
-          c['providerId'] = newId;
-        }
-      });
+    if (updated) {
+      setState(() {});
+      _recordUndoSnapshot();
     }
   }
 
-  // ==========================================================
-  // CONSTRUCTORES DE PRESENTACIÓN Y RESIDUOS
-  // ==========================================================
-  void _addPresentation() {
-    setState(() {
-      _presentationControllers.add({
-        'id': UniqueKey().toString(),
-        'db_id': null,
-        'isEditMode': false,
-        'childId': null,
-        'leftoverCreated': false,
-
-        'ump': TextEditingController(text: "Unidad"),
-        'specific': TextEditingController(),
-        'unidadVenta': TextEditingController(text: "Unidad"),
-        'unidadesVenta': TextEditingController(text: "1"),
-        'costoPres': TextEditingController(text: "0.00"),
-        'margen': TextEditingController(text: "1.35"),
-        'precioVenta': TextEditingController(text: ""),
-
-        'descuentoActivo': false,
-        'tipoDescuento': 'porcentaje',
-        'valorDescuento': TextEditingController(text: ""),
-
-        'stockInicial': TextEditingController(text: "0"),
-        'nuevoIngreso': TextEditingController(text: ""),
-        'stockDescuento': TextEditingController(text: "0"),
-        'stockFinal': TextEditingController(text: "0"),
-
-        'umpCompra': TextEditingController(text: ""),
-        'unidadesLote': TextEditingController(text: ""),
-        'cantCompra': TextEditingController(text: ""),
-        'totalPago': TextEditingController(text: ""),
-        'barcode': TextEditingController(),
-        'desc': TextEditingController(),
-        'image': TextEditingController(),
-        'ajusteBase': TextEditingController(),
-        'providerId': _generalProviderId == -2 ? null : _generalProviderId,
-        'isDefault': false,
-        'estado': _generalState == 0 ? 'privado' : 'publico',
+  Future<void> _pickBrand() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final res = await ProductEntityPickers.openBrandPicker(
+      context: context,
+      selectedBrandId: _selectedBrandId,
+      selectedBrandName: _selectedBrandName,
+    );
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (res != null && mounted) {
+      _debounceTimer?.cancel();
+      _recordUndoSnapshot();
+      setState(() {
+        _selectedBrandId = res.id;
+        _selectedBrandName = res.name;
       });
-    });
+      _recordUndoSnapshot();
+    }
   }
 
-  void _handleCreateLeftover(
-    String parentId,
-    int leftoverUnits,
-    double costoBaseIndividual,
-  ) {
-    int parentIndex = _presentationControllers.indexWhere(
-      (c) => c['id'] == parentId,
+  Future<void> _pickCategory() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final res = await ProductEntityPickers.openCategoryPicker(
+      context: context,
+      selectedCategoryId: _selectedCategoryId,
+      selectedCategoryName: _selectedCategoryName,
     );
-    if (parentIndex == -1) return;
-
-    Map<String, dynamic> sourceMap = _presentationControllers[parentIndex];
-    sourceMap['leftoverCreated'] = true;
-
-    String newChildId = UniqueKey().toString();
-    sourceMap['childId'] = newChildId;
-
-    setState(() {
-      _presentationControllers.insert(parentIndex + 1, {
-        'id': newChildId,
-        'db_id': null, // Es una variante totalmente nueva
-        'isEditMode': sourceMap['isEditMode'],
-        'childId': null,
-        'leftoverCreated': false,
-
-        'specific': TextEditingController(
-          text: sourceMap['specific'].text.isNotEmpty
-              ? "${sourceMap['specific'].text} - Suelta"
-              : "Suelta",
-        ),
-        'unidadVenta': TextEditingController(text: "Unidad"),
-        'unidadesVenta': TextEditingController(text: "1"),
-        'costoPres': TextEditingController(
-          text: costoBaseIndividual.toStringAsFixed(2),
-        ),
-        'margen': TextEditingController(text: "1.35"),
-        'precioVenta': TextEditingController(
-          text: (costoBaseIndividual * 1.35).toStringAsFixed(2),
-        ),
-
-        'descuentoActivo': false,
-        'tipoDescuento': 'porcentaje',
-        'valorDescuento': TextEditingController(text: ""),
-
-        'stockInicial': TextEditingController(text: leftoverUnits.toString()),
-        'nuevoIngreso': TextEditingController(text: "0"),
-        'stockDescuento': TextEditingController(text: "0"),
-        'stockFinal': TextEditingController(text: leftoverUnits.toString()),
-
-        'umpCompra': TextEditingController(text: ""),
-        'unidadesLote': TextEditingController(text: ""),
-        'cantCompra': TextEditingController(text: ""),
-        'totalPago': TextEditingController(text: ""),
-        'barcode': TextEditingController(),
-        'desc': TextEditingController(),
-        'image': TextEditingController(),
-        'ajusteBase': TextEditingController(),
-        'providerId': sourceMap['providerId'],
-        'isDefault': false,
-        'estado': sourceMap['estado'],
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (res != null && mounted) {
+      _debounceTimer?.cancel();
+      _recordUndoSnapshot();
+      setState(() {
+        _selectedCategoryId = res.id;
+        _selectedCategoryName = res.name;
       });
-    });
+      _recordUndoSnapshot();
+    }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("✅ Variante sobrante creada debajo"),
-        backgroundColor: Colors.green,
-      ),
+  Future<void> _pickGeneralProvider(bool isDark) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final res = await ProductEntityPickers.openProviderPicker(
+      context: context,
+      selectedProviderId: _generalProviderId,
+      title: "Proveedor General",
+      deferredProviderNames: _deferredProviderNames,
     );
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (res != null && mounted) {
+      if (res.id != null && res.id! < 0) {
+        _deferredProviderNames[res.id!] = res.name;
+      }
+      await _handleGeneralProviderChange(res.id, res.name, isDark);
+    }
+  }
+
+  void _addPresentation() {
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
+    setState(() => ProductEditOperations.addPresentation(
+      controllers: _presentationControllers,
+      keys: _presentationKeys,
+      generalProviderId: _generalProviderId,
+      deferredProviderNames: _deferredProviderNames,
+    ));
+    if (_presentationControllers.isNotEmpty) {
+      _attachPresentationListeners(_presentationControllers.last);
+    }
+    _recordUndoSnapshot();
+  }
+
+  void _clonePresentation(int index) {
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
+    setState(() => ProductEditOperations.clonePresentation(
+      index: index,
+      controllers: _presentationControllers,
+      keys: _presentationKeys,
+      context: context,
+    ));
+    if (index + 1 < _presentationControllers.length) {
+      _attachPresentationListeners(_presentationControllers[index + 1]);
+    }
+    _recordUndoSnapshot();
+  }
+
+  void _handleSetDefault(int index) {
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
+    setState(() => ProductEditOperations.setDefault(
+      index: index,
+      controllers: _presentationControllers,
+      context: context,
+    ));
+    _recordUndoSnapshot();
+  }
+
+  void _handleMoveUp(int index) {
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
+    setState(() => ProductEditOperations.moveUp(index: index, controllers: _presentationControllers));
+    _recordUndoSnapshot();
+  }
+
+  void _handleMoveDown(int index) {
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
+    setState(() => ProductEditOperations.moveDown(index: index, controllers: _presentationControllers));
+    _recordUndoSnapshot();
+  }
+
+  void _handleCreateLeftover(String parentId, int leftoverUnits, double costoBaseIndividual) {
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
+    setState(() => ProductEditOperations.createLeftover(
+      context: context,
+      parentId: parentId,
+      leftoverUnits: leftoverUnits,
+      costoBaseIndividual: costoBaseIndividual,
+      controllers: _presentationControllers,
+      keys: _presentationKeys,
+    ));
+    int pIdx = _presentationControllers.indexWhere((c) => c['id'] == parentId);
+    if (pIdx != -1 && pIdx + 1 < _presentationControllers.length) {
+      _attachPresentationListeners(_presentationControllers[pIdx + 1]);
+    }
+    _recordUndoSnapshot();
   }
 
   void _invalidateLeftover(String parentId) {
-    int parentIndex = _presentationControllers.indexWhere(
-      (c) => c['id'] == parentId,
-    );
-    if (parentIndex != -1) {
-      String? childId = _presentationControllers[parentIndex]['childId'];
-      if (childId != null) {
-        int childIndex = _presentationControllers.indexWhere(
-          (c) => c['id'] == childId,
-        );
-        if (childIndex != -1) {
-          _disposeControllerMap(_presentationControllers[childIndex]);
-          _presentationControllers.removeAt(childIndex);
-        }
-      }
-      _presentationControllers[parentIndex]['childId'] = null;
-      _presentationControllers[parentIndex]['leftoverCreated'] = false;
-      setState(() {});
-    }
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
+    setState(() => ProductEditOperations.invalidateLeftover(
+      parentId: parentId,
+      controllers: _presentationControllers,
+      keys: _presentationKeys,
+    ));
+    _recordUndoSnapshot();
   }
 
   void _deletePresentation(int index, bool isDark) {
-    final item = _presentationControllers[index];
-    if (item['isDefault'] == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "No puedes borrar la presentación Principal.",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ),
-      );
-      return;
-    }
-
-    showDialog(
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
+    final mapToDelete = _presentationControllers[index];
+    _detachPresentationListeners(mapToDelete);
+    ProductEditOperations.deletePresentation(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(
-              Icons.warning_amber_rounded,
-              color: isDark ? Colors.red[300] : Colors.red,
-              size: 28,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              "Eliminar Variante",
-              style: TextStyle(
-                color: isDark ? Colors.white : Colors.black87,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          "¿Seguro que deseas eliminar esta variante?",
-          style: TextStyle(
-            color: isDark ? Colors.grey[300] : Colors.grey[700],
-            fontSize: 16,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              "Cancelar",
-              style: TextStyle(color: Colors.grey, fontSize: 15),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isDark ? Colors.red[800] : Colors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              if (item['db_id'] != null) _idsToDelete.add(item['db_id']);
-
-              // Si era un hijo, liberar al padre
-              String idToDelete = item['id'];
-              for (var c in _presentationControllers) {
-                if (c['childId'] == idToDelete) {
-                  c['childId'] = null;
-                  c['leftoverCreated'] = false;
-                }
-              }
-
-              // Eliminar padre (y su hijo si tiene)
-              String? childId = item['childId'];
-              setState(() {
-                _disposeControllerMap(_presentationControllers[index]);
-                _presentationControllers.removeAt(index);
-              });
-
-              if (childId != null) {
-                int childIndex = _presentationControllers.indexWhere(
-                  (c) => c['id'] == childId,
-                );
-                if (childIndex != -1) {
-                  setState(() {
-                    _disposeControllerMap(_presentationControllers[childIndex]);
-                    _presentationControllers.removeAt(childIndex);
-                  });
-                }
-              }
-            },
-            child: const Text(
-              "Eliminar",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-          ),
-        ],
-      ),
+      index: index,
+      isDark: isDark,
+      controllers: _presentationControllers,
+      keys: _presentationKeys,
+      idsToDelete: _idsToDelete,
+      onDeleted: () {
+        _recordUndoSnapshot();
+        setState(() {});
+      },
     );
   }
 
-  // ==========================================================
-  // MÉTODOS DE MODALES DE CREACIÓN RÁPIDA
-  // ==========================================================
-  Future<int?> _handleCreateBrand(bool isDark) async {
-    String? newName = await _showSimpleDialog(
-      "Nueva Marca",
-      "Nombre de la marca",
-      isDark,
-    );
-    if (!mounted) return null;
-    if (newName != null && newName.isNotEmpty) {
-      return await Provider.of<InventoryProvider>(
-        context,
-        listen: false,
-      ).createBrand(newName);
-    }
-    return null;
+  void _handleBeforeDiscreteMutation() {
+    _debounceTimer?.cancel();
+    _recordUndoSnapshot();
   }
 
-  Future<int?> _handleCreateCategory(bool isDark) async {
-    String? newName = await _showSimpleDialog(
-      "Nueva Categoría",
-      "Nombre de la categoría",
-      isDark,
-    );
-    if (!mounted) return null;
-    if (newName != null && newName.isNotEmpty) {
-      return await Provider.of<InventoryProvider>(
-        context,
-        listen: false,
-      ).createCategory(newName);
-    }
-    return null;
+  void _handleDiscreteMutationCompleted() {
+    _recordUndoSnapshot();
+    if (mounted) setState(() {});
   }
 
-  Future<int?> _handleCreateProvider(bool isDark) async {
-    String? newName = await _showSimpleDialog(
-      "Nuevo Proveedor",
-      "Nombre de la empresa",
-      isDark,
+  Future<bool> _showUnsavedChangesDialog(BuildContext context, bool isDark) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final hasChanges = ProductEditChangeDetector.hasUnsavedChanges(
+      isDirty: false,
+      productToEdit: widget.productToEdit,
+      nameCtrl: _nameCtrl,
+      descCtrl: _descCtrl,
+      imgUrlCtrl: _imgUrlCtrl,
+      parentBarcodeCtrl: _parentBarcodeCtrl,
+      selectedBrandId: _selectedBrandId,
+      selectedBrandName: _selectedBrandName,
+      selectedCategoryId: _selectedCategoryId,
+      selectedCategoryName: _selectedCategoryName,
+      generalProviderId: _generalProviderId,
+      generalProviderName: _generalProviderName,
+      idsToDelete: _idsToDelete,
+      presentationControllers: _presentationControllers,
+      initialSnapshot: _initialSnapshot,
+      generalState: _generalState,
     );
-    if (!mounted) return null;
-    if (newName != null && newName.isNotEmpty) {
-      return await Provider.of<InventoryProvider>(
-        context,
-        listen: false,
-      ).createProvider(newName);
-    }
-    return null;
+    final result = hasChanges ? await ProductUnsavedChangesDialog.show(context, isDark: isDark) : true;
+    FocusManager.instance.primaryFocus?.unfocus();
+    return result;
   }
 
-  Future<String?> _showSimpleDialog(String title, String hint, bool isDark) {
-    TextEditingController ctrl = TextEditingController();
-    return showDialog<String>(
+  Future<void> _saveChanges() async {
+    final success = await ProductEditOperations.saveEditedProduct(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-        content: TextField(
-          controller: ctrl,
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black87,
-            fontSize: 16,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(
-              color: isDark ? Colors.grey[500] : Colors.grey,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
-          ),
-          textCapitalization: TextCapitalization.sentences,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              "Cancelar",
-              style: TextStyle(
-                color: isDark ? Colors.grey[400] : Colors.grey,
-                fontSize: 16,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isDark
-                  ? Colors.blue[300]
-                  : Theme.of(context).primaryColor,
-              foregroundColor: isDark ? Colors.black87 : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text(
-              "Crear",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================================
-  // GUARDAR EDICIÓN
-  // ==========================================================
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Completa la Información General (Nombre)"),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    if (_presentationControllers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Debe haber al menos una presentación",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ),
-      );
-      return;
-    }
-
-    final String pDesc = _descCtrl.text.trim();
-    final String pImg = _imgUrlCtrl.text.trim();
-    final String pCode = _parentBarcodeCtrl.text.trim();
-
-    List<ProductPresentation> presentacionesFinales = [];
-
-    for (var c in _presentationControllers) {
-      String specific = (c['specific'] as TextEditingController).text.trim();
-      String uVenta = (c['unidadVenta'] as TextEditingController).text.trim();
-      int factorVenta =
-          int.tryParse((c['unidadesVenta'] as TextEditingController).text) ?? 1;
-
-      double margen =
-          double.tryParse((c['margen'] as TextEditingController).text) ?? 1.35;
-      double pVenta =
-          double.tryParse((c['precioVenta'] as TextEditingController).text) ??
-          0.0;
-
-      int stockVisual =
-          int.tryParse((c['stockFinal'] as TextEditingController).text) ?? 0;
-      int stockBaseGuardar = stockVisual * factorVenta;
-      
-      String ajusteText = (c['ajusteBase'] as TextEditingController).text.trim();
-      if (ajusteText.isNotEmpty) {
-        stockBaseGuardar = int.tryParse(ajusteText) ?? stockBaseGuardar;
-      }
-
-      if (factorVenta > 1) {
-        StockValidationResult? validation = c['stockValidation'] as StockValidationResult?;
-        if (validation != null) {
-          if (validation.status == StockValidationStatus.deficit) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  "❌ '$specific': ${validation.userMessage(uVenta, factorVenta)}",
-                ),
-                backgroundColor: Colors.red,
-              ),
-            );
-            return;
-          }
-          if (validation.status == StockValidationStatus.hasLeftover &&
-              c['leftoverCreated'] != true) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  "⚠️ '$specific' tiene unidades sueltas sin asignar. Crea su variante.",
-                ),
-                backgroundColor: Colors.orange,
-              ),
-            );
-            return;
-          }
-        }
-      }
-
-      String umpC = (c['umpCompra'] as TextEditingController).text.trim();
-      double cantC =
-          double.tryParse((c['cantCompra'] as TextEditingController).text) ??
-          0.0;
-      double totalP =
-          double.tryParse((c['totalPago'] as TextEditingController).text) ??
-          0.0;
-      int loteC =
-          int.tryParse((c['unidadesLote'] as TextEditingController).text) ?? 1;
-
-      double costoPresFinal =
-          double.tryParse((c['costoPres'] as TextEditingController).text) ??
-          0.0;
-
-      String rawDesc = (c['desc'] as TextEditingController).text.trim();
-      String? finalDesc = (rawDesc.isEmpty && pDesc.isNotEmpty)
-          ? pDesc
-          : (rawDesc.isEmpty ? null : rawDesc);
-      String rawImg = (c['image'] as TextEditingController).text.trim();
-      String? finalImg = (rawImg.isEmpty && pImg.isNotEmpty)
-          ? pImg
-          : (rawImg.isEmpty ? null : rawImg);
-      String rawCode = (c['barcode'] as TextEditingController).text.trim();
-      String? finalCode = (rawCode.isEmpty && pCode.isNotEmpty)
-          ? pCode
-          : (rawCode.isEmpty ? null : rawCode);
-
-      bool descuentoActivo = c['descuentoActivo'] == true;
-      String tipoDescuento = c['tipoDescuento'] as String;
-      double valorDescuento =
-          double.tryParse(
-            (c['valorDescuento'] as TextEditingController).text,
-          ) ??
-          0.0;
-
-      double? precioOferta;
-      if (descuentoActivo && valorDescuento > 0 && pVenta > 0) {
-        if (tipoDescuento == 'porcentaje') {
-          precioOferta = pVenta - (pVenta * (valorDescuento / 100));
-        } else {
-          precioOferta = pVenta - valorDescuento;
-        }
-      }
-
-      presentacionesFinales.add(
-        ProductPresentation(
-          id: c['db_id'],
-          nombreEspecifico: specific.isEmpty ? null : specific,
-
-          unidadVenta: uVenta.isEmpty ? "Unidad" : uVenta,
-          unidadesPorVenta: factorVenta,
-          costoUnitarioCalculado: costoPresFinal,
-          factorGananciaVenta: margen,
-          precioVentaFinal: pVenta,
-
-          stockActual: stockBaseGuardar,
-
-          umpCompra: umpC.isEmpty ? null : umpC,
-          cantidadUmpComprada: cantC > 0 ? cantC : null,
-          totalPagoLote: totalP > 0 ? totalP : null,
-          unidadesPorLote: loteC,
-          precioUmpProveedor: cantC > 0 ? (totalP / cantC) : null,
-
-          codigoBarras: finalCode,
-          imagenUrl: finalImg,
-          descripcion: finalDesc,
-          proveedorId: c['providerId'],
-          esDefault: c['isDefault'] == true,
-          estado: c['estado'] as String,
-          tipoDescuento: descuentoActivo ? tipoDescuento : null,
-          valorDescuento: descuentoActivo && valorDescuento > 0
-              ? valorDescuento
-              : null,
-          precioOferta: precioOferta,
-        ),
-      );
-    }
-
-    final provider = Provider.of<InventoryProvider>(context, listen: false);
-
-    final success = await provider.editFullProduct(
-      productId: widget.productToEdit.id,
-      nombre: _nameCtrl.text,
-      descripcion: pDesc.isEmpty ? null : pDesc,
-      marcaId: _selectedBrandId == 0 ? null : _selectedBrandId,
-      categoriaId: _selectedCategoryId == 0 ? null : _selectedCategoryId,
-      estado: _generalState == 2 ? 'publico' : 'privado',
-      imagenUrl: pImg.isEmpty ? null : pImg,
-      codigoBarras: pCode.isEmpty ? null : pCode,
-      presentaciones: presentacionesFinales,
+      formKey: _formKey,
+      productToEdit: widget.productToEdit,
+      nameCtrl: _nameCtrl,
+      descCtrl: _descCtrl,
+      imgUrlCtrl: _imgUrlCtrl,
+      parentBarcodeCtrl: _parentBarcodeCtrl,
+      selectedBrandId: _selectedBrandId,
+      selectedBrandName: _selectedBrandName,
+      selectedCategoryId: _selectedCategoryId,
+      selectedCategoryName: _selectedCategoryName,
+      controllers: _presentationControllers,
       idsToDelete: _idsToDelete,
     );
-
     if (success && mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "✅ Producto actualizado correctamente",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Error: ${provider.errorMessage}",
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _initialSnapshot = null;
+      Navigator.pop(context, true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = Theme.of(context).scaffoldBackgroundColor;
-
-    final textColor = isDark ? Colors.white : Colors.black87;
-
-    if (_isLoading) {
-      return Scaffold(
-        backgroundColor: bgColor,
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
     final provider = Provider.of<InventoryProvider>(context);
 
-    List<ProviderModel> providerListForDropdown = List.from(
-      provider.activeProviders,
-    );
-    providerListForDropdown.insert(
-      0,
-      ProviderModel(
-        id: 0,
-        nombreEmpresa: "Ninguno",
-        idNegocio: 0,
-        activo: true,
-      ),
-    );
-
-    int? currentGenProv = _generalProviderId;
-    if (currentGenProv == -2) {
-      providerListForDropdown.insert(
-        0,
-        ProviderModel(
-          id: -2,
-          nombreEmpresa: "Múltiples Proveedores (Mixto)",
-          idNegocio: 0,
-          activo: true,
-        ),
-      );
-    }
-
-    List<Category> categoryListForDropdown = List.from(
-      provider.activeCategories,
-    );
-    categoryListForDropdown.insert(
-      0,
-      Category(id: 0, nombre: "Ninguno", activo: true),
-    );
-
-    List<Brand> brandListForDropdown = List.from(provider.activeBrands);
-    brandListForDropdown.insert(
-      0,
-      Brand(id: 0, nombre: "Ninguno", activo: true),
-    );
-
-    return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(
-          "Editar Producto",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-            color: textColor,
-          ),
-        ),
-        backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
-        foregroundColor: textColor,
-        iconTheme: IconThemeData(color: textColor),
-        elevation: 0,
-      ),
-
-      bottomNavigationBar: Container(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          16,
-          20,
-          InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 16),
-        ),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A1A24) : Colors.white,
-          boxShadow: [
-            if (!isDark)
-              const BoxShadow(
-                color: Colors.black12,
-                blurRadius: 15,
-                offset: Offset(0, -5),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _showUnsavedChangesDialog(context, isDark);
+        if (shouldPop && context.mounted) Navigator.pop(context);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Editar Producto", style: TextStyle(fontWeight: FontWeight.bold)),
+          elevation: 0,
+          actions: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              transitionBuilder: (child, anim) => FadeTransition(
+                opacity: anim,
+                child: ScaleTransition(scale: anim, child: child),
               ),
-          ],
-          border: Border(
-            top: BorderSide(
-              color: isDark ? Colors.white10 : Colors.transparent,
+              child: _hasUnsavedChanges
+                  ? Row(
+                      key: const ValueKey("reversion_controls"),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            Icons.undo_rounded,
+                            size: 21,
+                            color: isDark ? Colors.amber[300] : Colors.amber[800],
+                          ),
+                          tooltip: "Deshacer último cambio",
+                          onPressed: _undoStack.length > 1 ? _undoLastChange : null,
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.restore_rounded,
+                            size: 21,
+                            color: isDark ? Colors.tealAccent[200] : Colors.teal[700],
+                          ),
+                          tooltip: "Restaurar original",
+                          onPressed: () => _restoreOriginalSavedState(isDark),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(key: ValueKey("no_reversion")),
             ),
-          ),
-        ),
-        child: SizedBox(
-          height: 50,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: provider.isLoading
-                  ? Colors.grey
-                  : (isDark ? Colors.blue[700] : Colors.blue[800]),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
+            const InfoTooltipButton(
+              title: "Edición de Productos",
+              description: "Modifica información básica, proveedores y presentaciones de tus productos. Puedes reordenar variantes o designar una nueva principal.",
+              tips: [
+                InfoTip(icon: Icons.undo_rounded, text: "Usa ↶ Deshacer para revertir paso a paso la última modificación y ↺ Restaurar para regresar al producto guardado original."),
+                InfoTip(icon: Icons.calculate_rounded, text: "Chips de redondeo (.50, .90, .00): conmutables. Tócalos para redondear o vuélvelos a pulsar para recuperar el precio previo."),
+                InfoTip(icon: Icons.star_rounded, text: "La variante principal se mostrará por defecto en el catálogo."),
+                InfoTip(icon: Icons.swap_vert_rounded, text: "Reordena tus presentaciones usando las flechas o el modal."),
+              ],
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? (_hasUnsavedChanges
+                        ? const Color(0xFF00E676).withValues(alpha: 0.22)
+                        : const Color(0xFF00E676).withValues(alpha: 0.10))
+                    : (_hasUnsavedChanges
+                        ? const Color(0xFF00796B).withValues(alpha: 0.16)
+                        : const Color(0xFF00796B).withValues(alpha: 0.08)),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark
+                      ? (_hasUnsavedChanges
+                          ? const Color(0xFF00E676).withValues(alpha: 0.6)
+                          : const Color(0xFF00E676).withValues(alpha: 0.2))
+                      : (_hasUnsavedChanges
+                          ? const Color(0xFF00796B).withValues(alpha: 0.5)
+                          : const Color(0xFF00796B).withValues(alpha: 0.15)),
+                  width: _hasUnsavedChanges ? 1.4 : 1.0,
+                ),
               ),
-              elevation: isDark ? 0 : 4,
+              child: IconButton(
+                icon: Icon(
+                  Icons.check_rounded,
+                  size: 22,
+                  color: isDark ? const Color(0xFF00E676) : const Color(0xFF00796B),
+                ),
+                tooltip: "Guardar Cambios",
+                style: IconButton.styleFrom(
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: const Size(38, 38),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: _saveChanges,
+              ),
             ),
-            onPressed: provider.isLoading ? null : _save,
-            child: provider.isLoading
-                ? const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 3,
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Text(
-                        "GUARDANDO...",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  )
-                : const Text(
-                    "GUARDAR CAMBIOS",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
-                    ),
-                  ),
-          ),
+          ],
         ),
-      ),
-
-      body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        behavior: HitTestBehavior.translucent,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          behavior: HitTestBehavior.translucent,
           child: Form(
             key: _formKey,
+            child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ProductGeneralInfo(
                   nameCtrl: _nameCtrl,
-                  selectedBrandId: _selectedBrandId,
-                  selectedCategoryId: _selectedCategoryId,
-                  generalProviderId: currentGenProv,
+                  brandDisplay: ProductEntityPickers.getBrandDisplay(
+                    provider: provider,
+                    selectedBrandId: _selectedBrandId,
+                    selectedBrandName: _selectedBrandName,
+                  ),
+                  isBrandDeferred: _selectedBrandId != null && _selectedBrandId! < 0,
+                  onSelectBrand: _pickBrand,
+                  categoryDisplay: ProductEntityPickers.getCategoryDisplay(
+                    provider: provider,
+                    selectedCategoryId: _selectedCategoryId,
+                    selectedCategoryName: _selectedCategoryName,
+                  ),
+                  isCategoryDeferred: _selectedCategoryId != null && _selectedCategoryId! < 0,
+                  onSelectCategory: _pickCategory,
+                  generalProviderDisplay: ProductEntityPickers.getProviderDisplay(
+                    provider: provider,
+                    providerId: _generalProviderId,
+                    deferredProviderNames: _deferredProviderNames,
+                  ),
+                  isGeneralProviderDeferred: _generalProviderId != null && _generalProviderId! < 0,
+                  onSelectGeneralProvider: () => _pickGeneralProvider(isDark),
                   generalState: _generalState,
-                  brandListForDropdown: brandListForDropdown,
-                  categoryListForDropdown: categoryListForDropdown,
-                  providerListForDropdown: providerListForDropdown,
                   isDark: isDark,
-                  onBrandChanged: (v) {
-                    if (v == -1) {
-                      _handleCreateBrand(isDark).then((id) {
-                        if (id != null) setState(() => _selectedBrandId = id);
-                      });
-                    } else {
-                      setState(() => _selectedBrandId = v);
-                    }
-                  },
-                  onCategoryChanged: (v) {
-                    if (v == -1) {
-                      _handleCreateCategory(isDark).then((id) {
-                        if (id != null) {
-                          setState(() => _selectedCategoryId = id);
-                        }
-                      });
-                    } else {
-                      setState(() => _selectedCategoryId = v);
-                    }
-                  },
-                  onProviderChanged: (v) =>
-                      _handleGeneralProviderChange(v, isDark),
                   onStateChanged: _setGeneralState,
                 ),
                 const SizedBox(height: 16),
@@ -1035,56 +755,72 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   barcodeCtrl: _parentBarcodeCtrl,
                 ),
                 const SizedBox(height: 30),
-
-                Text(
-                  " PRESENTACIONES / VARIANTES",
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                    color: isDark ? Colors.teal[300] : Colors.teal[800],
-                    letterSpacing: 0.5,
-                  ),
+                VariantSectionHeader(
+                  isDark: isDark,
+                  allExpanded: _allExpanded,
+                  canReorder: _presentationControllers.length > 1,
+                  onToggleExpandCollapse: () => setState(() {
+                    _allExpanded = !_allExpanded;
+                    for (var c in _presentationControllers) {
+                      c['isExpanded'] = _allExpanded;
+                    }
+                  }),
+                  onReorder: () {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    _recordUndoSnapshot();
+                    VariantReorderModal.show(
+                      context: context,
+                      isDark: isDark,
+                      controllers: _presentationControllers,
+                      onReorder: (oldIdx, newIdx) {
+                        _recordUndoSnapshot();
+                        setState(() {});
+                      },
+                    ).whenComplete(() {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                    });
+                  },
                 ),
-                const SizedBox(height: 12),
-
+                const SizedBox(height: 8),
+                VariantJumpBar(
+                  controllers: _presentationControllers,
+                  presentationKeys: _presentationKeys,
+                  isDark: isDark,
+                  onVariantSelected: (ctrl) => setState(() => ctrl['isExpanded'] = true),
+                ),
+                const SizedBox(height: 16),
                 ProductPresentationList(
                   presentationControllers: _presentationControllers,
+                  presentationKeys: _presentationKeys,
                   isDark: isDark,
-                  providerListForDropdown: providerListForDropdown,
-                  handleCreateProvider: _handleCreateProvider,
-                  deletePresentation: _deletePresentation,
+                  providerListForDropdown: provider.providers,
+                  deferredProviderNames: _deferredProviderNames,
+                  deletePresentation: (idx, dark) => _deletePresentation(idx, dark),
                   handleCreateLeftover: _handleCreateLeftover,
                   invalidateLeftover: _invalidateLeftover,
-                  onStateChange: () => setState(() {}),
+                  onStateChange: () {
+                    _onFormChangedWithDebounce();
+                    setState(() {});
+                  },
+                  onSetDefault: _handleSetDefault,
+                  onMoveUp: _handleMoveUp,
+                  onMoveDown: _handleMoveDown,
+                  onClone: _clonePresentation,
+                  onBeforeDiscreteMutation: _handleBeforeDiscreteMutation,
+                  onDiscreteMutationCompleted: _handleDiscreteMutationCompleted,
                 ),
-
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: _addPresentation,
                     icon: const Icon(Icons.add_circle_outline, size: 20),
-                    label: const Text(
-                      "AÑADIR OTRA PRESENTACIÓN",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
+                    label: const Text("AÑADIR OTRA PRESENTACIÓN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      foregroundColor: isDark
-                          ? Colors.teal[300]
-                          : Colors.teal[700],
-                      side: BorderSide(
-                        color: isDark
-                            ? Colors.teal.withValues(alpha: 0.5)
-                            : Colors.teal.shade300,
-                        width: 2,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      foregroundColor: isDark ? Colors.teal[300] : Colors.teal[700],
+                      side: BorderSide(color: isDark ? Colors.teal.withValues(alpha: 0.5) : Colors.teal.shade300, width: 2),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -1092,6 +828,13 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               ],
             ),
           ),
+        ),
+      ),
+      bottomNavigationBar: ProductFormBottomBar(
+          title: "GUARDAR CAMBIOS",
+          isLoading: false,
+          isDark: isDark,
+          onSave: _saveChanges,
         ),
       ),
     );

@@ -292,6 +292,8 @@ class SalesService {
     String? origenVenta,
     String sortBy = "fecha_venta",
     String order = "desc",
+    String? financialStatus,
+    String? paymentMethod,
   }) async {
     try {
       final rows = await _repository.getHistoryRaw(
@@ -304,7 +306,9 @@ class SalesService {
         isArchived: isArchived,
         origenVenta: origenVenta,
         sortBy: sortBy,
-        order: order
+        order: order,
+        financialStatus: financialStatus,
+        paymentMethod: paymentMethod,
       );
 
       return rows.map((e) {
@@ -328,6 +332,7 @@ class SalesService {
     String? endDate,
     bool isArchived = false,
     String? origenVenta,
+    String? financialStatus,
   }) async {
     try {
       final statsMap = await _repository.getStatsRaw(
@@ -336,6 +341,7 @@ class SalesService {
         endDate: endDate,
         isArchived: isArchived,
         origenVenta: origenVenta,
+        financialStatus: financialStatus,
       );
       
       int productsCount = await _repository.getProductsSoldCount(
@@ -344,6 +350,7 @@ class SalesService {
         endDate: endDate,
         isArchived: isArchived,
         origenVenta: origenVenta,
+        financialStatus: financialStatus,
       );
 
       if (statsMap != null) {

@@ -18,6 +18,8 @@ import 'package:app_movil/features/smart_quotation/widgets/history/detail_widget
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/sale_items_list.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/sale_action_footer.dart';
 
+import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart'; 
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart'; 
@@ -101,6 +103,9 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
   }
 
   void _handleArchive(bool isDark) async {
+    final nav = Navigator.of(context);
+    final saleProv = Provider.of<SaleProvider>(context, listen: false);
+    final trackingProv = Provider.of<TrackingProvider>(context, listen: false);
     final dialogBgColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
@@ -182,21 +187,63 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     try {
       int idTarget = widget.saleId ?? _saleData!['id'];
       if (_saleData!['is_archived'] == 1) {
-         if (mounted) await Provider.of<SaleProvider>(context, listen: false).restoreSale(idTarget);
+         await saleProv.restoreSale(idTarget);
       } else {
-         if (mounted) await Provider.of<SaleProvider>(context, listen: false).voidSale(idTarget, selectedReason!);
+         await saleProv.voidSale(idTarget, selectedReason!);
       }
       
+      try {
+        await trackingProv.loadClients();
+      } catch (_) {}
+
       if (mounted) {
         final isLoan = _saleData!['origen_venta'] == 'prestamo_personal';
         _showSnack(_saleData!['is_archived'] == 1 ? (isLoan ? "Préstamo restaurado exitosamente." : "Venta restaurada exitosamente.") : (isLoan ? "Préstamo anulado exitosamente." : "Venta anulada y stock devuelto."));
-        Navigator.pop(context); 
+        nav.pop(); 
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessingAction = false);
         _showSnack(e.toString().replaceAll("Exception: ", ""), isError: true);
       }
+    }
+  }
+
+  void _handleRegisterPayment() async {
+    final clientId = _saleData?['cliente_id'];
+    if (clientId == null || clientId <= 0) {
+      _showSnack("Esta operación no tiene un cliente asociado para registrar abonos.", isError: true);
+      return;
+    }
+
+    final saleProv = Provider.of<SaleProvider>(context, listen: false);
+    final client = await saleProv.getClientById(clientId);
+    if (client == null) {
+      _showSnack("No se encontró el registro del cliente.", isError: true);
+      return;
+    }
+
+    if (mounted) {
+      final double totalAmount = (_saleData?['monto_total'] ?? 0.0).toDouble();
+      final double paidAmount = (_saleData?['monto_pagado'] ?? 0.0).toDouble();
+      final double diff = totalAmount - paidAmount;
+      final double pendingDebt = diff > 0.01 ? diff : 0.0;
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => PaymentEntryModal(
+          client: client,
+          initialTargetType: 'venta',
+          initialTargetId: _saleData?['id'],
+          initialAmount: pendingDebt,
+          onPaymentSuccess: () {
+            _loadSaleDetail();
+            saleProv.silentRefresh();
+          },
+        ),
+      );
     }
   }
 
@@ -598,6 +645,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                   cotizacionId: cotizacionId,
                   clientId: clientId,
                   isDark: isDark,
+                  isLoan: isLoan,
                   onEditTap: (type, currentNote, id) => _showEditNoteDialog(
                     type: type, 
                     currentNote: currentNote, 
@@ -612,6 +660,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                   pendingDebt: pendingDebt,
                   cuotasRaw: cuotasRaw,
                   isDark: isDark,
+                  onPaymentSuccess: _loadSaleDetail,
                 ),
 
                 if (imageUrl.isNotEmpty)
@@ -641,14 +690,17 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
             ),
           ),
 
-          bottomNavigationBar: isLoan ? null : SaleActionFooter(
+          bottomNavigationBar: SaleActionFooter(
             isDark: isDark,
             cardColor: cardColor,
             cotizacionId: cotizacionId,
             saleId: widget.saleId,
             isQuickSale: isQuickSale,
+            isLoan: isLoan,
+            pendingDebt: pendingDebt,
             onSellAgainQuickSale: () => _handleSellAgainQuickSale(isDark),
             onDuplicateOptions: () => _showDuplicateOptionsModal(cotizacionId, isDark),
+            onRegisterPayment: _handleRegisterPayment,
           ),
         ),
 

@@ -14,6 +14,9 @@ import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dar
 import 'package:app_movil/features/scanner/screens/invoice_staging_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/matching_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
+import 'package:app_movil/core/widgets/floating_dock_session_state.dart';
 
 /// Modelo ligero para representar un proceso de trabajo activo en el Dock.
 class WorkTask {
@@ -62,20 +65,35 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
   late AnimationController _pulseController;
   int _selectedTaskIndex = 0;
 
-  // Estado del Globo Flotante
-  bool _isBubble = false;
-  bool _isLeftEdge = false;
-  double _bubbleBottom = 20.0;
+  // Estado del Globo Flotante 2D y Modo Oculto en Borde (Edge Peek) sincronizado en sesión
+  late bool _isBubble;
+  late bool _isLeftEdge;
+  late bool _isEdgeTucked; // Estado oculto en el borde mostrando solo pestaña
+  late double _bubbleBottom;
   double? _bubblePanX;
   bool _hadTasks = false;
 
   @override
   void initState() {
     super.initState();
+    _isBubble = FloatingDockSessionState.isBubble;
+    _isLeftEdge = FloatingDockSessionState.isLeftEdge;
+    _isEdgeTucked = FloatingDockSessionState.isEdgeTucked;
+    _bubbleBottom = FloatingDockSessionState.panBottom ?? 80.0;
+    _bubblePanX = FloatingDockSessionState.panX;
+
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
+  }
+
+  void _syncSessionState() {
+    FloatingDockSessionState.isBubble = _isBubble;
+    FloatingDockSessionState.isLeftEdge = _isLeftEdge;
+    FloatingDockSessionState.isEdgeTucked = _isEdgeTucked;
+    FloatingDockSessionState.panBottom = _bubbleBottom;
+    FloatingDockSessionState.panX = _bubblePanX;
   }
 
   @override
@@ -227,6 +245,47 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
       );
     }
 
+    // 5. Borrador de Producto en Creación
+    final invProv = Provider.of<InventoryProvider>(context);
+    if (invProv.hasCreationDraft) {
+      final draft = invProv.creationDraft!;
+      final name = draft.name.trim().isNotEmpty
+          ? draft.name.trim()
+          : 'Nuevo Producto';
+      final presCount = draft.presentations.length;
+      final subtitle = presCount <= 1
+          ? '$name • 1 presentación'
+          : '$name • $presCount presentaciones';
+
+      tasks.add(
+        WorkTask(
+          id: 'product_create',
+          title: 'Producto en Creación',
+          shortTitle: 'Producto',
+          subtitle: subtitle,
+          icon: Icons.add_box_rounded,
+          color: const Color(0xFF00897B),
+          onResume: () {
+            HapticFeedback.lightImpact();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ProductCreateScreen(),
+              ),
+            );
+          },
+          onDiscard: () {
+            _confirmDiscard(
+              context,
+              title: '¿Descartar Producto?',
+              message: 'Se perderán los datos del producto que estabas creando.',
+              onConfirm: () => invProv.clearCreationDraft(),
+            );
+          },
+        ),
+      );
+    }
+
     return tasks;
   }
 
@@ -270,8 +329,10 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
     setState(() {
       _isBubble = true;
       _isLeftEdge = isLeft;
+      _isEdgeTucked = false;
       _bubblePanX = null;
     });
+    _syncSessionState();
     widget.onBubbleModeChanged?.call(true);
   }
 
@@ -279,8 +340,10 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
     HapticFeedback.mediumImpact();
     setState(() {
       _isBubble = false;
+      _isEdgeTucked = false;
       _bubblePanX = null;
     });
+    _syncSessionState();
     widget.onBubbleModeChanged?.call(false);
   }
 
@@ -304,17 +367,86 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentTask = tasks[_selectedTaskIndex];
-    final screenWidth = MediaQuery.of(context).size.width;
+    final mediaQuery = MediaQuery.of(context);
+    final screenWidth = mediaQuery.size.width;
+    final screenHeight = mediaQuery.size.height;
+    final safePadding = mediaQuery.padding;
+
+    // Cotas de movimiento vertical 2D para no invadir notch ni botones del sistema
+    final minBottom = safePadding.bottom + 16.0;
+    final maxBottom = screenHeight - safePadding.top - 74.0;
 
     // =========================================================================
-    // CASO 1: MODO GLOBO FLOTANTE (HitTest Estrictamente Acotado a 58x58px)
+    // CASO 1: MODO GLOBO FLOTANTE 2D + MODO OCULTO EN BORDE (EDGE PEEK)
     // =========================================================================
     if (_isBubble) {
+      // SUB-CASO 1.A: PESTAÑA OCULTA EN EL BORDE (EDGE PEEK)
+      if (_isEdgeTucked) {
+        return AnimatedPositioned(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          bottom: _bubbleBottom.clamp(minBottom, maxBottom),
+          left: _isLeftEdge ? 0 : null,
+          right: !_isLeftEdge ? 0 : null,
+          width: 28,
+          height: 64,
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              setState(() {
+                _isEdgeTucked = false;
+              });
+              _syncSessionState();
+            },
+            onHorizontalDragUpdate: (details) {
+              final pullingInward = _isLeftEdge ? details.delta.dx > 1 : details.delta.dx < -1;
+              if (pullingInward) {
+                setState(() {
+                  _isEdgeTucked = false;
+                  _bubblePanX = _isLeftEdge ? 24.0 : screenWidth - 82.0;
+                });
+                _syncSessionState();
+              }
+            },
+            child: Container(
+              width: 28,
+              height: 64,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                borderRadius: _isLeftEdge
+                    ? const BorderRadius.horizontal(right: Radius.circular(18))
+                    : const BorderRadius.horizontal(left: Radius.circular(18)),
+                border: Border.all(
+                  color: currentTask.color,
+                  width: 2.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: currentTask.color.withValues(alpha: 0.45),
+                    blurRadius: 14,
+                    spreadRadius: 1,
+                    offset: Offset(_isLeftEdge ? 2 : -2, 2),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Icon(
+                  _isLeftEdge ? Icons.chevron_right_rounded : Icons.chevron_left_rounded,
+                  color: currentTask.color,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      // SUB-CASO 1.B: GLOBO FLOTANTE NORMAL (Arrastre libre en 2D X e Y)
       final double? leftPos;
       final double? rightPos;
 
       if (_bubblePanX != null) {
-        leftPos = _bubblePanX!.clamp(16.0, screenWidth - 74.0);
+        leftPos = _bubblePanX!.clamp(0.0, screenWidth - 58.0);
         rightPos = null;
       } else if (_isLeftEdge) {
         leftPos = 16.0;
@@ -324,8 +456,10 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
         rightPos = 16.0;
       }
 
-      return Positioned(
-        bottom: _bubbleBottom,
+      return AnimatedPositioned(
+        duration: _bubblePanX != null ? Duration.zero : const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        bottom: _bubbleBottom.clamp(minBottom, maxBottom),
         left: leftPos,
         right: rightPos,
         width: 58,
@@ -334,17 +468,32 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
           onTap: _expandFromBubble,
           onPanUpdate: (details) {
             setState(() {
-              _bubblePanX = (details.globalPosition.dx - 29).clamp(16.0, screenWidth - 74.0);
-              _bubbleBottom = (_bubbleBottom - details.delta.dy).clamp(20.0, 300.0);
+              final currentStartX = _bubblePanX ?? (_isLeftEdge ? 16.0 : screenWidth - 74.0);
+              _bubblePanX = (currentStartX + details.delta.dx).clamp(0.0, screenWidth - 58.0);
+              _bubbleBottom = (_bubbleBottom - details.delta.dy).clamp(minBottom, maxBottom);
             });
+            _syncSessionState();
           },
           onPanEnd: (details) {
+            final velocityX = details.velocity.pixelsPerSecond.dx;
             final currentX = _bubblePanX ?? (_isLeftEdge ? 16.0 : screenWidth - 74.0);
-            final snapLeft = currentX < (screenWidth / 2);
+
             setState(() {
-              _isLeftEdge = snapLeft;
+              // Si se arroja o jala fuertemente contra el borde -> Modo Edge Peek
+              if (currentX < 24.0 || velocityX < -650) {
+                _isEdgeTucked = true;
+                _isLeftEdge = true;
+              } else if (currentX > screenWidth - 82.0 || velocityX > 650) {
+                _isEdgeTucked = true;
+                _isLeftEdge = false;
+              } else {
+                // Magnetismo suave hacia el lateral más cercano
+                _isEdgeTucked = false;
+                _isLeftEdge = currentX < (screenWidth / 2);
+              }
               _bubblePanX = null;
             });
+            _syncSessionState();
           },
           child: AnimatedBuilder(
             animation: _pulseController,

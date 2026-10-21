@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/widgets/empty_state_widget.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
@@ -19,6 +20,9 @@ import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
 import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
 import 'package:app_movil/features/catalog/screens/tabs/widgets/inventory_filter_header.dart';
 import 'package:app_movil/features/catalog/widgets/auto_categorization_modal.dart';
+import 'package:app_movil/features/catalog/screens/product_detail_screen.dart';
+import 'package:app_movil/core/widgets/price_update_modal.dart';
+import 'package:app_movil/core/widgets/stock_update_modal.dart';
 
 class ProductsTab extends StatefulWidget {
   const ProductsTab({super.key});
@@ -498,6 +502,46 @@ class _ProductsTabState extends State<ProductsTab>
     );
   }
 
+  void _navigateToDetail(BuildContext navContext, InventoryWrapper wrapper) {
+    HapticFeedback.lightImpact();
+    Navigator.push(
+      navContext,
+      MaterialPageRoute(
+        builder: (_) => ProductDetailScreen(
+          product: wrapper.product,
+          initialPresentationId: wrapper.presentation.id ?? -1,
+          heroTag: 'inv_${wrapper.product.id}_${wrapper.presentation.id}',
+        ),
+      ),
+    ).then((_) {
+      if (mounted) {
+        Provider.of<InventoryProvider>(context, listen: false).loadInventory(reset: true);
+      }
+    });
+  }
+
+  void _openPriceModal(BuildContext context, InventoryWrapper wrapper, bool isDark) {
+    HapticFeedback.lightImpact();
+    final provider = Provider.of<InventoryProvider>(context, listen: false);
+    PriceUpdateModal.show(
+      context: context,
+      presentation: wrapper.presentation,
+      provider: provider,
+      isDark: isDark,
+    );
+  }
+
+  void _openStockModal(BuildContext context, InventoryWrapper wrapper, bool isDark) {
+    HapticFeedback.lightImpact();
+    final provider = Provider.of<InventoryProvider>(context, listen: false);
+    StockUpdateModal.show(
+      context: context,
+      presentation: wrapper.presentation,
+      provider: provider,
+      isDark: isDark,
+    );
+  }
+
   void _openActions(BuildContext context, InventoryWrapper wrapper) {
     // Si bien los invitados pueden ver los detalles, si intentan editar dentro
     // de ProductActionSheet el backend los rebotará automáticamente
@@ -582,6 +626,98 @@ class _ProductsTabState extends State<ProductsTab>
                   viewMode: _viewMode,
                   onViewModeChanged: (mode) => setState(() => _viewMode = mode),
                 ),
+
+                // 2.1 Banner de Producto en Creación Pendiente (Borrador en Memoria)
+                if (provider.hasCreationDraft)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ProductCreateScreen(),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF004D40).withValues(alpha: 0.3)
+                                : const Color(0xFFE0F2F1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isDark
+                                  ? const Color(0xFF00897B)
+                                  : const Color(0xFF80CBC4),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00897B),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.edit_note_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Producto en creación pendiente",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? const Color(0xFF80CBC4)
+                                            : const Color(0xFF00695C),
+                                      ),
+                                    ),
+                                    Text(
+                                      provider.creationDraft!.name
+                                              .trim()
+                                              .isNotEmpty
+                                          ? "${provider.creationDraft!.name.trim()} (${provider.creationDraft!.presentations.length} var.) • Toca para continuar"
+                                          : "Borrador sin título • Toca para continuar",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark
+                                            ? Colors.white70
+                                            : Colors.black87,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                size: 14,
+                                color: Color(0xFF00897B),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // 3. LA LISTA EN SÍ
                 if (provider.isLoading && displayItems.isEmpty)
@@ -798,18 +934,21 @@ class _ProductsTabState extends State<ProductsTab>
   Widget _buildSliverList(List<InventoryWrapper> items, bool isDark) {
     if (_viewMode == 1) {
       return SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
         sliver: SliverGrid(
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.70,
+            childAspectRatio: 0.62,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
           ),
           delegate: SliverChildBuilderDelegate(
             (ctx, i) => InventoryGridCard(
               item: items[i],
-              onTap: () => _openActions(ctx, items[i]),
+              onTap: () => _navigateToDetail(ctx, items[i]),
+              onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
+              onTapStock: () => _openStockModal(ctx, items[i], isDark),
+              onMoreOptions: () => _openActions(ctx, items[i]),
             ),
             childCount: items.length,
           ),
@@ -819,14 +958,17 @@ class _ProductsTabState extends State<ProductsTab>
 
     if (_viewMode == 2) {
       return SliverPadding(
-        padding: const EdgeInsets.only(bottom: 100),
+        padding: const EdgeInsets.only(bottom: 110),
         sliver: SliverList(
           delegate: SliverChildBuilderDelegate((ctx, i) {
             return Column(
               children: [
                 InventoryCompactTile(
                   item: items[i],
-                  onTap: () => _openActions(ctx, items[i]),
+                  onTap: () => _navigateToDetail(ctx, items[i]),
+                  onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
+                  onTapStock: () => _openStockModal(ctx, items[i], isDark),
+                  onMoreOptions: () => _openActions(ctx, items[i]),
                 ),
                 if (i < items.length - 1)
                   Divider(
@@ -843,12 +985,15 @@ class _ProductsTabState extends State<ProductsTab>
     }
 
     return SliverPadding(
-      padding: const EdgeInsets.only(top: 8, bottom: 100),
+      padding: const EdgeInsets.only(top: 8, bottom: 110),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (ctx, i) => InventoryItemTile(
             item: items[i],
-            onTap: () => _openActions(ctx, items[i]),
+            onTap: () => _navigateToDetail(ctx, items[i]),
+            onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
+            onTapStock: () => _openStockModal(ctx, items[i], isDark),
+            onMoreOptions: () => _openActions(ctx, items[i]),
           ),
           childCount: items.length,
         ),

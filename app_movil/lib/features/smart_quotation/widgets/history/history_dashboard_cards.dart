@@ -16,59 +16,52 @@ class HistoryDashboardCards extends StatelessWidget {
     
     final bgColor = isDark ? const Color(0xFF1A1A24) : Colors.white;
 
-    final title1 = isArchivadas ? "Tickets Anulados" : "Ventas Realizadas";
-    final title2 = isArchivadas ? "Monto Anulado (S/)" : "Ingresos (S/)";
-    final title3 = isArchivadas ? "Deuda Anulada (S/)" : "Por Cobrar (S/)";
+    final title1 = isArchivadas ? "Anuladas" : "Operaciones";
+    final title2 = isArchivadas ? "Monto Anulado" : "Cobrado (S/)";
+    final title3 = isArchivadas ? "Deuda Anulada" : "Por Cobrar (S/)";
 
-    final color1 = isArchivadas ? (isDark ? Colors.grey[400]! : Colors.grey) : (isDark ? Colors.blue[300]! : Colors.blue);
-    final color2 = isArchivadas ? (isDark ? Colors.red[300]! : Colors.red) : (isDark ? Colors.green[400]! : Colors.green);
-    final color3 = isArchivadas ? (isDark ? Colors.deepOrange[300]! : Colors.deepOrange) : (isDark ? Colors.orange[300]! : Colors.orange);
+    final color1 = isArchivadas ? (isDark ? Colors.grey[400]! : Colors.grey[700]!) : (isDark ? Colors.blue[300]! : Colors.blue[800]!);
+    final color2 = isArchivadas ? (isDark ? Colors.red[300]! : Colors.red[700]!) : (isDark ? Colors.green[400]! : Colors.green[700]!);
+    final color3 = isArchivadas ? (isDark ? Colors.deepOrange[300]! : Colors.deepOrange) : (isDark ? Colors.orange[300]! : Colors.orange[800]!);
 
     return Container(
       color: bgColor,
-      padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 150, 
-              child: _AnimatedStatCard(
-                title: title1,
-                value: (stats?.cantidadVentas ?? 0).toDouble(),
-                isInteger: true,
-                color: color1,
-                icon: isArchivadas ? Icons.auto_delete : Icons.receipt_long,
-                isDark: isDark,
-              ),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: _AnimatedStatCard(
+              title: title1,
+              value: (stats?.cantidadVentas ?? 0).toDouble(),
+              isInteger: true,
+              color: color1,
+              icon: isArchivadas ? Icons.auto_delete : Icons.receipt_long,
+              isDark: isDark,
             ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 170,
-              child: _AnimatedStatCard(
-                title: title2,
-                value: stats?.totalIngresos ?? 0.0,
-                format: currency,
-                color: color2,
-                icon: isArchivadas ? Icons.money_off : Icons.trending_up,
-                isDark: isDark,
-              ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _AnimatedStatCard(
+              title: title2,
+              value: stats?.totalIngresos ?? 0.0,
+              format: currency,
+              color: color2,
+              icon: isArchivadas ? Icons.money_off : Icons.trending_up,
+              isDark: isDark,
             ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 170,
-              child: _AnimatedStatCard(
-                title: title3,
-                value: stats?.totalDeuda ?? 0.0,
-                format: currency,
-                color: color3,
-                icon: isArchivadas ? Icons.account_balance_wallet_outlined : Icons.account_balance_wallet,
-                isDark: isDark,
-              ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _AnimatedStatCard(
+              title: title3,
+              value: stats?.totalDeuda ?? 0.0,
+              format: currency,
+              color: color3,
+              icon: isArchivadas ? Icons.account_balance_wallet_outlined : Icons.account_balance_wallet,
+              isDark: isDark,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -96,34 +89,53 @@ class _AnimatedStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: isDark ? color.withValues(alpha: 0.1) : color.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: isDark ? 0.3 : 0.2)),
+        color: isDark ? color.withValues(alpha: 0.1) : color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: isDark ? 0.35 : 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(width: 8),
-              Expanded(child: Text(title, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  title, 
+                  style: TextStyle(
+                    color: color, 
+                    fontSize: 11, 
+                    fontWeight: FontWeight.bold,
+                  ), 
+                  maxLines: 1, 
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           TweenAnimationBuilder<double>(
             tween: Tween<double>(begin: 0, end: value),
             duration: const Duration(milliseconds: 600),
             curve: Curves.easeOut,
             builder: (context, animatedValue, child) {
               String displayText = isInteger ? animatedValue.toInt().toString() : format!.format(animatedValue);
-              return Text(
-                displayText,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: isDark ? Colors.white : color.withValues(alpha: 0.9)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              return FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  displayText,
+                  style: TextStyle(
+                    fontSize: 16.5, 
+                    fontWeight: FontWeight.w900, 
+                    color: isDark ? Colors.white : color.withValues(alpha: 0.95),
+                  ),
+                  maxLines: 1,
+                ),
               );
             },
           ),

@@ -21,6 +21,7 @@ class QuickSearchProvider with ChangeNotifier {
 
   List<Category> _categories = [];
   int? _selectedCategoryId;
+  int _orphanCategoriesCount = 0;
 
   // --- PAGINACIÓN ---
   int _currentSkip = 0;
@@ -36,6 +37,8 @@ class QuickSearchProvider with ChangeNotifier {
   String get errorMessage => _errorMessage;
   List<Category> get categories => _categories.where((c) => c.activo).toList();
   int? get selectedCategoryId => _selectedCategoryId;
+  int get orphanCategoriesCount => _orphanCategoriesCount;
+  bool get hasOrphanCategories => _orphanCategoriesCount > 0;
 
   // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
   void updateContext(int? negocioId) {
@@ -48,14 +51,18 @@ class QuickSearchProvider with ChangeNotifier {
   }
 
   Future<void> _loadCategories() async {
-    if (_categories.isNotEmpty || _negocioId == null) return;
+    if (_negocioId == null) return;
     try {
-      final masters = await _masterDataService.fetchAllMasterData(true);
-      if (masters != null) {
-        _categories = List<Category>.from(masters['categories']);
-        _categories.sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
-        notifyListeners();
+      if (_categories.isEmpty) {
+        final masters = await _masterDataService.fetchAllMasterData(true);
+        if (masters != null) {
+          _categories = List<Category>.from(masters['categories']);
+          _categories.sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+        }
       }
+      final orphans = await _productService.countOrphans(estado: 'publico');
+      _orphanCategoriesCount = orphans['orphan_categories'] ?? 0;
+      notifyListeners();
     } catch (e) {
       debugPrint("Error cargando categorias en quick sale: $e");
     }
@@ -196,5 +203,40 @@ class QuickSearchProvider with ChangeNotifier {
       _searchResults.sort((a, b) => a.effectivePrice.compareTo(b.effectivePrice));
     }
     notifyListeners();
+  }
+
+  /// 🔄 Sincronización en caliente 360° para reflejar cambios inmediatos de stock y precio
+  void syncPresentation(
+    int presentationId, {
+    int? newStock,
+    double? newPrice,
+    double? newOfferPrice,
+    String? newDiscountType,
+    double? newDiscountValue,
+  }) {
+    bool updated = false;
+    for (int i = 0; i < _searchResults.length; i++) {
+      final item = _searchResults[i];
+      if (item.presentation.id == presentationId) {
+        final updatedPres = item.presentation.copyWith(
+          stockActual: newStock ?? item.presentation.stockActual,
+          precioVentaFinal: newPrice ?? item.presentation.precioVentaFinal,
+          precioOferta: newOfferPrice == -1
+              ? null
+              : (newOfferPrice ?? item.presentation.precioOferta),
+          tipoDescuento: newOfferPrice == -1
+              ? null
+              : (newDiscountType ?? item.presentation.tipoDescuento),
+          valorDescuento: newOfferPrice == -1
+              ? null
+              : (newDiscountValue ?? item.presentation.valorDescuento),
+        );
+        _searchResults[i] = item.copyWith(presentation: updatedPres);
+        updated = true;
+      }
+    }
+    if (updated) {
+      notifyListeners();
+    }
   }
 }

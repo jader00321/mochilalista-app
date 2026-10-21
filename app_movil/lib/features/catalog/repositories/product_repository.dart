@@ -43,24 +43,44 @@ class ProductRepository {
       }
       if (queryParams['category_ids'] != null &&
           queryParams['category_ids'].toString().isNotEmpty) {
-        List<String> catIdsStr = queryParams['category_ids'].toString().split(
-          ',',
-        );
-        query +=
-            " AND p.categoria_id IN (${List.filled(catIdsStr.length, '?').join(',')})";
-        args.addAll(catIdsStr.map((id) => int.tryParse(id.trim()) ?? -1));
+        List<int> catIds = queryParams['category_ids']
+            .toString()
+            .split(',')
+            .map((id) => int.tryParse(id.trim()) ?? -1)
+            .toList();
+        final hasOrphan = catIds.contains(0);
+        final realIds = catIds.where((id) => id > 0).toList();
+        if (hasOrphan && realIds.isEmpty) {
+          query += " AND (p.categoria_id IS NULL OR p.categoria_id = 0)";
+        } else if (hasOrphan && realIds.isNotEmpty) {
+          query += " AND (p.categoria_id IS NULL OR p.categoria_id = 0 OR p.categoria_id IN (${List.filled(realIds.length, '?').join(',')}))";
+          args.addAll(realIds);
+        } else if (realIds.isNotEmpty) {
+          query += " AND p.categoria_id IN (${List.filled(realIds.length, '?').join(',')})";
+          args.addAll(realIds);
+        }
       }
       if (queryParams['brand_ids'] != null &&
           queryParams['brand_ids'].toString().isNotEmpty) {
-        List<String> brandIdsStr = queryParams['brand_ids'].toString().split(
-          ',',
-        );
-        query +=
-            " AND p.marca_id IN (${List.filled(brandIdsStr.length, '?').join(',')})";
-        args.addAll(brandIdsStr.map((id) => int.tryParse(id.trim()) ?? -1));
+        List<int> brandIds = queryParams['brand_ids']
+            .toString()
+            .split(',')
+            .map((id) => int.tryParse(id.trim()) ?? -1)
+            .toList();
+        final hasOrphan = brandIds.contains(0);
+        final realIds = brandIds.where((id) => id > 0).toList();
+        if (hasOrphan && realIds.isEmpty) {
+          query += " AND (p.marca_id IS NULL OR p.marca_id = 0)";
+        } else if (hasOrphan && realIds.isNotEmpty) {
+          query += " AND (p.marca_id IS NULL OR p.marca_id = 0 OR p.marca_id IN (${List.filled(realIds.length, '?').join(',')}))";
+          args.addAll(realIds);
+        } else if (realIds.isNotEmpty) {
+          query += " AND p.marca_id IN (${List.filled(realIds.length, '?').join(',')})";
+          args.addAll(realIds);
+        }
       }
-      if (queryParams['has_offer'] == 'true') {
-        query += " AND pr.precio_oferta IS NOT NULL AND pr.precio_oferta > 0";
+      if (queryParams['has_offer'] == 'true' || queryParams['hasOffer'] == 'true') {
+        query += " AND ( (pr.precio_oferta IS NOT NULL AND CAST(pr.precio_oferta AS REAL) > 0 AND CAST(pr.precio_oferta AS REAL) < CAST(pr.precio_venta_final AS REAL)) OR (pr.valor_descuento IS NOT NULL AND CAST(pr.valor_descuento AS REAL) > 0 AND pr.tipo_descuento IS NOT NULL AND pr.tipo_descuento NOT IN ('', 'ninguno')) OR (pr.id IN (SELECT rp.presentacion_id FROM reglas_promocion rp INNER JOIN campanas_promocionales cp ON rp.campana_id = cp.id WHERE cp.activo = 1)) OR (pr.id IN (SELECT ip.presentacion_id FROM items_paquete ip INNER JOIN paquetes pq ON ip.paquete_id = pq.id WHERE pq.activo = 1)) )";
       }
       if (queryParams['only_defaults'] == 'true') {
         query += " AND pr.es_default = 1";
@@ -165,24 +185,44 @@ class ProductRepository {
       }
       if (queryParams['category_ids'] != null &&
           queryParams['category_ids'].toString().isNotEmpty) {
-        List<String> catIdsStr = queryParams['category_ids'].toString().split(
-          ',',
-        );
-        query +=
-            " AND p.categoria_id IN (${List.filled(catIdsStr.length, '?').join(',')})";
-        args.addAll(catIdsStr.map((id) => int.tryParse(id.trim()) ?? -1));
+        List<int> catIds = queryParams['category_ids']
+            .toString()
+            .split(',')
+            .map((id) => int.tryParse(id.trim()) ?? -1)
+            .toList();
+        final hasOrphan = catIds.contains(0);
+        final realIds = catIds.where((id) => id > 0).toList();
+        if (hasOrphan && realIds.isEmpty) {
+          query += " AND (p.categoria_id IS NULL OR p.categoria_id = 0)";
+        } else if (hasOrphan && realIds.isNotEmpty) {
+          query += " AND (p.categoria_id IS NULL OR p.categoria_id = 0 OR p.categoria_id IN (${List.filled(realIds.length, '?').join(',')}))";
+          args.addAll(realIds);
+        } else if (realIds.isNotEmpty) {
+          query += " AND p.categoria_id IN (${List.filled(realIds.length, '?').join(',')})";
+          args.addAll(realIds);
+        }
       }
       if (queryParams['brand_ids'] != null &&
           queryParams['brand_ids'].toString().isNotEmpty) {
-        List<String> brandIdsStr = queryParams['brand_ids'].toString().split(
-          ',',
-        );
-        query +=
-            " AND p.marca_id IN (${List.filled(brandIdsStr.length, '?').join(',')})";
-        args.addAll(brandIdsStr.map((id) => int.tryParse(id.trim()) ?? -1));
+        List<int> brandIds = queryParams['brand_ids']
+            .toString()
+            .split(',')
+            .map((id) => int.tryParse(id.trim()) ?? -1)
+            .toList();
+        final hasOrphan = brandIds.contains(0);
+        final realIds = brandIds.where((id) => id > 0).toList();
+        if (hasOrphan && realIds.isEmpty) {
+          query += " AND (p.marca_id IS NULL OR p.marca_id = 0)";
+        } else if (hasOrphan && realIds.isNotEmpty) {
+          query += " AND (p.marca_id IS NULL OR p.marca_id = 0 OR p.marca_id IN (${List.filled(realIds.length, '?').join(',')}))";
+          args.addAll(realIds);
+        } else if (realIds.isNotEmpty) {
+          query += " AND p.marca_id IN (${List.filled(realIds.length, '?').join(',')})";
+          args.addAll(realIds);
+        }
       }
-      if (queryParams['has_offer'] == 'true') {
-        query += " AND pr.precio_oferta IS NOT NULL AND pr.precio_oferta > 0";
+      if (queryParams['has_offer'] == 'true' || queryParams['hasOffer'] == 'true') {
+        query += " AND ( (pr.precio_oferta IS NOT NULL AND CAST(pr.precio_oferta AS REAL) > 0 AND CAST(pr.precio_oferta AS REAL) < CAST(pr.precio_venta_final AS REAL)) OR (pr.valor_descuento IS NOT NULL AND CAST(pr.valor_descuento AS REAL) > 0 AND pr.tipo_descuento IS NOT NULL AND pr.tipo_descuento NOT IN ('', 'ninguno')) OR (pr.id IN (SELECT rp.presentacion_id FROM reglas_promocion rp INNER JOIN campanas_promocionales cp ON rp.campana_id = cp.id WHERE cp.activo = 1)) OR (pr.id IN (SELECT ip.presentacion_id FROM items_paquete ip INNER JOIN paquetes pq ON ip.paquete_id = pq.id WHERE pq.activo = 1)) )";
       }
       if (queryParams['only_defaults'] == 'true') {
         query += " AND pr.es_default = 1";
@@ -229,6 +269,39 @@ class ProductRepository {
     }
   }
 
+  Future<Map<String, int>> countOrphansRaw(
+    int negocioId, {
+    String? estado,
+  }) async {
+    try {
+      final db = await _dbHelper.database;
+      String query = '''
+        SELECT 
+          COUNT(DISTINCT CASE WHEN (p.categoria_id IS NULL OR p.categoria_id = 0) THEN p.id END) as orphan_categories,
+          COUNT(DISTINCT CASE WHEN (p.marca_id IS NULL OR p.marca_id = 0) THEN p.id END) as orphan_brands
+        FROM productos p
+        INNER JOIN presentaciones_producto pr ON pr.producto_id = p.id
+        WHERE p.negocio_id = ? AND pr.activo = 1
+      ''';
+      List<dynamic> args = [negocioId];
+      if (estado != null) {
+        query += " AND pr.estado = ?";
+        args.add(estado);
+      }
+      final rows = await db.rawQuery(query, args);
+      if (rows.isNotEmpty) {
+        return {
+          'orphan_categories': (rows.first['orphan_categories'] as num?)?.toInt() ?? 0,
+          'orphan_brands': (rows.first['orphan_brands'] as num?)?.toInt() ?? 0,
+        };
+      }
+      return {'orphan_categories': 0, 'orphan_brands': 0};
+    } catch (e, stack) {
+      AppLogger.error('ProductRepository.countOrphansRaw', e, stack);
+      return {'orphan_categories': 0, 'orphan_brands': 0};
+    }
+  }
+
   Future<Map<String, dynamic>?> getProductByIdRaw(int productId) async {
     final db = await _dbHelper.database;
     final pRows = await db.rawQuery(
@@ -246,6 +319,7 @@ class ProductRepository {
       'presentaciones_producto',
       where: 'producto_id = ? AND activo = 1',
       whereArgs: [productId],
+      orderBy: 'es_default DESC, orden ASC, id ASC',
     );
 
     Map<String, dynamic> fullJson = Map.from(pRows.first);
@@ -263,7 +337,7 @@ class ProductRepository {
       'presentaciones_producto',
       where: 'producto_id IN ($placeholders) AND activo = 1',
       whereArgs: productIds,
-      orderBy: 'es_default DESC, id ASC',
+      orderBy: 'es_default DESC, orden ASC, id ASC',
     );
 
     final Map<int, List<Map<String, dynamic>>> result = {};
@@ -448,15 +522,202 @@ class ProductRepository {
     return res;
   }
 
+  /// Whitelists oficiales basados en el esquema canónico de SQLite (local_db.dart)
+  static const Set<String> _kProductoColumns = {
+    'id',
+    'negocio_id',
+    'categoria_id',
+    'marca_id',
+    'codigo_barras',
+    'nombre',
+    'descripcion',
+    'imagen_url',
+    'estado',
+    'fecha_actualizacion',
+  };
+
+  static const Set<String> _kPresentacionColumns = {
+    'id',
+    'producto_id',
+    'proveedor_id',
+    'nombre_especifico',
+    'descripcion',
+    'imagen_url',
+    'codigo_barras',
+    'ump_compra',
+    'precio_ump_proveedor',
+    'cantidad_ump_comprada',
+    'total_pago_lote',
+    'unidades_por_lote',
+    'factura_carga_id',
+    'unidad_venta',
+    'unidades_por_venta',
+    'costo_unitario_calculado',
+    'factor_ganancia_venta',
+    'precio_venta_final',
+    'precio_oferta',
+    'tipo_descuento',
+    'valor_descuento',
+    'stock_actual',
+    'estado',
+    'stock_alerta',
+    'es_default',
+    'orden',
+    'activo',
+  };
+
   Future<void> createFullProductTransaction(
     Map<String, dynamic> productData,
     List<Map<String, dynamic>> presentationsData,
   ) async {
     final db = await _dbHelper.database;
     await db.transaction((txn) async {
-      int pId = await txn.insert('productos', productData);
+      final int negocioId = productData['negocio_id'] as int;
+
+      // 1. Marca diferida
+      if (productData.containsKey('deferred_brand_name') &&
+          productData['deferred_brand_name'] != null) {
+        final String brandName =
+            productData.remove('deferred_brand_name') as String;
+        if (brandName.trim().isNotEmpty) {
+          final existing = await txn.query(
+            'marcas',
+            columns: ['id'],
+            where: 'negocio_id = ? AND LOWER(nombre) = LOWER(?)',
+            whereArgs: [negocioId, brandName.trim()],
+            limit: 1,
+          );
+          if (existing.isNotEmpty) {
+            productData['marca_id'] = existing.first['id'];
+          } else {
+            final newId = await txn.insert('marcas', {
+              'negocio_id': negocioId,
+              'nombre': brandName.trim(),
+              'activo': 1,
+            });
+            productData['marca_id'] = newId;
+          }
+        }
+      }
+      if (productData['marca_id'] != null && (productData['marca_id'] as num) <= 0) {
+        productData['marca_id'] = null;
+      }
+
+      // 2. Categoría diferida
+      if (productData.containsKey('deferred_category_name') &&
+          productData['deferred_category_name'] != null) {
+        final String catName =
+            productData.remove('deferred_category_name') as String;
+        if (catName.trim().isNotEmpty) {
+          final existing = await txn.query(
+            'categorias',
+            columns: ['id'],
+            where: 'negocio_id = ? AND LOWER(nombre) = LOWER(?)',
+            whereArgs: [negocioId, catName.trim()],
+            limit: 1,
+          );
+          if (existing.isNotEmpty) {
+            productData['categoria_id'] = existing.first['id'];
+          } else {
+            final newId = await txn.insert('categorias', {
+              'negocio_id': negocioId,
+              'nombre': catName.trim(),
+              'activo': 1,
+            });
+            productData['categoria_id'] = newId;
+          }
+        }
+      }
+      if (productData['categoria_id'] != null && (productData['categoria_id'] as num) <= 0) {
+        productData['categoria_id'] = null;
+      }
+
+      // 3. Proveedor General diferido o asignado
+      int? generalProvId;
+      if (productData.containsKey('deferred_provider_name') &&
+          productData['deferred_provider_name'] != null) {
+        final String provName =
+            productData.remove('deferred_provider_name') as String;
+        if (provName.trim().isNotEmpty) {
+          final existing = await txn.query(
+            'proveedores',
+            columns: ['id'],
+            where: 'negocio_id = ? AND LOWER(nombre_empresa) = LOWER(?)',
+            whereArgs: [negocioId, provName.trim()],
+            limit: 1,
+          );
+          if (existing.isNotEmpty) {
+            generalProvId = existing.first['id'] as int;
+          } else {
+            generalProvId = await txn.insert('proveedores', {
+              'negocio_id': negocioId,
+              'nombre_empresa': provName.trim(),
+              'activo': 1,
+              'fecha_creacion': DateTime.now().toIso8601String(),
+            });
+          }
+        }
+      } else if (productData['proveedor_id'] != null) {
+        final pNum = (productData['proveedor_id'] as num).toInt();
+        if (pNum > 0) generalProvId = pNum;
+      }
+
+      // 4. Proveedores diferidos y herencia en variantes
+      final Map<String, int> createdVariantProviders = {};
       for (var pres in presentationsData) {
+        if (pres.containsKey('deferred_provider_name') &&
+            pres['deferred_provider_name'] != null) {
+          final String vProvName =
+              pres.remove('deferred_provider_name') as String;
+          if (vProvName.trim().isNotEmpty) {
+            if (createdVariantProviders.containsKey(vProvName.toLowerCase())) {
+              pres['proveedor_id'] =
+                  createdVariantProviders[vProvName.toLowerCase()];
+            } else {
+              final existing = await txn.query(
+                'proveedores',
+                columns: ['id'],
+                where: 'negocio_id = ? AND LOWER(nombre_empresa) = LOWER(?)',
+                whereArgs: [negocioId, vProvName.trim()],
+                limit: 1,
+              );
+              int vId;
+              if (existing.isNotEmpty) {
+                vId = existing.first['id'] as int;
+              } else {
+                vId = await txn.insert('proveedores', {
+                  'negocio_id': negocioId,
+                  'nombre_empresa': vProvName.trim(),
+                  'activo': 1,
+                  'fecha_creacion': DateTime.now().toIso8601String(),
+                });
+              }
+              createdVariantProviders[vProvName.toLowerCase()] = vId;
+              pres['proveedor_id'] = vId;
+            }
+          }
+        }
+
+        // Cascada: si la variante no tiene proveedor propio o es <= 0, hereda el general
+        if (pres['proveedor_id'] == null || (pres['proveedor_id'] as num) <= 0) {
+          pres['proveedor_id'] = generalProvId;
+        }
+      }
+
+      // 5. Whitelist Canónico SQLite para la tabla productos (CERO columnas espurias)
+      productData.removeWhere((key, _) => !_kProductoColumns.contains(key));
+      int pId = await txn.insert('productos', productData);
+
+      // 6. Whitelist Canónico SQLite para la tabla presentaciones_producto
+      for (int i = 0; i < presentationsData.length; i++) {
+        final pres = presentationsData[i];
         pres['producto_id'] = pId;
+        if (!pres.containsKey('orden') || pres['orden'] == null) {
+          pres['orden'] = i;
+        }
+        pres.remove('id');
+        pres.remove('db_id');
+        pres.removeWhere((key, _) => !_kPresentacionColumns.contains(key));
         await txn.insert('presentaciones_producto', pres);
       }
     });
@@ -471,8 +732,169 @@ class ProductRepository {
   ) async {
     final db = await _dbHelper.database;
     await db.transaction((txn) async {
+      int negocioId = (productData['negocio_id'] as num?)?.toInt() ?? 0;
+      if (negocioId == 0) {
+        final pRows = await txn.query(
+          'productos',
+          columns: ['negocio_id'],
+          where: 'id = ?',
+          whereArgs: [productId],
+          limit: 1,
+        );
+        if (pRows.isNotEmpty) {
+          negocioId = (pRows.first['negocio_id'] as num?)?.toInt() ?? 0;
+        }
+      }
+
+      // 1. Marca diferida
+      if (productData.containsKey('deferred_brand_name') &&
+          productData['deferred_brand_name'] != null) {
+        final String brandName =
+            productData.remove('deferred_brand_name') as String;
+        if (brandName.trim().isNotEmpty) {
+          final existing = await txn.query(
+            'marcas',
+            columns: ['id'],
+            where: 'negocio_id = ? AND LOWER(nombre) = LOWER(?)',
+            whereArgs: [negocioId, brandName.trim()],
+            limit: 1,
+          );
+          if (existing.isNotEmpty) {
+            productData['marca_id'] = existing.first['id'];
+          } else {
+            final newId = await txn.insert('marcas', {
+              'negocio_id': negocioId,
+              'nombre': brandName.trim(),
+              'activo': 1,
+            });
+            productData['marca_id'] = newId;
+          }
+        }
+      } else {
+        productData.remove('deferred_brand_name');
+      }
+      if (productData['marca_id'] != null && (productData['marca_id'] as num) <= 0) {
+        productData['marca_id'] = null;
+      }
+
+      // 2. Categoría diferida
+      if (productData.containsKey('deferred_category_name') &&
+          productData['deferred_category_name'] != null) {
+        final String catName =
+            productData.remove('deferred_category_name') as String;
+        if (catName.trim().isNotEmpty) {
+          final existing = await txn.query(
+            'categorias',
+            columns: ['id'],
+            where: 'negocio_id = ? AND LOWER(nombre) = LOWER(?)',
+            whereArgs: [negocioId, catName.trim()],
+            limit: 1,
+          );
+          if (existing.isNotEmpty) {
+            productData['categoria_id'] = existing.first['id'];
+          } else {
+            final newId = await txn.insert('categorias', {
+              'negocio_id': negocioId,
+              'nombre': catName.trim(),
+              'activo': 1,
+            });
+            productData['categoria_id'] = newId;
+          }
+        }
+      } else {
+        productData.remove('deferred_category_name');
+      }
+      if (productData['categoria_id'] != null && (productData['categoria_id'] as num) <= 0) {
+        productData['categoria_id'] = null;
+      }
+
+      // 3. Proveedor General diferido o asignado
+      int? generalProvId;
+      if (productData.containsKey('deferred_provider_name') &&
+          productData['deferred_provider_name'] != null) {
+        final String provName =
+            productData.remove('deferred_provider_name') as String;
+        if (provName.trim().isNotEmpty) {
+          final existing = await txn.query(
+            'proveedores',
+            columns: ['id'],
+            where: 'negocio_id = ? AND LOWER(nombre_empresa) = LOWER(?)',
+            whereArgs: [negocioId, provName.trim()],
+            limit: 1,
+          );
+          if (existing.isNotEmpty) {
+            generalProvId = existing.first['id'] as int;
+          } else {
+            generalProvId = await txn.insert('proveedores', {
+              'negocio_id': negocioId,
+              'nombre_empresa': provName.trim(),
+              'activo': 1,
+              'fecha_creacion': DateTime.now().toIso8601String(),
+            });
+          }
+        }
+      } else if (productData['proveedor_id'] != null) {
+        final pNum = (productData['proveedor_id'] as num).toInt();
+        if (pNum > 0) generalProvId = pNum;
+      }
+
+      // 4. Proveedores diferidos y herencia en variantes (actualizaciones e inserciones)
+      final Map<String, int> createdVariantProviders = {};
+      Future<void> resolveVariantProvider(Map<String, dynamic> pres) async {
+        if (pres.containsKey('deferred_provider_name') &&
+            pres['deferred_provider_name'] != null) {
+          final String vProvName =
+              pres.remove('deferred_provider_name') as String;
+          if (vProvName.trim().isNotEmpty) {
+            final lower = vProvName.toLowerCase();
+            if (createdVariantProviders.containsKey(lower)) {
+              pres['proveedor_id'] = createdVariantProviders[lower];
+            } else {
+              final existing = await txn.query(
+                'proveedores',
+                columns: ['id'],
+                where: 'negocio_id = ? AND LOWER(nombre_empresa) = LOWER(?)',
+                whereArgs: [negocioId, vProvName.trim()],
+                limit: 1,
+              );
+              int vId;
+              if (existing.isNotEmpty) {
+                vId = existing.first['id'] as int;
+              } else {
+                vId = await txn.insert('proveedores', {
+                  'negocio_id': negocioId,
+                  'nombre_empresa': vProvName.trim(),
+                  'activo': 1,
+                  'fecha_creacion': DateTime.now().toIso8601String(),
+                });
+              }
+              createdVariantProviders[lower] = vId;
+              pres['proveedor_id'] = vId;
+            }
+          }
+        } else {
+          pres.remove('deferred_provider_name');
+        }
+
+        // Cascada: heredar proveedor general si no tiene propio o es <= 0
+        if (pres['proveedor_id'] == null || (pres['proveedor_id'] as num) <= 0) {
+          pres['proveedor_id'] = generalProvId;
+        }
+      }
+
+      for (var pres in presentationsToUpdate) {
+        await resolveVariantProvider(pres);
+      }
+
+      for (var pres in presentationsToInsert) {
+        await resolveVariantProvider(pres);
+      }
+
+      // 5. Whitelist Canónico SQLite para la tabla productos (CERO columnas extrañas)
+      productData.removeWhere((key, _) => !_kProductoColumns.contains(key));
       await _updateProductTxn(txn, productId, productData);
 
+      // 6. Eliminar variantes marcadas
       for (int id in idsToDelete) {
         await txn.delete(
           'presentaciones_producto',
@@ -481,13 +903,24 @@ class ProductRepository {
         );
       }
 
+      // 7. Whitelist y actualización de presentaciones existentes
       for (var pres in presentationsToUpdate) {
-        int presId = pres['id'];
+        // Blindaje: Extraer db_id / id ANTES de que el whitelist de columnas SQLite lo limpie
+        final rawId = pres['db_id'] ?? pres['id'];
+        if (rawId == null) continue;
+        int presId = (rawId as num).toInt();
         pres.remove('id');
+        pres.remove('db_id');
+        pres.removeWhere((key, _) => !_kPresentacionColumns.contains(key));
         await _updatePresentationTxn(txn, presId, pres);
       }
 
+      // 8. Whitelist e inserción de nuevas presentaciones
       for (var pres in presentationsToInsert) {
+        pres['producto_id'] = productId;
+        pres.remove('id');
+        pres.remove('db_id');
+        pres.removeWhere((key, _) => !_kPresentacionColumns.contains(key));
         await txn.insert('presentaciones_producto', pres);
       }
     });

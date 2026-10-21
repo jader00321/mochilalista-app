@@ -1,6 +1,4 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
@@ -54,8 +52,18 @@ class _PulsingStockBadgeState extends State<PulsingStockBadge> with SingleTicker
 class InventoryItemTile extends StatelessWidget {
   final InventoryWrapper item;
   final VoidCallback onTap;
+  final VoidCallback? onTapPrice;
+  final VoidCallback? onTapStock;
+  final VoidCallback? onMoreOptions;
 
-  const InventoryItemTile({super.key, required this.item, required this.onTap});
+  const InventoryItemTile({
+    super.key,
+    required this.item,
+    required this.onTap,
+    this.onTapPrice,
+    this.onTapStock,
+    this.onMoreOptions,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +98,8 @@ class InventoryItemTile extends StatelessWidget {
     String discountBadgeText = "OFERTA";
     if (hasOffer && presentation.tipoDescuento == 'porcentaje' && presentation.valorDescuento != null) {
       discountBadgeText = "-${presentation.valorDescuento!.toStringAsFixed(0)}%";
+    } else if (hasOffer && presentation.discountPercentRounded > 0) {
+      discountBadgeText = "-${presentation.discountPercentRounded}%";
     }
 
     final String unidadVentaText = item.displayStockText;
@@ -105,6 +115,7 @@ class InventoryItemTile extends StatelessWidget {
       ),
       child: InkWell(
         onTap: onTap,
+        onLongPress: onMoreOptions,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -165,23 +176,42 @@ class InventoryItemTile extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        if (brandName.isNotEmpty)
-                          Flexible(
-                            child: Text(
-                              brandName.toUpperCase(),
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: isDark ? Colors.indigo[300] : Colors.grey[600], letterSpacing: 0.5),
-                              overflow: TextOverflow.ellipsis,
+                        Flexible(
+                          child: Text(
+                            (brandName.isNotEmpty ? brandName : provider.getCategoryName(product.categoriaId)).toUpperCase(),
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: isDark ? Colors.indigo[300] : Colors.grey[600], letterSpacing: 0.5),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: statusColor.withValues(alpha: 0.4))
+                              ),
+                              child: Text(statusText, style: TextStyle(fontSize: 9, color: statusColor, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                             ),
-                          ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: statusColor.withValues(alpha: 0.4))
-                          ),
-                          child: Text(statusText, style: TextStyle(fontSize: 9, color: statusColor, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                        )
+                            if (onMoreOptions != null) ...[
+                              const SizedBox(width: 4),
+                              InkWell(
+                                onTap: onMoreOptions,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Icon(
+                                    Icons.more_vert,
+                                    size: 18,
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
                     
@@ -189,7 +219,7 @@ class InventoryItemTile extends StatelessWidget {
 
                     Text(
                       product.nombre,
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, height: 1.2, color: isDark ? Colors.white : Colors.black87),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, height: 1.2, color: isDark ? Colors.white : Colors.black87),
                       maxLines: 2, overflow: TextOverflow.ellipsis,
                     ),
                     
@@ -199,12 +229,12 @@ class InventoryItemTile extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 2, bottom: 2),
                         child: Text(
                           presentation.nombreEspecifico!,
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: isDark ? Colors.teal[300] : Colors.teal[700]),
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: isDark ? Colors.teal[300] : Colors.teal[700]),
                           maxLines: 2, overflow: TextOverflow.ellipsis,
                         ),
                       ),
 
-                    // 🔥 Unidad de Venta como Badge
+                    // 🔥 Chip de Unidad / Factor de Venta
                     Container(
                       margin: const EdgeInsets.only(top: 4, bottom: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -213,101 +243,147 @@ class InventoryItemTile extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6)
                       ),
                       child: Text(
-                        (presentation.unidadVenta ?? presentation.umpCompra ?? "Unidad").toUpperCase(),
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700], letterSpacing: 0.5)
+                        item.presentationFactorChip,
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700], letterSpacing: 0.5)
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (hasOffer)
-                              Text("S/ ${presentation.precioVentaFinal.toStringAsFixed(2)}", style: TextStyle(fontSize: 12, decoration: TextDecoration.lineThrough, color: isDark ? Colors.red[300] : Colors.red, fontWeight: FontWeight.bold)),
-                            Text(
-                              "S/ ${finalPrice.toStringAsFixed(2)}", 
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: hasOffer ? (isDark ? Colors.red[400] : Colors.red[700]) : (isDark ? Colors.blue[300] : Colors.black87))
-                            ),
-                          ],
-                        ),
-
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            InkWell(
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                int factor = presentation.unidadesPorVenta;
-                                if (factor <= 0) factor = 1;
-                                int newBaseStock = math.max(0, presentation.stockActual - factor);
-                                provider.updatePresentation(presentation.id!, stock: newBaseStock);
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: isDark ? Colors.white12 : Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(Icons.remove, size: 14, color: isDark ? Colors.white70 : Colors.black87),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            PulsingStockBadge(
-                              isPulsing: isOutOfStock || isCritical,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: stockColor.withValues(alpha: 0.15), 
-                                  borderRadius: BorderRadius.circular(8), 
-                                  border: Border.all(
-                                    color: stockColor.withValues(alpha: (isOutOfStock || isCritical) ? 0.7 : 0.4),
-                                    width: (isOutOfStock || isCritical) ? 1.5 : 1.0,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      isOutOfStock
-                                          ? Icons.error_outline_rounded
-                                          : (isCritical ? Icons.warning_amber_rounded : Icons.inventory_2),
-                                      size: 16,
-                                      color: stockColor,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      isOutOfStock ? "Agotado" : (isCritical ? "Crítico ($stock)" : unidadVentaText), 
-                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: stockColor),
+                        // ZONA PRECIO (Tocable)
+                        Flexible(
+                          child: InkWell(
+                            onTap: onTapPrice ?? onTap,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (hasOffer) ...[
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          "S/ ${presentation.precioVentaFinal.toStringAsFixed(2)}",
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            decoration: TextDecoration.lineThrough,
+                                            color: isDark ? Colors.red[300] : Colors.red[700],
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? Colors.red[900]!.withValues(alpha: 0.4) : Colors.red[50],
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: isDark ? Colors.red[700]! : Colors.red.shade300),
+                                          ),
+                                          child: Text(
+                                            discountBadgeText,
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark ? Colors.red[300] : Colors.red[800],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
-                                ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        "S/ ${finalPrice.toStringAsFixed(2)}", 
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900,
+                                          color: hasOffer
+                                              ? (isDark ? Colors.orange[300] : Colors.orange[800])
+                                              : (isDark ? Colors.blue[300] : Colors.black87),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.edit_outlined,
+                                        size: 12,
+                                        color: isDark ? Colors.grey[500] : Colors.grey[400],
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 6),
-                            InkWell(
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                int factor = presentation.unidadesPorVenta;
-                                if (factor <= 0) factor = 1;
-                                int newBaseStock = presentation.stockActual + factor;
-                                provider.updatePresentation(presentation.id!, stock: newBaseStock);
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: isDark ? Colors.blue.withValues(alpha: 0.25) : Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+
+                        // ZONA BADGE DE STOCK INTERACTIVO (Tocable - Único punto de ajuste)
+                        InkWell(
+                          onTap: onTapStock ?? onTap,
+                          borderRadius: BorderRadius.circular(10),
+                          child: PulsingStockBadge(
+                            isPulsing: isOutOfStock || isCritical,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: item.hasLooseUnits
+                                    ? (isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50)
+                                    : stockColor.withValues(alpha: 0.15), 
+                                borderRadius: BorderRadius.circular(10), 
+                                border: Border.all(
+                                  color: item.hasLooseUnits
+                                      ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
+                                      : stockColor.withValues(alpha: (isOutOfStock || isCritical) ? 0.7 : 0.4),
+                                  width: (isOutOfStock || isCritical || item.hasLooseUnits) ? 1.5 : 1.0,
                                 ),
-                                child: Icon(Icons.add, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isOutOfStock
+                                        ? Icons.error_outline_rounded
+                                        : (isCritical
+                                            ? Icons.warning_amber_rounded
+                                            : (item.hasLooseUnits ? Icons.tune_rounded : Icons.inventory_2_rounded)),
+                                    size: 15,
+                                    color: item.hasLooseUnits
+                                        ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
+                                        : stockColor,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    unidadVentaText, 
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: item.hasLooseUnits
+                                          ? (isDark ? Colors.amber[300]! : Colors.amber[900]!)
+                                          : stockColor,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.edit_note_rounded,
+                                    size: 14,
+                                    color: (item.hasLooseUnits
+                                            ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
+                                            : stockColor)
+                                        .withValues(alpha: 0.7),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ],
                     )
@@ -320,4 +396,4 @@ class InventoryItemTile extends StatelessWidget {
       ),
     );
   }
-}
+}

@@ -71,7 +71,6 @@ class InteractiveSheetWrapper extends StatefulWidget {
     return math.max(minPadding, systemBottom);
   }
 
-  /// Helper estático para desplegar rápidamente cualquier modal con configuración óptima
   static Future<T?> show<T>({
     required BuildContext context,
     required Widget Function(BuildContext) builder,
@@ -79,6 +78,7 @@ class InteractiveSheetWrapper extends StatefulWidget {
     bool enableDrag = true,
     Color? barrierColor,
   }) {
+    FocusManager.instance.primaryFocus?.unfocus();
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
@@ -87,7 +87,9 @@ class InteractiveSheetWrapper extends StatefulWidget {
       backgroundColor: Colors.transparent,
       barrierColor: barrierColor ?? Colors.black54,
       builder: builder,
-    );
+    ).whenComplete(() {
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
   }
 
   @override
@@ -122,6 +124,7 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
   void _handleDragStart(DragStartDetails details) {
     if (!widget.enableDragToDismiss) return;
     if (!_isDraggingFromHandle && _currentScrollPixels > 0.5) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     _animController.stop();
     setState(() {
       _isDragging = true;
@@ -260,16 +263,28 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final maxAllowedHeight = screenHeight * widget.maxHeightFactor;
+    final mediaQuery = MediaQuery.of(context);
+    final screenHeight = mediaQuery.size.height;
+    final keyboardInset = mediaQuery.viewInsets.bottom;
+    final topPadding = mediaQuery.padding.top;
+    final isKeyboardOpen = keyboardInset > 0;
 
-    final effectiveBottom = widget.applyEffectiveBottomPadding
-        ? InteractiveSheetWrapper.getEffectiveBottomPadding(
-            context,
-            minPadding: widget.minBottomPadding,
-            includeKeyboard: true,
-          )
-        : 0.0;
+    // 🛡️ REDUCCIÓN DINÁMICA DE VIEWPORT: Garantiza que el modal no colisione con el tope
+    // de la pantalla ni provoque RenderFlex overflow cuando el teclado está abierto.
+    final safeAvailableHeight = math.max(160.0, screenHeight - keyboardInset - topPadding - 16.0);
+    final maxAllowedHeight = math.min(screenHeight * widget.maxHeightFactor, safeAvailableHeight);
+
+    // Cuando el teclado está abierto, la barra del sistema queda cubierta; usamos espaciado
+    // compacto (12dp) para que el modal y su botón de acción queden pegados sobre el teclado sin doble padding.
+    final effectiveBottom = isKeyboardOpen
+        ? 12.0
+        : (widget.applyEffectiveBottomPadding
+            ? InteractiveSheetWrapper.getEffectiveBottomPadding(
+                context,
+                minPadding: widget.minBottomPadding,
+                includeKeyboard: false,
+              )
+            : 0.0);
 
     final sheetBgColor = widget.backgroundColor ??
         (isDark ? const Color(0xFF1E1E28) : Colors.white);
@@ -284,9 +299,13 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
         ? Color.lerp(Colors.white24, Colors.white60, _isDragging ? math.max(0.5, dragProgress) : dragProgress)
         : Color.lerp(Colors.grey[300], Colors.grey[600], _isDragging ? math.max(0.5, dragProgress) : dragProgress);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final totalHeight = math.min(constraints.maxHeight, maxAllowedHeight);
+    return AnimatedPadding(
+      padding: EdgeInsets.only(bottom: keyboardInset),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final totalHeight = math.min(constraints.maxHeight, maxAllowedHeight);
 
         return Transform.translate(
           offset: Offset(0, _dragOffset),
@@ -418,7 +437,7 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
                       // ACCIÓN INFERIOR FIJA BLINDADA CONTRA BARRA DEL SISTEMA (BUG-07)
                       if (widget.bottomAction != null)
                         Container(
-                          padding: EdgeInsets.fromLTRB(20, 12, 20, effectiveBottom),
+                          padding: EdgeInsets.fromLTRB(20, isKeyboardOpen ? 8 : 12, 20, effectiveBottom),
                           decoration: BoxDecoration(
                             color: sheetBgColor,
                             border: Border(
@@ -440,6 +459,7 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
           ),
         );
       },
-    );
+    ),
+  );
   }
 }

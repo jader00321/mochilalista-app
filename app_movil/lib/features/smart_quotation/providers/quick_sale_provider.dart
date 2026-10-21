@@ -180,9 +180,10 @@ class QuickSaleProvider with ChangeNotifier {
       return updateQuantity(presId, (_currentState.quantities[presId] ?? 1) + 1, itemWrapper.displayStockForValidation);
     }
 
-    // 🔧 TAREA 4.4.2: Costo de presentación para cálculo de margen en tiempo real
-    final double? calculatedCost = itemWrapper.presentation.costoUnitarioCalculado != null
-        ? itemWrapper.presentation.costoUnitarioCalculado! * itemWrapper.presentation.unidadesPorVenta
+    // 🔧 Costo de presentación para cálculo de margen en tiempo real
+    final double presCost = itemWrapper.presentation.costoPresentacionFinal;
+    final double? calculatedCost = presCost > 0
+        ? presCost
         : (itemWrapper.presentation.factorGananciaVenta != null && itemWrapper.presentation.factorGananciaVenta! > 0
             ? itemWrapper.presentation.precioVentaFinal / itemWrapper.presentation.factorGananciaVenta!
             : null);
@@ -195,7 +196,7 @@ class QuickSaleProvider with ChangeNotifier {
       specificName: itemWrapper.presentation.nombreEspecifico,
       brand: itemWrapper.product.marcaNombre,
       price: itemWrapper.presentation.precioVentaFinal, 
-      offerPrice: (itemWrapper.presentation.precioOferta != null && itemWrapper.presentation.precioOferta! > 0) ? itemWrapper.presentation.precioOferta : null,
+      offerPrice: itemWrapper.hasOffer ? itemWrapper.effectivePrice : null,
       stock: itemWrapper.displayStockForValidation,
       imageUrl: itemWrapper.presentation.imagenUrl ?? itemWrapper.product.imagenUrl,
       unit: itemWrapper.presentation.unidadVenta ?? "Unidad", 
@@ -293,27 +294,36 @@ class QuickSaleProvider with ChangeNotifier {
     return null;
   }
 
-  /// 🔄 Sincroniza inmediatamente precio y stock de un ítem en el carrito en memoria (0ms)
-  void syncItemPriceAndStock(int presentationId, {double? newPrice, int? newStock}) {
+  /// 🔄 Sincroniza inmediatamente precio, oferta y stock de un ítem en el carrito en memoria (0ms)
+  void syncItemPriceAndStock(
+    int presentationId, {
+    double? newPrice,
+    double? newOfferPrice,
+    bool clearOffer = false,
+    int? newStock,
+  }) {
     final index = _currentState.cart.indexWhere((p) => p.presentationId == presentationId);
     if (index != -1) {
       final current = _currentState.cart[index];
-      final updated = MatchedProduct(
-        productId: current.productId,
-        presentationId: current.presentationId,
-        fullName: current.fullName,
-        productName: current.productName,
-        specificName: current.specificName,
-        brand: current.brand,
-        price: newPrice ?? current.price,
-        offerPrice: current.offerPrice,
+      final double updatedPrice = newPrice ?? current.price;
+      final double? updatedOffer = clearOffer ? null : (newOfferPrice ?? current.offerPrice);
+
+      final updated = current.copyWith(
+        price: updatedPrice,
+        offerPrice: updatedOffer,
+        clearOfferPrice: clearOffer,
         stock: newStock ?? current.stock,
-        imageUrl: current.imageUrl,
-        unit: current.unit,
-        conversionFactor: current.conversionFactor,
-        bundleId: current.bundleId,
       );
       _currentState.cart[index] = updated;
+
+      // Si el carrito tenía un precio override previo que correspondía al precio anterior,
+      // lo sincronizamos al nuevo precio efectivo para que el total refleje la edición de catálogo
+      if (_currentState.overridePrices.containsKey(presentationId)) {
+        final oldEffective = current.offerPrice ?? current.price;
+        if ((_currentState.overridePrices[presentationId]! - oldEffective).abs() < 0.01) {
+          _currentState.overridePrices[presentationId] = updatedOffer ?? updatedPrice;
+        }
+      }
 
       // Si la cantidad en el carrito supera el nuevo stock, ajustarla al máximo disponible
       final currentQty = _currentState.quantities[presentationId] ?? 1;

@@ -164,22 +164,28 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
     if (allItems.isEmpty) return prov.realTotalPresentationsCount;
 
     return allItems.where((w) {
-      // 1. Categorías
-      if (_selectedCategoryIds.isNotEmpty &&
-          !_selectedCategoryIds.contains(w.product.categoriaId)) {
-        return false;
+      // 1. Categorías (soporte para ID 0: huérfanos sin categoría)
+      if (_selectedCategoryIds.isNotEmpty) {
+        final catId = w.product.categoriaId;
+        final matches = _selectedCategoryIds.any((id) {
+          if (id == 0) return catId == 0;
+          return catId == id;
+        });
+        if (!matches) return false;
       }
 
-      // 2. Marcas
-      if (_selectedBrandIds.isNotEmpty &&
-          !_selectedBrandIds.contains(w.product.marcaId)) {
-        return false;
+      // 2. Marcas (soporte para ID 0: huérfanos sin marca)
+      if (_selectedBrandIds.isNotEmpty) {
+        final brandId = w.product.marcaId;
+        final matches = _selectedBrandIds.any((id) {
+          if (id == 0) return brandId == null || brandId == 0;
+          return brandId == id;
+        });
+        if (!matches) return false;
       }
 
-      // 3. Ofertas
-      if (_onlyOffers &&
-          (w.presentation.precioOferta == null ||
-              w.presentation.precioOferta! <= 0)) {
+      // 3. Ofertas (paridad 100% con InventoryWrapper.hasOffer)
+      if (_onlyOffers && !w.hasOffer) {
         return false;
       }
 
@@ -553,7 +559,7 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
                   const SizedBox(height: 14),
 
                   // D. CATEGORÍAS (ACORDEÓN COLAPSABLE)
-                  if (categories.isNotEmpty)
+                  if (categories.isNotEmpty || catProv.hasOrphanCategories)
                     Container(
                       margin: const EdgeInsets.only(bottom: 14),
                       decoration: BoxDecoration(
@@ -620,24 +626,41 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
                               child: Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
-                                children: categories.map((Category cat) {
-                                  final isSelected =
-                                      _selectedCategoryIds.contains(cat.id);
-                                  return _buildFilterChip(
-                                    label: cat.nombre,
-                                    isSelected: isSelected,
-                                    onTap: () {
-                                      _updateFilter(() {
-                                        if (isSelected) {
-                                          _selectedCategoryIds.remove(cat.id);
-                                        } else {
-                                          _selectedCategoryIds.add(cat.id);
-                                        }
-                                      });
-                                    },
-                                    isDark: isDark,
-                                  );
-                                }).toList(),
+                                children: [
+                                  if (catProv.hasOrphanCategories)
+                                    _buildFilterChip(
+                                      label: '[ Sin Categoría ]',
+                                      isSelected: _selectedCategoryIds.contains(0),
+                                      onTap: () {
+                                        _updateFilter(() {
+                                          if (_selectedCategoryIds.contains(0)) {
+                                            _selectedCategoryIds.remove(0);
+                                          } else {
+                                            _selectedCategoryIds.add(0);
+                                          }
+                                        });
+                                      },
+                                      isDark: isDark,
+                                    ),
+                                  ...categories.map((Category cat) {
+                                    final isSelected =
+                                        _selectedCategoryIds.contains(cat.id);
+                                    return _buildFilterChip(
+                                      label: cat.nombre,
+                                      isSelected: isSelected,
+                                      onTap: () {
+                                        _updateFilter(() {
+                                          if (isSelected) {
+                                            _selectedCategoryIds.remove(cat.id);
+                                          } else {
+                                            _selectedCategoryIds.add(cat.id);
+                                          }
+                                        });
+                                      },
+                                      isDark: isDark,
+                                    );
+                                  }),
+                                ],
                               ),
                             ),
                             secondChild: const SizedBox.shrink(),
@@ -651,7 +674,7 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
                     ),
 
                   // E. MARCAS (ACORDEÓN COLAPSABLE)
-                  if (brands.isNotEmpty)
+                  if (brands.isNotEmpty || catProv.hasOrphanBrands)
                     Container(
                       margin: const EdgeInsets.only(bottom: 14),
                       decoration: BoxDecoration(
@@ -718,24 +741,41 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
                               child: Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
-                                children: brands.map((Brand b) {
-                                  final isSelected =
-                                      _selectedBrandIds.contains(b.id);
-                                  return _buildFilterChip(
-                                    label: b.nombre,
-                                    isSelected: isSelected,
-                                    onTap: () {
-                                      _updateFilter(() {
-                                        if (isSelected) {
-                                          _selectedBrandIds.remove(b.id);
-                                        } else {
-                                          _selectedBrandIds.add(b.id);
-                                        }
-                                      });
-                                    },
-                                    isDark: isDark,
-                                  );
-                                }).toList(),
+                                children: [
+                                  if (catProv.hasOrphanBrands)
+                                    _buildFilterChip(
+                                      label: '[ Sin Marca ]',
+                                      isSelected: _selectedBrandIds.contains(0),
+                                      onTap: () {
+                                        _updateFilter(() {
+                                          if (_selectedBrandIds.contains(0)) {
+                                            _selectedBrandIds.remove(0);
+                                          } else {
+                                            _selectedBrandIds.add(0);
+                                          }
+                                        });
+                                      },
+                                      isDark: isDark,
+                                    ),
+                                  ...brands.map((Brand b) {
+                                    final isSelected =
+                                        _selectedBrandIds.contains(b.id);
+                                    return _buildFilterChip(
+                                      label: b.nombre,
+                                      isSelected: isSelected,
+                                      onTap: () {
+                                        _updateFilter(() {
+                                          if (isSelected) {
+                                            _selectedBrandIds.remove(b.id);
+                                          } else {
+                                            _selectedBrandIds.add(b.id);
+                                          }
+                                        });
+                                      },
+                                      isDark: isDark,
+                                    );
+                                  }),
+                                ],
                               ),
                             ),
                             secondChild: const SizedBox.shrink(),
@@ -785,7 +825,7 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
                     const SizedBox(width: 8),
                     Text(
                       liveCount > 0
-                          ? 'Mostrar $liveCount ${liveCount == 1 ? "Producto" : "Productos"}'
+                          ? 'Mostrar $liveCount ${_onlyDefaults ? (liveCount == 1 ? "Producto" : "Productos") : (liveCount == 1 ? "Variante" : "Variantes")}'
                           : 'Aplicar Filtros',
                       style: const TextStyle(
                         fontSize: 15,

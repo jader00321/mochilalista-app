@@ -195,17 +195,41 @@ class _CustomSearchBarState extends State<CustomSearchBar> {
         ),
 
         // 2. CHIPS DE CATEGORÍA
-        if (provider.categories.isNotEmpty) ...[
+        if (provider.categories.isNotEmpty || provider.hasOrphanCategories) ...[
           const SizedBox(height: 16),
           SizedBox(
             height: 36,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: provider.categories.length,
+              itemCount: (provider.hasOrphanCategories ? 1 : 0) + provider.categories.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
-                final cat = provider.categories[index];
+                if (provider.hasOrphanCategories && index == 0) {
+                  final isSelected = provider.activeCategoryIds.contains(0);
+                  return FilterChip(
+                    label: const Text('[ Sin Categoría ]'),
+                    selected: isSelected,
+                    onSelected: (val) => _toggleCategory(0, val, provider),
+                    showCheckmark: false,
+                    backgroundColor: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.2), 
+                    selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : const Color.fromARGB(255, 230, 230, 230), 
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.transparent) : Colors.transparent), 
+                    ),
+                    labelStyle: TextStyle(
+                      color: isSelected ? (isDark ? Colors.blue[200] : theme.primaryColor) : (isDark ? Colors.white70 : const Color.fromARGB(255, 48, 48, 48)),
+                      fontSize: 13,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  );
+                }
+
+                final catIndex = provider.hasOrphanCategories ? index - 1 : index;
+                final cat = provider.categories[catIndex];
                 final isSelected = provider.activeCategoryIds.contains(cat.id);
 
                 return FilterChip(

@@ -21,6 +21,8 @@ class SaleRepository {
     String? origenVenta,
     String sortBy = "fecha_venta",
     String order = "desc",
+    String? financialStatus,
+    String? paymentMethod,
   }) async {
     try {
       final db = await _dbHelper.database;
@@ -43,6 +45,19 @@ class SaleRepository {
       if (origenVenta != null && origenVenta != "todas") {
         query += " AND v.origen_venta = ?";
         args.add(origenVenta);
+      }
+      if (financialStatus == 'pagados' || financialStatus == 'pagado') {
+        query += " AND (v.monto_total - v.monto_pagado <= 0.01 OR v.estado_pago = 'pagado')";
+      } else if (financialStatus == 'con_deuda') {
+        query += " AND (v.monto_total - v.monto_pagado > 0.01 AND v.estado_pago != 'pagado')";
+      }
+      if (paymentMethod != null && paymentMethod.isNotEmpty && paymentMethod != 'todos') {
+        if (paymentMethod == 'yape_plin' || paymentMethod == 'billetera_digital') {
+          query += " AND (LOWER(v.metodo_pago) = 'yape' OR LOWER(v.metodo_pago) = 'plin' OR LOWER(v.metodo_pago) = 'yape_plin' OR LOWER(v.metodo_pago) = 'billetera_digital')";
+        } else {
+          query += " AND LOWER(v.metodo_pago) = ?";
+          args.add(paymentMethod.toLowerCase());
+        }
       }
       if (searchQuery != null && searchQuery.trim().isNotEmpty) {
         if (searchQuery.trim().startsWith('#')) {
@@ -79,10 +94,17 @@ class SaleRepository {
         'estado_pago',
         'id',
       ];
-      final safeSortBy = validSortColumns.contains(sortBy) ? sortBy : 'fecha_venta';
       final safeOrder = order.toLowerCase() == 'asc' ? 'ASC' : 'DESC';
 
-      query += " ORDER BY v.$safeSortBy $safeOrder LIMIT ? OFFSET ?";
+      String orderByClause;
+      if (sortBy == 'deuda_pendiente') {
+        orderByClause = "(v.monto_total - v.monto_pagado) $safeOrder, v.fecha_venta DESC";
+      } else {
+        final safeSortBy = validSortColumns.contains(sortBy) ? sortBy : 'fecha_venta';
+        orderByClause = "v.$safeSortBy $safeOrder";
+      }
+
+      query += " ORDER BY $orderByClause LIMIT ? OFFSET ?";
       args.add(limit);
       args.add(skip);
 
@@ -99,6 +121,7 @@ class SaleRepository {
     String? endDate,
     bool isArchived = false,
     String? origenVenta,
+    String? financialStatus,
   }) async {
     try {
       final db = await _dbHelper.database;
@@ -129,6 +152,11 @@ class SaleRepository {
       } else {
         query += " AND origen_venta != 'prestamo_personal'";
       }
+      if (financialStatus == 'pagados') {
+        query += " AND (monto_total - monto_pagado <= 0.01 OR estado_pago = 'pagado')";
+      } else if (financialStatus == 'con_deuda') {
+        query += " AND (monto_total - monto_pagado > 0.01 AND estado_pago != 'pagado')";
+      }
 
       final List<Map<String, dynamic>> rows = await db.rawQuery(query, args);
       return rows.isNotEmpty ? rows.first : null;
@@ -144,6 +172,7 @@ class SaleRepository {
     String? endDate,
     bool isArchived = false,
     String? origenVenta,
+    String? financialStatus,
   }) async {
     try {
       final db = await _dbHelper.database;
@@ -168,6 +197,11 @@ class SaleRepository {
         args.add(origenVenta);
       } else {
         query += " AND v.origen_venta != 'prestamo_personal'";
+      }
+      if (financialStatus == 'pagados') {
+        query += " AND (v.monto_total - v.monto_pagado <= 0.01 OR v.estado_pago = 'pagado')";
+      } else if (financialStatus == 'con_deuda') {
+        query += " AND (v.monto_total - v.monto_pagado > 0.01 AND v.estado_pago != 'pagado')";
       }
 
       final result = await db.rawQuery(query, args);

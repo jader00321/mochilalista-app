@@ -63,13 +63,67 @@ class RecentActivityList extends StatelessWidget {
             separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey[200]),
             itemBuilder: (context, index) {
               final sale = recentSales[index];
-              final isQuotation = sale.quotationId != null;
-              final date = DateTime.parse(sale.saleDate);
+              final date = DateTime.tryParse(sale.saleDate) ?? DateTime.now();
               final isToday = date.day == DateTime.now().day && date.month == DateTime.now().month && date.year == DateTime.now().year;
               final dateStr = isToday ? DateFormat('hh:mm a').format(date) : DateFormat('dd/MM/yy').format(date);
 
+              // 🎨 1. Determinación de Origen Semántico
+              final IconData originIcon;
+              final Color originColor;
+              final String originLabel;
+
+              if (sale.isLoan) {
+                originIcon = Icons.account_balance_wallet_rounded;
+                originColor = isDark ? Colors.amber[300]! : Colors.amber[800]!;
+                originLabel = "Préstamo (#${sale.displayId})";
+              } else if (sale.isQuickSale) {
+                originIcon = Icons.flash_on_rounded;
+                originColor = isDark ? Colors.teal[300]! : Colors.teal[700]!;
+                originLabel = "Caja Rápida (#${sale.displayId})";
+              } else {
+                originIcon = Icons.request_quote_rounded;
+                originColor = isDark ? Colors.orange[300]! : Colors.orange[800]!;
+                originLabel = "Cotización (#${sale.displayId})";
+              }
+
+              // 💰 2. Estado Financiero Real
+              final String statusText;
+              final Color statusColor;
+
+              if (sale.isArchived) {
+                statusText = "Anulado";
+                statusColor = isDark ? Colors.red[300]! : Colors.red[700]!;
+              } else if (sale.isFullyPaid) {
+                statusText = "Pagado";
+                statusColor = isDark ? Colors.green[400]! : Colors.green[700]!;
+              } else if (sale.isPartialPayment) {
+                statusText = "Parcial · Debe S/ ${sale.pendingDebt.toStringAsFixed(2)}";
+                statusColor = isDark ? Colors.orange[300]! : Colors.orange[800]!;
+              } else {
+                statusText = "Pendiente · S/ ${sale.pendingDebt.toStringAsFixed(2)}";
+                statusColor = isDark ? Colors.red[300]! : Colors.red[700]!;
+              }
+
+              final clientName = sale.clientName?.trim();
+              final hasClient = clientName != null && clientName.isNotEmpty;
+              final clientDisplay = hasClient 
+                  ? clientName 
+                  : (sale.isLoan ? "Cliente no registrado" : "Sin cliente");
+
+              final paymentMethodDisplay = sale.paymentMethod.isNotEmpty 
+                  ? sale.paymentMethod.toUpperCase() 
+                  : "CONTADO";
+
               return InkWell(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SaleHistoryDetailScreen(saleId: sale.id))),
+                onTap: () async {
+                  await Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (_) => SaleHistoryDetailScreen(saleId: sale.id)),
+                  );
+                  if (context.mounted) {
+                    Provider.of<SaleProvider>(context, listen: false).loadRecentHomeActivity();
+                  }
+                },
                 borderRadius: index == 0 
                     ? const BorderRadius.vertical(top: Radius.circular(20))
                     : (index == recentSales.length - 1 ? const BorderRadius.vertical(bottom: Radius.circular(20)) : BorderRadius.zero),
@@ -80,54 +134,89 @@ class RecentActivityList extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: isQuotation ? Colors.orange.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
+                          color: originColor.withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          isQuotation ? Icons.request_quote_rounded : Icons.point_of_sale_rounded,
-                          color: isQuotation ? Colors.orange : Colors.green,
+                          originIcon,
+                          color: originColor,
+                          size: 22,
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              sale.clientName ?? "Sin cliente",
+                              clientDisplay,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold, 
                                 fontSize: 15, 
-                                color: sale.clientName == null 
+                                color: !hasClient 
                                     ? (isDark ? Colors.grey[500] : Colors.grey[600]) 
                                     : (isDark ? Colors.white : Colors.black87),
-                                fontStyle: sale.clientName == null ? FontStyle.italic : FontStyle.normal,
+                                fontStyle: !hasClient ? FontStyle.italic : FontStyle.normal,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              "${isQuotation ? "Cotización" : "Venta Directa"} (#${sale.displayId})",
-                              style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.w600),
+                              originLabel,
+                              style: TextStyle(
+                                fontSize: 13, 
+                                color: isDark ? Colors.grey[300] : Colors.grey[800], 
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              "${sale.paymentMethod} • $dateStr",
+                              "$paymentMethodDisplay • $dateStr",
                               style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[500]),
                             ),
                           ],
                         ),
                       ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(
-                            currency.format(sale.totalAmount),
-                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: isDark ? Colors.white : Colors.black87),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                currency.format(sale.trueTotalAmount),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900, 
+                                  fontSize: 15, 
+                                  color: sale.isArchived 
+                                      ? Colors.grey 
+                                      : (isDark ? Colors.white : Colors.black87),
+                                  decoration: sale.isArchived ? TextDecoration.lineThrough : null,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(Icons.chevron_right, size: 18, color: isDark ? Colors.grey[600] : Colors.grey[400]),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Icon(Icons.chevron_right, size: 20, color: isDark ? Colors.grey[600] : Colors.grey[400]),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: statusColor.withValues(alpha: 0.35), width: 0.8),
+                            ),
+                            child: Text(
+                              statusText,
+                              style: TextStyle(
+                                fontSize: 10.5, 
+                                fontWeight: FontWeight.bold, 
+                                color: statusColor,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ],

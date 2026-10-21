@@ -161,6 +161,12 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                   isSelected: provider.selectedCategoryId == null, 
                   onTap: () => provider.selectCategory(null)
                 ),
+                if (provider.hasOrphanCategories)
+                  CategoryChip(
+                    label: "Sin Categoría", 
+                    isSelected: provider.selectedCategoryId == 0, 
+                    onTap: () => provider.selectCategory(0)
+                  ),
                 ...provider.categories.map((c) => CategoryChip(
                   label: c.nombre, 
                   isSelected: provider.selectedCategoryId == c.id, 

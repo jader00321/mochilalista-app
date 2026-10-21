@@ -148,7 +148,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
 
     final Widget mainContent = Padding(
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 20,
+        top: math.max(MediaQuery.of(context).padding.top, 24.0) + 16,
         bottom: 65, 
         left: 24,
         right: 24
@@ -477,29 +477,41 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
     required bool isDark,
     bool isLoading = false,
   }) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 600),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0.0, 0.2), end: Offset.zero).animate(animation),
-            child: child,
-          ),
-        );
-      },
-      child: _buildKpiCard(
-        key: ValueKey(keyId),
-        icon: icon,
-        label: label,
-        value: value,
-        numericTarget: numericTarget,
-        formatter: formatter,
-        color: color,
-        isDark: isDark,
-        isLoading: isLoading,
+    return SizedBox(
+      height: 82,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 600),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
+          return Stack(
+            alignment: Alignment.centerLeft,
+            children: <Widget>[
+              ...previousChildren,
+              if (currentChild != null) currentChild,
+            ],
+          );
+        },
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(begin: const Offset(0.0, 0.2), end: Offset.zero).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        child: _buildKpiCard(
+          key: ValueKey(keyId),
+          icon: icon,
+          label: label,
+          value: value,
+          numericTarget: numericTarget,
+          formatter: formatter,
+          color: color,
+          isDark: isDark,
+          isLoading: isLoading,
+        ),
       ),
     );
   }
@@ -517,7 +529,8 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
   }) {
     return Container(
       key: key,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      height: 82,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
@@ -526,17 +539,18 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(color: color.withValues(alpha: 0.2), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 24),
+            child: Icon(icon, color: color, size: 22),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (isLoading)
-                  const ShimmerBox(width: 80, height: 20, borderRadius: 4)
+                  const ShimmerBox(width: 80, height: 18, borderRadius: 4)
                 else
                   FittedBox(
                     fit: BoxFit.scaleDown,
@@ -553,7 +567,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w900,
-                                  fontSize: 18,
+                                  fontSize: 17,
                                 ),
                                 maxLines: 1,
                               );
@@ -564,20 +578,21 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w900,
-                              fontSize: 18,
+                              fontSize: 17,
                             ),
                           ),
                   ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     label,
                     maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 12,
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

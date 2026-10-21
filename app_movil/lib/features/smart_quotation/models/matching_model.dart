@@ -89,6 +89,13 @@ class MatchedProduct {
   String get displayNameCard => "$displayNameClean ($unit)";
   String get displayNameSearch => "$displayNameClean - $unit";
 
+  bool get hasOffer => offerPrice != null && offerPrice! > 0 && offerPrice! < price;
+
+  double get effectivePrice => hasOffer ? offerPrice! : price;
+
+  int get discountPercentRounded =>
+      hasOffer ? (((price - offerPrice!) / price) * 100).round() : 0;
+
   MatchedProduct clone() {
     return MatchedProduct(
       productId: productId, presentationId: presentationId, fullName: fullName,
@@ -99,6 +106,47 @@ class MatchedProduct {
       isOriginalItem: isOriginalItem,
       bundleId: bundleId,
       cost: cost,
+    );
+  }
+
+  MatchedProduct copyWith({
+    int? productId,
+    int? presentationId,
+    String? fullName,
+    String? productName,
+    String? specificName,
+    String? brand,
+    String? description,
+    double? price,
+    double? offerPrice,
+    bool clearOfferPrice = false,
+    int? stock,
+    String? imageUrl,
+    String? unit,
+    int? conversionFactor,
+    bool? isAvailable,
+    bool? isOriginalItem,
+    int? bundleId,
+    double? cost,
+  }) {
+    return MatchedProduct(
+      productId: productId ?? this.productId,
+      presentationId: presentationId ?? this.presentationId,
+      fullName: fullName ?? this.fullName,
+      productName: productName ?? this.productName,
+      specificName: specificName ?? this.specificName,
+      brand: brand ?? this.brand,
+      description: description ?? this.description,
+      price: price ?? this.price,
+      offerPrice: clearOfferPrice ? null : (offerPrice ?? this.offerPrice),
+      stock: stock ?? this.stock,
+      imageUrl: imageUrl ?? this.imageUrl,
+      unit: unit ?? this.unit,
+      conversionFactor: conversionFactor ?? this.conversionFactor,
+      isAvailable: isAvailable ?? this.isAvailable,
+      isOriginalItem: isOriginalItem ?? this.isOriginalItem,
+      bundleId: bundleId ?? this.bundleId,
+      cost: cost ?? this.cost,
     );
   }
 }

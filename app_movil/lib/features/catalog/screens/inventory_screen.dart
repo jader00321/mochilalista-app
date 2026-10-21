@@ -47,7 +47,8 @@ class PlaceholderTab extends StatelessWidget {
 }
 
 class InventoryScreen extends StatefulWidget {
-  const InventoryScreen({super.key});
+  final int initialTabIndex;
+  const InventoryScreen({super.key, this.initialTabIndex = 0});
 
   @override
   State<InventoryScreen> createState() => _InventoryScreenState();
@@ -62,7 +63,11 @@ class _InventoryScreenState extends State<InventoryScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(
+      length: 5,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
 
     _glowController = AnimationController(
       vsync: this,

@@ -40,6 +40,9 @@ class ManualQuoteItemCard extends StatelessWidget {
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final subtotal = manualPrice * quantity;
     final bool hasDiscount = (item.price - manualPrice) > 0.01;
+    final int discountPct = (hasDiscount && item.price > 0)
+        ? (((item.price - manualPrice) / item.price) * 100).round()
+        : 0;
     
     final bool isOutOfStock = item.stock <= 0;
     final bool exceedsStock = quantity > item.stock && !isOutOfStock;
@@ -146,7 +149,11 @@ class ManualQuoteItemCard extends StatelessWidget {
                       decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.grey[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200)),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: UniversalImage(path: item.imageUrl, fit: BoxFit.contain),
+                        child: UniversalImage(
+                          path: item.imageUrl, 
+                          fit: BoxFit.contain,
+                          productName: item.productName,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -234,13 +241,41 @@ class ManualQuoteItemCard extends StatelessWidget {
                             spacing: 6,
                             runSpacing: 4,
                             children: [
-                              if (hasDiscount)
-                                Text(currency.format(item.price), style: textTheme.bodySmall?.copyWith(decoration: TextDecoration.lineThrough, color: isDark ? Colors.grey[500] : Colors.grey, fontWeight: FontWeight.bold)),
+                              if (hasDiscount) ...[
+                                Text(
+                                  currency.format(item.price), 
+                                  style: textTheme.bodySmall?.copyWith(
+                                    decoration: TextDecoration.lineThrough, 
+                                    color: isDark ? Colors.grey[500] : Colors.grey, 
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (discountPct > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? Colors.red[900]!.withValues(alpha: 0.35) : Colors.red[50],
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: isDark ? Colors.red[700]! : Colors.red.shade300),
+                                    ),
+                                    child: Text(
+                                      "-$discountPct%",
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.red[300] : Colors.red[800],
+                                      ),
+                                    ),
+                                  ),
+                              ],
                               FittedBox(
                                 fit: BoxFit.scaleDown,
                                 child: Text(
                                   currency.format(manualPrice), 
-                                  style: textTheme.titleMedium?.copyWith(color: hasDiscount ? (isDark ? Colors.green[400] : Colors.green[700]) : textColor)
+                                  style: textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: hasDiscount ? (isDark ? Colors.green[400] : Colors.green[700]) : textColor,
+                                  ),
                                 ),
                               ),
                             ],

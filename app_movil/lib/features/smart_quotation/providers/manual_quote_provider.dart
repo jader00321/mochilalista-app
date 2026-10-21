@@ -133,4 +133,39 @@ class ManualQuoteProvider with ChangeNotifier {
       return _categories.firstWhere((c) => c.id == categoryId).nombre;
     } catch (_) { return ""; }
   }
+
+  /// 🔄 Sincronización en caliente 360° para reflejar cambios inmediatos de stock y precio
+  void syncPresentation(
+    int presentationId, {
+    int? newStock,
+    double? newPrice,
+    double? newOfferPrice,
+    String? newDiscountType,
+    double? newDiscountValue,
+  }) {
+    bool updated = false;
+    for (int i = 0; i < _searchResults.length; i++) {
+      final item = _searchResults[i];
+      if (item.presentation.id == presentationId) {
+        final updatedPres = item.presentation.copyWith(
+          stockActual: newStock ?? item.presentation.stockActual,
+          precioVentaFinal: newPrice ?? item.presentation.precioVentaFinal,
+          precioOferta: newOfferPrice == -1
+              ? null
+              : (newOfferPrice ?? item.presentation.precioOferta),
+          tipoDescuento: newOfferPrice == -1
+              ? null
+              : (newDiscountType ?? item.presentation.tipoDescuento),
+          valorDescuento: newOfferPrice == -1
+              ? null
+              : (newDiscountValue ?? item.presentation.valorDescuento),
+        );
+        _searchResults[i] = item.copyWith(presentation: updatedPres);
+        updated = true;
+      }
+    }
+    if (updated) {
+      notifyListeners();
+    }
+  }
 }

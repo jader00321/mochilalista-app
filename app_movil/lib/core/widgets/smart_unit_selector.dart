@@ -143,6 +143,8 @@ class _SmartUnitSelectorState extends State<SmartUnitSelector> {
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
+          clipBehavior: Clip.none,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           child: Row(
             children: [
               ...UnitCatalogService.getAllFixedUnits().map((u) {

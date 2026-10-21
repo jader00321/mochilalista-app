@@ -42,6 +42,37 @@ extension _ManualQuoteCatalogExt on _ManualQuotationScreenState {
         if (res) _initData();
         return res;
       } : null,
+      onStockUpdated: (presId, newStockBase) {
+        updateState(() {
+          final idx = _items.indexWhere((p) => p.presentationId == presId);
+          if (idx != -1) {
+            final oldP = _items[idx];
+            final factor = oldP.conversionFactor > 0 ? oldP.conversionFactor : 1;
+            _items[idx] = oldP.copyWith(stock: newStockBase ~/ factor);
+          }
+        });
+      },
+      onCatalogUpdated: (presId, newStockBase, newPrice, newOfferPrice) {
+        updateState(() {
+          final idx = _items.indexWhere((p) => p.presentationId == presId);
+          if (idx != -1) {
+            final oldP = _items[idx];
+            final factor = oldP.conversionFactor > 0 ? oldP.conversionFactor : 1;
+            final updatedP = oldP.copyWith(
+              stock: newStockBase ~/ factor,
+              price: newPrice ?? oldP.price,
+              offerPrice: newOfferPrice,
+            );
+            _items[idx] = updatedP;
+            if (_overriddenPrices.containsKey(presId)) {
+              final oldEffective = oldP.effectivePrice;
+              if ((_overriddenPrices[presId]! - oldEffective).abs() < 0.01) {
+                _overriddenPrices[presId] = updatedP.effectivePrice;
+              }
+            }
+          }
+        });
+      },
       onConfirm: (newProd, newQty, newPrice, newName) {
           updateState(() {
             if (newProd.presentationId != item.presentationId) {

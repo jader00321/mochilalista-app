@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -39,13 +38,66 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   Timer? _debounce;
   bool _saleCompleted = false; 
   bool _isOffersExpanded = false;
+  Future<List<InventoryWrapper>>? _recentSoldFuture;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<QuickSearchProvider>(context, listen: false).clearSearch();
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final searchProv = Provider.of<QuickSearchProvider>(context, listen: false);
+      searchProv.updateContext(auth.activeBusinessId);
+      searchProv.clearSearch();
+      if (auth.activeBusinessId != null) {
+        setState(() {
+          _recentSoldFuture = SalesService().getRecentSoldPresentations(auth.activeBusinessId!);
+        });
+      }
     });
+  }
+
+  Future<void> _handlePullToRefresh() async {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
+      final promoProv = Provider.of<PromotionProvider>(context, listen: false);
+      final invProv = Provider.of<InventoryProvider>(context, listen: false);
+
+      if (auth.activeBusinessId != null) {
+        await promoProv.loadPromotions(auth.activeBusinessId!);
+        _recentSoldFuture = SalesService().getRecentSoldPresentations(auth.activeBusinessId!);
+      }
+
+      for (final item in List.of(quickProv.cartItems)) {
+        final prod = await invProv.fetchProductById(item.productId);
+        if (prod != null) {
+          final pres = prod.presentaciones.where((p) => p.id == item.presentationId).firstOrNull;
+          if (pres != null) {
+            final factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+            final newOffer = pres.hasOffer ? pres.effectivePrice : null;
+            quickProv.syncItemPriceAndStock(
+              item.presentationId,
+              newPrice: pres.precioVentaFinal,
+              newOfferPrice: newOffer,
+              clearOffer: !pres.hasOffer,
+              newStock: pres.stockActual ~/ factor,
+            );
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+        CustomSnackBar.show(
+          context,
+          message: "Precios y stock sincronizados con el catálogo.",
+          isError: false,
+          icon: Icons.sync,
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() {});
+    }
   }
 
   @override
@@ -402,8 +454,11 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             child: Column(
               children: [
                 Expanded(
-                  child: CustomScrollView(
-                    slivers: [
+                  child: RefreshIndicator(
+                    onRefresh: _handlePullToRefresh,
+                    child: CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
                     SliverToBoxAdapter(
                       child: QuickSaleHeader(isGuest: isGuest, isDark: isDark),
                     ),
@@ -477,7 +532,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                           onChanged: _onSearchChanged,
                         ),
                       ),
-                      bottom: searchProv.categories.isNotEmpty
+                      bottom: (searchProv.categories.isNotEmpty || searchProv.hasOrphanCategories)
                           ? PreferredSize(
                               preferredSize: const Size.fromHeight(48),
                               child: Container(
@@ -507,6 +562,26 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                         backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
                                       ),
                                     ),
+                                    if (searchProv.hasOrphanCategories)
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 8.0),
+                                        child: ChoiceChip(
+                                          label: const Text("[ Sin Categoría ]"),
+                                          selected: searchProv.selectedCategoryId == 0,
+                                          onSelected: (val) {
+                                            searchProv.selectCategory(val ? 0 : null);
+                                          },
+                                          selectedColor: isDark ? Colors.blue[800] : Colors.blue[100],
+                                          labelStyle: TextStyle(
+                                            color: (searchProv.selectedCategoryId == 0)
+                                                ? (isDark ? Colors.white : Colors.blue[900])
+                                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                          backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
+                                        ),
+                                      ),
                                     ...searchProv.categories.map((cat) {
                                       final isSelected = searchProv.selectedCategoryId == cat.id;
                                       return Padding(
@@ -540,7 +615,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                     if (searchProv.searchResults.isEmpty && !isGuest && auth.activeBusinessId != null)
                       SliverToBoxAdapter(
                         child: FutureBuilder<List<InventoryWrapper>>(
-                          future: SalesService().getRecentSoldPresentations(auth.activeBusinessId!),
+                          future: _recentSoldFuture ?? (auth.activeBusinessId != null ? SalesService().getRecentSoldPresentations(auth.activeBusinessId!) : null),
                           builder: (ctx, snap) {
                             if (!snap.hasData || snap.data!.isEmpty) return const SizedBox.shrink();
                             final recents = snap.data!;
@@ -567,7 +642,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   SizedBox(
-                                    height: 38,
+                                    height: 40,
                                     child: ListView.separated(
                                       scrollDirection: Axis.horizontal,
                                       itemCount: recents.length,
@@ -579,7 +654,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                           borderRadius: BorderRadius.circular(10),
                                           onTap: () => _addToCart(wrapper),
                                           child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                             decoration: BoxDecoration(
                                               color: isDark ? Colors.blue.withValues(alpha: 0.12) : Colors.blue.withValues(alpha: 0.08),
                                               borderRadius: BorderRadius.circular(10),
@@ -599,14 +674,52 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                                   ),
                                                 ),
                                                 const SizedBox(width: 6),
-                                                Text(
-                                                  "S/ ${wrapper.effectivePrice.toStringAsFixed(2)}",
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                if (wrapper.hasOffer) ...[
+                                                  Text(
+                                                    "S/ ${wrapper.precio.toStringAsFixed(2)}",
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      decoration: TextDecoration.lineThrough,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: isDark ? Colors.grey[500] : Colors.grey,
+                                                    ),
                                                   ),
-                                                ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    "S/ ${wrapper.effectivePrice.toStringAsFixed(2)}",
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: isDark ? Colors.green[400] : Colors.green[700],
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                                    decoration: BoxDecoration(
+                                                      color: isDark ? Colors.red[900]!.withValues(alpha: 0.35) : Colors.red[50],
+                                                      borderRadius: BorderRadius.circular(4),
+                                                      border: Border.all(color: isDark ? Colors.red[700]! : Colors.red.shade300),
+                                                    ),
+                                                    child: Text(
+                                                      "-${wrapper.discountPercentage}%",
+                                                      style: TextStyle(
+                                                        fontSize: 9,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: isDark ? Colors.red[300] : Colors.red[800],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ] else ...[
+                                                  Text(
+                                                    "S/ ${wrapper.effectivePrice.toStringAsFixed(2)}",
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                    ),
+                                                  ),
+                                                ],
                                               ],
                                             ),
                                           ),
@@ -761,6 +874,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   ],
                 ),
               ),
+            ),
 
               if (quickProv.cartItems.isNotEmpty && searchProv.searchResults.isEmpty)
                 Container(
@@ -816,57 +930,27 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                       ),
                                     );
                                   },
-                                  child: quickProv.hideProfits
-                                      ? ClipRRect(
-                                          key: const ValueKey('blurred_profit_badge'),
-                                          borderRadius: BorderRadius.circular(6),
-                                          child: BackdropFilter(
-                                            filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: (isDark ? Colors.grey[800] : Colors.grey[300])?.withValues(alpha: 0.5),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.visibility_off, size: 10, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    "Oculto",
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                  child: (!quickProv.hideProfits && quickProv.estimatedCartProfit > 0)
+                                      ? Container(
+                                          key: const ValueKey('visible_profit_badge'),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            "Ganancia ~${currency.format(quickProv.estimatedCartProfit)}",
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark ? Colors.green[300] : Colors.green[800],
                                             ),
                                           ),
                                         )
-                                      : (quickProv.estimatedCartProfit > 0
-                                          ? Container(
-                                              key: const ValueKey('visible_profit_badge'),
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
-                                                borderRadius: BorderRadius.circular(6),
-                                                border: Border.all(
-                                                  color: isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                "Ganancia ~${currency.format(quickProv.estimatedCartProfit)}",
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: isDark ? Colors.green[300] : Colors.green[800],
-                                                ),
-                                              ),
-                                            )
-                                          : const SizedBox.shrink(key: ValueKey('empty_profit_badge'))),
+                                      : const SizedBox.shrink(key: ValueKey('empty_profit_badge')),
                                 ),
                               ],
                             ),

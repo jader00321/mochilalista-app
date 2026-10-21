@@ -6,6 +6,9 @@ import 'package:app_movil/features/catalog/screens/product_detail_screen.dart';
 import 'package:app_movil/features/catalog/screens/product_edit_screen.dart';
 import 'package:app_movil/core/widgets/price_update_modal.dart';
 import 'package:app_movil/core/widgets/stock_update_modal.dart';
+import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_search_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/manual_quote_provider.dart';
 
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
@@ -208,14 +211,28 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                           type: _ButtonType.price,
                           presentation: selectedPresentation,
                           isDark: isDark,
-                          onTap: () {
+                          onTap: () async {
                             if (selectedPresentation.id == -1) return;
-                            PriceUpdateModal.show(
+                            await PriceUpdateModal.show(
                               context: context, 
                               presentation: selectedPresentation, 
                               provider: provider,
                               isDark: isDark,
                             );
+                            if (context.mounted) {
+                              try {
+                                final catProv = Provider.of<CatalogProvider>(context, listen: false);
+                                catProv.syncPresentation(selectedPresentation.id!);
+                              } catch (_) {}
+                              try {
+                                final searchProv = Provider.of<QuickSearchProvider>(context, listen: false);
+                                searchProv.syncPresentation(selectedPresentation.id!);
+                              } catch (_) {}
+                              try {
+                                final manualProv = Provider.of<ManualQuoteProvider>(context, listen: false);
+                                manualProv.syncPresentation(selectedPresentation.id!);
+                              } catch (_) {}
+                            }
                           },
                         ),
                       ),
@@ -225,14 +242,28 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
                           type: _ButtonType.stock,
                           presentation: selectedPresentation,
                           isDark: isDark,
-                          onTap: () {
+                          onTap: () async {
                             if (selectedPresentation.id == -1) return;
-                            StockUpdateModal.show(
+                            final res = await StockUpdateModal.show(
                               context: context, 
                               presentation: selectedPresentation, 
                               provider: provider,
                               isDark: isDark,
                             );
+                            if (res == true && context.mounted) {
+                              try {
+                                final catProv = Provider.of<CatalogProvider>(context, listen: false);
+                                catProv.syncPresentation(selectedPresentation.id!);
+                              } catch (_) {}
+                              try {
+                                final searchProv = Provider.of<QuickSearchProvider>(context, listen: false);
+                                searchProv.syncPresentation(selectedPresentation.id!);
+                              } catch (_) {}
+                              try {
+                                final manualProv = Provider.of<ManualQuoteProvider>(context, listen: false);
+                                manualProv.syncPresentation(selectedPresentation.id!);
+                              } catch (_) {}
+                            }
                           },
                         ),
                       ),

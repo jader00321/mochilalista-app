@@ -292,6 +292,20 @@ class SaleModel {
     return totalAmount;
   }
 
+  double get pendingDebt {
+    if (isArchived) return 0.0;
+    final diff = trueTotalAmount - paidAmount;
+    return diff > 0.01 ? diff : 0.0;
+  }
+
+  double get totalPaid => paidAmount;
+  bool get isFullyPaid => !isArchived && pendingDebt <= 0.01;
+  bool get isPartialPayment => !isArchived && paidAmount > 0.01 && pendingDebt > 0.01;
+  bool get isUnpaid => !isArchived && paidAmount <= 0.01 && pendingDebt > 0.01;
+  bool get isLoan => origenVenta == 'prestamo_personal';
+  bool get isQuickSale => origenVenta == 'pos_rapido';
+  bool get isQuotationSale => origenVenta == 'smart_quotation' || quotationId != null;
+
   String get displayId => sequentialNumber != null ? sequentialNumber.toString() : id.toString();
 
   SaleModel({
@@ -341,7 +355,7 @@ class SaleModel {
       porcentajeInteres: _parseDouble(json['porcentaje_interes']),
       saleDate: json['fecha_venta'] ?? "",
       motivoAnulacion: json['motivo_anulacion'],
-      notes: json['notas'],
+      notes: json['notas'] ?? json['nota_prestamo'],
       installments: (json['cuotas'] as List?)?.map((e) => InstallmentModel.fromJson(e)).toList() ?? [],
     );
   }

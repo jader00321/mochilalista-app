@@ -90,6 +90,39 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
     }
   }
 
+  String _pluralize(String unit, int qty) {
+    if (qty == 1) return unit;
+    final lower = unit.toLowerCase();
+    // Palabras terminadas en 'z' -> 'ces' (ej. Pez -> Peces, Lápiz -> Lápices)
+    if (lower.endsWith('z')) {
+      return "${unit.substring(0, unit.length - 1)}ces";
+    }
+    // Palabras terminadas en 'd' (ej. Unidad -> Unidades), 'r', 'n', 'l', 'j' -> 'es'
+    if (lower.endsWith('d') ||
+        lower.endsWith('r') ||
+        lower.endsWith('n') ||
+        lower.endsWith('l') ||
+        lower.endsWith('j')) {
+      return "${unit}es";
+    }
+    // Palabras terminadas en 'k' (ej. Pack -> Packs), 't', 'p' o vocales -> 's'
+    return "${unit}s";
+  }
+
+  String _formatQuantityUnit(String rawUnit, int quantity, int factor) {
+    final unit = rawUnit.trim().isEmpty ? 'Unidad' : rawUnit.trim();
+    if (factor > 1) {
+      final totalBase = quantity * factor;
+      final unitPlural = _pluralize(unit, quantity);
+      return "($quantity $unitPlural · $totalBase u.)";
+    }
+    if (unit.toLowerCase() == 'unidad') {
+      return "($quantity un.)";
+    }
+    final unitPlural = _pluralize(unit, quantity);
+    return "($quantity $unitPlural)";
+  }
+
   @override
   Widget build(BuildContext context) {
     final catalogProv = Provider.of<CatalogProvider>(context, listen: false);
@@ -104,8 +137,8 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
     final brandName = catalogProv.getBrandName(prod.marcaId);
     
     final bool isOutOfStock = _maxStock <= 0;
-    final bool hasOffer = _currentPres.precioOferta != null && _currentPres.precioOferta! > 0;
-    final double unitPrice = hasOffer ? _currentPres.precioOferta! : _currentPres.precioVentaFinal;
+    final bool hasOffer = _currentPres.hasOffer;
+    final double unitPrice = _currentPres.effectivePrice;
     final double subtotal = unitPrice * _quantity;
     
     final String imageUrl = _currentPres.imagenUrl ?? prod.imagenUrl ?? "";
@@ -125,15 +158,14 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
     final double costoPresentacion = _currentPres.costoPresentacionFinal;
     final bool tieneCosto = costoPresentacion > 0;
     final double costoUnitarioBase = tieneCosto
-        ? ((_currentPres.costoUnitarioCalculado != null && _currentPres.costoUnitarioCalculado! > 0)
-            ? _currentPres.costoUnitarioCalculado!
-            : (costoPresentacion / factorVenta))
+        ? (costoPresentacion / factorVenta)
         : 0.0;
     final double gananciaUnitaria = tieneCosto ? (unitPrice - costoPresentacion) : 0.0;
     final double gananciaTotal = gananciaUnitaria * _quantity;
     final double margenPorcentual = (tieneCosto && unitPrice > 0)
         ? ((unitPrice - costoPresentacion) / unitPrice * 100)
         : 0.0;
+    final String qtyLabel = _formatQuantityUnit(variantDisplay, _quantity, factorVenta);
 
     // Semáforo de Rentabilidad
     final Color profitColor;
@@ -257,21 +289,24 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                       },
                       child: Hero(
                         tag: imageTag,
-                        child: Container(
-                          width: 86, 
-                          height: 86,
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white10 : Colors.grey[50],
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: UniversalImage(
-                              path: imageUrl,
-                              productName: prod.nombre,
-                              categoryName: catalogProv.getCategoryName(prod.categoriaId),
-                              fit: BoxFit.contain,
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: Container(
+                            width: 86, 
+                            height: 86,
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white10 : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: UniversalImage(
+                                path: imageUrl,
+                                productName: prod.nombre,
+                                categoryName: catalogProv.getCategoryName(prod.categoriaId),
+                                fit: BoxFit.contain,
+                              ),
                             ),
                           ),
                         ),
@@ -404,7 +439,7 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                       child: _DetailPill(
                         icon: Icons.inventory_2_outlined,
                         label: "Empaque",
-                        value: "${_currentPres.unidadesPorLote} u.",
+                        value: "$factorVenta u.",
                         color: Colors.blue,
                         isDark: isDark,
                         textTheme: textTheme,
@@ -457,47 +492,56 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.query_stats_rounded, 
-                                        size: 16, 
-                                        color: isDark ? Colors.blue[300] : Colors.blue[800],
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        "DATOS FINANCIEROS (INTERNO)",
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 0.5,
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.query_stats_rounded, 
+                                          size: 16, 
                                           color: isDark ? Colors.blue[300] : Colors.blue[800],
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: profitBg,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(profitIcon, size: 14, color: profitColor),
-                                        const SizedBox(width: 4),
+                                        const SizedBox(width: 6),
                                         Text(
-                                          tieneCosto
-                                              ? "${margenPorcentual.toStringAsFixed(1)}% ($profitLabel)"
-                                              : "Sin costo registrado",
+                                          "DATOS FINANCIEROS",
                                           style: TextStyle(
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.bold,
-                                            color: profitColor,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.5,
+                                            color: isDark ? Colors.blue[300] : Colors.blue[800],
                                           ),
                                         ),
                                       ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerRight,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: profitBg,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(profitIcon, size: 14, color: profitColor),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              tieneCosto
+                                                  ? "${margenPorcentual.toStringAsFixed(1)}% ($profitLabel)"
+                                                  : "Sin costo registrado",
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.bold,
+                                                color: profitColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -545,7 +589,7 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          "Ganancia Neta ($_quantity un.):",
+                                          "Ganancia Neta $qtyLabel:",
                                           style: TextStyle(
                                             fontSize: 10.5, 
                                             color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -623,14 +667,14 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
 
                 // 6. SELECTOR DE PRECIO Y CANTIDAD
                 if (!isOutOfStock) ...[
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.end,
-                    runSpacing: 16,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Column(
-                         crossAxisAlignment: CrossAxisAlignment.start,
-                         children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
                               "Precio Venta", 
                               style: textTheme.titleMedium?.copyWith(
@@ -640,16 +684,51 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                             ),
                             const SizedBox(height: 4),
                             if (hasOffer)
-                               Text(
-                                 "S/ ${_currentPres.precioVentaFinal.toStringAsFixed(2)}", 
-                                 style: textTheme.titleLarge?.copyWith(
-                                   decoration: TextDecoration.lineThrough, 
-                                   color: isDark ? Colors.grey[600] : Colors.grey,
-                                   fontSize: 14,
-                                 ),
-                               ),
+                              Row(
+                                children: [
+                                  Text(
+                                    "S/ ${_currentPres.precioVentaFinal.toStringAsFixed(2)}",
+                                    style: textTheme.titleLarge?.copyWith(
+                                      decoration: TextDecoration.lineThrough,
+                                      color: isDark ? Colors.grey[600] : Colors.grey,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  if (_currentPres.discountPercentRounded > 0) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 1.5,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.red.withValues(alpha: 0.2)
+                                            : Colors.red[50],
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: isDark
+                                              ? Colors.red[400]!
+                                              : Colors.red,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        "-${_currentPres.discountPercentRounded}%",
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.red[300]
+                                              : Colors.red[800],
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
                             FittedBox(
                               fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
                               child: Text(
                                 "S/ ${unitPrice.toStringAsFixed(2)}", 
                                 style: textTheme.displayMedium?.copyWith(
@@ -658,9 +737,10 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                                 ),
                               ),
                             ),
-                         ],
+                          ],
+                        ),
                       ),
-                      
+                      const SizedBox(width: 16),
                       Container(
                         decoration: BoxDecoration(
                           color: isDark ? const Color(0xFF14141C) : Colors.grey[50], 
@@ -719,7 +799,7 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                               children: [
                                  Expanded(
                                    child: Text(
-                                     "Subtotal ($_quantity un.):", 
+                                     "Subtotal $qtyLabel:", 
                                      style: textTheme.titleMedium?.copyWith(
                                        color: hasOffer ? (isDark ? Colors.red[200] : Colors.red[900]) : (isDark ? Colors.green[200] : Colors.green[900]),
                                        fontWeight: FontWeight.bold,
@@ -846,14 +926,18 @@ class _DetailPill extends StatelessWidget {
               Icon(icon, size: 14, color: isDark ? color[300] : color[700]),
               const SizedBox(width: 4),
               Flexible(
-                child: Text(
-                  label.toUpperCase(), 
-                  style: TextStyle(
-                    fontSize: 10, 
-                    fontWeight: FontWeight.bold, 
-                    color: isDark ? color[200] : color[700],
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label.toUpperCase(), 
+                    style: TextStyle(
+                      fontSize: 9.5, 
+                      fontWeight: FontWeight.bold, 
+                      color: isDark ? color[200] : color[700],
+                      letterSpacing: 0.1,
+                    ),
+                    maxLines: 1,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

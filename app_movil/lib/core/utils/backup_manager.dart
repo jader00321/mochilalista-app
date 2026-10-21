@@ -215,7 +215,19 @@ class BackupManager {
         await tempDbFile.copy(currentDbFile.path);
 
         // Forzar reapertura para que onUpgrade se ejecute si es necesario
-        await LocalDatabase.instance.database;
+        final db = await LocalDatabase.instance.database;
+
+        // 🛡️ Saneamiento y blindaje SQLite V24: Garantizar que la columna 'orden' exista y que las presentaciones principales estén íntegras
+        try {
+          final tableInfo = await db.rawQuery("PRAGMA table_info(presentaciones_producto)");
+          final hasOrden = tableInfo.any((col) => col['name'] == 'orden');
+          if (!hasOrden) {
+            await db.execute("ALTER TABLE presentaciones_producto ADD COLUMN orden INTEGER DEFAULT 0");
+          }
+          await LocalDatabase.sanitizePresentacionesDefault(db);
+        } catch (e) {
+          AppLogger.error('BackupManager.restoreBackup', e, null);
+        }
 
         if (isZip) {
            await BackupPathMigrator.migrateAllImagePaths();
