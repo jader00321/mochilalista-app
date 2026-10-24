@@ -32,7 +32,7 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
         children: [
           // HEADER retráctil
           InkWell(
-            onTap: () => updateState(() => _showVenta = !_showVenta),
+            onTap: () => _toggleAccordion('venta'),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/cuota_reminder_modal.dart';
 
 class SalePaymentTimeline extends StatelessWidget {
   final List<dynamic> cuotasRaw;
@@ -56,7 +57,6 @@ class SalePaymentTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     if (cuotasRaw.isEmpty) return const SizedBox.shrink();
 
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final textColor = isDark ? Colors.white : Colors.black87;
 
     return Container(
@@ -92,7 +92,6 @@ class SalePaymentTimeline extends StatelessWidget {
                 children: cuotasRaw.map((cRaw) {
                   final c = Map<String, dynamic>.from(cRaw as Map);
                   final bool cuotaPagada = c['estado'] == 'pagado';
-                  final hasPhone = clientPhone != null && clientPhone!.isNotEmpty && clientPhone != "000000000";
 
                   DateTime? dueDate;
                   try {
@@ -185,7 +184,7 @@ class SalePaymentTimeline extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              currency.format(c['monto']),
+                              AppCurrency.format(c['monto']),
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
@@ -237,44 +236,42 @@ class SalePaymentTimeline extends StatelessWidget {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    if (hasPhone) ...[
-                                      InkWell(
-                                        borderRadius: BorderRadius.circular(8),
-                                        onTap: () async {
-                                          final name = clientName ?? "Estimado cliente";
-                                          final msg = "Hola $name 👋. Le recordamos que la cuota #${c['numero_cuota']} por ${currency.format(c['monto'])} vence el $dateFormatted. Puede realizar su pago mediante Yape, Plin o en tienda física. ¡Muchas gracias!";
-                                          final cleanPhone = clientPhone!.replaceAll(RegExp(r'\D'), '');
-                                          final waPhone = cleanPhone.startsWith('51') ? cleanPhone : '51$cleanPhone';
-                                          final url = Uri.parse("https://wa.me/$waPhone?text=${Uri.encodeComponent(msg)}");
-                                          if (await canLaunchUrl(url)) {
-                                            await launchUrl(url, mode: LaunchMode.externalApplication);
-                                          }
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF25D366).withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: const Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(Icons.chat, size: 14, color: Color(0xFF25D366)),
-                                              SizedBox(width: 4),
-                                              Text(
-                                                "Recordar",
-                                                style: TextStyle(
-                                                  color: Color(0xFF25D366),
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                    InkWell(
+                                      borderRadius: BorderRadius.circular(8),
+                                      onTap: () {
+                                        CuotaReminderModal.show(
+                                          context: context,
+                                          cuota: c,
+                                          dateFormatted: dateFormatted,
+                                          clientName: clientName,
+                                          clientPhone: clientPhone,
+                                          isDark: isDark,
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.chat, size: 14, color: Color(0xFF25D366)),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              "Recordar",
+                                              style: TextStyle(
+                                                color: Color(0xFF25D366),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
-                                    ],
+                                    ),
+                                    const SizedBox(width: 8),
 
                                     if (clientId != null && clientId! > 0)
                                       InkWell(

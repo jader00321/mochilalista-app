@@ -80,6 +80,13 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
        fullNameBuilder += " $cleanSpec";
     }
 
+    final double presCost = pres.costoPresentacionFinal;
+    final double? calculatedCost = presCost > 0
+        ? presCost
+        : (pres.factorGananciaVenta != null && pres.factorGananciaVenta! > 0
+            ? pres.precioVentaFinal / pres.factorGananciaVenta!
+            : null);
+
     final matched = MatchedProduct(
       productId: prod.id,
       presentationId: pres.id ?? 0, 
@@ -93,6 +100,7 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
       imageUrl: pres.imagenUrl ?? prod.imagenUrl,
       unit: pres.unidadVenta ?? "Unidad", 
       conversionFactor: pres.unidadesPorVenta, 
+      cost: calculatedCost,
     );
 
     final provider = Provider.of<ManualQuoteProvider>(context, listen: false);
@@ -123,6 +131,13 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
        fullNameBuilder += " $cleanSpec";
     }
 
+    final double presCost = pres.costoPresentacionFinal;
+    final double? calculatedCost = presCost > 0
+        ? presCost
+        : (pres.factorGananciaVenta != null && pres.factorGananciaVenta! > 0
+            ? pres.precioVentaFinal / pres.factorGananciaVenta!
+            : null);
+
     final matched = MatchedProduct(
       productId: prod.id,
       presentationId: pres.id ?? 0, 
@@ -136,6 +151,7 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
       imageUrl: pres.imagenUrl ?? prod.imagenUrl,
       unit: pres.unidadVenta ?? "Unidad", 
       conversionFactor: pres.unidadesPorVenta, 
+      cost: calculatedCost,
     );
 
     widget.onAddProduct(matched, 1, matched.offerPrice ?? matched.price, matched.fullName);

@@ -8,6 +8,7 @@ class ExportOption {
   final IconData icon;
   final bool requiresFormatSelection;
   final bool requiresPaymentMethodSelection;
+  final int? count;
 
   const ExportOption({
     required this.id,
@@ -16,6 +17,7 @@ class ExportOption {
     required this.icon,
     this.requiresFormatSelection = true,
     this.requiresPaymentMethodSelection = false,
+    this.count,
   });
 }
 
@@ -664,7 +666,32 @@ class _ExportOptionsModalState extends State<ExportOptionsModal> {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(opt.description, style: TextStyle(fontSize: 13, color: widget.isDark ? Colors.grey[400] : Colors.grey[700])),
                 ),
-                trailing: Icon(Icons.chevron_right, color: widget.isDark ? Colors.grey[600] : Colors.grey[400]),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (opt.count != null)
+                      Container(
+                        margin: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: (widget.isDark ? Colors.blue[900] : Colors.blue[100])?.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: (widget.isDark ? Colors.blue[400] : Colors.blue[700])!.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Text(
+                          "${opt.count} ${opt.count == 1 ? 'lista' : 'listas'}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: widget.isDark ? Colors.blue[300] : Colors.blue[800],
+                          ),
+                        ),
+                      ),
+                    Icon(Icons.chevron_right, color: widget.isDark ? Colors.grey[600] : Colors.grey[400]),
+                  ],
+                ),
                 onTap: () => _handleLegacyOptionSelect(opt),
               );
             },

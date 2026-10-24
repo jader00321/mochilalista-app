@@ -17,13 +17,13 @@ class PriceUpdateModal extends StatefulWidget {
   });
 
   /// 🏆 Despliegue con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
-  static Future<void> show({
+  static Future<bool?> show({
     required BuildContext context,
     required ProductPresentation presentation,
     required InventoryProvider provider,
     required bool isDark,
   }) {
-    return InteractiveSheetWrapper.show(
+    return InteractiveSheetWrapper.show<bool>(
       context: context,
       builder: (ctx) => PriceUpdateModal(
         presentation: presentation,
@@ -59,7 +59,10 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
     if (widget.presentation.hasOffer) {
       finalOfferPrice = widget.presentation.precioOferta ??
           widget.presentation.effectivePrice;
-      discountType = widget.presentation.tipoDescuento == 'monto' ? 1 : 0;
+      discountType = (widget.presentation.tipoDescuento == 'monto' ||
+              widget.presentation.tipoDescuento == 'fijo')
+          ? 1
+          : 0;
       if (discountType == 0) {
         discountCtrl.text =
             (widget.presentation.valorDescuento ?? 0).toStringAsFixed(0);
@@ -239,6 +242,42 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
               fontSize: 12,
             ),
           ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: widget.isDark
+                  ? Colors.blue.withValues(alpha: 0.12)
+                  : Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: widget.isDark
+                    ? Colors.blue.withValues(alpha: 0.3)
+                    : Colors.blue.shade200,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 14,
+                  color: widget.isDark ? Colors.blue[300] : Colors.blue[800],
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    "Los cambios actualizan tu Catálogo/Inventario de forma permanente.",
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: widget.isDark ? Colors.blue[200] : Colors.blue[900],
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
       actions: [
@@ -285,7 +324,7 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
                       widget.presentation.id!,
                       precioVentaFinal: double.tryParse(priceCtrl.text),
                       oferta: finalOfferPrice,
-                      tipoDesc: discountType == 0 ? 'porcentaje' : 'monto',
+                      tipoDesc: discountType == 0 ? 'porcentaje' : 'fijo',
                       valorDesc: val,
                     );
                   } else {
@@ -298,7 +337,7 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
                       valorDesc: 0.0,
                     );
                   }
-                  if (context.mounted) Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context, true);
                 },
           child: _isSaving
               ? const SizedBox(
@@ -317,7 +356,7 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
         ),
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 36),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -476,23 +515,45 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
                 children: [
                   Expanded(
                     child: _TabButton(
-                      label: "% Dscnt",
+                      label: "% Porcentaje",
                       selected: discountType == 0,
                       isDark: widget.isDark,
                       onTap: () {
-                        setState(() => discountType = 0);
-                        _calculate();
+                        if (discountType != 0) {
+                          double base = double.tryParse(priceCtrl.text) ?? 0.0;
+                          double val = double.tryParse(discountCtrl.text) ?? 0.0;
+                          if (base > 0 && val > 0 && val < base) {
+                            double calcPercent = ((base - val) / base) * 100;
+                            discountCtrl.text = calcPercent.round().toString();
+                          }
+                          setState(() {
+                            discountType = 0;
+                            _activeRoundingTarget = null;
+                          });
+                          _calculate();
+                        }
                       },
                     ),
                   ),
                   Expanded(
                     child: _TabButton(
-                      label: "S/ Nuevo",
+                      label: "S/ Fijo",
                       selected: discountType == 1,
                       isDark: widget.isDark,
                       onTap: () {
-                        setState(() => discountType = 1);
-                        _calculate();
+                        if (discountType != 1) {
+                          double base = double.tryParse(priceCtrl.text) ?? 0.0;
+                          double val = double.tryParse(discountCtrl.text) ?? 0.0;
+                          if (base > 0 && val > 0 && val < 100) {
+                            double calcOffer = base * (1 - (val / 100));
+                            discountCtrl.text = calcOffer.toStringAsFixed(2);
+                          }
+                          setState(() {
+                            discountType = 1;
+                            _activeRoundingTarget = null;
+                          });
+                          _calculate();
+                        }
                       },
                     ),
                   ),
@@ -518,7 +579,7 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
                 decoration: InputDecoration(
                   labelText: discountType == 0
                       ? "Porcentaje de Oferta (%)"
-                      : "Nuevo Precio (S/)",
+                      : "Precio Oferta (S/)",
                   labelStyle: TextStyle(
                     color: widget.isDark ? Colors.grey[400] : Colors.grey[700],
                   ),
@@ -776,9 +837,9 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          TextButton(
-                            onPressed: () => setState(() {
+                          const SizedBox(height: 10),
+                          InkWell(
+                            onTap: () => setState(() {
                               finalOfferPrice = null;
                               discountCtrl.clear();
                               _activeRoundingTarget = null;
@@ -786,19 +847,28 @@ class _PriceUpdateModalState extends State<PriceUpdateModal> {
                               isBasePriceUpdate = false;
                               errorMsg = null;
                             }),
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(0, 0),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              "Quitar Oferta",
-                              style: TextStyle(
-                                color: widget.isDark
-                                    ? Colors.red[300]
-                                    : Colors.red,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.red.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Text(
+                                "Quitar Oferta",
+                                style: TextStyle(
+                                  color: widget.isDark
+                                      ? Colors.red[300]
+                                      : Colors.red,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),

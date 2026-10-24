@@ -206,7 +206,7 @@ class PresentationDiscountSection extends StatelessWidget {
                             ),
                             Expanded(
                               child: GestureDetector(
-                                onTap: () => onDiscountTypeChanged('monto'),
+                                onTap: () => onDiscountTypeChanged('fijo'),
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: isFijo
@@ -253,7 +253,7 @@ class PresentationDiscountSection extends StatelessWidget {
                   flex: 3,
                   child: MiniInput(
                     ctrl: valorDescuentoCtrl,
-                    label: isFijo ? "Monto S/" : "Valor %",
+                    label: isFijo ? "Precio Oferta S/" : "Valor %",
                     isNum: true,
                     hint: isFijo ? "0.00" : "0",
                     isDark: isDark,
@@ -263,7 +263,7 @@ class PresentationDiscountSection extends StatelessWidget {
               ],
             ),
 
-            // Enunciado explicativo en modo S/ Fijo (Opción 2)
+            // Enunciado explicativo en modo S/ Fijo
             if (isFijo) ...[
               const SizedBox(height: 8),
               if (valorDcto > 0 && valorDcto < precioVenta) ...[
@@ -294,7 +294,7 @@ class PresentationDiscountSection extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          "Se restará del precio de venta: S/ ${precioVenta.toStringAsFixed(2)} - S/ ${valorDcto.toStringAsFixed(2)} = S/ ${(precioVenta - valorDcto).toStringAsFixed(2)}",
+                          "Descuento aplicado: S/ ${(precioVenta - valorDcto).toStringAsFixed(2)} menos sobre el precio normal de S/ ${precioVenta.toStringAsFixed(2)} (-$discountPercentRounded%)",
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -335,7 +335,7 @@ class PresentationDiscountSection extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          "El descuento debe ser menor al precio regular (S/ ${precioVenta.toStringAsFixed(2)})",
+                          "La oferta debe ser menor al precio regular (S/ ${precioVenta.toStringAsFixed(2)})",
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,

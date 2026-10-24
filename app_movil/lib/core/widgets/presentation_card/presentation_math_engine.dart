@@ -398,6 +398,21 @@ class PresentationMathEngine {
         margenCtrl.text = format2(margen);
       }
     }
+
+    // 🔥 Sincronización 360° en vivo del Módulo de Descuentos al cambiar el precio base normal
+    if (controllerMap['descuentoActivo'] == true) {
+      double pVentaActual = double.tryParse(ventaCtrl.text) ?? 0.0;
+      if (controllerMap['precioOfertaExacto'] != null) {
+        double exact = (controllerMap['precioOfertaExacto'] as num).toDouble();
+        if (exact >= pVentaActual || exact <= 0) {
+          controllerMap['precioOfertaExacto'] = null;
+          controllerMap['activeDiscountRoundingTarget'] = null;
+          controllerMap['preRoundedOfferPrice'] = null;
+          controllerMap['preRoundedDiscountValor'] = null;
+        }
+      }
+    }
+
     onStateUpdate();
   }
 
@@ -417,10 +432,16 @@ class PresentationMathEngine {
       return (controllerMap['precioOfertaExacto'] as num).toDouble();
     }
 
-    if (controllerMap['tipoDescuento'] == 'porcentaje') {
+    final String tipo = (controllerMap['tipoDescuento'] as String?) ?? 'porcentaje';
+    final bool isFijo = tipo == 'monto' || tipo == 'fijo';
+
+    if (!isFijo) {
       return baseVenta - (baseVenta * (valorDcto / 100));
     } else {
-      return baseVenta - valorDcto;
+      if (valorDcto < baseVenta) {
+        return valorDcto;
+      }
+      return null;
     }
   }
 
@@ -428,6 +449,48 @@ class PresentationMathEngine {
     controllerMap['activeDiscountRoundingTarget'] = null;
     controllerMap['precioOfertaExacto'] = null;
     controllerMap['preRoundedDiscountValor'] = null;
+    controllerMap['preRoundedOfferPrice'] = null;
+    onStateUpdate();
+  }
+
+  void switchDiscountType(String newType) {
+    String currentType = (controllerMap['tipoDescuento'] as String?) ?? 'porcentaje';
+    if (currentType == newType) return;
+
+    double baseVenta = double.tryParse(ventaCtrl.text) ?? 0.0;
+    double currentVal = double.tryParse(valorDescuentoCtrl.text) ?? 0.0;
+
+    final bool wasFijo = currentType == 'monto' || currentType == 'fijo';
+    final bool willBeFijo = newType == 'monto' || newType == 'fijo';
+
+    if (baseVenta > 0 && currentVal > 0) {
+      if (!wasFijo && willBeFijo) {
+        // De % Porcentaje a S/ Fijo:
+        // currentVal es el porcentaje a descontar (ej. 15%)
+        // El nuevo input en S/ Fijo es el Precio Oferta deseado: baseVenta * (1 - currentVal / 100)
+        double calculatedOffer = baseVenta * (1.0 - (currentVal / 100.0));
+        if (calculatedOffer < 0) calculatedOffer = 0.0;
+        valorDescuentoCtrl.text = calculatedOffer.toStringAsFixed(2);
+      } else if (wasFijo && !willBeFijo) {
+        // De S/ Fijo a % Porcentaje:
+        // currentVal es el Precio Oferta (ej. 0.85)
+        // El nuevo porcentaje es: ((baseVenta - currentVal) / baseVenta) * 100
+        if (currentVal < baseVenta) {
+          double calculatedPercent = ((baseVenta - currentVal) / baseVenta) * 100.0;
+          if ((calculatedPercent - calculatedPercent.roundToDouble()).abs() < 0.001) {
+            valorDescuentoCtrl.text = calculatedPercent.round().toString();
+          } else {
+            valorDescuentoCtrl.text = calculatedPercent.toStringAsFixed(2);
+          }
+        }
+      }
+    }
+
+    controllerMap['tipoDescuento'] = newType;
+    controllerMap['activeDiscountRoundingTarget'] = null;
+    controllerMap['precioOfertaExacto'] = null;
+    controllerMap['preRoundedDiscountValor'] = null;
+    controllerMap['preRoundedOfferPrice'] = null;
     onStateUpdate();
   }
 
@@ -445,6 +508,8 @@ class PresentationMathEngine {
         controllerMap['activeDiscountRoundingTarget'] as double?;
     String? preRoundedValor =
         controllerMap['preRoundedDiscountValor'] as String?;
+    double? preRoundedOffer =
+        controllerMap['preRoundedOfferPrice'] as double?;
 
     final bool isSameActive = activeTarget != null &&
         ((activeTarget - targetFraction).abs() < 0.01 ||
@@ -456,14 +521,16 @@ class PresentationMathEngine {
         valorDescuentoCtrl.text = preRoundedValor;
       }
       controllerMap['activeDiscountRoundingTarget'] = null;
-      controllerMap['precioOfertaExacto'] = null;
+      controllerMap['precioOfertaExacto'] = preRoundedOffer;
       controllerMap['preRoundedDiscountValor'] = null;
+      controllerMap['preRoundedOfferPrice'] = null;
       onStateUpdate();
       return;
     }
 
     preRoundedValor ??= valorDescuentoCtrl.text.trim();
     controllerMap['preRoundedDiscountValor'] = preRoundedValor;
+    controllerMap['preRoundedOfferPrice'] = controllerMap['precioOfertaExacto'];
 
     double floor = currentOffer.floorToDouble();
     double roundedOffer;
@@ -486,12 +553,16 @@ class PresentationMathEngine {
     }
 
     String tipo = (controllerMap['tipoDescuento'] as String?) ?? 'porcentaje';
-    if (tipo == 'porcentaje') {
+    final bool isFijo = tipo == 'monto' || tipo == 'fijo';
+    if (!isFijo) {
       double newPercent = ((baseVenta - roundedOffer) / baseVenta) * 100;
-      valorDescuentoCtrl.text = newPercent.toStringAsFixed(2);
+      if ((newPercent - newPercent.roundToDouble()).abs() < 0.001) {
+        valorDescuentoCtrl.text = newPercent.round().toString();
+      } else {
+        valorDescuentoCtrl.text = newPercent.toStringAsFixed(2);
+      }
     } else {
-      double newMonto = baseVenta - roundedOffer;
-      valorDescuentoCtrl.text = newMonto.toStringAsFixed(2);
+      valorDescuentoCtrl.text = roundedOffer.toStringAsFixed(2);
     }
 
     controllerMap['activeDiscountRoundingTarget'] = targetFraction;

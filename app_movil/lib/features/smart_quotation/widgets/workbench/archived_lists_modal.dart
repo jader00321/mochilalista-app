@@ -80,6 +80,7 @@ class _ArchivedListsModalContentState extends State<_ArchivedListsModalContent> 
           icon: Icons.archive,
           iconColor: widget.isDark ? Colors.grey[400] : Colors.grey[700],
           maxHeightFactor: 0.90,
+          applyEffectiveBottomPadding: true,
           child: Stack(
             children: [
               CustomScrollView(
@@ -149,56 +150,66 @@ class _ArchivedListsModalContentState extends State<_ArchivedListsModalContent> 
                                 onLongPress: () {
                                   showModalBottomSheet(
                                     context: context,
-                                    backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
-                                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-                                    builder: (bsCtx) => SafeArea(
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 20),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ListTile(
-                                              leading: const Icon(Icons.restore, color: Colors.blue, size: 28),
-                                              title: Text("Restaurar Lista", style: TextStyle(color: widget.isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
-                                              subtitle: Text("Devolverá la lista a la Mesa de Trabajo", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
-                                              onTap: () {
-                                                Navigator.pop(bsCtx);
-                                                _handleRestore(context, q);
-                                              },
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    elevation: 0,
+                                    builder: (bsCtx) => InteractiveSheetWrapper(
+                                      title: q.clientName ?? "Opciones",
+                                      icon: Icons.archive,
+                                      iconColor: widget.isDark ? Colors.purple[300] : Colors.purple,
+                                      maxHeightFactor: 0.6,
+                                      applyEffectiveBottomPadding: true,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          ListTile(
+                                            leading: const CircleAvatar(
+                                              backgroundColor: Colors.blueAccent,
+                                              child: Icon(Icons.restore, color: Colors.white, size: 20),
                                             ),
-                                            const Divider(),
-                                            ListTile(
-                                              leading: const Icon(Icons.delete_forever, color: Colors.red, size: 28),
-                                              title: Text("Eliminar Definitivamente", style: TextStyle(color: widget.isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
-                                              subtitle: Text("Esta acción no se puede deshacer", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
-                                              onTap: () {
-                                                Navigator.pop(bsCtx);
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (dialogCtx) => AlertDialog(
-                                                    backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
-                                                    title: const Text("¿Eliminar definitivamente?", style: TextStyle(fontWeight: FontWeight.bold)),
-                                                    content: const Text("Esta acción borrará la cotización por completo de la base de datos y no se podrá recuperar."),
-                                                    actions: [
-                                                      TextButton(
-                                                        onPressed: () => Navigator.pop(dialogCtx),
-                                                        child: const Text("Cancelar"),
-                                                      ),
-                                                      ElevatedButton(
-                                                        onPressed: () {
-                                                          Navigator.pop(dialogCtx);
-                                                          _handleDelete(context, q);
-                                                        },
-                                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                                        child: const Text("Eliminar", style: TextStyle(color: Colors.white)),
-                                                      )
-                                                    ],
-                                                  )
-                                                );
-                                              },
+                                            title: Text("Restaurar Lista", style: TextStyle(color: widget.isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
+                                            subtitle: Text("Devolverá la lista a la Mesa de Trabajo activa", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
+                                            onTap: () {
+                                              Navigator.pop(bsCtx);
+                                              _handleRestore(context, q);
+                                            },
+                                          ),
+                                          const Divider(),
+                                          ListTile(
+                                            leading: const CircleAvatar(
+                                              backgroundColor: Colors.redAccent,
+                                              child: Icon(Icons.delete_forever, color: Colors.white, size: 20),
                                             ),
-                                          ],
-                                        ),
+                                            title: Text("Eliminar Definitivamente", style: TextStyle(color: widget.isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
+                                            subtitle: Text("Esta acción no se puede deshacer", style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
+                                            onTap: () {
+                                              Navigator.pop(bsCtx);
+                                              showDialog(
+                                                context: context,
+                                                builder: (dialogCtx) => AlertDialog(
+                                                  backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
+                                                  title: const Text("¿Eliminar definitivamente?", style: TextStyle(fontWeight: FontWeight.bold)),
+                                                  content: const Text("Esta acción borrará la cotización por completo de la base de datos y no se podrá recuperar."),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () => Navigator.pop(dialogCtx),
+                                                      child: const Text("Cancelar"),
+                                                    ),
+                                                    ElevatedButton(
+                                                      onPressed: () {
+                                                        Navigator.pop(dialogCtx);
+                                                        _handleDelete(context, q);
+                                                      },
+                                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                                      child: const Text("Eliminar", style: TextStyle(color: Colors.white)),
+                                                    )
+                                                  ],
+                                                )
+                                              );
+                                            },
+                                          ),
+                                          const SizedBox(height: 12),
+                                        ],
                                       ),
                                     ),
                                   );

@@ -345,15 +345,21 @@ void main() {
         ),
       );
 
-      // Verificar alerta de unidades sueltas
-      expect(find.text("Hay 1 u. suelta(s) fuera del múltiplo de Par (x2)."), findsOneWidget);
-      expect(find.text("⚡ Cuadrar"), findsOneWidget);
+      // Verificar chip exclusivo de unidad de venta
+      expect(find.text("Por Par (x2)"), findsOneWidget);
+      expect(find.text("⚡ Cuadrar"), findsNothing);
+      expect(find.text("Por Unidad base"), findsNothing);
 
-      // Tocar botón [ ⚡ Cuadrar ]
-      await tester.tap(find.text("⚡ Cuadrar"));
+      // Cambiar a Modo "Fijar Stock Total" (tab index 1)
+      await tester.tap(find.text("Fijar Stock Total"));
       await tester.pumpAndSettle();
 
-      // Debe haber fijado el modo a "Fijar Stock Total" y redondeado a 24 unidades base
+      // Ingresar 12 pares
+      final textField = find.byType(TextField);
+      expect(textField, findsOneWidget);
+      await tester.enterText(textField, "12");
+      await tester.pumpAndSettle();
+
       // Confirmar actualización
       final confirmBtn = find.text("APLICAR CAMBIOS");
       expect(confirmBtn, findsOneWidget);
@@ -361,7 +367,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(mockProvider.lastUpdatedPresentationId, 50);
-      expect(mockProvider.lastStock, 24); // Cuadrado a 24 base (12 pares exactos)
+      expect(mockProvider.lastStock, 24); // 12 pares * factor 2 = 24 base
     });
   });
 

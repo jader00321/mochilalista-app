@@ -784,4 +784,20 @@ class SalesService {
       return [];
     }
   }
+
+  Future<bool> updateSaleNote(int saleId, String newNote) async {
+    try {
+      final db = await dbHelper.database;
+      final rows = await db.update(
+        'ventas',
+        {'nota_prestamo': newNote},
+        where: 'id = ?',
+        whereArgs: [saleId],
+      );
+      return rows > 0;
+    } catch (e) {
+      debugPrint("Error al actualizar nota de venta/préstamo: $e");
+      return false;
+    }
+  }
 }

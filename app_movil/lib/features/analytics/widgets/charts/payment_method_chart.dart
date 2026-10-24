@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class PaymentMethodChart extends StatefulWidget {
   final AnalyticsData data;
   final bool isDark;
-  final String Function(double) formatCurrency;
+  final String Function(double)? formatCurrency;
 
   const PaymentMethodChart({
     super.key,
     required this.data,
     required this.isDark,
-    required this.formatCurrency,
+    this.formatCurrency,
   });
 
   @override
@@ -21,18 +22,22 @@ class PaymentMethodChart extends StatefulWidget {
 class _PaymentMethodChartState extends State<PaymentMethodChart> {
   int _selectedSegmentIndex = -1;
 
+  String _format(double amount) {
+    if (widget.formatCurrency != null) return widget.formatCurrency!(amount);
+    return AppCurrency.format(amount);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.data.salesByPaymentMethod.isEmpty) return const SizedBox.shrink();
 
     double total = 0;
     for (var p in widget.data.salesByPaymentMethod) {
-      total += p['amount'];
+      total += (p['amount'] as num).toDouble();
     }
 
     if (total == 0) return const SizedBox.shrink();
 
-    // Colores para los métodos de pago
     final colors = [
       Colors.indigo[400]!,
       Colors.orange[400]!,
@@ -44,7 +49,7 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
     List<PieChartSectionData> sections = [];
     for (int i = 0; i < widget.data.salesByPaymentMethod.length; i++) {
       var p = widget.data.salesByPaymentMethod[i];
-      double amount = p['amount'];
+      double amount = (p['amount'] as num).toDouble();
       bool isTouched = i == _selectedSegmentIndex;
       
       sections.add(
@@ -52,7 +57,7 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
           color: colors[i % colors.length],
           value: amount,
           showTitle: false,
-          radius: isTouched ? 35 : 30,
+          radius: isTouched ? 36 : 30,
         ),
       );
     }
@@ -74,38 +79,93 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Ingresos por Método de Pago", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Ingresos por Método de Pago", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Icon(Icons.touch_app, size: 16, color: Colors.grey[400]),
+            ],
+          ),
           const SizedBox(height: 24),
           Row(
             children: [
               SizedBox(
-                height: 120,
-                width: 120,
-                child: PieChart(
-                  PieChartData(
-                    pieTouchData: PieTouchData(
-                      touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                        if (event is FlPanEndEvent || event is FlLongPressEnd) return;
-                        if (event is FlTapUpEvent) {
-                          setState(() {
-                            if (pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
-                              _selectedSegmentIndex = -1;
-                            } else {
-                              int index = pieTouchResponse.touchedSection!.touchedSectionIndex;
-                              if (_selectedSegmentIndex == index) {
-                                _selectedSegmentIndex = -1;
-                              } else {
-                                _selectedSegmentIndex = index;
-                              }
+                height: 130,
+                width: 130,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    PieChart(
+                      PieChartData(
+                        pieTouchData: PieTouchData(
+                          touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                            if (event is FlPanEndEvent || event is FlLongPressEnd) return;
+                            if (event is FlTapUpEvent) {
+                              setState(() {
+                                if (pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
+                                  _selectedSegmentIndex = -1;
+                                } else {
+                                  int index = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                                  if (_selectedSegmentIndex == index) {
+                                    _selectedSegmentIndex = -1;
+                                  } else {
+                                    _selectedSegmentIndex = index;
+                                  }
+                                }
+                              });
                             }
-                          });
-                        }
-                      },
+                          },
+                        ),
+                        sections: sections,
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 32,
+                      ),
                     ),
-                    sections: sections,
-                    sectionsSpace: 2,
-                    centerSpaceRadius: 30,
-                  ),
+                    // Center Hub
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: _selectedSegmentIndex != -1 && _selectedSegmentIndex < widget.data.salesByPaymentMethod.length
+                          ? Column(
+                              key: ValueKey(_selectedSegmentIndex),
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  "${total > 0 ? ((((widget.data.salesByPaymentMethod[_selectedSegmentIndex]['amount'] as num).toDouble()) / total) * 100).toStringAsFixed(0) : '0'}%",
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: colors[_selectedSegmentIndex % colors.length],
+                                  ),
+                                ),
+                                Text(
+                                  widget.data.salesByPaymentMethod[_selectedSegmentIndex]['name'].toString().toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: widget.isDark ? Colors.white70 : Colors.black87,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            )
+                          : Column(
+                              key: const ValueKey(-1),
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.payment, size: 16, color: widget.isDark ? Colors.white38 : Colors.grey[400]),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "Total",
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: widget.isDark ? Colors.white38 : Colors.grey[500],
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 16),
@@ -116,6 +176,7 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
                   children: widget.data.salesByPaymentMethod.asMap().entries.map((e) {
                     int idx = e.key;
                     var val = e.value;
+                    double amount = (val['amount'] as num).toDouble();
                     bool isTouched = idx == _selectedSegmentIndex;
                     
                     return GestureDetector(
@@ -130,10 +191,12 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
                       },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
+                        padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 6.0),
+                        margin: const EdgeInsets.only(bottom: 2.0),
                         decoration: BoxDecoration(
-                          color: isTouched ? colors[idx % colors.length].withValues(alpha: 0.1) : Colors.transparent,
+                          color: isTouched ? colors[idx % colors.length].withValues(alpha: 0.15) : Colors.transparent,
                           borderRadius: BorderRadius.circular(8),
+                          border: isTouched ? Border.all(color: colors[idx % colors.length].withValues(alpha: 0.4)) : null,
                         ),
                         child: Row(
                           children: [
@@ -142,9 +205,9 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
                             Expanded(child: Text(val['name'].toString().toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: isTouched ? FontWeight.bold : FontWeight.normal), maxLines: 1, overflow: TextOverflow.ellipsis)),
                             Row(
                               children: [
-                                Text(widget.formatCurrency(val['amount']), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                Text(_format(amount), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                 const SizedBox(width: 8),
-                                Text("${((val['amount'] / total) * 100).toStringAsFixed(1)}%", style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
+                                Text("${((amount / total) * 100).toStringAsFixed(1)}%", style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
                               ],
                             )
                           ],
@@ -181,13 +244,13 @@ class _PaymentMethodChartState extends State<PaymentMethodChart> {
     String lowerName = name.toLowerCase();
     
     if (lowerName.contains('yape') || lowerName.contains('plin')) {
-      insightText = "$name generó ${widget.formatCurrency(amount)} ($percentage%). Recuerda verificar tus límites de recepción diaria y que tu QR esté siempre visible.";
+      insightText = "$name generó ${_format(amount)} ($percentage%). Recuerda verificar tus límites de recepción diaria y que tu QR esté siempre visible.";
     } else if (lowerName.contains('efectivo')) {
-      insightText = "$name movió ${widget.formatCurrency(amount)} ($percentage%). Realiza arqueos de caja diarios para evitar faltantes y registra todo en el sistema.";
+      insightText = "$name movió ${_format(amount)} ($percentage%). Realiza arqueos de caja diarios para evitar faltantes y registra todo en el sistema.";
     } else if (lowerName.contains('tarjeta') || lowerName.contains('visa') || lowerName.contains('pos')) {
-      insightText = "$name procesó ${widget.formatCurrency(amount)} ($percentage%). Monitorea las comisiones del POS para asegurar que tu margen no se erosione.";
+      insightText = "$name procesó ${_format(amount)} ($percentage%). Monitorea las comisiones del POS para asegurar que tu margen no se erosione.";
     } else {
-      insightText = "$name canalizó ${widget.formatCurrency(amount)} ($percentage% del ingreso). Verifica que todos los depósitos hayan sido acreditados correctamente.";
+      insightText = "$name canalizó ${_format(amount)} ($percentage% del ingreso). Verifica que todos los depósitos hayan sido acreditados correctamente.";
     }
 
     return AnimatedSwitcher(

@@ -305,6 +305,7 @@ class TrackingProvider with ChangeNotifier {
       await _service.withdrawClientBalance(clientId, _negocioId!, _usuarioId!, amount, method);
       await loadClients();
       await loadClientLedger(clientId);
+      await loadClientDebts(clientId);
       return true;
     } catch (e) {
       _handleException(e);

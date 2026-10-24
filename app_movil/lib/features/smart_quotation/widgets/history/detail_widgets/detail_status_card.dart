@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/sale_payment_timeline.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class DetailStatusCard extends StatelessWidget {
   final Map<String, dynamic> saleData;
@@ -27,9 +28,28 @@ class DetailStatusCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(label, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 15)),
-          Text(value, style: TextStyle(fontWeight: isBold ? FontWeight.w900 : FontWeight.bold, color: valColor, fontSize: fontSize)),
+          Flexible(
+            flex: 3,
+            child: Text(
+              label, 
+              style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14.5),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            flex: 2,
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: isBold ? FontWeight.w900 : FontWeight.bold, color: valColor, fontSize: fontSize),
+            ),
+          ),
         ],
       ),
     );
@@ -37,7 +57,6 @@ class DetailStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
@@ -164,11 +183,11 @@ class DetailStatusCard extends StatelessWidget {
                   final double capitalInicial = abonoInicial + debtBase;
 
                   return [
-                    _buildSummaryRow("Capital Inicial Prestado", currency.format(capitalInicial), textColor, isDark),
+                    _buildSummaryRow("Capital Inicial Prestado", AppCurrency.format(capitalInicial), textColor, isDark),
                     if (interestAmount > 0.01)
                       _buildSummaryRow(
                         "Interés / Financiamiento (${interesRate.toStringAsFixed(1)}%)",
-                        "+ ${currency.format(interestAmount)}",
+                        "+ ${AppCurrency.format(interestAmount)}",
                         Colors.orange,
                         isDark,
                       ),
@@ -178,10 +197,10 @@ class DetailStatusCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       child: Divider(height: 1, thickness: 1.5, color: isDark ? Colors.white24 : Colors.grey[400]),
                     ),
-                    _buildSummaryRow("Total a Devolver", currency.format(totalAmount), textColor, isDark, isBold: true, fontSize: 18),
-                    _buildSummaryRow("Total Abonado", currency.format(paidAmount), isDark ? Colors.green[300]! : Colors.green[700]!, isDark, fontSize: 16),
+                    _buildSummaryRow("Total a Devolver", AppCurrency.format(totalAmount), textColor, isDark, isBold: true, fontSize: 18),
+                    _buildSummaryRow("Total Abonado", AppCurrency.format(paidAmount), isDark ? Colors.green[300]! : Colors.green[700]!, isDark, fontSize: 16),
                     if (pendingDebt > 0.01)
-                      _buildSummaryRow("Saldo Deudor Exigible", currency.format(pendingDebt), isDark ? Colors.red[300]! : Colors.red[700]!, isDark, isBold: true, fontSize: 16),
+                      _buildSummaryRow("Saldo Deudor Exigible", AppCurrency.format(pendingDebt), isDark ? Colors.red[300]! : Colors.red[700]!, isDark, isBold: true, fontSize: 16),
                   ];
                 })(),
               ] else ...[
@@ -189,7 +208,7 @@ class DetailStatusCard extends StatelessWidget {
                 _buildSummaryRow("Método de Pago", saleData['metodo_pago'].toString().toUpperCase(), textColor, isDark),
                 _buildSummaryRow("Estado", saleData['estado_pago'].toString().toUpperCase(), textColor, isDark),
                 if ((saleData['descuento_aplicado'] ?? 0) > 0)
-                  _buildSummaryRow("Descuento", "- ${currency.format(saleData['descuento_aplicado'])}", isDark ? Colors.green[400]! : Colors.green, isDark),
+                  _buildSummaryRow("Descuento", "- ${AppCurrency.format(saleData['descuento_aplicado'])}", isDark ? Colors.green[400]! : Colors.green, isDark),
 
                 if (saleData['estado_pago'] == 'pendiente' && (saleData['porcentaje_interes'] ?? 0) > 0)
                   ...(() {
@@ -203,7 +222,7 @@ class DetailStatusCard extends StatelessWidget {
                     double interestAmount = debtWithInterest - debtBase;
 
                     return [
-                      _buildSummaryRow("Financiamiento (${interesRate.toStringAsFixed(1)}%)", "+ ${currency.format(interestAmount)}", Colors.orange, isDark)
+                      _buildSummaryRow("Financiamiento (${interesRate.toStringAsFixed(1)}%)", "+ ${AppCurrency.format(interestAmount)}", Colors.orange, isDark)
                     ];
                   })(),
 
@@ -212,10 +231,10 @@ class DetailStatusCard extends StatelessWidget {
                   child: Divider(height: 1, thickness: 1.5, color: isDark ? Colors.white24 : Colors.grey[400]),
                 ),
 
-                _buildSummaryRow("Importe Total", currency.format(totalAmount), textColor, isDark, isBold: true, fontSize: 18),
-                _buildSummaryRow("Abonado", currency.format(paidAmount), isDark ? Colors.green[300]! : Colors.green[700]!, isDark, fontSize: 16),
+                _buildSummaryRow("Importe Total", AppCurrency.format(totalAmount), textColor, isDark, isBold: true, fontSize: 18),
+                _buildSummaryRow("Abonado", AppCurrency.format(paidAmount), isDark ? Colors.green[300]! : Colors.green[700]!, isDark, fontSize: 16),
                 if (pendingDebt > 0.01)
-                  _buildSummaryRow("Deuda Pendiente", currency.format(pendingDebt), isDark ? Colors.red[300]! : Colors.red[700]!, isDark, isBold: true, fontSize: 16),
+                  _buildSummaryRow("Deuda Pendiente", AppCurrency.format(pendingDebt), isDark ? Colors.red[300]! : Colors.red[700]!, isDark, isBold: true, fontSize: 16),
               ],
 
               SalePaymentTimeline(

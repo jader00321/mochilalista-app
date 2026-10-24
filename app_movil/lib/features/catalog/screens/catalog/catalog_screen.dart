@@ -1054,18 +1054,17 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                 else
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                    sliver: SliverGrid(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.60,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                          ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          if (index == provider.displayItems.length) {
-                            return const Center(
+                    sliver: SliverList.builder(
+                      itemCount: ((provider.displayItems.length + 1) ~/ 2) +
+                          (provider.isLoading ? 1 : 0),
+                      itemBuilder: (context, rowIndex) {
+                        final totalItems = provider.displayItems.length;
+                        final rowCount = (totalItems + 1) ~/ 2;
+
+                        if (rowIndex >= rowCount) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
                               child: SizedBox(
                                 width: 30,
                                 height: 30,
@@ -1073,24 +1072,57 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                                   strokeWidth: 3,
                                 ),
                               ),
-                            );
-                          }
-                          final itemWrapper = provider.displayItems[index];
-                          return CatalogItemCard(
-                            item: itemWrapper,
-                            isStoreMode: _isStoreMode,
-                            onDetails: () =>
-                                _showDetailModal(context, itemWrapper),
-                            onPresentationDetails: (pres) => _showDetailModal(
-                              context,
-                              itemWrapper.copyWith(presentation: pres),
                             ),
                           );
-                        },
-                        childCount:
-                            provider.displayItems.length +
-                            (provider.isLoading ? 1 : 0),
-                      ),
+                        }
+
+                        final index1 = rowIndex * 2;
+                        final index2 = index1 + 1;
+                        final item1 = provider.displayItems[index1];
+                        final item2 = index2 < totalItems
+                            ? provider.displayItems[index2]
+                            : null;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(
+                                  child: CatalogItemCard(
+                                    item: item1,
+                                    isStoreMode: _isStoreMode,
+                                    onDetails: () =>
+                                        _showDetailModal(context, item1),
+                                    onPresentationDetails: (pres) =>
+                                        _showDetailModal(
+                                      context,
+                                      item1.copyWith(presentation: pres),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: item2 != null
+                                      ? CatalogItemCard(
+                                          item: item2,
+                                          isStoreMode: _isStoreMode,
+                                          onDetails: () =>
+                                              _showDetailModal(context, item2),
+                                          onPresentationDetails: (pres) =>
+                                              _showDetailModal(
+                                            context,
+                                            item2.copyWith(presentation: pres),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
               ],

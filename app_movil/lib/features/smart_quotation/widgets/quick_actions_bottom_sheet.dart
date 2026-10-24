@@ -43,27 +43,74 @@ class QuickActionsBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isSold = quotation.status == 'SOLD';
+    
+    IconData headerIcon;
+    Color headerColor;
+
+    if (isSold) {
+      headerIcon = Icons.verified;
+      headerColor = isDark ? Colors.green[400]! : Colors.green[800]!;
+    } else if (quotation.type == 'ai_scan') {
+      headerIcon = Icons.auto_awesome;
+      headerColor = isDark ? Colors.purple[300]! : Colors.purple;
+    } else if (quotation.type == 'pack') {
+      headerIcon = Icons.inventory_2;
+      headerColor = isDark ? Colors.teal[300]! : Colors.teal;
+    } else {
+      headerIcon = Icons.edit_note;
+      headerColor = isDark ? Colors.deepOrange[300]! : Colors.deepOrange;
+    }
+
     return InteractiveSheetWrapper(
-      title: quotation.clientName ?? "Opciones Rápidas",
-      icon: Icons.flash_on,
-      iconColor: isDark ? Colors.amber[300] : Colors.amber,
+      title: quotation.clientName ?? "Opciones de Cotización",
+      icon: headerIcon,
+      iconColor: headerColor,
       maxHeightFactor: 0.85,
+      applyEffectiveBottomPadding: true,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-            
-            _buildListTile(
-              icon: Icons.copy_all, 
-              color: isDark ? Colors.blue[300]! : Colors.blue, 
-              title: "Duplicar Cotización", 
-              subtitle: "Crea una copia idéntica para editar", 
-              isDark: isDark, 
-              onTap: () {
-                Navigator.pop(context); 
-                _handleClone();
-              }
+          if (isSold)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lock, size: 18, color: isDark ? Colors.green[300] : Colors.green[800]),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "Cotización Vendida (Histórico Inmutable). Puedes duplicarla para crear un nuevo borrador o compartirla.",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.green[200] : Colors.green[900],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            
+
+          _buildListTile(
+            icon: Icons.copy_all, 
+            color: isDark ? Colors.blue[300]! : Colors.blue, 
+            title: "Duplicar Cotización", 
+            subtitle: "Crea una copia idéntica para editar", 
+            isDark: isDark, 
+            onTap: () {
+              Navigator.pop(context); 
+              _handleClone();
+            }
+          ),
+          
+          if (!isSold)
             _buildListTile(
               icon: Icons.edit, 
               color: isDark ? Colors.orange[300]! : Colors.orange, 
@@ -76,18 +123,19 @@ class QuickActionsBottomSheet extends StatelessWidget {
               }
             ),
 
-            _buildListTile(
-              icon: Icons.share, 
-              color: isDark ? Colors.green[400]! : Colors.green, 
-              title: "Compartir con Cliente", 
-              subtitle: "Enviar resumen por WhatsApp o redes", 
-              isDark: isDark, 
-              onTap: () {
-                Navigator.pop(context);
-                _handleQuickShare();
-              }
-            ),
+          _buildListTile(
+            icon: Icons.share, 
+            color: isDark ? Colors.green[400]! : Colors.green, 
+            title: "Compartir con Cliente", 
+            subtitle: "Enviar resumen por WhatsApp o redes", 
+            isDark: isDark, 
+            onTap: () {
+              Navigator.pop(context);
+              _handleQuickShare();
+            }
+          ),
 
+          if (!isSold)
             Builder(
               builder: (ctx) {
                 final validation = Provider.of<WorkbenchProvider>(parentContext, listen: false).getValidationFor(quotation.id);
@@ -108,19 +156,20 @@ class QuickActionsBottomSheet extends StatelessWidget {
               }
             ),
 
-            if (quotation.status != 'ARCHIVED' && quotation.status != 'SOLD')
-              _buildListTile(
-                icon: Icons.archive, 
-                color: isDark ? Colors.purple[400]! : Colors.purple, 
-                title: "Archivar", 
-                subtitle: "Ocultar de las listas activas", 
-                isDark: isDark, 
-                onTap: () {
-                  Navigator.pop(context);
-                  _handleArchive();
-                }
-              ),
+          if (!isSold && quotation.status != 'ARCHIVED')
+            _buildListTile(
+              icon: Icons.archive, 
+              color: isDark ? Colors.purple[400]! : Colors.purple, 
+              title: "Archivar", 
+              subtitle: "Ocultar de las listas activas", 
+              isDark: isDark, 
+              onTap: () {
+                Navigator.pop(context);
+                _handleArchive();
+              }
+            ),
 
+          if (!isSold) ...[
             Divider(color: isDark ? Colors.white10 : Colors.grey[200], indent: 70),
 
             _buildListTile(
@@ -134,7 +183,8 @@ class QuickActionsBottomSheet extends StatelessWidget {
                 _handleDelete();
               }
             ),
-            const SizedBox(height: 10),
+          ],
+          const SizedBox(height: 10),
         ],
       ),
     );

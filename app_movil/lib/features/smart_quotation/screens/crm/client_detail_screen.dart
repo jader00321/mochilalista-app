@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
@@ -160,8 +160,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
       onConfirm: () async {
         String msg = "Hola ${_currentClient.fullName}, te saludamos de la tienda 👋.\n\n";
         if (_currentClient.totalDebt > 0) {
-          final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-          msg += "Le escribimos para recordarle que tiene un saldo pendiente de ${currency.format(_currentClient.totalDebt)}.\n";
+          msg += "Le escribimos para recordarle que tiene un saldo pendiente de ${AppCurrency.format(_currentClient.totalDebt)}.\n";
           
           final trackingProv = Provider.of<TrackingProvider>(context, listen: false);
           int overdueCount = 0;
@@ -179,7 +178,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
             }
           }
           if (overdueCount > 0) {
-            msg += "\n⚠️ Cuenta con $overdueCount cuota(s) vencida(s) por ${currency.format(overdueAmount)}.\n";
+            msg += "\n⚠️ Cuenta con $overdueCount cuota(s) vencida(s) por ${AppCurrency.format(overdueAmount)}.\n";
           }
           msg += "\nPuede realizar su abono mediante Yape, Plin o en tienda física. Si ya realizó su pago, por favor haga caso omiso a este mensaje. ¡Muchas gracias!";
         } else {
@@ -246,7 +245,14 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
             SliverAppBar(
-              title: const Text("Perfil del Cliente", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+              title: const FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Perfil del Cliente",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19),
+                ),
+              ),
               backgroundColor: isDark ? const Color(0xFF1A1A24) : const Color(0xFF1565C0),
               foregroundColor: Colors.white,
               elevation: 0,
@@ -309,29 +315,31 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
               ),
             ),
             
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _SliverAppBarDelegate(
-                TabBar(
-                  controller: _tabController,
-                  isScrollable: true, 
-                  tabAlignment: TabAlignment.start, 
-                  padding: EdgeInsets.zero,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  labelColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                  unselectedLabelColor: isDark ? Colors.grey[500] : Colors.grey,
-                  indicatorColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                  indicatorWeight: 3,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  tabs: const [
-                    Tab(text: "Estado de Cuenta"),
-                    Tab(text: "Historial de Compras"),
-                    Tab(text: "Listas Pendientes"),
-                  ],
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _SliverAppBarDelegate(
+                  TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.center,
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    labelColor: isDark ? Colors.blue[300] : Colors.blue[800],
+                    unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
+                    indicatorColor: isDark ? Colors.blue[300] : Colors.blue[800],
+                    indicatorWeight: 3,
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                    tabs: const [
+                      Tab(text: "Estado de Cuenta"),
+                      Tab(text: "Historial de Compras"),
+                      Tab(text: "Listas Pendientes"),
+                    ],
+                  ),
+                  surfaceColor,
                 ),
-                surfaceColor
               ),
-            ),
           ];
         },
         body: Container(

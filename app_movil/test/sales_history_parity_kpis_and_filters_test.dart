@@ -252,20 +252,21 @@ void main() {
       );
 
       // Verificaciones en Tarjetas de Historial:
-      // 1. Badges superiores de Origen Explícito
-      expect(find.text("🏦 Préstamo Personal"), findsOneWidget);
-      expect(find.text("📋 Cotización Vendida"), findsOneWidget);
+      // 1. Badges superiores de Origen Explícito (elegante sin emojis)
+      expect(find.text("Préstamo Personal"), findsOneWidget);
+      expect(find.text("Cotización Vendida"), findsOneWidget);
 
       // 2. Cliente Freddy visible en ambos (¡El préstamo NO debe ocultar a Freddy!)
       expect(find.text("Freddy"), findsNWidgets(2));
 
-      // 3. Subtítulo del préstamo muestra su nota real
-      expect(find.text("Préstamo personal para mercadería"), findsOneWidget);
+      // 3. Subtítulo del préstamo no repite 'Préstamo personal'
+      expect(find.text("Mercadería"), findsOneWidget);
 
       // 4. Verdad contable en Recibo #1: Debe decir PAGO PARCIAL · Debe S/ 18.57 (JAMÁS PAGADO)
       expect(find.text("PAGO PARCIAL · Debe S/ 18.57"), findsOneWidget);
       expect(find.text("Abonado: S/ 5.00"), findsOneWidget);
-      expect(find.text("Debe: S/ 18.57"), findsOneWidget);
+      // El texto redundante "Debe: S/ 18.57" bajo el monto principal fue eliminado
+      expect(find.text("Debe: S/ 18.57"), findsNothing);
 
       // 5. Estado de entrega: presente en ventas ("PENDIENTE RECOJO"), NUNCA en préstamos
       expect(find.text("PENDIENTE RECOJO"), findsOneWidget);
@@ -298,12 +299,13 @@ void main() {
           ),
         ),
       );
+
       await tester.pumpAndSettle();
 
       // Verificación de títulos nítidos sin truncar
       expect(find.text("Operaciones"), findsOneWidget);
-      expect(find.text("Cobrado (S/)"), findsOneWidget);
-      expect(find.text("Por Cobrar (S/)"), findsOneWidget);
+      expect(find.text("Cobrado"), findsOneWidget);
+      expect(find.text("Por Cobrar"), findsOneWidget);
 
       // Verificación de cifras renderizadas
       expect(find.text("2"), findsOneWidget);
@@ -408,10 +410,30 @@ class _MockSaleProvider extends ChangeNotifier implements SaleProvider {
   bool get isLoading => false;
 
   @override
+  bool get isRefreshing => false;
+
+  @override
   bool get hasMoreData => false;
 
   @override
   bool get isLoadingMore => false;
+
+  @override
+  List<SaleModel> get archivedSales => _history.where((s) => s.isArchived).toList();
+
+  @override
+  List<SaleModel> getSalesForTab(String tabKey) {
+    if (tabKey == 'archivadas') {
+      return _history.where((s) => s.isArchived).toList();
+    }
+    if (tabKey == 'smart_quotation') {
+      return _history.where((s) => !s.isArchived && !s.isQuickSale && !s.isLoan).toList();
+    }
+    if (tabKey == 'pos_rapido') {
+      return _history.where((s) => !s.isArchived && s.isQuickSale).toList();
+    }
+    return _history.where((s) => !s.isArchived).toList();
+  }
 
   @override
   String get errorMessage => "";

@@ -9,6 +9,9 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
         decoration: BoxDecoration(color: widget.isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.shade200)),
         child: ExpansionTile(
           initiallyExpanded: true,
+          onExpansionChanged: (expanded) {
+            if (expanded) _autoScrollTo(_keyStock);
+          },
           tilePadding: const EdgeInsets.symmetric(horizontal: 16),
           title: Text("Stock Inicial (Nueva Variante)", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700], letterSpacing: 0.5)),
           leading: Icon(Icons.inventory, color: widget.isDark ? Colors.green[300] : Colors.green[700]),
@@ -69,6 +72,9 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
         decoration: BoxDecoration(color: widget.isDark ? Colors.green.withValues(alpha: 0.05) : Colors.green.withValues(alpha: 0.02), borderRadius: BorderRadius.circular(12), border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade100)),
         child: ExpansionTile(
           initiallyExpanded: true,
+          onExpansionChanged: (expanded) {
+            if (expanded) _autoScrollTo(_keyStock);
+          },
           tilePadding: const EdgeInsets.symmetric(horizontal: 16),
           title: Text("Gestión de Stock", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700], letterSpacing: 0.5)),
           leading: Icon(Icons.inventory, color: widget.isDark ? Colors.green[300] : Colors.green[700]),

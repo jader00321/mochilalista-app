@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
@@ -22,7 +22,6 @@ class QuoteItemListRow extends StatelessWidget {
   Widget build(BuildContext context) {
     bool hasStockIssue = stockError != null && stockError!.itemId != -1;
     bool hasPriceIssue = priceError != null && priceError!.itemId != -1;
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
     // 🔥 PRECIOS (El Cotizado es la VERDAD)
     double quotedPrice = item.unitPriceApplied;
@@ -125,7 +124,6 @@ class QuoteItemListRow extends StatelessWidget {
                        child: Text(item.specificName!, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600])),
                      ),
                 ] else ...[
-                   // 🔥 LEGADO ELIMINADO: Reemplazado productNameSnapshot por displayName
                    Text(item.displayName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, height: 1.2, color: hasStockIssue ? (isDark ? Colors.red[300] : Colors.red[900]) : textColor), maxLines: 5, overflow: TextOverflow.ellipsis),
                 ],
                 
@@ -161,23 +159,36 @@ class QuoteItemListRow extends StatelessWidget {
                         spacing: 8,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          if (hasDiscount) Text(currency.format(item.originalUnitPrice), style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, decoration: TextDecoration.lineThrough, fontSize: 13, fontWeight: FontWeight.bold)),
-                          Text(currency.format(quotedPrice), style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange[700], fontWeight: FontWeight.w900, fontSize: 16)),
+                          if (hasDiscount) Text(AppCurrency.format(item.originalUnitPrice), style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, decoration: TextDecoration.lineThrough, fontSize: 13, fontWeight: FontWeight.bold)),
+                          Text(AppCurrency.format(quotedPrice), style: TextStyle(color: isDark ? Colors.orange[300] : Colors.orange[700], fontWeight: FontWeight.w900, fontSize: 16)),
                         ]
                       ),
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
-                        decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50], borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200)), 
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50], 
+                          borderRadius: BorderRadius.circular(6), 
+                          border: Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200)
+                        ), 
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.info_outline, size: 14, color: isDark ? Colors.orange[300] : Colors.orange[900]),
                             const SizedBox(width: 6),
-                            Text("En tienda ahora: ${currency.format(newSystemPrice)}", style: TextStyle(fontSize: 12, color: isDark ? Colors.orange[300] : Colors.orange[900], fontWeight: FontWeight.bold)),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  "En tienda ahora: ${AppCurrency.format(newSystemPrice)}", 
+                                  style: TextStyle(fontSize: 12, color: isDark ? Colors.orange[300] : Colors.orange[900], fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
                           ],
-                        )
-                      )
+                        ),
+                      ),
                     ],
                   )
                 else if (hasDiscount)
@@ -185,12 +196,12 @@ class QuoteItemListRow extends StatelessWidget {
                     spacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(currency.format(item.originalUnitPrice), style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, decoration: TextDecoration.lineThrough, fontSize: 13, fontWeight: FontWeight.bold)),
-                      Text(currency.format(quotedPrice), style: TextStyle(color: isDark ? Colors.green[400] : Colors.green[700], fontWeight: FontWeight.w900, fontSize: 16)),
+                      Text(AppCurrency.format(item.originalUnitPrice), style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, decoration: TextDecoration.lineThrough, fontSize: 13, fontWeight: FontWeight.bold)),
+                      Text(AppCurrency.format(quotedPrice), style: TextStyle(color: isDark ? Colors.green[400] : Colors.green[700], fontWeight: FontWeight.w900, fontSize: 16)),
                     ]
                   )
                 else
-                  Text("Unit: ${currency.format(quotedPrice)}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[700]))
+                  Text("Unit: ${AppCurrency.format(quotedPrice)}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[700]))
               ],
             ),
           ),
@@ -208,7 +219,7 @@ class QuoteItemListRow extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerRight,
                   child: Text(
-                    currency.format(total), 
+                    AppCurrency.format(total), 
                     style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: hasStockIssue ? (isDark ? Colors.red[300] : Colors.red[900]) : (hasPriceIssue ? (isDark ? Colors.orange[300] : Colors.orange[900]) : textColor))
                   ),
                 ),

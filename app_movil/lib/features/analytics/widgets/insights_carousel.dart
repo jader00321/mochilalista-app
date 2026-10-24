@@ -97,111 +97,114 @@ class _InsightsCarouselState extends State<InsightsCarousel> with SingleTickerPr
           maxChildSize: 0.9,
           expand: false,
           builder: (_, controller) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: BoxDecoration(
-                color: widget.isDark ? const Color(0xFF1E293B) : Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: ListView(
-                controller: controller,
-                children: [
-                  Center(
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 24),
-                      width: 40,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: widget.isDark ? Colors.white24 : Colors.grey[300],
-                        borderRadius: BorderRadius.circular(10),
+            return SafeArea(
+              bottom: true,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                decoration: BoxDecoration(
+                  color: widget.isDark ? const Color(0xFF1E293B) : Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: ListView(
+                  controller: controller,
+                  children: [
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 24),
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: widget.isDark ? Colors.white24 : Colors.grey[300],
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
-                  ),
-                  Row(
-                    children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
+                          child: Icon(insight.icon, color: iconColor, size: 28),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Text(insight.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: widget.isDark ? Colors.white : Colors.black87)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      insight.description,
+                      style: TextStyle(fontSize: 15, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], height: 1.5),
+                    ),
+                    if (insight.suggestedAction != null) ...[
+                      const SizedBox(height: 24),
                       Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-                        child: Icon(insight.icon, color: iconColor, size: 28),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Text(insight.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: widget.isDark ? Colors.white : Colors.black87)),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: widget.isDark ? Colors.black12 : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey[300]!),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.lightbulb_outline, color: Colors.amber[700], size: 24),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                "¿Qué hacer?\n${insight.suggestedAction}",
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], height: 1.4),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    insight.description,
-                    style: TextStyle(fontSize: 15, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], height: 1.5),
-                  ),
-                  if (insight.suggestedAction != null) ...[
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: widget.isDark ? Colors.black12 : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey[300]!),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.lightbulb_outline, color: Colors.amber[700], size: 24),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              "¿Qué hacer?\n${insight.suggestedAction}",
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], height: 1.4),
-                            ),
+                    if (insight.actionRoute != null) ...[
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _navigateToRoute(context, insight.actionRoute!);
+                          },
+                          icon: const Icon(Icons.arrow_forward),
+                          label: Text(insight.actionLabel ?? "Continuar"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: iconColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  if (insight.actionRoute != null) ...[
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _navigateToRoute(context, insight.actionRoute!);
-                        },
-                        icon: const Icon(Icons.arrow_forward),
-                        label: Text(insight.actionLabel ?? "Continuar"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: iconColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text("Cerrar", style: TextStyle(color: widget.isDark ? Colors.white70 : Colors.black54)),
-                      ),
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: iconColor,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text("Cerrar", style: TextStyle(color: widget.isDark ? Colors.white70 : Colors.black54)),
                         ),
-                        child: const Text("Entendido", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       ),
-                    ),
+                    ] else ...[
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: iconColor,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: const Text("Entendido", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             );
           }

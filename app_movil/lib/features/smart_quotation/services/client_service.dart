@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:intl/intl.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/core/database/local_db.dart';
@@ -526,8 +527,9 @@ class ClientService {
         }
       });
       
-      // Asegurar reconciliación real después de cada pago
+      // Asegurar reconciliación real después de cada pago (deuda y saldo a favor)
       await recalculateClientDebt(clientId);
+      await recalculateClientSaldoAFavor(clientId);
       return true;
     } catch (e) { throw Exception("Error registrando pago localmente: $e"); }
   }
@@ -614,7 +616,7 @@ class ClientService {
         'fecha_venta': DateTime.now().toIso8601String(),
       });
 
-      // 2. Insertar cuotas generadas por el modal
+      // 2. Insertar cuotas generadas por el modal o cuota única por defecto
       if (installments != null && installments.isNotEmpty) {
         for (var cuota in installments) {
           await txn.insert('cuotas', {
@@ -626,6 +628,16 @@ class ClientService {
             'estado': 'pendiente',
           });
         }
+      } else {
+        final defaultDue = DateTime.now().add(const Duration(days: 30));
+        await txn.insert('cuotas', {
+          'venta_id': loanId,
+          'numero_cuota': 1,
+          'monto': finalDebt,
+          'monto_pagado': 0.0,
+          'fecha_vencimiento': DateFormat('yyyy-MM-dd').format(defaultDue),
+          'estado': 'pendiente',
+        });
       }
     });
 

@@ -15,6 +15,7 @@ extension _ModalVariantCards on _ComparativeUpdateModalState {
       height: 90,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         itemCount: alternatives.length + 1,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
@@ -160,33 +161,56 @@ extension _ModalVariantCards on _ComparativeUpdateModalState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Línea 1: Checkbox + Label + Referencia BD
+          // Línea 1: Checkbox + Label + Referencia BD (Organizado para 0 recortes)
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 24, height: 24,
-                child: Checkbox(
-                  value: isChecked, 
-                  onChanged: onChanged, 
-                  activeColor: Colors.blue, 
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: SizedBox(
+                  width: 20, height: 20,
+                  child: Checkbox(
+                    value: isChecked, 
+                    onChanged: onChanged, 
+                    activeColor: Colors.blue, 
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
               ),
-              const SizedBox(width: 6),
-              Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: widget.isDark ? Colors.white70 : Colors.black87)),
-              const Spacer(),
-              Flexible(
-                child: Text(
-                  "BD: $dbValue", 
-                  style: TextStyle(
-                    fontSize: 10, 
-                    color: widget.isDark ? Colors.grey[500] : Colors.grey[600], 
-                    decoration: isChecked ? TextDecoration.lineThrough : null,
-                    fontStyle: FontStyle.italic,
-                  ),
-                  maxLines: 1, 
-                  overflow: TextOverflow.ellipsis,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label, 
+                      style: TextStyle(
+                        fontSize: 12, 
+                        fontWeight: FontWeight.w700, 
+                        color: widget.isDark ? Colors.white70 : Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (dbValue.isNotEmpty && dbValue != 'null' && dbValue != 'N/A') ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        "BD: $dbValue", 
+                        style: TextStyle(
+                          fontSize: 9.5, 
+                          color: isChecked 
+                              ? (widget.isDark ? Colors.grey[500] : Colors.grey[600]) 
+                              : (widget.isDark ? Colors.blue[300] : Colors.blue[700]), 
+                          decoration: isChecked ? TextDecoration.lineThrough : null,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        maxLines: 1, 
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],

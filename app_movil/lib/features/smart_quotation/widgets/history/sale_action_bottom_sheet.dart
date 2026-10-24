@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:intl/intl.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart'; 
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
@@ -16,6 +15,7 @@ import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_s
 import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';
 
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class SaleActionBottomSheet extends StatefulWidget {
   final SaleModel sale;
@@ -153,6 +153,7 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
             builder: (context, setModalState) {
               return InteractiveSheetWrapper(
                 maxHeightFactor: 0.85,
+                applyEffectiveBottomPadding: true,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,6 +250,7 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
         backgroundColor: Colors.transparent,
         builder: (ctx) => InteractiveSheetWrapper(
           maxHeightFactor: 0.6,
+          applyEffectiveBottomPadding: true,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -334,13 +336,13 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
     final bool isQuickSale = widget.sale.origenVenta == 'pos_rapido';
     final bool isLoan = widget.sale.origenVenta == 'prestamo_personal';
     final bool hasPendingDebt = widget.sale.pendingDebt > 0.01 && !isArchived;
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
 
     return InteractiveSheetWrapper(
       maxHeightFactor: 0.85,
+      applyEffectiveBottomPadding: true,
       child: AnimatedSize(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -388,7 +390,7 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              "Deuda Pendiente: ${currency.format(widget.sale.pendingDebt)}",
+                              "Deuda Pendiente: ${AppCurrency.format(widget.sale.pendingDebt)}",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: isDark ? Colors.amber[300] : Colors.amber[900],

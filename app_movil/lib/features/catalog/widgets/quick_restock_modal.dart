@@ -28,16 +28,15 @@ class QuickRestockModal extends StatefulWidget {
 class _QuickRestockModalState extends State<QuickRestockModal> {
   // Modo: 0 = Sumar mercancía recibida, 1 = Fijar stock total exacto
   int _selectedMode = 0;
-  
-  // Granularidad: 0 = Por Unidad de Venta (xFactor), 1 = Por Unidad Base (x1)
-  int _unitGranularity = 0;
 
   final TextEditingController _qtyCtrl = TextEditingController();
   bool _isSaving = false;
+  late int _currentStockBase;
 
   @override
   void initState() {
     super.initState();
+    _currentStockBase = widget.presentation.stockActual;
     _qtyCtrl.text = "1";
     _qtyCtrl.addListener(() => setState(() {}));
   }
@@ -56,8 +55,6 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
 
   bool get _hasFactor => _factor > 1;
 
-  int get _currentStockBase => widget.presentation.stockActual;
-
   int get _currentStockSalesUnits => _currentStockBase ~/ _factor;
 
   int get _currentStockRemainder => _currentStockBase % _factor;
@@ -67,24 +64,14 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
   int get _calculatedNewStockBase {
     if (_selectedMode == 0) {
       // Sumar nuevo stock
-      if (_unitGranularity == 0 && _hasFactor) {
-        return _currentStockBase + (_parsedInput * _factor);
-      } else {
-        return _currentStockBase + _parsedInput;
-      }
+      return _currentStockBase + (_parsedInput * _factor);
     } else {
       // Fijar stock exacto
-      if (_unitGranularity == 0 && _hasFactor) {
-        return _parsedInput * _factor;
-      } else {
-        return _parsedInput;
-      }
+      return _parsedInput * _factor;
     }
   }
 
   int get _calculatedNewStockSalesUnits => _calculatedNewStockBase ~/ _factor;
-
-  int get _calculatedNewStockRemainder => _calculatedNewStockBase % _factor;
 
   void _onModeChanged(int mode) {
     if (_selectedMode == mode) return;
@@ -93,25 +80,17 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
       if (mode == 0) {
         _qtyCtrl.text = "1";
       } else {
-        if (_unitGranularity == 0 && _hasFactor) {
-          _qtyCtrl.text = _currentStockSalesUnits.toString();
-        } else {
-          _qtyCtrl.text = _currentStockBase.toString();
-        }
+        _qtyCtrl.text = _currentStockSalesUnits.toString();
       }
     });
   }
 
-  void _onGranularityChanged(int gran) {
-    if (_unitGranularity == gran) return;
+  void _squareStock() {
+    HapticFeedback.mediumImpact();
     setState(() {
-      _unitGranularity = gran;
-      if (_selectedMode == 0) {
-        _qtyCtrl.text = gran == 0 ? "1" : _factor.toString();
-      } else {
-        _qtyCtrl.text = gran == 0
-            ? _currentStockSalesUnits.toString()
-            : _currentStockBase.toString();
+      _currentStockBase = (_currentStockBase ~/ _factor) * _factor;
+      if (_selectedMode == 1) {
+        _qtyCtrl.text = (_currentStockBase ~/ _factor).toString();
       }
     });
   }
@@ -123,26 +102,6 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
     } else {
       _qtyCtrl.text = (current + amount).clamp(0, 99999).toString();
     }
-  }
-
-  void _squareToExactMultiple(int targetMultipleBase) {
-    setState(() {
-      if (_selectedMode == 0) {
-        int diff = targetMultipleBase - _currentStockBase;
-        if (diff < 0) diff = 0;
-        if (_unitGranularity == 0 && _hasFactor) {
-          _qtyCtrl.text = (diff / _factor).ceil().toString();
-        } else {
-          _qtyCtrl.text = diff.toString();
-        }
-      } else {
-        if (_unitGranularity == 0 && _hasFactor) {
-          _qtyCtrl.text = (targetMultipleBase ~/ _factor).toString();
-        } else {
-          _qtyCtrl.text = targetMultipleBase.toString();
-        }
-      }
-    });
   }
 
   Future<void> _submitRestock() async {
@@ -169,8 +128,11 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
       if (!mounted) return;
 
       if (success) {
+        final remainder = newStockBase % _factor;
         final summaryMsg = _hasFactor
-            ? "Stock actualizado: $_calculatedNewStockSalesUnits $_unidadVenta ($newStockBase u. base)"
+            ? (remainder > 0
+                ? "Stock actualizado: $_calculatedNewStockSalesUnits $_unidadVenta (+ $remainder u. base suelta) = $newStockBase unidades base"
+                : "Stock actualizado: $_calculatedNewStockSalesUnits $_unidadVenta = $newStockBase unidades base")
             : "Stock actualizado: $newStockBase unidades disponibles";
 
         CustomSnackBar.show(
@@ -203,10 +165,6 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
             widget.presentation.nombreEspecifico!.isNotEmpty
         ? widget.presentation.nombreEspecifico!
         : "$_unidadVenta (x$_factor)";
-
-    final isOddStock = _hasFactor && (_calculatedNewStockRemainder != 0);
-    final nextMultipleBase = ((_calculatedNewStockBase ~/ _factor) + 1) * _factor;
-    final targetSalesUnits = nextMultipleBase ~/ _factor;
 
     return Container(
       padding: EdgeInsets.only(
@@ -360,106 +318,126 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
                     color: isDark ? Colors.white12 : Colors.grey.shade300,
                   ),
                 ),
-                padding: const EdgeInsets.all(3),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: () => _onGranularityChanged(0),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
-                          decoration: BoxDecoration(
-                            color: _unitGranularity == 0
-                                ? (isDark ? const Color(0xFF2C324A) : Colors.white)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: _unitGranularity == 0
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.1),
-                                      blurRadius: 4,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          alignment: Alignment.center,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.all_inbox,
-                                size: 14,
-                                color: _unitGranularity == 0
-                                    ? Colors.blue[400]
-                                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                "Por $_unidadVenta (x$_factor)",
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: _unitGranularity == 0
-                                      ? (isDark ? Colors.blue[300] : Colors.blue[900])
-                                      : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                    Text(
+                      "Unidad de ingreso:",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.grey[300] : Colors.grey[800],
                       ),
                     ),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () => _onGranularityChanged(1),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.blue[800] : Colors.blue[100],
                         borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
-                          decoration: BoxDecoration(
-                            color: _unitGranularity == 1
-                                ? (isDark ? const Color(0xFF2C324A) : Colors.white)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: _unitGranularity == 1
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.1),
-                                      blurRadius: 4,
-                                    ),
-                                  ]
-                                : null,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check, size: 13, color: isDark ? Colors.white : Colors.blue[900]),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Por $_unidadVenta (x$_factor)",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.blue[900],
+                            ),
                           ),
-                          alignment: Alignment.center,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.format_list_numbered,
-                                size: 14,
-                                color: _unitGranularity == 1
-                                    ? Colors.blue[400]
-                                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                "Por Unidad base (x1)",
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: _unitGranularity == 1
-                                      ? (isDark ? Colors.blue[300] : Colors.blue[900])
-                                      : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
+
+              // Banner Inteligente Condicional de Unidades Residuales
+              if (_currentStockRemainder > 0) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? Colors.amber[400]! : Colors.amber[800]!,
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 16,
+                            color: isDark ? Colors.amber[300]! : Colors.amber[900]!,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              "Hay $_currentStockRemainder u. base suelta(s) que no completan un $_unidadVenta (x$_factor).${_selectedMode == 1 ? ' Al fijar stock total, esas unidades sueltas se reemplazarán por el nuevo total exacto.' : ' Al sumar compra se conservarán intactas.'}",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.amber[200] : Colors.amber[900],
+                                height: 1.25,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                                side: BorderSide(color: isDark ? Colors.amber[400]! : Colors.amber[800]!),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                widget.onNavigateToFullEdit();
+                              },
+                              icon: const Icon(Icons.build_outlined, size: 13),
+                              label: const Text(
+                                "🛠️ Ir a Editar",
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isDark ? Colors.amber[700] : Colors.amber[800],
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                elevation: 0,
+                              ),
+                              onPressed: _squareStock,
+                              icon: const Icon(Icons.flash_on, size: 13),
+                              label: const Text(
+                                "⚡ Cuadrar aquí",
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
 
             const SizedBox(height: 16),
@@ -543,9 +521,7 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
                       ),
                       if (_hasFactor)
                         Text(
-                          _unitGranularity == 0
-                              ? "$_unidadVenta\n(+${_parsedInput * _factor} u.)"
-                              : "Unidades base\n(+$_parsedInput u.)",
+                          "$_unidadVenta\n(+${_parsedInput * _factor} u.)",
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 10,
@@ -581,8 +557,8 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
                       ),
                       if (_hasFactor)
                         Text(
-                          _calculatedNewStockRemainder > 0
-                              ? "$_unidadVenta (+${_calculatedNewStockRemainder}u)\n($_calculatedNewStockBase u.)"
+                          _calculatedNewStockBase % _factor > 0
+                              ? "$_unidadVenta (+${_calculatedNewStockBase % _factor}u)\n($_calculatedNewStockBase u.)"
                               : "$_unidadVenta\n($_calculatedNewStockBase u.)",
                           textAlign: TextAlign.center,
                           style: TextStyle(
@@ -598,75 +574,15 @@ class _QuickRestockModalState extends State<QuickRestockModal> {
               ),
             ),
 
-            // Alerta inteligente de stock impar y botón de cuadratura rápida
-            if (isOddStock) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.orange.withValues(alpha: 0.15)
-                      : Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.shade300,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange[400]),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "Stock con residuo impar: $_calculatedNewStockBase u. equivalen a ${(_calculatedNewStockBase / _factor).toStringAsFixed(1)} $_unidadVenta. Quedan $_calculatedNewStockRemainder u. suelta(s) fuera de empaque.",
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: isDark ? Colors.orange[200] : Colors.orange[900],
-                              fontWeight: FontWeight.w600,
-                              height: 1.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _squareToExactMultiple(nextMultipleBase),
-                        icon: const Icon(Icons.bolt, size: 16),
-                        label: Text(
-                          "Cuadrar a $targetSalesUnits $_unidadVenta ($nextMultipleBase u.)",
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800],
-                          side: BorderSide(
-                            color: isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade400,
-                          ),
-                          visualDensity: VisualDensity.compact,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
             const SizedBox(height: 18),
 
             // Campo de entrada y botones de incremento rápido
             Text(
               _selectedMode == 0
-                  ? (_hasFactor && _unitGranularity == 0
+                  ? (_hasFactor
                       ? "Cantidad de ${_unidadVenta}s compradas / recibidas:"
                       : "Cantidad de unidades compradas / recibidas:")
-                  : (_hasFactor && _unitGranularity == 0
+                  : (_hasFactor
                       ? "Nuevo stock total disponible (en ${_unidadVenta}s):"
                       : "Nuevo stock total disponible (en unidades base):"),
               style: TextStyle(

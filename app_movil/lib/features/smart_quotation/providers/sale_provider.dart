@@ -15,8 +15,11 @@ class SaleProvider with ChangeNotifier {
   final ClientService _clientService = ClientService();
 
   bool _isLoading = false;
+  bool _isRefreshing = false;
   String _errorMessage = "";
   List<SaleModel> _salesHistory = [];
+  List<SaleModel> _masterSales = [];
+  List<SaleModel> _archivedSales = [];
   List<SaleModel> _recentHomeSales = [];
 
   bool _isLoadingMore = false;
@@ -46,8 +49,11 @@ class SaleProvider with ChangeNotifier {
     _currentEndDate = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
   }
   bool get isLoading => _isLoading;
+  bool get isRefreshing => _isRefreshing;
   String get errorMessage => _errorMessage;
   List<SaleModel> get salesHistory => _salesHistory;
+  List<SaleModel> get masterSales => _masterSales;
+  List<SaleModel> get archivedSales => _archivedSales;
   List<SaleModel> get recentHomeSales => _recentHomeSales;
 
   bool get isLoadingMore => _isLoadingMore;
@@ -205,7 +211,38 @@ class SaleProvider with ChangeNotifier {
         negocioId: _negocioId!, usuarioId: _usuarioId!,
         id: quotationId, totalAmount: 0, totalSavings: 0, items: [], notas: newNote
       );
+      final idx = _salesHistory.indexWhere((s) => s.quotationId == quotationId);
+      if (idx != -1) {
+        _salesHistory[idx] = _salesHistory[idx].copyWith(notes: newNote);
+      }
+      final mIdx = _masterSales.indexWhere((s) => s.quotationId == quotationId);
+      if (mIdx != -1) {
+        _masterSales[mIdx] = _masterSales[mIdx].copyWith(notes: newNote);
+      }
+      notifyListeners();
       return true;
+    } catch (e) {
+      _handleException(e);
+      return false;
+    }
+  }
+
+  Future<bool> updateSaleNote(int saleId, String newNote) async {
+    if (_negocioId == null) return false;
+    try {
+      final success = await _salesService.updateSaleNote(saleId, newNote);
+      if (success) {
+        final idx = _salesHistory.indexWhere((s) => s.id == saleId);
+        if (idx != -1) {
+          _salesHistory[idx] = _salesHistory[idx].copyWith(notes: newNote);
+        }
+        final mIdx = _masterSales.indexWhere((s) => s.id == saleId);
+        if (mIdx != -1) {
+          _masterSales[mIdx] = _masterSales[mIdx].copyWith(notes: newNote);
+        }
+        notifyListeners();
+      }
+      return success;
     } catch (e) {
       _handleException(e);
       return false;
@@ -354,16 +391,139 @@ class SaleProvider with ChangeNotifier {
   void setFinancialFilter(String status) {
     if (_financialStatus == status) return;
     _financialStatus = status;
-    loadFilteredHistory(reset: true);
+    _applyTabFilterInMemory();
+    notifyListeners();
+  }
+
+  /// 🔄 Sincroniza inmediatamente un cobro en memoria (_masterSales y _salesHistory)
+  /// y recalcula las estadísticas y KPIs a 0ms sin esperar a SQLite.
+  void updateSalePaymentInMaster({
+    required int saleId,
+    required double newPaidAmount,
+    String? newPaymentStatus,
+  }) {
+    final mIdx = _masterSales.indexWhere((s) => s.id == saleId);
+    if (mIdx != -1) {
+      final old = _masterSales[mIdx];
+      final status = newPaymentStatus ?? (newPaidAmount >= old.trueTotalAmount - 0.01 ? 'pagado' : 'pendiente');
+      _masterSales[mIdx] = old.copyWith(
+        paidAmount: newPaidAmount,
+        paymentStatus: status,
+      );
+    }
+
+    final aIdx = _archivedSales.indexWhere((s) => s.id == saleId);
+    if (aIdx != -1) {
+      final old = _archivedSales[aIdx];
+      final status = newPaymentStatus ?? (newPaidAmount >= old.trueTotalAmount - 0.01 ? 'pagado' : 'pendiente');
+      _archivedSales[aIdx] = old.copyWith(
+        paidAmount: newPaidAmount,
+        paymentStatus: status,
+      );
+    }
+
+    _applyTabFilterInMemory();
+    notifyListeners();
+  }
+
+  void _mergeSales(List<SaleModel> incoming, {bool replace = false}) {
+    if (replace) {
+      final map = <int, SaleModel>{};
+      for (final s in incoming) {
+        map[s.id] = s;
+      }
+      _masterSales = map.values.toList();
+    } else {
+      final map = {for (var s in _masterSales) s.id: s};
+      for (final s in incoming) {
+        map[s.id] = s;
+      }
+      _masterSales = map.values.toList();
+    }
+  }
+
+  void _mergeArchivedSales(List<SaleModel> incoming, {bool replace = false}) {
+    if (replace) {
+      final map = <int, SaleModel>{};
+      for (final s in incoming) {
+        map[s.id] = s;
+      }
+      _archivedSales = map.values.toList();
+    } else {
+      final map = {for (var s in _archivedSales) s.id: s};
+      for (final s in incoming) {
+        map[s.id] = s;
+      }
+      _archivedSales = map.values.toList();
+    }
+  }
+
+  List<SaleModel> getSalesForTab(String tabKey) {
+    // 1. Base por pestaña
+    List<SaleModel> list;
+    switch (tabKey) {
+      case 'todas':
+        list = _masterSales.where((s) => !s.isArchived).toList();
+        break;
+      case 'smart_quotation':
+        list = _masterSales.where((s) => !s.isArchived && s.origenVenta == 'smart_quotation').toList();
+        break;
+      case 'pos_rapido':
+        list = _masterSales.where((s) => !s.isArchived && s.origenVenta == 'pos_rapido').toList();
+        break;
+      case 'archivadas':
+        list = _archivedSales.isNotEmpty
+            ? List<SaleModel>.from(_archivedSales)
+            : _masterSales.where((s) => s.isArchived).toList();
+        break;
+      default:
+        list = List<SaleModel>.from(_salesHistory);
+    }
+
+    // 2. Filtro por buscador en tiempo real (_searchQuery)
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      list = list.where((s) {
+        final name = (s.clientName ?? '').toLowerCase();
+        final idStr = s.id.toString();
+        final displayId = s.displayId.toLowerCase();
+        final notes = (s.notes ?? '').toLowerCase();
+        return name.contains(q) || idStr.contains(q) || displayId.contains(q) || notes.contains(q);
+      }).toList();
+    }
+
+    // 3. Filtro por estado financiero (_financialStatus)
+    if (_financialStatus == 'pagados') {
+      list = list.where((s) => s.isFullyPaid).toList();
+    } else if (_financialStatus == 'con_deuda') {
+      list = list.where((s) => s.pendingDebt > 0.01).toList();
+    }
+
+    // 4. Criterio de ordenamiento en memoria (_currentSortBy, _currentOrder)
+    list.sort((a, b) {
+      int comparison = 0;
+      switch (_currentSortBy) {
+        case 'monto_total':
+          comparison = a.totalAmount.compareTo(b.totalAmount);
+          break;
+        case 'fecha_venta':
+        default:
+          final dateA = DateTime.tryParse(a.saleDate) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final dateB = DateTime.tryParse(b.saleDate) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          comparison = dateA.compareTo(dateB);
+          break;
+      }
+      return _currentOrder == 'desc' ? -comparison : comparison;
+    });
+
+    return list;
   }
 
   Future<void> silentRefresh() async {
     if (_negocioId == null) return;
     try {
       bool isArchivedTab = _currentTab == "archivadas";
-      String? origen = (_currentTab == "todas" || _currentTab == "archivadas") ? null : _currentTab;
-
-      final targetLimit = _salesHistory.length < _limit ? _limit : _salesHistory.length;
+      final targetLimit = (_masterSales.length > _salesHistory.length ? _masterSales.length : _salesHistory.length).clamp(_limit, 500);
 
       final newSales = await _salesService.getHistory(
         _negocioId!,
@@ -373,14 +533,20 @@ class SaleProvider with ChangeNotifier {
         endDate: _currentEndDate,
         searchQuery: _searchQuery,
         isArchived: isArchivedTab,
-        origenVenta: origen,
+        origenVenta: null,
         sortBy: _currentSortBy,
         order: _currentOrder,
         financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
       );
 
-      _salesHistory = newSales;
-      _currentSkip = newSales.length;
+      if (isArchivedTab) {
+        _mergeArchivedSales(newSales, replace: true);
+      } else {
+        _mergeSales(newSales, replace: true);
+      }
+
+      _applyTabFilterInMemory();
+      _currentSkip = isArchivedTab ? _archivedSales.length : _masterSales.length;
       _hasMoreData = newSales.length >= targetLimit;
 
       _currentStats = await _salesService.getStats(
@@ -388,7 +554,7 @@ class SaleProvider with ChangeNotifier {
         startDate: _currentStartDate,
         endDate: _currentEndDate,
         isArchived: isArchivedTab,
-        origenVenta: origen,
+        origenVenta: null,
         financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
       );
       
@@ -409,20 +575,19 @@ class SaleProvider with ChangeNotifier {
     
     if (reset) {
       _isLoading = true;
+      _isRefreshing = true;
       _currentSkip = 0;
-      _salesHistory = [];
       _hasMoreData = true;
       notifyListeners();
       _loadDynamicStats();
     } else {
-      if (_isLoadingMore || !_hasMoreData) return;
+      if (_isLoadingMore || !_hasMoreData || _isRefreshing) return;
       _isLoadingMore = true;
       notifyListeners();
     }
 
     try {
       bool isArchivedTab = _currentTab == "archivadas";
-      String? origen = (_currentTab == "todas" || _currentTab == "archivadas") ? null : _currentTab;
 
       final newSales = await _salesService.getHistory(
         _negocioId!,
@@ -432,7 +597,7 @@ class SaleProvider with ChangeNotifier {
         endDate: _currentEndDate,
         searchQuery: _searchQuery,
         isArchived: isArchivedTab,
-        origenVenta: origen,
+        origenVenta: null,
         sortBy: _currentSortBy,
         order: _currentOrder,
         financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
@@ -440,35 +605,73 @@ class SaleProvider with ChangeNotifier {
 
       if (newSales.length < _limit) _hasMoreData = false;
 
-      if (reset) {
-        _salesHistory = newSales;
+      if (isArchivedTab) {
+        _mergeArchivedSales(newSales, replace: reset);
       } else {
-        _salesHistory.addAll(newSales);
+        _mergeSales(newSales, replace: reset);
+        if (reset) {
+          // Pre-carga a 0ms para la pestaña de Archivadas / Anuladas
+          _salesService.getHistory(
+            _negocioId!,
+            skip: 0,
+            limit: _limit,
+            startDate: _currentStartDate,
+            endDate: _currentEndDate,
+            isArchived: true,
+            origenVenta: null,
+            sortBy: _currentSortBy,
+            order: _currentOrder,
+          ).then((archivedList) {
+            _mergeArchivedSales(archivedList, replace: true);
+            _applyTabFilterInMemory();
+            notifyListeners();
+          }).catchError((_) {});
+        }
       }
       
-      _currentSkip += newSales.length;
+      _applyTabFilterInMemory();
+      _currentSkip = isArchivedTab ? _archivedSales.length : _masterSales.length;
 
     } catch (e) {
       _handleException(e);
     } finally {
       _isLoading = false;
+      _isRefreshing = false;
       _isLoadingMore = false;
       notifyListeners();
     }
+  }
+
+  void _applyTabFilterInMemory() {
+    _salesHistory = getSalesForTab(_currentTab);
+
+    // Sincronización instantánea de KPIs a 0ms
+    int count = _salesHistory.length;
+    double ingresos = 0.0;
+    double deuda = 0.0;
+    for (var s in _salesHistory) {
+      ingresos += s.paidAmount;
+      deuda += s.pendingDebt;
+    }
+    _currentStats = SalesStatsModel(
+      cantidadVentas: count,
+      totalIngresos: ingresos,
+      totalDeuda: deuda,
+      totalProductosVendidos: 0,
+    );
   }
 
   Future<void> _loadDynamicStats() async {
     if (_negocioId == null) return;
     try {
       bool isArchivedTab = _currentTab == "archivadas";
-      String? origen = (_currentTab == "todas" || _currentTab == "archivadas") ? null : _currentTab;
 
       _currentStats = await _salesService.getStats(
         _negocioId!,
         startDate: _currentStartDate,
         endDate: _currentEndDate,
         isArchived: isArchivedTab,
-        origenVenta: origen,
+        origenVenta: null,
         financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
       );
       notifyListeners(); 
@@ -617,25 +820,45 @@ class SaleProvider with ChangeNotifier {
     if (_currentSortBy == sortBy && _currentOrder == order) return;
     _currentSortBy = sortBy;
     _currentOrder = order;
-    loadFilteredHistory(reset: true);
+    _applyTabFilterInMemory();
+    notifyListeners();
   }
 
   void setSearchQuery(String query) {
+    if (_searchQuery == query) return;
     _searchQuery = query;
-    loadFilteredHistory(reset: true);
+    _applyTabFilterInMemory();
+    notifyListeners();
   }
 
   void setTab(String tabKey) {
     if (_currentTab == tabKey) return;
     _currentTab = tabKey;
-    loadFilteredHistory(reset: true);
+
+    // ⚡ Segmentación instantánea en memoria a 0ms (sin wipe ni spinners)
+    _applyTabFilterInMemory();
+    notifyListeners();
+
+    // Si conmutó a archivadas y no hay archivadas en memoria, consultar a SQLite
+    if (tabKey == 'archivadas' && _archivedSales.isEmpty && !_masterSales.any((s) => s.isArchived)) {
+      loadFilteredHistory(reset: true);
+    } else if (tabKey != 'archivadas' && _masterSales.isEmpty) {
+      loadFilteredHistory(reset: true);
+    }
   }
 
   Future<void> voidSale(int saleId, String motivoAnulacion) async {
     if (_negocioId == null) return;
     try {
       await _salesService.voidSale(saleId, _negocioId!, motivoAnulacion);
-      _salesHistory.removeWhere((element) => element.id == saleId);
+      final mIdx = _masterSales.indexWhere((element) => element.id == saleId);
+      if (mIdx != -1) {
+        final archived = _masterSales[mIdx].copyWith(isArchived: true, motivoAnulacion: motivoAnulacion);
+        _masterSales[mIdx] = archived;
+        _archivedSales.removeWhere((s) => s.id == saleId);
+        _archivedSales.insert(0, archived);
+      }
+      _applyTabFilterInMemory();
       notifyListeners();
       _loadDynamicStats();
       loadRecentHomeActivity();
@@ -650,7 +873,12 @@ class SaleProvider with ChangeNotifier {
     if (_negocioId == null) return;
     try {
       await _salesService.restoreSale(saleId, _negocioId!);
-      _salesHistory.removeWhere((element) => element.id == saleId);
+      _archivedSales.removeWhere((s) => s.id == saleId);
+      final mIdx = _masterSales.indexWhere((element) => element.id == saleId);
+      if (mIdx != -1) {
+        _masterSales[mIdx] = _masterSales[mIdx].copyWith(isArchived: false, motivoAnulacion: null);
+      }
+      _applyTabFilterInMemory();
       notifyListeners();
       _loadDynamicStats();
       loadRecentHomeActivity();

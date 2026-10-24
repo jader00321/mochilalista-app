@@ -204,7 +204,9 @@ class InventoryGridCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 1.0),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           if (hasOffer) ...[
                             Text(
@@ -216,26 +218,27 @@ class InventoryGridCard extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(width: 4),
                           ],
-                          Flexible(
-                            child: Text(
-                              "S/ ${item.effectivePrice.toStringAsFixed(2)}",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 14,
-                                color: hasOffer
-                                    ? (isDark ? Colors.orange[300] : Colors.orange[800])
-                                    : (isDark ? Colors.blue[300] : Colors.black87),
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                "S/ ${item.effectivePrice.toStringAsFixed(2)}",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14,
+                                  color: hasOffer
+                                      ? (isDark ? Colors.orange[300] : Colors.orange[800])
+                                      : (isDark ? Colors.blue[300] : Colors.black87),
+                                ),
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                          Icon(
-                            Icons.edit_outlined,
-                            size: 11,
-                            color: isDark ? Colors.grey[500] : Colors.grey[400],
+                              const SizedBox(width: 3),
+                              Icon(
+                                Icons.edit_outlined,
+                                size: 11,
+                                color: isDark ? Colors.grey[500] : Colors.grey[400],
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -288,7 +291,7 @@ class InventoryGridCard extends StatelessWidget {
                                     ? (isDark ? Colors.amber[300]! : Colors.amber[900]!)
                                     : stockColor,
                               ),
-                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
                             ),
                           ),
                           Icon(

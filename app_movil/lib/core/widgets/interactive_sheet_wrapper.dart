@@ -151,10 +151,10 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
     });
 
     final velocity = details.primaryVelocity ?? 0.0;
-    final threshold = totalHeight * 0.20;
+    final threshold = math.min(85.0, totalHeight * 0.15);
 
-    // Si la velocidad supera 700 px/s o el desplazamiento supera el 20%, cerrar modal
-    if (velocity > 700 || _dragOffset > threshold) {
+    // Si la velocidad supera 380 px/s o el desplazamiento supera el umbral, cerrar modal
+    if (velocity > 380 || _dragOffset > threshold) {
       _triggerDismiss(totalHeight);
     } else {
       // Retorno con rebote elástico suave
@@ -249,8 +249,8 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
     } else if (notification is ScrollEndNotification) {
       if (_dragOffset > 0) {
         final velocity = notification.dragDetails?.primaryVelocity ?? 0.0;
-        final threshold = totalHeight * 0.20;
-        if (velocity > 700 || _dragOffset > threshold) {
+        final threshold = math.min(85.0, totalHeight * 0.15);
+        if (velocity > 380 || _dragOffset > threshold) {
           _triggerDismiss(totalHeight);
         } else {
           _animateBack();

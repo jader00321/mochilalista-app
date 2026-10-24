@@ -189,4 +189,33 @@ class PromotionProvider with ChangeNotifier {
     }
     return result;
   }
+
+  InventoryProvider? get inventoryProvider => _inventoryProvider;
+
+  /// Calcula el costo total de los productos físicos que componen un paquete
+  double? calculateBundleCost(int bundleId) {
+    if (_inventoryProvider == null) return null;
+    final items = getItemsForBundle(bundleId);
+    if (items.isEmpty) return null;
+
+    double totalCost = 0.0;
+    bool hasValidCost = false;
+    for (var item in items) {
+      final productWrap = _inventoryProvider!.items.where(
+        (p) => p.presentation.id == item.presentacionId,
+      ).firstOrNull;
+      if (productWrap != null) {
+        final cost = productWrap.presentation.costoPresentacionFinal;
+        if (cost > 0) {
+          totalCost += cost * item.cantidadRequerida;
+          hasValidCost = true;
+        } else if (productWrap.presentation.factorGananciaVenta != null &&
+            productWrap.presentation.factorGananciaVenta! > 0) {
+          totalCost += (productWrap.presentation.precioVentaFinal / productWrap.presentation.factorGananciaVenta!) * item.cantidadRequerida;
+          hasValidCost = true;
+        }
+      }
+    }
+    return (hasValidCost && totalCost > 0) ? totalCost : null;
+  }
 }

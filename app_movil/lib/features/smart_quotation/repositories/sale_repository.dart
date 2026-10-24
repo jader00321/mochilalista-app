@@ -149,8 +149,6 @@ class SaleRepository {
       if (origenVenta != null && origenVenta != "todas") {
         query += " AND origen_venta = ?";
         args.add(origenVenta);
-      } else {
-        query += " AND origen_venta != 'prestamo_personal'";
       }
       if (financialStatus == 'pagados') {
         query += " AND (monto_total - monto_pagado <= 0.01 OR estado_pago = 'pagado')";
@@ -195,8 +193,6 @@ class SaleRepository {
       if (origenVenta != null && origenVenta != "todas") {
         query += " AND v.origen_venta = ?";
         args.add(origenVenta);
-      } else {
-        query += " AND v.origen_venta != 'prestamo_personal'";
       }
       if (financialStatus == 'pagados') {
         query += " AND (v.monto_total - v.monto_pagado <= 0.01 OR v.estado_pago = 'pagado')";

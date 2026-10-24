@@ -109,13 +109,46 @@ class ProductEditOperations {
         umpCompra: pres.umpCompra ?? "",
         desc: pres.descripcion ?? "",
         image: pres.imagenUrl ?? "",
-        descuentoActivo: (pres.precioOferta != null && pres.precioOferta! > 0) ||
+        descuentoActivo: (pres.precioOferta != null &&
+                pres.precioOferta! > 0 &&
+                pres.precioOferta! < pres.precioVentaFinal) ||
             (pres.valorDescuento != null &&
                 pres.valorDescuento! > 0 &&
                 pres.tipoDescuento != null &&
                 pres.tipoDescuento != 'ninguno'),
-        valorDescuento: pres.valorDescuento?.toStringAsFixed(2) ?? "",
-        tipoDescuento: pres.tipoDescuento ?? 'porcentaje',
+        valorDescuento: (() {
+          final bool isFijo =
+              pres.tipoDescuento == 'monto' || pres.tipoDescuento == 'fijo';
+          if (!isFijo) {
+            if (pres.valorDescuento != null && pres.valorDescuento! > 0) {
+              if ((pres.valorDescuento! - pres.valorDescuento!.roundToDouble())
+                      .abs() <
+                  0.001) {
+                return pres.valorDescuento!.round().toString();
+              }
+              return pres.valorDescuento!.toStringAsFixed(2);
+            } else if (pres.precioOferta != null &&
+                pres.precioVentaFinal > 0) {
+              final double p = ((pres.precioVentaFinal - pres.precioOferta!) /
+                      pres.precioVentaFinal) *
+                  100;
+              return p.round().toString();
+            }
+            return "";
+          } else {
+            if (pres.precioOferta != null && pres.precioOferta! > 0) {
+              return pres.precioOferta!.toStringAsFixed(2);
+            } else if (pres.valorDescuento != null &&
+                pres.valorDescuento! > 0) {
+              return pres.valorDescuento!.toStringAsFixed(2);
+            }
+            return "";
+          }
+        })(),
+        tipoDescuento: (pres.tipoDescuento == 'monto' ||
+                pres.tipoDescuento == 'fijo')
+            ? 'fijo'
+            : 'porcentaje',
         precioOfertaExacto: pres.precioOferta,
       );
 

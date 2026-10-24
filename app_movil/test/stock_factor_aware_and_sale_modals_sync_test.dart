@@ -208,8 +208,8 @@ void main() {
 
   group('Fase 2: Estandarización 2-Tier Anti-Colisión y Contenedores Contrastados', () {
     testWidgets('ManualPriceModifier: arquitectura de 2 niveles sin colisiones', (tester) async {
-      final discountCtrl = TextEditingController(text: '3.00');
-      final priceCtrl = TextEditingController(text: '17.00');
+      final discountCtrl = TextEditingController(text: '2.00');
+      final priceCtrl = TextEditingController(text: '18.00');
       final discountFocusNode = FocusNode();
       bool editCatalogCalled = false;
 
@@ -254,6 +254,10 @@ void main() {
       await tester.tap(find.text('Editar Catálogo'));
       await tester.pumpAndSettle();
       expect(editCatalogCalled, isTrue);
+
+      // Desplegar modo compacto para ver inputs
+      await tester.tap(find.text('Personalizar'));
+      await tester.pumpAndSettle();
 
       // Inputs de descuento y precio final con prefijos
       expect(find.text('S/ a Descontar'), findsOneWidget);

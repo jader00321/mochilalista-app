@@ -33,7 +33,7 @@ class QuickSaleCartItem extends StatelessWidget {
     final subtotal = effectivePrice * quantity;
     
     final double baseSystemPrice = product.price; 
-    final bool isDiscounted = effectivePrice < baseSystemPrice;
+    final bool isDiscounted = (baseSystemPrice - effectivePrice) > 0.01;
     final int discountPct = (isDiscounted && baseSystemPrice > 0)
         ? (((baseSystemPrice - effectivePrice) / baseSystemPrice) * 100).round()
         : 0;

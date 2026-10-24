@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 
 class ManualQuoteFooter extends StatefulWidget {
   final int itemCount;
   final double totalSavings;
   final double totalAmount;
+  final double estimatedProfit;
   final bool isSaving;
   final bool isDark; 
   final VoidCallback onSellPressed;
@@ -18,6 +21,7 @@ class ManualQuoteFooter extends StatefulWidget {
     required this.itemCount,
     required this.totalSavings,
     required this.totalAmount,
+    this.estimatedProfit = 0.0,
     required this.isSaving,
     required this.isDark,
     required this.onSellPressed,
@@ -76,7 +80,53 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("TOTAL", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1, color: widget.isDark ? Colors.grey[400] : Colors.grey)),
+                      Row(
+                        children: [
+                          Text("TOTAL", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1, color: widget.isDark ? Colors.grey[400] : Colors.grey)),
+                          if (!widget.isClient) ...[
+                            const SizedBox(width: 8),
+                            Consumer<QuickSaleProvider>(
+                              builder: (ctx, quickProv, _) {
+                                return AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 300),
+                                  transitionBuilder: (child, animation) {
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: ScaleTransition(
+                                        scale: Tween<double>(begin: 0.85, end: 1.0).animate(
+                                          CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                                        ),
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: (!quickProv.hideProfits && widget.estimatedProfit > 0)
+                                      ? Container(
+                                          key: const ValueKey('visible_manual_profit_badge'),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: widget.isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: widget.isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            "Ganancia ~${currency.format(widget.estimatedProfit)}",
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: widget.isDark ? Colors.green[300] : Colors.green[800],
+                                            ),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(key: ValueKey('empty_manual_profit_badge')),
+                                );
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
                       Text(currency.format(widget.totalAmount), style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: widget.isDark ? Colors.green[400] : const Color(0xFF2E7D32))),
                     ],
                   ),

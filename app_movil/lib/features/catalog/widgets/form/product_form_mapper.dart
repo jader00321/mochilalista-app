@@ -75,21 +75,25 @@ class ProductFormMapper {
 
       bool descuentoActivo = c['descuentoActivo'] == true;
       String tipoDescuento = (c['tipoDescuento'] as String?) ?? 'porcentaje';
-      double valorDescuento = double.tryParse(
+      final bool isFijo = tipoDescuento == 'monto' || tipoDescuento == 'fijo';
+      double valorDescuentoInput = double.tryParse(
             (c['valorDescuento'] as TextEditingController).text,
           ) ??
           0.0;
 
       double? precioOferta;
-      if (descuentoActivo && valorDescuento > 0 && pVenta > 0) {
+      if (descuentoActivo && valorDescuentoInput > 0 && pVenta > 0) {
         if (c['precioOfertaExacto'] != null &&
             (c['precioOfertaExacto'] as num) > 0 &&
             (c['precioOfertaExacto'] as num) < pVenta) {
           precioOferta = (c['precioOfertaExacto'] as num).toDouble();
-        } else if (tipoDescuento == 'porcentaje') {
-          precioOferta = pVenta - (pVenta * (valorDescuento / 100));
+        } else if (!isFijo) {
+          precioOferta = pVenta - (pVenta * (valorDescuentoInput / 100));
         } else {
-          precioOferta = pVenta - valorDescuento;
+          // En modo S/ Fijo, el valor ingresado es directamente el Precio Oferta deseado
+          if (valorDescuentoInput < pVenta) {
+            precioOferta = valorDescuentoInput;
+          }
         }
       }
 
@@ -121,9 +125,9 @@ class ProductFormMapper {
           esDefault: c['isDefault'] == true,
           orden: i,
           estado: (c['estado'] as String?) ?? 'publico',
-          tipoDescuento: descuentoActivo ? tipoDescuento : null,
-          valorDescuento: descuentoActivo && valorDescuento > 0
-              ? valorDescuento
+          tipoDescuento: descuentoActivo ? (isFijo ? 'fijo' : 'porcentaje') : null,
+          valorDescuento: descuentoActivo && valorDescuentoInput > 0
+              ? valorDescuentoInput
               : null,
           precioOferta: precioOferta,
         ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 
 class QuoteDetailHeader extends StatefulWidget {
@@ -25,7 +25,6 @@ class _QuoteDetailHeaderState extends State<QuoteDetailHeader> {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final total = widget.quotation?.totalAmount ?? 0.0;
     final savings = widget.quotation?.totalSavings ?? 0.0;
     final itemsCount = widget.quotation?.items.length ?? widget.quotation?.itemCount ?? 0;
@@ -121,7 +120,7 @@ class _QuoteDetailHeaderState extends State<QuoteDetailHeader> {
                   Text("TOTAL A PAGAR", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1)),
                   const SizedBox(height: 4),
                   Text(
-                    currency.format(total), 
+                    AppCurrency.format(total), 
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: widget.isDark ? Colors.blue[300] : Colors.blue[900])
                   ),
                 ],
@@ -157,7 +156,7 @@ class _QuoteDetailHeaderState extends State<QuoteDetailHeader> {
                           children: [
                             Icon(Icons.savings_outlined, size: 16, color: widget.isDark ? Colors.green[300] : Colors.green[800]),
                             const SizedBox(width: 6),
-                            Flexible(child: Text("Ahorro: ${currency.format(savings)}", style: TextStyle(color: widget.isDark ? Colors.green[300] : Colors.green[800], fontSize: 13, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+                            Flexible(child: Text("Ahorro: ${AppCurrency.format(savings)}", style: TextStyle(color: widget.isDark ? Colors.green[300] : Colors.green[800], fontSize: 13, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
                           ]
                         )
                       ),

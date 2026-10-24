@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 import 'package:app_movil/features/analytics/widgets/dashboard/glass_card.dart';
@@ -7,8 +6,8 @@ import 'package:app_movil/features/promotions/screens/bundle_builder_screen.dart
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
-
 import 'package:app_movil/core/widgets/discount_intelligent_modal.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class DeadStockCard extends StatefulWidget {
   final AnalyticsData data;
@@ -96,7 +95,6 @@ class _DeadStockCardState extends State<DeadStockCard> {
   }
 
   void _showOfferModal(BuildContext context, Map<String, dynamic> productData) {
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final isDark = widget.isDark;
     final String prodName = productData['producto_nombre'] ?? '';
     final String presName = productData['nombre_especifico'] ?? '';
@@ -168,7 +166,7 @@ class _DeadStockCardState extends State<DeadStockCard> {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text("Capital retenido: ${currency.format(stock * cost)}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                        Text("Capital retenido: ${AppCurrency.format(stock * cost)}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
                       ],
                     ),
                   ),
@@ -225,7 +223,6 @@ class _DeadStockCardState extends State<DeadStockCard> {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final itemsToShow = _showAll ? widget.data.deadStockList : widget.data.deadStockList.take(5).toList();
     final analytics = Provider.of<AnalyticsProvider>(context);
 
@@ -237,61 +234,60 @@ class _DeadStockCardState extends State<DeadStockCard> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.1), shape: BoxShape.circle),
-                child: const Icon(Icons.hourglass_empty, color: Colors.grey),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: const Icon(Icons.hourglass_empty, color: Colors.amber, size: 22),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Inventario Muerto", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: widget.isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<int>(
-                              value: analytics.deadStockThresholdDays,
-                              icon: const Icon(Icons.arrow_drop_down, size: 20),
-                              isDense: true,
-                              dropdownColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
-                              style: TextStyle(
-                                fontSize: 13, 
-                                fontWeight: FontWeight.bold, 
-                                color: widget.isDark ? Colors.white : Colors.black
-                              ),
-                              items: const [
-                                DropdownMenuItem(value: 15, child: Text("> 15 días")),
-                                DropdownMenuItem(value: 30, child: Text("> 30 días")),
-                                DropdownMenuItem(value: 60, child: Text("> 60 días")),
-                                DropdownMenuItem(value: 90, child: Text("> 90 días")),
-                                DropdownMenuItem(value: 180, child: Text("> 180 días")),
-                                DropdownMenuItem(value: 365, child: Text("> 1 año")),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  analytics.setDeadStockThresholdDays(val);
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text("Tienes ${widget.data.deadStockCount} productos estancados.\nCapital Inmovilizado: ${currency.format(widget.data.immobilizedCapital)}", 
-                         style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                  ],
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  "Inventario Muerto", 
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              )
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(
+                  color: widget.isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: analytics.deadStockThresholdDays,
+                    icon: const Icon(Icons.arrow_drop_down, size: 18),
+                    isDense: true,
+                    dropdownColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
+                    style: TextStyle(
+                      fontSize: 12, 
+                      fontWeight: FontWeight.bold, 
+                      color: widget.isDark ? Colors.white : Colors.black
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 15, child: Text("> 15 días")),
+                      DropdownMenuItem(value: 30, child: Text("> 30 días")),
+                      DropdownMenuItem(value: 60, child: Text("> 60 días")),
+                      DropdownMenuItem(value: 90, child: Text("> 90 días")),
+                      DropdownMenuItem(value: 180, child: Text("> 180 días")),
+                      DropdownMenuItem(value: 365, child: Text("> 1 año")),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        analytics.setDeadStockThresholdDays(val);
+                      }
+                    },
+                  ),
+                ),
+              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Text(
+              "Tienes ${widget.data.deadStockCount} productos estancados • Capital inmovilizado: ${AppCurrency.format(widget.data.immobilizedCapital)}",
+              style: TextStyle(fontSize: 13, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+            ),
           ),
           const SizedBox(height: 12),
           Container(
@@ -384,7 +380,7 @@ class _DeadStockCardState extends State<DeadStockCard> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(currency.format(stock * cost), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text(AppCurrency.format(stock * cost), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                             Text("$stock und.", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                           ],
                         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/screens/crm/client_detail_screen.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
@@ -27,8 +28,7 @@ class ClientCard extends StatelessWidget {
       onConfirm: () async {
         String msg = "Hola ${client.fullName}, te saludamos de la librería.";
         if (client.totalDebt > 0) {
-          final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-          msg += " Te escribimos para recordarte que tienes un saldo pendiente de ${currency.format(client.totalDebt)}.";
+          msg += " Te escribimos para recordarte que tienes un saldo pendiente de ${AppCurrency.format(client.totalDebt)}.";
         }
 
         final url = Uri.parse("https://wa.me/51${client.phone.replaceAll(' ', '')}?text=${Uri.encodeComponent(msg)}");
@@ -86,7 +86,6 @@ class ClientCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final confidenceColor = _getConfidenceColor(isDark);
     
@@ -94,6 +93,7 @@ class ClientCard extends StatelessWidget {
     final textColor = isDark ? Colors.white : Colors.black87;
     
     final bool isAppClient = client.usuarioVinculadoId != null;
+    final bool hasValidPhone = client.phone.isNotEmpty && client.phone != "000000000";
 
     return Card(
       elevation: isDark ? 0 : 2,
@@ -101,14 +101,14 @@ class ClientCard extends StatelessWidget {
       color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: confidenceColor.withValues(alpha: 0.4), width: 1.5)
+        side: BorderSide(color: confidenceColor.withValues(alpha: 0.4), width: 1.5),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
           Navigator.push(
             context, 
-            MaterialPageRoute(builder: (_) => ClientDetailScreen(client: client))
+            MaterialPageRoute(builder: (_) => ClientDetailScreen(client: client)),
           ).then((_) => onRefresh());
         },
         child: Column(
@@ -116,31 +116,32 @@ class ClientCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(20),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Stack(
                     children: [
                       CircleAvatar(
-                        radius: 30,
+                        radius: 28,
                         backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
                         child: Text(
                           client.fullName.isNotEmpty ? client.fullName[0].toUpperCase() : "?", 
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 26, color: isDark ? Colors.white70 : Colors.black54)
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: isDark ? Colors.white70 : Colors.black54),
                         ),
                       ),
                       Positioned(
                         bottom: 0, right: 0,
                         child: Container(
-                          width: 18, height: 18, 
+                          width: 16, height: 16, 
                           decoration: BoxDecoration(
                             color: confidenceColor, 
                             shape: BoxShape.circle, 
-                            border: Border.all(color: cardColor, width: 2.5)
-                          )
+                            border: Border.all(color: cardColor, width: 2.5),
+                          ),
                         ),
-                      )
+                      ),
                     ],
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   
                   Expanded(
                     child: Column(
@@ -151,62 +152,112 @@ class ClientCard extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 client.fullName, 
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor), 
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: textColor), 
                                 maxLines: 1, 
-                                overflow: TextOverflow.ellipsis
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             if (isAppClient)
                               Container(
-                                margin: const EdgeInsets.only(left: 8),
+                                margin: const EdgeInsets.only(left: 6),
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: Colors.teal.withValues(alpha: 0.15), 
                                   borderRadius: BorderRadius.circular(6), 
-                                  border: Border.all(color: Colors.teal.withValues(alpha: 0.5))
+                                  border: Border.all(color: Colors.teal.withValues(alpha: 0.5)),
                                 ),
                                 child: const Row(
                                   children: [
                                     Icon(Icons.phone_android, size: 12, color: Colors.teal),
-                                    SizedBox(width: 4),
+                                    SizedBox(width: 3),
                                     Text("APP", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.teal)),
                                   ],
                                 ),
-                              )
+                              ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        if (client.etiquetas.isNotEmpty)
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: client.etiquetas.take(2).map((e) => Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(color: isDark ? Colors.purple.withValues(alpha: 0.15) : Colors.purple[50], borderRadius: BorderRadius.circular(8)),
-                              child: Text(e, style: TextStyle(fontSize: 12, color: isDark ? Colors.purple[200] : Colors.purple[800], fontWeight: FontWeight.bold)),
-                            )).toList(),
-                          )
-                        else
-                          Row(
-                            children: [
-                              Icon(Icons.phone_android, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                              const SizedBox(width: 6),
-                              Text(_formatPhone(client.phone), style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 15, fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 5),
+
+                        // Contacto (Teléfono y DNI) siempre visible y sutil
+                        Row(
+                          children: [
+                            Icon(Icons.phone_android, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                            const SizedBox(width: 4),
+                            Text(
+                              hasValidPhone ? _formatPhone(client.phone) : "Sin teléfono",
+                              style: TextStyle(
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (client.docNumber != null && client.docNumber!.trim().isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Text("•", style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 12)),
+                              const SizedBox(width: 8),
+                              Text(
+                                client.docNumber!.trim(),
+                                style: TextStyle(
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  fontSize: 13,
+                                ),
+                              ),
                             ],
+                          ],
+                        ),
+
+                        // Etiquetas CRM
+                        if (client.etiquetas.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: client.etiquetas.take(2).map((e) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                              decoration: BoxDecoration(
+                                color: isDark ? Colors.purple.withValues(alpha: 0.15) : Colors.purple[50],
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: isDark ? Colors.purple.withValues(alpha: 0.3) : Colors.purple.shade200),
+                              ),
+                              child: Text(
+                                e,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.purple[200] : Colors.purple[800],
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )).toList(),
                           ),
+                        ],
                       ],
                     ),
                   ),
 
-                  if (client.totalDebt > 0.01)
+                  if (client.totalDebt > 0.01) ...[
+                    const SizedBox(width: 10),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text("Deuda", style: TextStyle(fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 2),
-                        Text(currency.format(client.totalDebt), style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.redAccent, fontSize: 18)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            "Deuda",
+                            style: TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          AppCurrency.format(client.totalDebt),
+                          style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.redAccent, fontSize: 17),
+                        ),
                       ],
-                    )
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -216,22 +267,43 @@ class ClientCard extends StatelessWidget {
             Container(
               decoration: BoxDecoration(
                 color: isDark ? Colors.black12 : Colors.grey[50], 
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20))
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
               ),
               child: IntrinsicHeight(
                 child: Row(
                   children: [
                     if (client.totalDebt > 0.01) ...[
-                      Expanded(child: _QuickActionButton(icon: Icons.payments, label: "Cobrar", color: isDark ? Colors.green[400]! : Colors.green[700]!, onTap: () => _openPaymentModal(context))),
+                      Expanded(
+                        child: _QuickActionButton(
+                          icon: Icons.payments,
+                          label: "Cobrar",
+                          color: isDark ? Colors.green[400]! : Colors.green[700]!,
+                          onTap: () => _openPaymentModal(context),
+                        ),
+                      ),
                       VerticalDivider(width: 1, color: isDark ? Colors.white10 : Colors.grey[300]),
                     ],
-                    Expanded(child: _QuickActionButton(icon: Icons.chat, label: "WhatsApp", color: const Color(0xFF25D366), onTap: () => _launchWhatsApp(context))),
+                    Expanded(
+                      child: _QuickActionButton(
+                        icon: Icons.chat,
+                        label: "WhatsApp",
+                        color: const Color(0xFF25D366),
+                        onTap: () => _launchWhatsApp(context),
+                      ),
+                    ),
                     VerticalDivider(width: 1, color: isDark ? Colors.white10 : Colors.grey[300]),
-                    Expanded(child: _QuickActionButton(icon: Icons.call, label: "Llamar", color: isDark ? Colors.blue[300]! : Colors.blue[600]!, onTap: () => _launchCall(context))),
+                    Expanded(
+                      child: _QuickActionButton(
+                        icon: Icons.call,
+                        label: "Llamar",
+                        color: isDark ? Colors.blue[300]! : Colors.blue[600]!,
+                        onTap: () => _launchCall(context),
+                      ),
+                    ),
                   ],
                 ),
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -250,15 +322,18 @@ class _QuickActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 22, color: color),
-            const SizedBox(width: 8),
-            Text(label, style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.bold)),
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.bold)),
           ],
         ),
       ),

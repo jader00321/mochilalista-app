@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/sales_checkout_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/whatsapp_preview_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class QuotationActionButtons extends StatelessWidget {
@@ -88,7 +91,7 @@ class QuotationActionButtons extends StatelessWidget {
       buttonColor = isDark ? Colors.red[700]! : Colors.red[600]!;
       buttonIcon = Icons.build_circle;
     } else if (warningCount > 0) {
-      buttonLabel = "VENDER ($warningCount alertas)";
+      buttonLabel = warningCount == 1 ? "VENDER (1 alerta)" : "VENDER ($warningCount alertas)";
       buttonColor = isDark ? Colors.orange[700]! : Colors.orange[600]!;
       buttonIcon = Icons.point_of_sale;
     } else {
@@ -110,15 +113,17 @@ class QuotationActionButtons extends StatelessWidget {
       child: SafeArea(
         child: Row(
           children: [
-            _buildActionButton(
-              icon: Icons.edit, activeColor: isDark ? Colors.blueGrey[300]! : Colors.blueGrey, tooltip: "Editar", 
-              onTap: () async {
-                final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => ManualQuotationScreen(quotationId: quotationId)));
-                if (result == true) onReloadData();
-              }, 
-              disabledIconColor: disabledIconColor, disabledBgColor: disabledBgColor,
-              isDisabled: isSold 
-            ),
+            if (!isSold) ...[
+              _buildActionButton(
+                icon: Icons.edit, activeColor: isDark ? Colors.blueGrey[300]! : Colors.blueGrey, tooltip: "Editar", 
+                onTap: () async {
+                  final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => ManualQuotationScreen(quotationId: quotationId)));
+                  if (result == true) onReloadData();
+                }, 
+                disabledIconColor: disabledIconColor, disabledBgColor: disabledBgColor,
+                isDisabled: false,
+              ),
+            ],
             _buildActionButton(
               icon: Icons.picture_as_pdf, activeColor: isDark ? Colors.red[400]! : Colors.red[700]!, tooltip: "PDF", 
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PdfPreviewScreen(quotationId: quotationId))), 
@@ -136,12 +141,28 @@ class QuotationActionButtons extends StatelessWidget {
                 height: 55,
                   child: isSold 
                  ? ElevatedButton.icon( 
-                     onPressed: () { 
-                         CustomSnackBar.show(context, message: "Esta lista ya fue cobrada y no se puede modificar.", icon: Icons.info);
+                     onPressed: () async { 
+                       final workbenchProv = Provider.of<WorkbenchProvider>(context, listen: false);
+                       final newId = await workbenchProv.cloneQuotation(quotationId);
+                       if (newId != null && context.mounted) {
+                         Navigator.pushReplacement(
+                           context, 
+                           MaterialPageRoute(builder: (_) => QuotationDetailScreen(quotationId: newId)),
+                         );
+                         CustomSnackBar.show(context, message: "Cotización duplicada como nuevo borrador", isError: false);
+                       }
                      },
-                     style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200], foregroundColor: isDark ? Colors.white70 : Colors.grey[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
-                     icon: const Icon(Icons.lock, size: 22),
-                     label: const Text("CERRADA", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                     style: ElevatedButton.styleFrom(
+                       backgroundColor: isDark ? Colors.blue[700] : Colors.blue[800], 
+                       foregroundColor: Colors.white, 
+                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), 
+                       elevation: isDark ? 0 : 3,
+                     ),
+                     icon: const Icon(Icons.copy_all, size: 20),
+                     label: const FittedBox(
+                       fit: BoxFit.scaleDown,
+                       child: Text("DUPLICAR COTIZACIÓN", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                     ),
                    )
                  : ElevatedButton(
                     onPressed: () { 

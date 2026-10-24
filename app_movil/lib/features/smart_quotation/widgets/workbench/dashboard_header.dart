@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 
 class DashboardHeader extends StatefulWidget {
@@ -41,11 +42,10 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
       animation: widget.tabController,
       builder: (context, _) {
         final isSoldTab = widget.tabController.index == 2;
-        final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
         return Container(
           width: double.infinity,
-          padding: const EdgeInsets.only(bottom: 4, top: 6, left: 16, right: 16),
+          padding: const EdgeInsets.only(bottom: 6, top: 6, left: 16, right: 16),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: widget.isDark 
@@ -53,7 +53,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                 : [const Color(0xFF1565C0), const Color(0xFF0D47A1)], 
               begin: Alignment.topCenter, end: Alignment.bottomCenter 
             ),
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20))
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -61,10 +61,10 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
               SizedBox(
                 height: 94,
                 child: isSoldTab 
-                  ? _buildSoldKPIs(currency)
+                  ? _buildSoldKPIs()
                   : (widget.tabController.index == 1 
-                      ? _buildTab1KPIs(currency) 
-                      : _buildActiveKPIs(currency)),
+                      ? _buildTab1KPIs() 
+                      : _buildActiveKPIs()),
               ),
               const SizedBox(height: 6),
               _buildTimeFilterSelector(context),
@@ -75,7 +75,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
     );
   }
 
-  Widget _buildActiveKPIs(NumberFormat currency) {
+  Widget _buildActiveKPIs() {
     int prepCount = widget.provider.filteredInProcessList.length;
     int readyCount = widget.provider.filteredReadyAndPacksList.length;
     int alertCount = widget.provider.totalAlertsCount; 
@@ -90,12 +90,12 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
         const SizedBox(width: 8),
         Expanded(child: _buildAlertKpiCard(alertCount)),
         const SizedBox(width: 8),
-        Expanded(child: _buildKpiCard("Proyectado", currency.format(projectedTotal), Icons.monetization_on, Colors.blueAccent)),
+        Expanded(child: _buildKpiCard("Proyectado", AppCurrency.format(projectedTotal), Icons.monetization_on, Colors.blueAccent)),
       ],
     );
   }
 
-  Widget _buildTab1KPIs(NumberFormat currency) {
+  Widget _buildTab1KPIs() {
     int readyCount = widget.provider.filteredReadyAndPacksList.where((q) => q.type != 'pack').length;
     int packsCount = widget.provider.filteredReadyAndPacksList.where((q) => q.type == 'pack').length;
     
@@ -115,12 +115,12 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
         const SizedBox(width: 8),
         Expanded(child: _buildAlertKpiCard(alertCount)),
         const SizedBox(width: 8),
-        Expanded(child: _buildKpiCard("Proyectado", currency.format(projectedTotal), Icons.monetization_on, Colors.blueAccent)),
+        Expanded(child: _buildKpiCard("Proyectado", AppCurrency.format(projectedTotal), Icons.monetization_on, Colors.blueAccent)),
       ],
     );
   }
 
-  Widget _buildSoldKPIs(NumberFormat currency) {
+  Widget _buildSoldKPIs() {
     int soldCount = widget.provider.filteredSoldList.length;
     double totalIncome = widget.provider.totalDaySales;
     int productsSold = widget.provider.productsSoldCount;
@@ -130,11 +130,11 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
       children: [
         Expanded(child: _buildKpiCard("Ventas", "$soldCount", Icons.shopping_cart_checkout, Colors.greenAccent)),
         const SizedBox(width: 8),
-        Expanded(child: _buildKpiCard("Ingresos", currency.format(totalIncome), Icons.account_balance_wallet, Colors.amber)),
+        Expanded(child: _buildKpiCard("Ingresos", AppCurrency.format(totalIncome), Icons.account_balance_wallet, Colors.amber)),
         const SizedBox(width: 8),
         Expanded(child: _buildKpiCard("Prods. Vend.", "$productsSold", Icons.inventory_2, Colors.purpleAccent)),
         const SizedBox(width: 8),
-        Expanded(child: _buildKpiCard("Ticket Prom.", currency.format(avgTicket), Icons.receipt_long, Colors.blueAccent)),
+        Expanded(child: _buildKpiCard("Ticket Prom.", AppCurrency.format(avgTicket), Icons.receipt_long, Colors.blueAccent)),
       ],
     );
   }
@@ -168,38 +168,58 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
   }
 
   void _showTimeFilterBottomSheet(BuildContext context) {
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      backgroundColor: widget.isDark ? const Color(0xFF1A1A24) : Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
-        return SafeArea(
+        return InteractiveSheetWrapper(
+          title: "Filtrar por Fecha",
+          icon: Icons.calendar_month,
+          iconColor: Colors.blueAccent,
+          maxHeightFactor: 0.85,
+          applyEffectiveBottomPadding: true,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Text("Filtrar por Fecha", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ),
-              _buildFilterOption(ctx, "Hoy", TimeFilter.today),
-              _buildFilterOption(ctx, "Esta Semana", TimeFilter.thisWeek),
-              _buildFilterOption(ctx, "Este Mes", TimeFilter.thisMonth),
-              _buildFilterOption(ctx, "Últimos 6 Meses", TimeFilter.sixMonths),
-              _buildFilterOption(ctx, "Todo", TimeFilter.allTime),
-              _buildFilterOption(ctx, "Rango Personalizado...", TimeFilter.custom),
-              const SizedBox(height: 16),
+              _buildFilterOption(ctx, "Hoy", TimeFilter.today, Icons.today),
+              _buildFilterOption(ctx, "Esta Semana", TimeFilter.thisWeek, Icons.date_range),
+              _buildFilterOption(ctx, "Este Mes", TimeFilter.thisMonth, Icons.calendar_view_month),
+              _buildFilterOption(ctx, "Últimos 6 Meses", TimeFilter.sixMonths, Icons.history),
+              _buildFilterOption(ctx, "Todo", TimeFilter.allTime, Icons.all_inclusive),
+              _buildFilterOption(ctx, "Rango Personalizado...", TimeFilter.custom, Icons.edit_calendar),
+              const SizedBox(height: 12),
             ],
           ),
         );
-      }
+      },
     );
   }
 
-  Widget _buildFilterOption(BuildContext context, String label, TimeFilter filter) {
+  Widget _buildFilterOption(BuildContext context, String label, TimeFilter filter, IconData icon) {
     final isSelected = widget.provider.timeFilter == filter;
+    final primaryColor = widget.isDark ? Colors.blue[300]! : Colors.blue[700]!;
+
     return ListTile(
-      title: Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? (widget.isDark ? Colors.blue[300] : Colors.blue[700]) : (widget.isDark ? Colors.white : Colors.black87))),
-      trailing: isSelected ? Icon(Icons.check_circle, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]) : null,
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? primaryColor.withValues(alpha: 0.15) 
+              : (widget.isDark ? Colors.white10 : Colors.grey[200]),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: isSelected ? primaryColor : (widget.isDark ? Colors.grey[400] : Colors.grey[700]), size: 20),
+      ),
+      title: Text(
+        label, 
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, 
+          color: isSelected ? primaryColor : (widget.isDark ? Colors.white : Colors.black87),
+          fontSize: 15,
+        ),
+      ),
+      trailing: isSelected 
+          ? Icon(Icons.check_circle, color: primaryColor) 
+          : null,
       onTap: () async {
         Navigator.pop(context);
         if (filter == TimeFilter.custom) {
@@ -234,7 +254,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
     Color iconColor = hasAlerts ? Colors.redAccent : Colors.grey[400]!;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12), 
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8), 
       decoration: BoxDecoration(
         color: hasAlerts ? Colors.redAccent.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.12), 
         borderRadius: BorderRadius.circular(16),
@@ -265,7 +285,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
 
   Widget _buildKpiCard(String label, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12), 
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8), 
       decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(16)),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

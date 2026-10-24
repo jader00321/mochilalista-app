@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 
 class ManualQuoteItemCard extends StatelessWidget {
   final MatchedProduct item;
@@ -234,7 +236,55 @@ class ManualQuoteItemCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("Unitario", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.grey[500] : Colors.grey[600])),
+                          Row(
+                            children: [
+                              Text("Unitario", style: textTheme.labelSmall?.copyWith(color: isDark ? Colors.grey[500] : Colors.grey[600])),
+                              if (!isClient && item.cost != null && item.cost! > 0) ...[
+                                Builder(
+                                  builder: (ctx) {
+                                    final quickProv = Provider.of<QuickSaleProvider>(ctx);
+                                    final double margin = ((manualPrice - item.cost!) / manualPrice) * 100;
+                                    final Color marginColor = margin >= 20
+                                        ? (isDark ? Colors.green[400]! : Colors.green[700]!)
+                                        : (margin >= 10
+                                            ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
+                                            : (isDark ? Colors.red[400]! : Colors.red[700]!));
+
+                                    return AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 250),
+                                      child: quickProv.hideProfits
+                                          ? const SizedBox.shrink(key: ValueKey('manual_margin_hidden'))
+                                          : Row(
+                                              key: const ValueKey('manual_margin_visible'),
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const SizedBox(width: 6),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                                  decoration: BoxDecoration(
+                                                    color: marginColor.withValues(alpha: 0.12),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Container(width: 5, height: 5, decoration: BoxDecoration(color: marginColor, shape: BoxShape.circle)),
+                                                      const SizedBox(width: 3),
+                                                      Text(
+                                                        "${margin.round()}% mrg",
+                                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: marginColor),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ],
+                          ),
                           const SizedBox(height: 2),
                           Wrap(
                             crossAxisAlignment: WrapCrossAlignment.end,

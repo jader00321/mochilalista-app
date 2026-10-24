@@ -250,84 +250,55 @@ class InventoryItemTile extends StatelessWidget {
 
                     const SizedBox(height: 10),
 
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        // ZONA PRECIO (Tocable)
-                        Flexible(
-                          child: InkWell(
-                            onTap: onTapPrice ?? onTap,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (hasOffer) ...[
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          "S/ ${presentation.precioVentaFinal.toStringAsFixed(2)}",
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            decoration: TextDecoration.lineThrough,
-                                            color: isDark ? Colors.red[300] : Colors.red[700],
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                          decoration: BoxDecoration(
-                                            color: isDark ? Colors.red[900]!.withValues(alpha: 0.4) : Colors.red[50],
-                                            borderRadius: BorderRadius.circular(4),
-                                            border: Border.all(color: isDark ? Colors.red[700]! : Colors.red.shade300),
-                                          ),
-                                          child: Text(
-                                            discountBadgeText,
-                                            style: TextStyle(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                              color: isDark ? Colors.red[300] : Colors.red[800],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final priceWidget = InkWell(
+                          onTap: onTapPrice ?? onTap,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (hasOffer) ...[
+                                  Text(
+                                    "S/ ${presentation.precioVentaFinal.toStringAsFixed(2)}",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      decoration: TextDecoration.lineThrough,
+                                      color: isDark ? Colors.red[300] : Colors.red[700],
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                  ],
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        "S/ ${finalPrice.toStringAsFixed(2)}", 
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900,
-                                          color: hasOffer
-                                              ? (isDark ? Colors.orange[300] : Colors.orange[800])
-                                              : (isDark ? Colors.blue[300] : Colors.black87),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Icon(
-                                        Icons.edit_outlined,
-                                        size: 12,
-                                        color: isDark ? Colors.grey[500] : Colors.grey[400],
-                                      ),
-                                    ],
                                   ),
                                 ],
-                              ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      "S/ ${finalPrice.toStringAsFixed(2)}", 
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900,
+                                        color: hasOffer
+                                            ? (isDark ? Colors.orange[300] : Colors.orange[800])
+                                            : (isDark ? Colors.blue[300] : Colors.black87),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.edit_outlined,
+                                      size: 12,
+                                      color: isDark ? Colors.grey[500] : Colors.grey[400],
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                        ),
+                        );
 
-                        const SizedBox(width: 8),
-
-                        // ZONA BADGE DE STOCK INTERACTIVO (Tocable - Único punto de ajuste)
-                        InkWell(
+                        final stockBadgeWidget = InkWell(
                           onTap: onTapStock ?? onTap,
                           borderRadius: BorderRadius.circular(10),
                           child: PulsingStockBadge(
@@ -384,8 +355,36 @@ class InventoryItemTile extends StatelessWidget {
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        );
+
+                        // Estimación precisa para detectar saturación horizontal
+                        final double estPriceWidth = finalPrice >= 1000 ? 120.0 : 85.0;
+                        final double estStockWidth = 55.0 + (unidadVentaText.length * 7.5);
+                        final bool shouldWrap = (estPriceWidth + estStockWidth + 12 > constraints.maxWidth) ||
+                            (unidadVentaText.length > 13);
+
+                        if (shouldWrap) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              priceWidget,
+                              const SizedBox(height: 6),
+                              stockBadgeWidget,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            priceWidget,
+                            const SizedBox(width: 8),
+                            stockBadgeWidget,
+                          ],
+                        );
+                      },
                     )
                   ],
                 ),

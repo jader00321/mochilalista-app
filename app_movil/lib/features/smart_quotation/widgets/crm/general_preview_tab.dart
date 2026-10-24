@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 class GeneralPreviewTab extends StatelessWidget {
@@ -35,7 +35,6 @@ class GeneralPreviewTab extends StatelessWidget {
 
     List<Widget> impactPreview = [];
     double remaining = amount;
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
     for (var sale in debts) {
       if (remaining <= 0.01) break;
@@ -54,7 +53,7 @@ class GeneralPreviewTab extends StatelessWidget {
             impactPreview.add(_buildImpactRow(
               saldado, 
               saldado ? "Cancela Cuota ${cuota.installmentNumber} ($entityName #${sale.displayId})" : "Abono parcial a Cuota ${cuota.installmentNumber} ($entityName #${sale.displayId})", 
-              aplicado, currency, isDark
+              aplicado, isDark
             ));
           }
         }
@@ -67,7 +66,7 @@ class GeneralPreviewTab extends StatelessWidget {
         impactPreview.add(_buildImpactRow(
           saldado, 
           saldado ? "Cancela $entityName #${sale.displayId} al contado" : "Abono parcial a $entityName #${sale.displayId}", 
-          aplicado, currency, isDark
+          aplicado, isDark
         ));
       }
     }
@@ -82,7 +81,7 @@ class GeneralPreviewTab extends StatelessWidget {
     );
   }
 
-  Widget _buildImpactRow(bool saldado, String description, double amount, NumberFormat currency, bool isDark) {
+  Widget _buildImpactRow(bool saldado, String description, double amount, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
@@ -96,7 +95,7 @@ class GeneralPreviewTab extends StatelessWidget {
           Icon(saldado ? Icons.check_circle : Icons.timelapse, color: saldado ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.orange[300] : Colors.orange), size: 24),
           const SizedBox(width: 16),
           Expanded(child: Text(description, style: TextStyle(fontSize: 15, color: isDark ? Colors.white : Colors.black87))),
-          Text(currency.format(amount), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: saldado ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.orange[300] : Colors.orange[800]))),
+          Text(AppCurrency.format(amount), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: saldado ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.orange[300] : Colors.orange[800]))),
         ],
       ),
     );

@@ -46,6 +46,7 @@ class ComparativeUpdateModal extends StatefulWidget {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      enableDrag: false, // 🛡️ Precisión técnica 3: Desactiva el arrastre del sheet para 60fps de scroll limpio
       backgroundColor: Colors.transparent,
       elevation: 0,
       builder: (_) => ComparativeUpdateModal(
@@ -67,9 +68,49 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
   late Map<String, dynamic> _currentDbData;
   String _discountMode = 'keep';
   bool _showIdentidad = false;
-  bool _showProveedor = false; // FASE 9: Colapsado por defecto
-  bool _showVenta = true; // FASE 10: Expandido por defecto (es lo primero que ve el usuario)
+  bool _showProveedor = false; // Colapsado por defecto
+  bool _showVenta = true; // Expandido por defecto
   
+  // 🎯 Control de Scroll y Auto-Scroll Inteligente de Acordeones (Precisión Técnica 3)
+  final ScrollController _modalScrollController = ScrollController();
+  final GlobalKey _keyVenta = GlobalKey();
+  final GlobalKey _keyStock = GlobalKey();
+  final GlobalKey _keyProveedor = GlobalKey();
+  final GlobalKey _keyIdentidad = GlobalKey();
+
+  void _autoScrollTo(GlobalKey key) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final targetContext = key.currentContext;
+      if (targetContext != null && targetContext.mounted) {
+        Scrollable.ensureVisible(
+          targetContext,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeInOutCubic,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+        );
+      }
+    });
+  }
+
+  void _toggleAccordion(String section) {
+    updateState(() {
+      if (section == 'venta') _showVenta = !_showVenta;
+      if (section == 'proveedor') _showProveedor = !_showProveedor;
+      if (section == 'identidad') _showIdentidad = !_showIdentidad;
+    });
+
+    bool isOpened = (section == 'venta' && _showVenta) ||
+                    (section == 'proveedor' && _showProveedor) ||
+                    (section == 'identidad' && _showIdentidad);
+
+    if (isOpened) {
+      final key = section == 'venta' 
+          ? _keyVenta 
+          : (section == 'proveedor' ? _keyProveedor : _keyIdentidad);
+      _autoScrollTo(key);
+    }
+  }
+
   late TextEditingController _nomCtrl;
   late TextEditingController _uVentaCtrl;
   late TextEditingController _uVentaFactorCtrl;
@@ -167,6 +208,7 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     _precioUmpCtrl.dispose();
     _pagoTotalCtrl.dispose();
     _unidLoteCtrl.dispose();
+    _modalScrollController.dispose();
     super.dispose();
   }
 
@@ -455,7 +497,8 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     String cat = widget.group.matchProducto.datos?.categoriaNombre ?? "Sin categoría";
 
     return InteractiveSheetWrapper(
-      maxHeightFactor: 0.92,
+      maxHeightFactor: 0.94,
+      enableDragToDismiss: false, // 🛡️ Precisión técnica 3: Desactiva arrastre del modal para 60fps de scroll limpio
       applyEffectiveBottomPadding: false,
       titleWidget: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -507,186 +550,244 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
           child: const Text("GUARDAR DECISIÓN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         ),
       ),
-      child: Column(
-        children: [
-                    Container(
-                      margin: const EdgeInsets.only(top: 8, bottom: 16),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: isNuevo ? (widget.isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50]) : (widget.isDark ? Colors.blueGrey.withValues(alpha: 0.1) : Colors.blueGrey[50]), borderRadius: BorderRadius.circular(12), border: Border.all(color: isNuevo ? (widget.isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[200]!) : Colors.transparent)),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Scrollbar(
+        controller: _modalScrollController,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _modalScrollController,
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 4,
+            bottom: MediaQuery.viewInsetsOf(context).bottom + 24, // 🛡️ Margen seguro reactivo a teclado
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 8, bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isNuevo 
+                      ? (widget.isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50]) 
+                      : (widget.isDark ? Colors.blueGrey.withValues(alpha: 0.1) : Colors.blueGrey[50]), 
+                  borderRadius: BorderRadius.circular(12), 
+                  border: Border.all(
+                    color: isNuevo 
+                        ? (widget.isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange[200]!) 
+                        : Colors.transparent,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
+                          decoration: BoxDecoration(
+                            color: widget.isDark ? Colors.blueGrey.withValues(alpha: 0.15) : Colors.blueGrey[50], 
+                            borderRadius: BorderRadius.circular(6),
+                          ), 
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min, 
                             children: [
-                              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: widget.isDark ? Colors.blueGrey.withValues(alpha: 0.15) : Colors.blueGrey[50], borderRadius: BorderRadius.circular(6)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.category, size: 10, color: widget.isDark ? Colors.blueGrey[300] : Colors.blueGrey[700]), const SizedBox(width: 4), Text(cat, style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.blueGrey[300] : Colors.blueGrey[800], fontWeight: FontWeight.w900, letterSpacing: 0.5))])),
-                              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: widget.isDark ? Colors.blueGrey.withValues(alpha: 0.15) : Colors.blueGrey[50], borderRadius: BorderRadius.circular(6)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.branding_watermark, size: 10, color: widget.isDark ? Colors.blueGrey[300] : Colors.blueGrey[700]), const SizedBox(width: 4), Text(brand, style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.blueGrey[300] : Colors.blueGrey[800], fontWeight: FontWeight.w900, letterSpacing: 0.5))])),
+                              Icon(Icons.category, size: 10, color: widget.isDark ? Colors.blueGrey[300] : Colors.blueGrey[700]), 
+                              const SizedBox(width: 4), 
+                              Text(cat, style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.blueGrey[300] : Colors.blueGrey[800], fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                             ],
                           ),
-                          const SizedBox(height: 10),
-                          Text(widget.group.nombrePadre, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
-                          const SizedBox(height: 4),
-                          Text("Variante seleccionada: $presName", style: TextStyle(fontSize: 14, color: isNuevo ? (widget.isDark ? Colors.orange[300] : Colors.orange[800]) : (widget.isDark ? Colors.blue[300] : Colors.blue[800]), fontWeight: FontWeight.w500)),
-                        ],
-                      ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
+                          decoration: BoxDecoration(
+                            color: widget.isDark ? Colors.blueGrey.withValues(alpha: 0.15) : Colors.blueGrey[50], 
+                            borderRadius: BorderRadius.circular(6),
+                          ), 
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min, 
+                            children: [
+                              Icon(Icons.branding_watermark, size: 10, color: widget.isDark ? Colors.blueGrey[300] : Colors.blueGrey[700]), 
+                              const SizedBox(width: 4), 
+                              Text(brand, style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.blueGrey[300] : Colors.blueGrey[800], fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    
-                    _buildVariantCards(),
+                    const SizedBox(height: 10),
+                    Text(widget.group.nombrePadre, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
+                    const SizedBox(height: 4),
+                    Text("Variante seleccionada: $presName", style: TextStyle(fontSize: 14, color: isNuevo ? (widget.isDark ? Colors.orange[300] : Colors.orange[800]) : (widget.isDark ? Colors.blue[300] : Colors.blue[800]), fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              
+              _buildVariantCards(),
 
-                    // BANNER O ETIQUETA DE DISCREPANCIA
-                    Builder(builder: (ctx) {
-                      if (isNuevo) return const SizedBox.shrink();
-                      bool sameUnit = (widget.variant.unidadesPorVenta == (widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1));
-                      if (!sameUnit) {
-                        int totalUnidadesBase = widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
-                        var validation = UnitCatalogService.validateStockForUnit(
-                          totalUnitsBase: totalUnidadesBase,
-                          presentationFactor: widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1,
-                          baseUnitCost: 0,
-                          unitName: widget.variant.matchPresentacion.datos?.unidadVenta ?? '',
-                        );
+              // BANNER O ETIQUETA DE DISCREPANCIA
+              Builder(builder: (ctx) {
+                if (isNuevo) return const SizedBox.shrink();
+                bool sameUnit = (widget.variant.unidadesPorVenta == (widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1));
+                if (!sameUnit) {
+                  int totalUnidadesBase = widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
+                  var validation = UnitCatalogService.validateStockForUnit(
+                    totalUnitsBase: totalUnidadesBase,
+                    presentationFactor: widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1,
+                    baseUnitCost: 0,
+                    unitName: widget.variant.matchPresentacion.datos?.unidadVenta ?? '',
+                  );
 
-                        if (validation.status == StockValidationStatus.exact || validation.status == StockValidationStatus.hasLeftover) {
-                           return Container(
-                             margin: const EdgeInsets.only(top: 8, bottom: 8),
-                             child: Row(
-                               children: [
-                                 Icon(Icons.info_outline, size: 14, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
-                                 const SizedBox(width: 6),
-                                 Expanded(
-                                   child: Text(
-                                     "Unidad adaptada: Factura [x${widget.variant.unidadesPorVenta}] → Sistema [x${widget.variant.matchPresentacion.datos?.unidadesPorVenta}]",
-                                     style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontStyle: FontStyle.italic),
-                                   ),
-                                 ),
-                               ],
+                  if (validation.status == StockValidationStatus.exact || validation.status == StockValidationStatus.hasLeftover) {
+                     return Container(
+                       margin: const EdgeInsets.only(top: 8, bottom: 8),
+                       child: Row(
+                         children: [
+                           Icon(Icons.info_outline, size: 14, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                           const SizedBox(width: 6),
+                           Expanded(
+                             child: Text(
+                               "Unidad adaptada: Factura [x${widget.variant.unidadesPorVenta}] → Sistema [x${widget.variant.matchPresentacion.datos?.unidadesPorVenta}]",
+                               style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontStyle: FontStyle.italic),
                              ),
-                           );
-                        } else {
-                           return Container(
-                             margin: const EdgeInsets.only(top: 8, bottom: 8),
-                             padding: const EdgeInsets.all(10),
-                             decoration: BoxDecoration(color: widget.isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: widget.isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200)),
-                             child: Row(
-                               crossAxisAlignment: CrossAxisAlignment.start,
-                               children: [
-                                 Icon(Icons.warning_amber_rounded, size: 20, color: widget.isDark ? Colors.orange[300] : Colors.orange[700]),
-                                 const SizedBox(width: 8),
-                                 Expanded(child: Text("Tu stock actual ($totalUnidadesBase unid.) no alcanza para formar el paquete de [x${widget.variant.matchPresentacion.datos?.unidadesPorVenta}]. Adapte la unidad.", style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.orange[200] : Colors.orange[900]))),
-                               ]
-                             )
-                           );
-                        }
-                      }
-                      return const SizedBox.shrink();
-                    }),
+                           ),
+                         ],
+                       ),
+                     );
+                  } else {
+                     return Container(
+                       margin: const EdgeInsets.only(top: 8, bottom: 8),
+                       padding: const EdgeInsets.all(10),
+                       decoration: BoxDecoration(color: widget.isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: widget.isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200)),
+                       child: Row(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                           Icon(Icons.warning_amber_rounded, size: 20, color: widget.isDark ? Colors.orange[300] : Colors.orange[700]),
+                           const SizedBox(width: 8),
+                           Expanded(child: Text("Tu stock actual ($totalUnidadesBase unid.) no alcanza para formar el paquete de [x${widget.variant.matchPresentacion.datos?.unidadesPorVenta}]. Adapte la unidad.", style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.orange[200] : Colors.orange[900]))),
+                         ]
+                       )
+                     );
+                  }
+                }
+                return const SizedBox.shrink();
+              }),
 
-                    const SizedBox(height: 16),
-                    
-                    // FASE 6: Orden optimizado por prioridad del usuario
-                    // 1. CÁLCULO FINANCIERO (lo que más importa al usuario)
-                    _buildGroupedSaleRow(isNuevo),
+              const SizedBox(height: 16),
+              
+              // 1. CÁLCULO FINANCIERO (Venta y Precios con Auto-Scroll)
+              KeyedSubtree(key: _keyVenta, child: _buildGroupedSaleRow(isNuevo)),
 
-                    // 2. GESTIÓN DE STOCK
-                    if (!isNuevo) _buildStockManagementRow() else _buildNewVariantStockRow(),
-                    _buildLeftoverWarning(),
+              // 2. GESTIÓN DE STOCK
+              KeyedSubtree(
+                key: _keyStock, 
+                child: !isNuevo ? _buildStockManagementRow() : _buildNewVariantStockRow(),
+              ),
+              _buildLeftoverWarning(),
 
-                    // 3. DESCUENTOS (si aplica)
-                    if (hasDiscount) _buildDiscountRow(),
+              // 3. DESCUENTOS (si aplica)
+              if (hasDiscount) _buildDiscountRow(),
 
-                    // 4. COMPARATIVA DE COMPRA (Proveedor) — ahora después de precios
-                    _buildGroupedPurchaseRow(),
+              // 4. COMPARATIVA DE COMPRA (Proveedor con Auto-Scroll)
+              KeyedSubtree(key: _keyProveedor, child: _buildGroupedPurchaseRow()),
 
-                    // FASE 8: Identidad rediseñada con _buildCompactField
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(color: widget.isDark ? Colors.grey.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.02), borderRadius: BorderRadius.circular(12), border: Border.all(color: widget.isDark ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.shade300)),
-                      child: Column(
-                        children: [
-                          InkWell(
-                            onTap: () => updateState(() => _showIdentidad = !_showIdentidad),
-                            borderRadius: BorderRadius.circular(12),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.drive_file_rename_outline, color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text("📝 Identidad del Producto", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
-                                        if (!_showIdentidad) ...[
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            "${_nomCtrl.text.isEmpty ? 'Sin nombre' : _nomCtrl.text} | ${_marcaCtrl.text.isEmpty ? 'Sin marca' : _marcaCtrl.text}",
-                                            style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
-                                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ]
-                                      ],
-                                    ),
-                                  ),
-                                  Icon(_showIdentidad ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
-                                ],
+              // 5. IDENTIDAD DEL PRODUCTO con Auto-Scroll
+              KeyedSubtree(
+                key: _keyIdentidad,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(color: widget.isDark ? Colors.grey.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.02), borderRadius: BorderRadius.circular(12), border: Border.all(color: widget.isDark ? Colors.grey.withValues(alpha: 0.2) : Colors.grey.shade300)),
+                  child: Column(
+                    children: [
+                      InkWell(
+                        onTap: () => _toggleAccordion('identidad'),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          child: Row(
+                            children: [
+                              Icon(Icons.drive_file_rename_outline, color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("📝 Identidad del Producto", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
+                                    if (!_showIdentidad) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        "${_nomCtrl.text.isEmpty ? 'Sin nombre' : _nomCtrl.text} | ${_marcaCtrl.text.isEmpty ? 'Sin marca' : _marcaCtrl.text}",
+                                        style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ]
+                                  ],
+                                ),
                               ),
-                            ),
+                              Icon(_showIdentidad ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                            ],
                           ),
-                          AnimatedSize(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeInOut,
-                            child: !_showIdentidad ? const SizedBox.shrink() : Padding(
-                              padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
-                              child: Column(
-                                children: [
-                                  _buildCompactField(
-                                    "Nombre Específico",
-                                    _currentDbData['nombre_especifico']?.toString() ?? 'N/A',
-                                    _nomCtrl,
-                                    widget.variant.updateNombre,
-                                    (v) => updateState(() => widget.variant.updateNombre = v!),
-                                    isText: true,
-                                  ),
-                                  _buildCompactField(
-                                    "Marca",
-                                    _currentDbData['marca_nombre']?.toString() ?? 'N/A',
-                                    _marcaCtrl,
-                                    widget.variant.updateMarca,
-                                    (v) => updateState(() => widget.variant.updateMarca = v!),
-                                    isText: true,
-                                  ),
-                                  _buildCompactField(
-                                    "Código de Barras",
-                                    _currentDbData['codigo_barras']?.toString() ?? 'N/A',
-                                    _codigoBarraCtrl,
-                                    widget.variant.updateCodigoBarra,
-                                    (v) => updateState(() => widget.variant.updateCodigoBarra = v!),
-                                    isText: true,
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.qr_code_scanner),
-                                      color: Colors.blue,
-                                      iconSize: 22,
-                                      tooltip: "Escanear",
-                                      onPressed: () async {
-                                        final code = await Navigator.push(context, MaterialPageRoute(builder: (_) => const BarcodeScannerScreen(captureOnly: true)));
-                                        if (code != null && code is String) {
-                                          updateState(() {
-                                            _codigoBarraCtrl.text = code;
-                                            widget.variant.updateCodigoBarra = true;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-        ],
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeInOut,
+                        child: !_showIdentidad ? const SizedBox.shrink() : Padding(
+                          padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
+                          child: Column(
+                            children: [
+                              _buildCompactField(
+                                "Nombre Específico",
+                                _currentDbData['nombre_especifico']?.toString() ?? 'N/A',
+                                _nomCtrl,
+                                widget.variant.updateNombre,
+                                (v) => updateState(() => widget.variant.updateNombre = v!),
+                                isText: true,
+                              ),
+                              _buildCompactField(
+                                "Marca",
+                                _currentDbData['marca_nombre']?.toString() ?? 'N/A',
+                                _marcaCtrl,
+                                widget.variant.updateMarca,
+                                (v) => updateState(() => widget.variant.updateMarca = v!),
+                                isText: true,
+                              ),
+                              _buildCompactField(
+                                "Código de Barras",
+                                _currentDbData['codigo_barras']?.toString() ?? 'N/A',
+                                _codigoBarraCtrl,
+                                widget.variant.updateCodigoBarra,
+                                (v) => updateState(() => widget.variant.updateCodigoBarra = v!),
+                                isText: true,
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.qr_code_scanner),
+                                  color: Colors.blue,
+                                  iconSize: 22,
+                                  tooltip: "Escanear",
+                                  onPressed: () async {
+                                    final code = await Navigator.push(context, MaterialPageRoute(builder: (_) => const BarcodeScannerScreen(captureOnly: true)));
+                                    if (code != null && code is String) {
+                                      updateState(() {
+                                        _codigoBarraCtrl.text = code;
+                                        widget.variant.updateCodigoBarra = true;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

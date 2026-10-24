@@ -5,6 +5,7 @@ class DetailNotesCard extends StatelessWidget {
   final String clientNote;
   final int cotizacionId;
   final int? clientId;
+  final int? saleId;
   final bool isDark;
   final bool isLoan;
   final Function(String, String, int) onEditTap;
@@ -15,6 +16,7 @@ class DetailNotesCard extends StatelessWidget {
     required this.clientNote,
     required this.cotizacionId,
     this.clientId,
+    this.saleId,
     required this.isDark,
     this.isLoan = false,
     required this.onEditTap,
@@ -79,11 +81,11 @@ class DetailNotesCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (!isLoan && cotizacionId > 0)
+                    if (isLoan || cotizacionId > 0)
                       IconButton(
                         icon: Icon(Icons.edit, color: isDark ? Colors.orange[300] : Colors.orange[800], size: 22),
-                        onPressed: () => onEditTap('sale', saleNote, cotizacionId),
-                        tooltip: "Editar nota de venta",
+                        onPressed: () => onEditTap(isLoan ? 'loan' : 'sale', saleNote, isLoan ? (saleId ?? cotizacionId) : cotizacionId),
+                        tooltip: isLoan ? "Editar nota de préstamo" : "Editar nota de venta",
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),

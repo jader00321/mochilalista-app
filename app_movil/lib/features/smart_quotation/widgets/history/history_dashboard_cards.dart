@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class HistoryDashboardCards extends StatelessWidget {
   const HistoryDashboardCards({super.key});
@@ -11,14 +11,13 @@ class HistoryDashboardCards extends StatelessWidget {
     final provider = Provider.of<SaleProvider>(context);
     final stats = provider.currentStats;
     final isArchivadas = provider.currentTab == 'archivadas';
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     final bgColor = isDark ? const Color(0xFF1A1A24) : Colors.white;
 
     final title1 = isArchivadas ? "Anuladas" : "Operaciones";
-    final title2 = isArchivadas ? "Monto Anulado" : "Cobrado (S/)";
-    final title3 = isArchivadas ? "Deuda Anulada" : "Por Cobrar (S/)";
+    final title2 = isArchivadas ? "Monto Anulado" : "Cobrado";
+    final title3 = isArchivadas ? "Deuda Anulada" : "Por Cobrar";
 
     final color1 = isArchivadas ? (isDark ? Colors.grey[400]! : Colors.grey[700]!) : (isDark ? Colors.blue[300]! : Colors.blue[800]!);
     final color2 = isArchivadas ? (isDark ? Colors.red[300]! : Colors.red[700]!) : (isDark ? Colors.green[400]! : Colors.green[700]!);
@@ -44,7 +43,7 @@ class HistoryDashboardCards extends StatelessWidget {
             child: _AnimatedStatCard(
               title: title2,
               value: stats?.totalIngresos ?? 0.0,
-              format: currency,
+              isCurrency: true,
               color: color2,
               icon: isArchivadas ? Icons.money_off : Icons.trending_up,
               isDark: isDark,
@@ -55,7 +54,7 @@ class HistoryDashboardCards extends StatelessWidget {
             child: _AnimatedStatCard(
               title: title3,
               value: stats?.totalDeuda ?? 0.0,
-              format: currency,
+              isCurrency: true,
               color: color3,
               icon: isArchivadas ? Icons.account_balance_wallet_outlined : Icons.account_balance_wallet,
               isDark: isDark,
@@ -70,7 +69,7 @@ class HistoryDashboardCards extends StatelessWidget {
 class _AnimatedStatCard extends StatelessWidget {
   final String title;
   final double value;
-  final NumberFormat? format;
+  final bool isCurrency;
   final Color color;
   final IconData icon;
   final bool isInteger;
@@ -79,7 +78,7 @@ class _AnimatedStatCard extends StatelessWidget {
   const _AnimatedStatCard({
     required this.title,
     required this.value,
-    this.format,
+    this.isCurrency = false,
     required this.color,
     required this.icon,
     this.isInteger = false,
@@ -123,7 +122,9 @@ class _AnimatedStatCard extends StatelessWidget {
             duration: const Duration(milliseconds: 600),
             curve: Curves.easeOut,
             builder: (context, animatedValue, child) {
-              String displayText = isInteger ? animatedValue.toInt().toString() : format!.format(animatedValue);
+              String displayText = isInteger 
+                  ? animatedValue.toInt().toString() 
+                  : (isCurrency ? AppCurrency.format(animatedValue) : animatedValue.toStringAsFixed(2));
               return FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,

@@ -88,30 +88,36 @@ class SmartQuotationProvider with ChangeNotifier {
   }
 
   /// 🔄 Sincroniza inmediatamente precio y stock de un ítem en el borrador en memoria (0ms)
-  void syncItemPriceAndStock(int presentationId, {double? newPrice, int? newStock}) {
+  void syncItemPriceAndStock(
+    int presentationId, {
+    double? newPrice,
+    double? newOfferPrice,
+    bool clearOffer = false,
+    int? newStock,
+    double? newCost,
+  }) {
     if (_currentState.draftManualItems != null) {
       final index = _currentState.draftManualItems!.indexWhere((p) => p.presentationId == presentationId);
       if (index != -1) {
         final current = _currentState.draftManualItems![index];
-        final updated = MatchedProduct(
-          productId: current.productId,
-          presentationId: current.presentationId,
-          fullName: current.fullName,
-          productName: current.productName,
-          specificName: current.specificName,
-          brand: current.brand,
-          price: newPrice ?? current.price,
-          offerPrice: current.offerPrice,
+        final double updatedPrice = newPrice ?? current.price;
+        final double? updatedOffer = clearOffer ? null : (newOfferPrice ?? current.offerPrice);
+
+        final updated = current.copyWith(
+          price: updatedPrice,
+          offerPrice: updatedOffer,
+          clearOfferPrice: clearOffer,
           stock: newStock ?? current.stock,
-          imageUrl: current.imageUrl,
-          unit: current.unit,
-          conversionFactor: current.conversionFactor,
-          bundleId: current.bundleId,
+          cost: newCost ?? current.cost,
         );
         _currentState.draftManualItems![index] = updated;
 
-        if (newPrice != null && _currentState.draftManualPrices != null) {
-          _currentState.draftManualPrices![presentationId] = newPrice;
+        if (_currentState.draftManualPrices != null && _currentState.draftManualPrices!.containsKey(presentationId)) {
+          final oldEffective = current.offerPrice ?? current.price;
+          if ((_currentState.draftManualPrices![presentationId]! - oldEffective).abs() < 0.01 ||
+              (_currentState.draftManualPrices![presentationId]! - current.price).abs() < 0.01) {
+            _currentState.draftManualPrices![presentationId] = updatedOffer ?? updatedPrice;
+          }
         }
         notifyListeners();
       }

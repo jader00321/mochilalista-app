@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
@@ -71,8 +72,6 @@ class QuotationCard extends StatelessWidget {
     if (quotation.type == 'pack' && quotation.status != 'SOLD' && (isCritical || isWarning)) {
       statusText = "Plantilla ($statusText)"; 
     }
-
-    final currencyFormat = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     
     String dateStr = "";
     try {
@@ -141,23 +140,16 @@ class QuotationCard extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        quotation.clientName ?? "Sin Cliente - #${quotation.displayId}",
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.blueGrey[900]),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (quotation.status == 'DRAFT')
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.orange.withValues(alpha: 0.5))),
-                                        child: const Text("Borrador", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange)),
-                                      ),
-                                  ],
+                                Text(
+                                  quotation.clientName ?? "Sin Cliente - #${quotation.displayId}",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    height: 1.25,
+                                    color: isDark ? Colors.white : Colors.blueGrey[900],
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 4),
                                 Row(
@@ -176,20 +168,18 @@ class QuotationCard extends StatelessWidget {
                               ],
                             ),
                           ),
-                          if (quotation.status != 'SOLD') ...[
-                            const SizedBox(width: 4),
-                            Tooltip(
-                              message: "Mantener presionado para opciones",
-                              child: InkWell(
-                                onTap: onLongPress,
-                                borderRadius: BorderRadius.circular(20),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4.0),
-                                  child: Icon(Icons.more_vert, size: 20, color: isDark ? Colors.grey[500] : Colors.grey[600]),
-                                ),
+                          const SizedBox(width: 4),
+                          Tooltip(
+                            message: "Opciones de cotización",
+                            child: InkWell(
+                              onTap: onLongPress,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Padding(
+                                padding: const EdgeInsets.all(4.0),
+                                child: Icon(Icons.more_vert, size: 20, color: isDark ? Colors.grey[500] : Colors.grey[600]),
                               ),
                             ),
-                          ],
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -207,7 +197,7 @@ class QuotationCard extends StatelessWidget {
                             _buildTag(typeLabel, typeColor, isDark),
                           
                           Text(
-                            "${quotation.itemCount} Ítems • $dateStr",
+                            "${quotation.itemCount} ${quotation.itemCount == 1 ? 'Ítem' : 'Ítems'} • $dateStr",
                             style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w500),
                           ),
                         ],
@@ -254,7 +244,7 @@ class QuotationCard extends StatelessWidget {
                       Align(
                         alignment: Alignment.centerRight,
                         child: Text(
-                          currencyFormat.format(quotation.totalAmount),
+                          AppCurrency.format(quotation.totalAmount),
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,

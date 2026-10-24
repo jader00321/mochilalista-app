@@ -159,54 +159,104 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center, 
             children: [
+              // Lado izquierdo: Saludo + Nombre de usuario + [🔄, 🔔] en Fila 1,
+              // y Nombre de negocio en Fila 2 (extendiéndose por debajo de 🔄 y 🔔 hasta antes del Avatar)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      _greeting,
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 4),
-                    
+                    // Fila 1: Saludo & Nombre de usuario a la izquierda, botones de acción a la derecha
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
-                          child: MarqueeText(
-                            text: userName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.5,
-                              height: 1.1,
-                            ),
-                            pauseDuration: const Duration(seconds: 3),
-                            scrollSpeed: 32.0,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _greeting,
+                                style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: MarqueeText(
+                                      text: userName,
+                                      enableGradientFade: false, // 🛡️ Precisión técnica 4: 100% nítido sin letras oscurecidas
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -0.5,
+                                        height: 1.1,
+                                      ),
+                                      pauseDuration: const Duration(seconds: 3),
+                                      scrollSpeed: 32.0,
+                                    ),
+                                  ),
+                                  if (isGuest) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.withValues(alpha: 0.8),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                      ),
+                                      child: Text(
+                                        displayRole, 
+                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                        if (isGuest) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                            ),
-                            child: Text(
-                              displayRole, 
-                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          onPressed: () => _loadData(forceRefresh: true),
+                          icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 24),
+                          tooltip: "Actualizar datos",
+                          padding: const EdgeInsets.all(6),
+                          constraints: const BoxConstraints(),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          onPressed: () {
+                            if (isGuest) return; 
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+                          },
+                          padding: const EdgeInsets.all(6),
+                          constraints: const BoxConstraints(),
+                          icon: Badge(
+                            isLabelVisible: unreadCount > 0, 
+                            label: Text("$unreadCount", style: const TextStyle(fontWeight: FontWeight.bold)),
+                            backgroundColor: Colors.orangeAccent,
+                            offset: const Offset(4, -4),
+                            child: AnimatedBuilder(
+                              animation: _bgAnimController,
+                              builder: (context, child) {
+                                double scale = unreadCount > 0 ? 1.0 + (_bgAnimController.value * 0.15) : 1.0;
+                                return Transform.scale(
+                                  scale: scale,
+                                  child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: isGuest ? 0.3 : 1.0), size: 26),
+                                );
+                              }
                             ),
                           ),
-                        ],
+                        ),
                       ],
                     ),
-                    
+
+                    // Fila 2: Nombre del negocio pasando limpiamente por debajo de [🔄] y [🔔]
                     if (!isGuest)
                       Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
+                        padding: const EdgeInsets.only(top: 6.0),
                         child: Row(
                           children: [
                             Icon(Icons.storefront_rounded, color: Colors.blue[200], size: 18),
@@ -214,6 +264,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                             Expanded(
                               child: MarqueeText(
                                 text: auth.businessName.isEmpty ? "Mi Negocio" : auth.businessName,
+                                enableGradientFade: false, // 🛡️ Precisión técnica 4: 100% nítido sin letras oscurecidas
                                 style: TextStyle(
                                   color: Colors.blue[100],
                                   fontSize: 15,
@@ -232,71 +283,37 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
               
               const SizedBox(width: 12),
 
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: () => _loadData(forceRefresh: true),
-                    icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 26),
-                    tooltip: "Actualizar datos",
-                  ),
-                  
-                  IconButton(
-                    onPressed: () {
-                      if (isGuest) return; 
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
-                    },
-                    icon: Badge(
-                      isLabelVisible: unreadCount > 0, 
-                      label: Text("$unreadCount", style: const TextStyle(fontWeight: FontWeight.bold)),
-                      backgroundColor: Colors.orangeAccent,
-                      offset: const Offset(4, -4),
-                      child: AnimatedBuilder(
-                        animation: _bgAnimController,
-                        builder: (context, child) {
-                          double scale = unreadCount > 0 ? 1.0 + (_bgAnimController.value * 0.15) : 1.0;
-                          return Transform.scale(
-                            scale: scale,
-                            child: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: isGuest ? 0.3 : 1.0), size: 28),
-                          );
+              // Avatar circular del perfil (detiene el nombre del negocio con margen limpio)
+              GestureDetector(
+                onTap: () {
+                  if (auth.isAuthenticated) {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()))
+                      .then((_) {
+                        if (mounted) {
+                          _loadData(forceRefresh: true);
                         }
-                      ),
-                    ),
+                      });
+                  } else {
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()));
+                  }
+                },
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2),
                   ),
-                  const SizedBox(width: 8),
-                  
-                    GestureDetector(
-                    onTap: () {
-                      if (auth.isAuthenticated) {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()))
-                          .then((_) {
-                            if (mounted) {
-                              _loadData(forceRefresh: true);
-                            }
-                          });
-                      } else {
-                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()));
-                      }
-                    },
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2),
-                      ),
-                      child: ClipOval(
-                        child: hasValidLogo
-                          ? (rawLogoUrl.startsWith('http') 
-                                ? Image.network(rawLogoUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.store, color: Colors.white, size: 24))
-                                : Image.file(File(rawLogoUrl), fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.store, color: Colors.white, size: 24)))
-                          : const Icon(Icons.person_rounded, color: Colors.white, size: 28),
-                      ),
-                    ),
+                  child: ClipOval(
+                    child: hasValidLogo
+                      ? (rawLogoUrl.startsWith('http') 
+                            ? Image.network(rawLogoUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.store, color: Colors.white, size: 24))
+                            : Image.file(File(rawLogoUrl), fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.store, color: Colors.white, size: 24)))
+                      : const Icon(Icons.person_rounded, color: Colors.white, size: 28),
                   ),
-                ],
-              )
+                ),
+              ),
             ],
           ),
 

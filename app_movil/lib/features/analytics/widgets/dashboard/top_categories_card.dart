@@ -1,18 +1,18 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 import 'package:app_movil/features/analytics/widgets/dashboard/glass_card.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class TopCategoriesCard extends StatefulWidget {
   final AnalyticsData data;
   final bool isDark;
-  final String Function(double) formatCurrency;
+  final String Function(double)? formatCurrency;
 
   const TopCategoriesCard({
     super.key,
     required this.data,
     required this.isDark,
-    required this.formatCurrency,
+    this.formatCurrency,
   });
 
   @override
@@ -21,34 +21,11 @@ class TopCategoriesCard extends StatefulWidget {
 
 class _TopCategoriesCardState extends State<TopCategoriesCard> {
   int _selectedCategoryIndex = -1;
-  bool _showByRevenue = false;
-  Timer? _autoRotateTimer;
+  bool _showByRevenue = true; // Por defecto Ingresos
 
-  @override
-  void initState() {
-    super.initState();
-    _startTimer();
-  }
-
-  @override
-  void dispose() {
-    _autoRotateTimer?.cancel();
-    super.dispose();
-  }
-
-  void _startTimer() {
-    _autoRotateTimer?.cancel();
-    _autoRotateTimer = Timer.periodic(const Duration(seconds: 6), (timer) {
-      if (mounted && _selectedCategoryIndex == -1) {
-        setState(() {
-          _showByRevenue = !_showByRevenue;
-        });
-      }
-    });
-  }
-
-  void _onUserInteraction() {
-    _startTimer();
+  String _format(double amount) {
+    if (widget.formatCurrency != null) return widget.formatCurrency!(amount);
+    return AppCurrency.format(amount);
   }
 
   @override
@@ -56,6 +33,8 @@ class _TopCategoriesCardState extends State<TopCategoriesCard> {
     List<Map<String, dynamic>> displayList = List<Map<String, dynamic>>.from(widget.data.topCategories);
     if (_showByRevenue) {
       displayList.sort((a, b) => ((b['total_ingresos'] as num?) ?? 0).compareTo((a['total_ingresos'] as num?) ?? 0));
+    } else {
+      displayList.sort((a, b) => ((b['total_vendido'] as num?) ?? 0).compareTo((a['total_vendido'] as num?) ?? 0));
     }
 
     double maxVal = 0;
@@ -71,61 +50,104 @@ class _TopCategoriesCardState extends State<TopCategoriesCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Text(
-                  _showByRevenue ? "Categorías por Ingresos" : "Categorías por Unidades", 
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Top Categorías", 
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _showByRevenue ? "Ordenadas por facturación" : "Ordenadas por volumen vendido",
+                      style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                    ),
+                  ],
                 ),
               ),
-              GestureDetector(
-                onTap: () {
-                  _onUserInteraction();
-                  setState(() { 
-                    _showByRevenue = !_showByRevenue; 
-                    _selectedCategoryIndex = -1; 
-                  });
-                },
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 400),
-                  transitionBuilder: (Widget child, Animation<double> animation) {
-                    return ScaleTransition(scale: animation, child: child);
-                  },
-                  child: AnimatedContainer(
-                    key: ValueKey(_showByRevenue),
-                    duration: const Duration(milliseconds: 300),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _showByRevenue 
-                          ? Colors.amber.withValues(alpha: 0.2) 
-                          : Colors.indigoAccent.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _showByRevenue ? Colors.amber.withValues(alpha: 0.5) : Colors.indigoAccent.withValues(alpha: 0.5)
+              // Segmented Pill Toggle
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: widget.isDark ? Colors.black26 : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        if (!_showByRevenue) {
+                          setState(() {
+                            _showByRevenue = true;
+                            _selectedCategoryIndex = -1;
+                          });
+                        }
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _showByRevenue 
+                              ? (widget.isDark ? Colors.indigoAccent : Colors.indigo) 
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.attach_money, size: 14, color: _showByRevenue ? Colors.white : (widget.isDark ? Colors.grey[400] : Colors.grey[700])),
+                            const SizedBox(width: 2),
+                            Text(
+                              "Ingresos",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: _showByRevenue ? Colors.white : (widget.isDark ? Colors.grey[400] : Colors.grey[700]),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _showByRevenue ? Icons.attach_money : Icons.inventory_2, 
-                          size: 16, 
-                          color: _showByRevenue ? (widget.isDark ? Colors.amberAccent : Colors.orange[800]) : Colors.indigoAccent
+                    GestureDetector(
+                      onTap: () {
+                        if (_showByRevenue) {
+                          setState(() {
+                            _showByRevenue = false;
+                            _selectedCategoryIndex = -1;
+                          });
+                        }
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: !_showByRevenue 
+                              ? (widget.isDark ? Colors.tealAccent.shade700 : Colors.teal) 
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _showByRevenue ? "Ingresos" : "Unidades", 
-                          style: TextStyle(
-                            fontSize: 12, 
-                            fontWeight: FontWeight.bold,
-                            color: _showByRevenue ? (widget.isDark ? Colors.amberAccent : Colors.orange[800]) : Colors.indigoAccent
-                          )
+                        child: Row(
+                          children: [
+                            Icon(Icons.inventory_2, size: 14, color: !_showByRevenue ? Colors.white : (widget.isDark ? Colors.grey[400] : Colors.grey[700])),
+                            const SizedBox(width: 2),
+                            Text(
+                              "Unidades",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: !_showByRevenue ? Colors.white : (widget.isDark ? Colors.grey[400] : Colors.grey[700]),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              )
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -161,7 +183,6 @@ class _TopCategoriesCardState extends State<TopCategoriesCard> {
 
                 return GestureDetector(
                   onTap: () {
-                    _onUserInteraction();
                     setState(() {
                       _selectedCategoryIndex = _selectedCategoryIndex == index ? -1 : index;
                     });
@@ -181,12 +202,12 @@ class _TopCategoriesCardState extends State<TopCategoriesCard> {
                           children: [
                             Expanded(child: Text(c['nombre'], style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.w600, fontSize: 13))),
                             Text(
-                              _showByRevenue ? widget.formatCurrency(amount) : "${amount.toInt()} unid.", 
+                              _showByRevenue ? _format(amount) : "${amount.toInt()} unid.", 
                               style: TextStyle(
                                 fontWeight: FontWeight.bold, 
                                 fontSize: 13,
                                 color: _showByRevenue ? (widget.isDark ? Colors.amberAccent : Colors.orange[800]) : null
-                              )
+                              ),
                             ),
                           ],
                         ),
@@ -269,7 +290,7 @@ class _TopCategoriesCardState extends State<TopCategoriesCard> {
 
   Widget _buildDetailPanel(Map<String, dynamic> c, int index, double amount) {
     String name = c['nombre'];
-    String displayAmount = _showByRevenue ? widget.formatCurrency(amount) : "${amount.toInt()} unidades";
+    String displayAmount = _showByRevenue ? _format(amount) : "${amount.toInt()} unidades";
     
     double totalRevenue = 0;
     double totalUnits = 0;

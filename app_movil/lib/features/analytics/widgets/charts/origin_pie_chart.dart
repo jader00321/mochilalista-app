@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class OriginPieChart extends StatefulWidget {
   final AnalyticsData data;
   final bool isDark;
-  final String Function(double) formatCurrency;
+  final String Function(double)? formatCurrency;
 
   const OriginPieChart({
     super.key,
     required this.data,
     required this.isDark,
-    required this.formatCurrency,
+    this.formatCurrency,
   });
 
   @override
@@ -21,14 +22,17 @@ class OriginPieChart extends StatefulWidget {
 class _OriginPieChartState extends State<OriginPieChart> {
   int _selectedSegmentIndex = -1;
 
+  String _format(double amount) {
+    if (widget.formatCurrency != null) return widget.formatCurrency!(amount);
+    return AppCurrency.format(amount);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.data.salesByOrigin.isEmpty) return const SizedBox.shrink();
 
     final List<Color> colors = [Colors.blueAccent, Colors.purpleAccent, Colors.teal, Colors.orange];
     
-    // Calcular el total de ESTE gráfico para el porcentaje, 
-    // porque widget.data.totalSales podría no coincidir si hay filtros de fecha
     double totalForChart = widget.data.salesByOrigin.fold(0.0, (sum, item) => sum + (item['amount'] as double));
 
     return Container(
@@ -48,7 +52,13 @@ class _OriginPieChartState extends State<OriginPieChart> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Ventas por Origen", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Ventas por Origen", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Icon(Icons.touch_app, size: 16, color: Colors.grey[400]),
+            ],
+          ),
           const SizedBox(height: 24),
           SizedBox(
             height: 220,
@@ -56,41 +66,90 @@ class _OriginPieChartState extends State<OriginPieChart> {
               children: [
                 Expanded(
                   flex: 5,
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 2,
-                      centerSpaceRadius: 40,
-                      pieTouchData: PieTouchData(
-                        touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                          if (event is FlPanEndEvent || event is FlLongPressEnd) return;
-                          if (event is FlTapUpEvent) {
-                            setState(() {
-                              if (pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
-                                _selectedSegmentIndex = -1;
-                              } else {
-                                int index = pieTouchResponse.touchedSection!.touchedSectionIndex;
-                                if (_selectedSegmentIndex == index) {
-                                  _selectedSegmentIndex = -1;
-                                } else {
-                                  _selectedSegmentIndex = index;
-                                }
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          sectionsSpace: 3,
+                          centerSpaceRadius: 42,
+                          pieTouchData: PieTouchData(
+                            touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                              if (event is FlPanEndEvent || event is FlLongPressEnd) return;
+                              if (event is FlTapUpEvent) {
+                                setState(() {
+                                  if (pieTouchResponse == null || pieTouchResponse.touchedSection == null) {
+                                    _selectedSegmentIndex = -1;
+                                  } else {
+                                    int index = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                                    if (_selectedSegmentIndex == index) {
+                                      _selectedSegmentIndex = -1;
+                                    } else {
+                                      _selectedSegmentIndex = index;
+                                    }
+                                  }
+                                });
                               }
-                            });
-                          }
-                        },
+                            },
+                          ),
+                          sections: widget.data.salesByOrigin.asMap().entries.map((e) {
+                            int index = e.key;
+                            double amount = e.value['amount'];
+                            bool isTouched = index == _selectedSegmentIndex;
+                            return PieChartSectionData(
+                              color: colors[index % colors.length],
+                              value: amount,
+                              showTitle: false,
+                              radius: isTouched ? 48 : 40,
+                            );
+                          }).toList(),
+                        ),
                       ),
-                      sections: widget.data.salesByOrigin.asMap().entries.map((e) {
-                        int index = e.key;
-                        double amount = e.value['amount'];
-                        bool isTouched = index == _selectedSegmentIndex;
-                        return PieChartSectionData(
-                          color: colors[index % colors.length],
-                          value: amount,
-                          showTitle: false,
-                          radius: isTouched ? 45 : 40,
-                        );
-                      }).toList(),
-                    ),
+                      // Center Hub
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: _selectedSegmentIndex != -1 && _selectedSegmentIndex < widget.data.salesByOrigin.length
+                            ? Column(
+                                key: ValueKey(_selectedSegmentIndex),
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    "${totalForChart > 0 ? (((widget.data.salesByOrigin[_selectedSegmentIndex]['amount'] as double) / totalForChart) * 100).toStringAsFixed(0) : '0'}%",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: colors[_selectedSegmentIndex % colors.length],
+                                    ),
+                                  ),
+                                  Text(
+                                    widget.data.salesByOrigin[_selectedSegmentIndex]['name'],
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: widget.isDark ? Colors.white70 : Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              )
+                            : Column(
+                                key: const ValueKey(-1),
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.pie_chart, size: 18, color: widget.isDark ? Colors.white38 : Colors.grey[400]),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "Total",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: widget.isDark ? Colors.white38 : Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -105,33 +164,42 @@ class _OriginPieChartState extends State<OriginPieChart> {
                       double amount = e.value['amount'];
                       bool isTouched = index == _selectedSegmentIndex;
                       
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 4.0),
-                        decoration: BoxDecoration(
-                          color: isTouched ? colors[index % colors.length].withValues(alpha: 0.1) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(width: 12, height: 12, decoration: BoxDecoration(shape: BoxShape.circle, color: colors[index % colors.length])),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(name, style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], fontWeight: isTouched ? FontWeight.bold : FontWeight.w500)),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(widget.formatCurrency(amount), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black)),
-                                      Text("${totalForChart > 0 ? ((amount / totalForChart) * 100).toStringAsFixed(1) : '0'}%", style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
-                                    ],
-                                  )
-                                ],
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedSegmentIndex = _selectedSegmentIndex == index ? -1 : index;
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 6.0),
+                          margin: const EdgeInsets.only(bottom: 4.0),
+                          decoration: BoxDecoration(
+                            color: isTouched ? colors[index % colors.length].withValues(alpha: 0.15) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: isTouched ? Border.all(color: colors[index % colors.length].withValues(alpha: 0.4)) : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(width: 12, height: 12, decoration: BoxDecoration(shape: BoxShape.circle, color: colors[index % colors.length])),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(name, style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], fontWeight: isTouched ? FontWeight.bold : FontWeight.w500)),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(_format(amount), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black)),
+                                        Text("${totalForChart > 0 ? ((amount / totalForChart) * 100).toStringAsFixed(1) : '0'}%", style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
+                                      ],
+                                    )
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       );
                     }).toList(),
@@ -163,11 +231,11 @@ class _OriginPieChartState extends State<OriginPieChart> {
     
     String insightText;
     if (pct >= 50) {
-      insightText = "El canal $name es tu FUENTE PRINCIPAL con ${widget.formatCurrency(amount)} ($percentage%). Más de la mitad de tus ingresos dependen de él. Diversifica para reducir riesgos.";
+      insightText = "El canal $name es tu FUENTE PRINCIPAL con ${_format(amount)} ($percentage%). Más de la mitad de tus ingresos dependen de él. Diversifica para reducir riesgos.";
     } else if (pct >= 20) {
-      insightText = "$name generó ${widget.formatCurrency(amount)} ($percentage%). Es un canal relevante. Mantén su rendimiento y busca oportunidades de crecimiento aquí.";
+      insightText = "$name generó ${_format(amount)} ($percentage%). Es un canal relevante. Mantén su rendimiento y busca oportunidades de crecimiento aquí.";
     } else {
-      insightText = "$name aportó ${widget.formatCurrency(amount)} ($percentage%). Es un canal secundario. Evalúa si vale la pena invertir más en este origen o redirigir esfuerzos.";
+      insightText = "$name aportó ${_format(amount)} ($percentage%). Es un canal secundario. Evalúa si vale la pena invertir más en este origen o redirigir esfuerzos.";
     }
 
     return AnimatedSwitcher(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
@@ -46,8 +47,6 @@ class _LedgerTimelineTabState extends State<LedgerTimelineTab> {
         ),
       );
     }
-
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
     final int allCount = ledger.length;
     final int cargosCount = ledger.where((i) => i.tipo == 'cargo').length;
@@ -160,7 +159,7 @@ class _LedgerTimelineTabState extends State<LedgerTimelineTab> {
                   )
                 : ListView.builder(
                     key: ValueKey('list_$_selectedFilter'),
-                    padding: const EdgeInsets.only(top: 16, bottom: 100, left: 16, right: 16),
+                    padding: const EdgeInsets.only(top: 16, bottom: 140, left: 16, right: 16),
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final item = filtered[index];
@@ -260,8 +259,8 @@ class _LedgerTimelineTabState extends State<LedgerTimelineTab> {
                                           const SizedBox(width: 10),
                                           Text(
                                             isCargo
-                                                ? "- ${currency.format(item.monto)}"
-                                                : "+ ${currency.format(item.monto)}",
+                                                ? "- ${AppCurrency.format(item.monto)}"
+                                                : "+ ${AppCurrency.format(item.monto)}",
                                             style: TextStyle(
                                               color: highlightColor,
                                               fontWeight: FontWeight.w900,
@@ -299,8 +298,8 @@ class _LedgerTimelineTabState extends State<LedgerTimelineTab> {
                                             ),
                                             child: Text(
                                               item.saldoResultante < 0
-                                                  ? "Saldo a Favor: ${currency.format(item.saldoResultante.abs())}"
-                                                  : "Saldo Deuda: ${currency.format(item.saldoResultante)}",
+                                                  ? "Saldo a Favor: ${AppCurrency.format(item.saldoResultante.abs())}"
+                                                  : "Saldo Deuda: ${AppCurrency.format(item.saldoResultante)}",
                                               style: TextStyle(
                                                 color: item.saldoResultante < 0
                                                     ? (isDark ? Colors.amber[300] : Colors.amber[800])

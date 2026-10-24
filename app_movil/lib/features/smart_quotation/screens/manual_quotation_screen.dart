@@ -566,6 +566,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
           itemCount: _items.length, 
           totalSavings: _totalSavings, 
           totalAmount: _totalAmount, 
+          estimatedProfit: _estimatedTotalProfit, 
           isSaving: _isSaving, 
           isDark: isDark, 
           onSellPressed: _onSellPressed,

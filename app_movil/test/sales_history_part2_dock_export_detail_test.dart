@@ -21,7 +21,7 @@ void main() {
       FloatingDockSessionState.selectedTaskIndex = 0;
     });
 
-    test('Persistencia global de estado en FloatingDockSessionState', () {
+    test('Persistencia global de estado en FloatingDockSessionState y SecondaryBubbleSessionState', () {
       FloatingDockSessionState.isLeftEdge = true;
       FloatingDockSessionState.panBottom = 120.0;
       FloatingDockSessionState.isEdgeTucked = true;
@@ -37,6 +37,24 @@ void main() {
       expect(FloatingDockSessionState.panBottom, isNull);
       expect(FloatingDockSessionState.isEdgeTucked, isFalse);
       expect(FloatingDockSessionState.selectedTaskIndex, equals(0));
+
+      // Test SecondaryBubbleSessionState independencia y persistencia
+      SecondaryBubbleSessionState.isLeftEdge = true;
+      SecondaryBubbleSessionState.panBottom = 150.0;
+      SecondaryBubbleSessionState.isEdgeTucked = true;
+      SecondaryBubbleSessionState.selectedTaskIndex = 3;
+
+      expect(SecondaryBubbleSessionState.isLeftEdge, isTrue);
+      expect(SecondaryBubbleSessionState.panBottom, equals(150.0));
+      expect(SecondaryBubbleSessionState.isEdgeTucked, isTrue);
+      expect(SecondaryBubbleSessionState.selectedTaskIndex, equals(3));
+
+      // Resetear SecondaryBubbleSessionState no afecta a FloatingDockSessionState
+      SecondaryBubbleSessionState.reset();
+      expect(SecondaryBubbleSessionState.isLeftEdge, isFalse);
+      expect(SecondaryBubbleSessionState.panBottom, isNull);
+      expect(SecondaryBubbleSessionState.isEdgeTucked, isFalse);
+      expect(SecondaryBubbleSessionState.selectedTaskIndex, equals(0));
     });
 
     testWidgets('Conmutación de tareas por pulsación fija (450ms sin movimiento)', (tester) async {

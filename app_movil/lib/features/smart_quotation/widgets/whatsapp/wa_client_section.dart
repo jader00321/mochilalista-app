@@ -85,6 +85,7 @@ class WaClientSection extends StatelessWidget {
             _buildTextField(
               controller: nameCtrl,
               label: "Nombre Completo",
+              hintText: "Nombre del cliente (Opcional)",
               icon: Icons.badge,
               isDark: isDark,
               onChanged: (_) => onDataChanged(),
@@ -94,6 +95,7 @@ class WaClientSection extends StatelessWidget {
             _buildTextField(
               controller: phoneCtrl,
               label: "WhatsApp (9 dígitos)",
+              hintText: "987 654 321",
               icon: Icons.phone_android,
               isPhone: true,
               isDark: isDark,
@@ -125,7 +127,16 @@ class WaClientSection extends StatelessWidget {
     );
   }
 
-  Widget _buildTextField({required TextEditingController controller, required String label, required IconData icon, required bool isDark, bool isPhone = false, int? maxLength, Function(String)? onChanged}) {
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    String? hintText,
+    required IconData icon,
+    required bool isDark,
+    bool isPhone = false,
+    int? maxLength,
+    Function(String)? onChanged,
+  }) {
     return TextFormField(
       controller: controller,
       keyboardType: isPhone ? TextInputType.number : TextInputType.text,
@@ -137,6 +148,8 @@ class WaClientSection extends StatelessWidget {
       style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87),
       decoration: InputDecoration(
         labelText: label,
+        hintText: hintText,
+        hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400], fontSize: 14),
         labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 15),
         prefixIcon: Icon(icon, size: 22, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey),
         filled: true,

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:gal/gal.dart'; 
 import 'package:permission_handler/permission_handler.dart';
 import 'package:app_movil/core/widgets/marquee_text.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
@@ -18,6 +19,7 @@ import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
 
 import 'package:app_movil/features/smart_quotation/widgets/smart_update_modal.dart';
+import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
 import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_detail_header.dart';        
 import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_evidence_panel.dart';       
 import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_item_list_row.dart';        
@@ -116,9 +118,20 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       builder: (ctx) => SmartUpdateModal(
         validation: validation,
         onUpdatePrices: () => _executeRefresh(prices: true, stock: false, names: false, bundles: false),
-        onFixStock: () => _executeRefresh(prices: false, stock: true, names: false, bundles: false),
-        onFixAll: () => _executeRefresh(prices: true, stock: true, names: true, bundles: false),
-        
+        onFixStock: () => _fixAllStock(validation),
+        onFixAll: () async {
+          await _fixAllStock(validation);
+          if (mounted) {
+            await _executeRefresh(prices: true, stock: false, names: true, bundles: false);
+          }
+        },
+        onOpenManualEdit: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ManualQuotationScreen(quotationId: widget.quotationId)),
+          );
+          if (result == true && mounted) _loadData();
+        },
         onUpdateNames: () => _executeRefresh(prices: false, stock: false, names: true, bundles: false),
         onSyncBundles: () => _executeRefresh(prices: false, stock: false, names: false, bundles: true),
         onSyncUnits: () => _executeRefresh(prices: false, stock: false, names: true, bundles: false),
@@ -128,6 +141,92 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         onAcceptSingleName: (itemId, newName) => _handleIndividualFix(itemId: itemId, newName: newName),
       ),
     );
+  }
+
+  Future<void> _fixAllStock(ValidationResult validation) async {
+    if (_fullQuotation == null) return;
+    setState(() => _isLoading = true);
+    try {
+      final List<Map<String, dynamic>> itemsPayload = [];
+      double newTotalAmount = 0.0;
+      double newTotalSavings = 0.0;
+
+      final stockWarningsMap = {for (var w in validation.stockWarnings) w.itemId: w};
+
+      for (var qItem in _fullQuotation!.items) {
+        final warning = stockWarningsMap[qItem.id];
+        if (warning != null) {
+          if (warning.available <= 0) {
+            // Producto agotado: se retira de la lista para levantar el bloqueo de venta
+            continue;
+          }
+          // Stock parcial disponible: ajustar la cantidad requerida al stock disponible
+          final qty = warning.available;
+          newTotalAmount += qItem.unitPriceApplied * qty;
+          double savings = (qItem.originalUnitPrice - qItem.unitPriceApplied) * qty;
+          if (savings > 0) newTotalSavings += savings;
+
+          itemsPayload.add({
+            "product_id": qItem.productId, 
+            "presentation_id": qItem.presentationId, 
+            "bundle_id": qItem.bundleId,
+            "quantity": qty,
+            "unit_price_applied": qItem.unitPriceApplied, 
+            "original_unit_price": qItem.originalUnitPrice, 
+            "product_name": qItem.productName,
+            "brand_name": qItem.brandName,
+            "specific_name": qItem.specificName,
+            "sales_unit": qItem.salesUnit,
+            "is_manual_price": qItem.isManualPrice, 
+            "image_url": qItem.imageUrl,
+            "original_text": qItem.originalText
+          });
+        } else {
+          newTotalAmount += qItem.unitPriceApplied * qItem.quantity;
+          double savings = (qItem.originalUnitPrice - qItem.unitPriceApplied) * qItem.quantity;
+          if (savings > 0) newTotalSavings += savings;
+
+          itemsPayload.add({
+            "product_id": qItem.productId, 
+            "presentation_id": qItem.presentationId, 
+            "bundle_id": qItem.bundleId,
+            "quantity": qItem.quantity,
+            "unit_price_applied": qItem.unitPriceApplied, 
+            "original_unit_price": qItem.originalUnitPrice, 
+            "product_name": qItem.productName,
+            "brand_name": qItem.brandName,
+            "specific_name": qItem.specificName,
+            "sales_unit": qItem.salesUnit,
+            "is_manual_price": qItem.isManualPrice, 
+            "image_url": qItem.imageUrl,
+            "original_text": qItem.originalText
+          });
+        }
+      }
+
+      final wbProv = Provider.of<WorkbenchProvider>(context, listen: false);
+      await wbProv.saveManualQuotation(
+        id: widget.quotationId,
+        clientId: _fullQuotation!.clientId,
+        clientName: _fullQuotation!.clientName,
+        institution: _fullQuotation!.institutionName,
+        grade: _fullQuotation!.gradeLevel,
+        notas: _fullQuotation!.notas,
+        totalAmount: newTotalAmount,
+        totalSavings: newTotalSavings > 0 ? newTotalSavings : 0.0,
+        items: itemsPayload,
+        status: _fullQuotation!.status,
+        type: _fullQuotation!.type,
+      );
+
+      if (mounted) {
+        CustomSnackBar.show(context, message: "Productos agotados y stock corregidos exitosamente", isError: false);
+      }
+      await _loadData();
+    } catch (e) {
+      if (mounted) CustomSnackBar.show(context, message: "Error al corregir stock: $e", isError: true);
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _handleIndividualFix({
@@ -344,6 +443,92 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     );
   }
 
+  void _showQuotationNameDialog(bool isDark) {
+    final title = _fullQuotation?.clientName ?? widget.clientName ?? "Detalle";
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+        title: Row(
+          children: [
+            Icon(Icons.description_outlined, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+            const SizedBox(width: 8),
+            const Text("Nombre de la Lista", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: SelectableText(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : Colors.blueGrey[900],
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text("Copiar"),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: title));
+              Navigator.pop(ctx);
+              CustomSnackBar.show(context, message: "Nombre copiado", isError: false);
+            },
+          ),
+          if (_fullQuotation?.status != 'SOLD' && !Provider.of<AuthProvider>(context, listen: false).isCommunityClient)
+            ElevatedButton.icon(
+              icon: const Icon(Icons.edit, size: 18),
+              label: const Text("Editar"),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showRenameDialog(isDark);
+              },
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cerrar"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRenameDialog(bool isDark) {
+    final controller = TextEditingController(text: _fullQuotation?.clientName ?? "");
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+        title: const Text("Cambiar Nombre", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: "Nombre o Cliente",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          ElevatedButton(
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty) {
+                Navigator.pop(ctx);
+                final workbenchProv = Provider.of<WorkbenchProvider>(context, listen: false);
+                final ok = await workbenchProv.renameQuotation(widget.quotationId, newName);
+                if (ok) {
+                  _loadData();
+                  if (mounted) CustomSnackBar.show(context, message: "Nombre actualizado", isError: false);
+                }
+              }
+            },
+            child: const Text("Guardar"),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showTextEvidenceDialog(bool isDark) {
     String fullText = _fullQuotation?.originalTextDump ?? "";
     if (fullText.isEmpty && _fullQuotation != null) {
@@ -482,6 +667,175 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     }
   }
 
+  void _showStateSelectorModal(bool isDark) {
+    final currentStatus = _fullQuotation?.status ?? 'DRAFT';
+    final bool isSold = currentStatus == 'SOLD';
+    final workbenchProv = Provider.of<WorkbenchProvider>(context, listen: false);
+
+    InteractiveSheetWrapper.show(
+      context: context,
+      builder: (sheetCtx) => InteractiveSheetWrapper(
+        title: isSold ? "Cotización Vendida" : "Opciones de Cotización",
+        icon: isSold ? Icons.verified : Icons.tune,
+        iconColor: isSold ? (isDark ? Colors.green[400]! : Colors.green[800]!) : (isDark ? Colors.blue[300] : Colors.blue[700]),
+        maxHeightFactor: 0.85,
+        applyEffectiveBottomPadding: true,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isSold) ...[
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.lock, size: 18, color: isDark ? Colors.green[300] : Colors.green[800]),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        "Cotización Vendida (Histórico Inmutable). Puedes duplicarla para crear un nuevo borrador o compartirla.",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.green[200] : Colors.green[900],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50],
+                  child: Icon(Icons.copy_all, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                ),
+                title: const Text("Duplicar Cotización", style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text("Crea un nuevo borrador editable basado en esta cotización"),
+                onTap: () async {
+                  Navigator.pop(sheetCtx);
+                  final newId = await workbenchProv.cloneQuotation(widget.quotationId);
+                  if (newId != null && mounted) {
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => QuotationDetailScreen(quotationId: newId)));
+                    CustomSnackBar.show(context, message: "Cotización duplicada como nuevo borrador", isError: false);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+            ] else ...[
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50],
+                  child: Icon(Icons.edit, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                ),
+                title: const Text("Cambiar Nombre / Cliente", style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text("Actualiza el título de esta lista"),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _showRenameDialog(isDark);
+                },
+              ),
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "ESTADO DE LA COTIZACIÓN",
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[600], letterSpacing: 0.5),
+                  ),
+                ),
+              ),
+              if (currentStatus != 'DRAFT')
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.grey.withValues(alpha: 0.2),
+                    child: const Icon(Icons.edit_note, color: Colors.grey),
+                  ),
+                  title: const Text("Borrador", style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text("Mover a preparación inicial"),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _changeStatus('DRAFT');
+                  },
+                ),
+              if (currentStatus != 'PENDING')
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.orange.withValues(alpha: 0.2),
+                    child: const Icon(Icons.access_time, color: Colors.orange),
+                  ),
+                  title: const Text("Pendiente (Revisar)", style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text("Lista en proceso de armado o revisión"),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _changeStatus('PENDING');
+                  },
+                ),
+              if (currentStatus != 'READY')
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blue.withValues(alpha: 0.2),
+                    child: const Icon(Icons.check_circle_outline, color: Colors.blue),
+                  ),
+                  title: const Text("Listo para Vender", style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text("Lista armada y validada para despacho"),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _changeStatus('READY');
+                  },
+                ),
+              const Divider(),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.teal.withValues(alpha: 0.2),
+                  child: const Icon(Icons.inventory_2, color: Colors.teal),
+                ),
+                title: const Text("Convertir en Pack Escolar", style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text("Guardar como plantilla reutilizable"),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _confirmConvertToPack(workbenchProv);
+                },
+              ),
+              if (currentStatus != 'ARCHIVED')
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.purple.withValues(alpha: 0.2),
+                    child: const Icon(Icons.archive_outlined, color: Colors.purple),
+                  ),
+                  title: const Text("Archivar", style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text("Ocultar de la Mesa de Trabajo activa"),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _changeStatus('ARCHIVED');
+                  },
+                ),
+              Divider(color: isDark ? Colors.white10 : Colors.grey[200]),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.red.withValues(alpha: 0.15),
+                  child: const Icon(Icons.delete_outline, color: Colors.red),
+                ),
+                title: const Text("Eliminar Cotización", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                subtitle: const Text("Eliminar definitivamente esta cotización"),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _handleDeleteRequest();
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final workbenchProv = Provider.of<WorkbenchProvider>(context);
@@ -514,6 +868,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               child: MarqueeText(
                 text: _fullQuotation?.clientName ?? widget.clientName ?? "Detalle",
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                onTap: () => _showQuotationNameDialog(isDark),
               ),
             ),
             const SizedBox(height: 2),
@@ -544,32 +899,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               onPressed: () => quickProv.toggleHideProfits(),
             ),
           ),
-          IconButton(icon: const Icon(Icons.refresh, size: 26), onPressed: _loadData),
+          if (_fullQuotation?.status != 'SOLD')
+            IconButton(icon: const Icon(Icons.refresh, size: 26), tooltip: "Sincronizar", onPressed: _loadData),
           
-          if (!isClient && _fullQuotation?.status != 'SOLD') // 🔒 Si está vendido, ocultar menú
-            PopupMenuButton<String>(
-              color: isDark ? const Color(0xFF23232F) : Colors.white,
+          if (!isClient)
+            IconButton(
               icon: const Icon(Icons.more_vert, size: 26),
-              onSelected: (val) {
-                if (val == 'DELETE') {
-                  _handleDeleteRequest(); 
-                } else {
-                  _changeStatus(val);
-                }
-              },
-              itemBuilder: (BuildContext context) {
-                final current = _fullQuotation?.status ?? 'DRAFT';
-                List<PopupMenuEntry<String>> options = [];
-                if (current != 'DRAFT') options.add(PopupMenuItem(value: 'DRAFT', child: _StatusRow(icon: Icons.edit_note, color: Colors.grey, text: "Borrador", isDark: isDark)));
-                if (current != 'PENDING') options.add(PopupMenuItem(value: 'PENDING', child: _StatusRow(icon: Icons.access_time, color: Colors.orange, text: "Pendiente", isDark: isDark)));
-                if (current != 'READY') options.add(PopupMenuItem(value: 'READY', child: _StatusRow(icon: Icons.check_circle_outline, color: Colors.blue, text: "Listo para Vender", isDark: isDark)));
-                options.add(const PopupMenuDivider());
-                options.add(PopupMenuItem(value: 'CONVERT_PACK', child: _StatusRow(icon: Icons.copy_all, color: Colors.teal, text: "Convertir en Pack Escolar", isDark: isDark)));
-                if (current != 'ARCHIVED') options.add(PopupMenuItem(value: 'ARCHIVED', child: _StatusRow(icon: Icons.archive_outlined, color: Colors.purple, text: "Archivar", isDark: isDark)));
-                options.add(const PopupMenuDivider());
-                options.add(PopupMenuItem(value: 'DELETE', child: _StatusRow(icon: Icons.delete_outline, color: Colors.red, text: "Eliminar Cotización", isDark: isDark)));
-                return options;
-              },
+              tooltip: "Opciones y Estado",
+              onPressed: () => _showStateSelectorModal(isDark),
             ),
         ],
       ),
@@ -635,7 +972,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                   )
                 else
                   SliverPadding(
-                    padding: const EdgeInsets.only(bottom: 20, top: 8),
+                    padding: EdgeInsets.only(
+                      top: 8, 
+                      bottom: 120 + MediaQuery.of(context).padding.bottom,
+                    ),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (ctx, i) {
@@ -664,25 +1004,6 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   }
 }
 
-class _StatusRow extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String text;
-  final bool isDark;
-  
-  const _StatusRow({required this.icon, required this.color, required this.text, required this.isDark});
-  
-  @override
-  Widget build(BuildContext context) {
-    Color finalColor = isDark ? (color == Colors.blue ? Colors.blue[300]! : color == Colors.red ? Colors.red[300]! : color == Colors.orange ? Colors.orange[300]! : color == Colors.teal ? Colors.teal[300]! : color == Colors.purple ? Colors.purple[300]! : color) : color;
-    
-    return Row(children: [
-      Icon(icon, color: finalColor, size: 22), 
-      const SizedBox(width: 12), 
-      Text(text, style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w500))
-    ]);
-  }
-}
 
 class _QuoteHeaderDelegate extends SliverPersistentHeaderDelegate {
   final SmartQuotationModel? quotation;

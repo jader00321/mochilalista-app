@@ -158,6 +158,8 @@ class ProductControllerFactory {
         source['activeDiscountRoundingTarget'] as double?;
     map['preRoundedDiscountValor'] =
         source['preRoundedDiscountValor'] as String?;
+    map['preRoundedOfferPrice'] =
+        source['preRoundedOfferPrice'] as double?;
     return map;
   }
 

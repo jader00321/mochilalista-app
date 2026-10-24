@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/features/analytics/services/inventory_intelligence_service.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 enum AnalyticsStep { idle, starting, sales, inventory, clients, insights, done, error }
 enum InsightType { success, warning, info, tip }
-enum AnalyticsPeriod { today, week, month, sixMonths, year, allTime }
+enum AnalyticsPeriod { today, week, month, sixMonths, year, allTime, custom }
 
 class BusinessInsight {
   final IconData icon;
@@ -64,6 +65,11 @@ class AnalyticsData {
   final List<BusinessInsight> insights;
   final FinancialHealthSummary? financialHealth;
   final String? categoryInsight;
+  final double effectiveCollectionRate;
+  final double averageMarginPerSale;
+  final double previousPeriodSales;
+  final DateTime? periodStartDate;
+  final DateTime? periodEndDate;
 
   AnalyticsData({
     this.totalSales = 0.0,
@@ -91,6 +97,11 @@ class AnalyticsData {
     this.insights = const [],
     this.financialHealth,
     this.categoryInsight,
+    this.effectiveCollectionRate = 100.0,
+    this.averageMarginPerSale = 0.0,
+    this.previousPeriodSales = 0.0,
+    this.periodStartDate,
+    this.periodEndDate,
   });
 }
 
@@ -101,6 +112,7 @@ class AnalyticsProvider with ChangeNotifier {
   String _statusMessage = "Listo para iniciar";
   double _progress = 0.0;
   AnalyticsPeriod _selectedPeriod = AnalyticsPeriod.sixMonths;
+  DateTimeRange? _customDateRange;
   int _deadStockThresholdDays = 30;
   
   AnalyticsData? _data;
@@ -114,6 +126,7 @@ class AnalyticsProvider with ChangeNotifier {
   String? get lastErrorMsg => _lastErrorMsg;
   String? get lastStackTrace => _lastStackTrace;
   AnalyticsPeriod get selectedPeriod => _selectedPeriod;
+  DateTimeRange? get customDateRange => _customDateRange;
   int get deadStockThresholdDays => _deadStockThresholdDays;
 
   final dbHelper = LocalDatabase.instance;
@@ -124,6 +137,20 @@ class AnalyticsProvider with ChangeNotifier {
       _selectedPeriod = newPeriod;
       runStaggeredAnalysis();
     }
+  }
+
+  void setCustomDateRange(DateTimeRange range) {
+    _customDateRange = range;
+    _selectedPeriod = AnalyticsPeriod.custom;
+    runStaggeredAnalysis();
+  }
+
+  void setPeriodAndAnalyze(AnalyticsPeriod period, {DateTimeRange? customRange}) {
+    _selectedPeriod = period;
+    if (customRange != null) {
+      _customDateRange = customRange;
+    }
+    runStaggeredAnalysis();
   }
 
   void setDeadStockThresholdDays(int days) {
@@ -158,7 +185,7 @@ class AnalyticsProvider with ChangeNotifier {
     _statusMessage = "Iniciando motor analítico...";
     notifyListeners();
     
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(const Duration(milliseconds: 400));
 
     try {
       // 0. Seed Ledger (para usuarios previos a Fase 1 Trazabilidad)
@@ -171,92 +198,175 @@ class AnalyticsProvider with ChangeNotifier {
       _progress = 0.3;
       _statusMessage = "Calculando ingresos brutos y rentabilidad...";
       notifyListeners();
-      
-      // Obtener todas las ventas del negocio (ignorando las archivadas y los préstamos)
-      final ventasRows = await db.query('ventas', where: 'negocio_id = ? AND is_archived = 0 AND IFNULL(origen_venta, "") != "prestamo_personal"', whereArgs: [_negocioId]);
-      int totalTransactions = ventasRows.length;
-      double totalVentas = 0.0;
-      double totalGananciaNeta = 0.0;
-      
-      // Mapeos para gráficas
-      Map<String, double> salesByMonth = {};
-      Map<String, double> salesByDayListMap = {}; // para dailySalesData
-      Map<String, double> salesByDayMap = {};
-      Map<String, double> salesByOriginMap = {};
-      Map<String, double> salesByPaymentMap = {};
-      
-      // Calcular ganancia neta global de manera optimizada (N+1 resuelto)
-      final gananciaQuery = await db.rawQuery('''
-        SELECT SUM(
-          CASE 
-            WHEN pp.costo_unitario_calculado IS NOT NULL AND pp.costo_unitario_calculado > 0 
-            THEN (vi.precio_unitario - pp.costo_unitario_calculado) * vi.cantidad
-            ELSE (vi.precio_unitario * vi.cantidad) * 0.30
-          END
-        ) as ganancia_neta
-        FROM venta_items vi
-        JOIN ventas v ON vi.venta_id = v.id
-        LEFT JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
-        WHERE v.negocio_id = ? AND v.is_archived = 0 AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
-      ''', [_negocioId]);
-      
-      if (gananciaQuery.isNotEmpty && gananciaQuery.first['ganancia_neta'] != null) {
-        totalGananciaNeta = (gananciaQuery.first['ganancia_neta'] as num).toDouble();
-      }
 
-      // Filtrar para gráficas temporales
-      DateTime now = DateTime.now();
+      // Determinación precisa del rango de fechas del periodo y periodo comparativo previo
+      final now = DateTime.now();
       DateTime startDate;
+      DateTime endDate = now;
+      DateTime prevStartDate;
+      DateTime prevEndDate;
+
       switch (_selectedPeriod) {
         case AnalyticsPeriod.today:
           startDate = DateTime(now.year, now.month, now.day);
+          endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+          prevStartDate = startDate.subtract(const Duration(days: 1));
+          prevEndDate = DateTime(prevStartDate.year, prevStartDate.month, prevStartDate.day, 23, 59, 59);
           break;
         case AnalyticsPeriod.week:
           startDate = now.subtract(const Duration(days: 7));
+          endDate = now;
+          prevStartDate = startDate.subtract(const Duration(days: 7));
+          prevEndDate = startDate;
           break;
         case AnalyticsPeriod.month:
           startDate = now.subtract(const Duration(days: 30));
+          endDate = now;
+          prevStartDate = startDate.subtract(const Duration(days: 30));
+          prevEndDate = startDate;
           break;
         case AnalyticsPeriod.sixMonths:
           startDate = now.subtract(const Duration(days: 180));
+          endDate = now;
+          prevStartDate = startDate.subtract(const Duration(days: 180));
+          prevEndDate = startDate;
           break;
         case AnalyticsPeriod.year:
           startDate = now.subtract(const Duration(days: 365));
+          endDate = now;
+          prevStartDate = startDate.subtract(const Duration(days: 365));
+          prevEndDate = startDate;
           break;
         case AnalyticsPeriod.allTime:
-          startDate = DateTime(2000);
+          startDate = DateTime(2000, 1, 1);
+          endDate = now;
+          prevStartDate = DateTime(1990, 1, 1);
+          prevEndDate = DateTime(1999, 12, 31);
+          break;
+        case AnalyticsPeriod.custom:
+          if (_customDateRange != null) {
+            startDate = _customDateRange!.start;
+            endDate = DateTime(_customDateRange!.end.year, _customDateRange!.end.month, _customDateRange!.end.day, 23, 59, 59);
+            final duration = endDate.difference(startDate);
+            prevEndDate = startDate;
+            prevStartDate = startDate.subtract(duration);
+          } else {
+            startDate = now.subtract(const Duration(days: 30));
+            endDate = now;
+            prevStartDate = startDate.subtract(const Duration(days: 30));
+            prevEndDate = startDate;
+          }
           break;
       }
+      
+      // Obtener todas las ventas activas del negocio para partición exacta
+      final allVentasRows = await db.query(
+        'ventas', 
+        where: 'negocio_id = ? AND is_archived = 0 AND IFNULL(origen_venta, "") != "prestamo_personal"', 
+        whereArgs: [_negocioId]
+      );
 
-      final filteredVentas = ventasRows.where((venta) {
+      // Particionar entre periodo actual y periodo previo con parsing tolerante
+      final periodVentas = allVentasRows.where((venta) {
         String? fechaVentaStr = venta['fecha_venta']?.toString();
-        DateTime fecha = DateTime.tryParse(fechaVentaStr ?? '') ?? now;
-        return fecha.isAfter(startDate) || fecha.isAtSameMomentAs(startDate);
+        DateTime? fecha = DateTime.tryParse(fechaVentaStr ?? '');
+        if (fecha == null) return false;
+        return (fecha.isAfter(startDate) || fecha.isAtSameMomentAs(startDate)) &&
+               (fecha.isBefore(endDate) || fecha.isAtSameMomentAs(endDate));
       }).toList();
 
-      for (var venta in ventasRows) {
+      final prevPeriodVentas = allVentasRows.where((venta) {
+        String? fechaVentaStr = venta['fecha_venta']?.toString();
+        DateTime? fecha = DateTime.tryParse(fechaVentaStr ?? '');
+        if (fecha == null) return false;
+        return (fecha.isAfter(prevStartDate) || fecha.isAtSameMomentAs(prevStartDate)) &&
+               (fecha.isBefore(prevEndDate) || fecha.isAtSameMomentAs(prevEndDate));
+      }).toList();
+
+      int totalTransactions = periodVentas.length;
+      double totalVentas = 0.0;
+      double totalPagado = 0.0;
+      double totalGananciaNeta = 0.0;
+      double prevTotalVentas = 0.0;
+
+      for (var venta in periodVentas) {
         double monto = (venta['monto_total'] as num?)?.toDouble() ?? 0.0;
         totalVentas += monto;
+        double pagado = (venta['monto_pagado'] as num?)?.toDouble() ?? monto;
+        totalPagado += pagado;
       }
 
-      for (var venta in filteredVentas) {
+      for (var venta in prevPeriodVentas) {
         double monto = (venta['monto_total'] as num?)?.toDouble() ?? 0.0;
-        
+        prevTotalVentas += monto;
+      }
+
+      // Tasa de crecimiento simétrico del periodo
+      double growthRate = 0.0;
+      if (prevTotalVentas > 0) {
+        growthRate = ((totalVentas - prevTotalVentas) / prevTotalVentas) * 100;
+      } else if (totalVentas > 0) {
+        growthRate = 100.0;
+      } else {
+        growthRate = 0.0;
+      }
+      if (growthRate > 999.0) growthRate = 999.0;
+      if (growthRate < -999.0) growthRate = -999.0;
+
+      // Tasa de cobranza efectiva (% cobrado vs total facturado)
+      double effectiveCollectionRate = totalVentas > 0 ? (totalPagado / totalVentas) * 100 : 100.0;
+      if (effectiveCollectionRate > 100.0) effectiveCollectionRate = 100.0;
+      if (effectiveCollectionRate < 0.0) effectiveCollectionRate = 0.0;
+
+      // Mapeos para gráficas
+      Map<String, double> salesByMonth = {};
+      Map<String, double> salesByDayListMap = {}; // para dailySalesData
+      // Inicializar siempre los 7 días de la semana en orden estricto
+      final weekDays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+      Map<String, double> salesByDayMap = {for (var d in weekDays) d: 0.0};
+      Map<String, double> salesByOriginMap = {};
+      Map<String, double> salesByPaymentMap = {};
+      
+      // Ids de ventas del periodo actual para consultas hijas
+      final List<dynamic> ventaIds = periodVentas.map((v) => v['id']).toList();
+      String ventaIdsIn = ventaIds.isNotEmpty ? ventaIds.join(',') : '0';
+
+      if (periodVentas.isNotEmpty) {
+        final gananciaQuery = await db.rawQuery('''
+          SELECT SUM(
+            CASE 
+              WHEN pp.costo_unitario_calculado IS NOT NULL AND pp.costo_unitario_calculado > 0 
+              THEN (vi.precio_unitario - pp.costo_unitario_calculado) * vi.cantidad
+              ELSE (vi.precio_unitario * vi.cantidad) * 0.30
+            END
+          ) as ganancia_neta
+          FROM venta_items vi
+          LEFT JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
+          WHERE vi.venta_id IN ($ventaIdsIn)
+        ''');
+
+        if (gananciaQuery.isNotEmpty && gananciaQuery.first['ganancia_neta'] != null) {
+          totalGananciaNeta = (gananciaQuery.first['ganancia_neta'] as num).toDouble();
+        }
+      }
+
+      for (var venta in periodVentas) {
+        double monto = (venta['monto_total'] as num?)?.toDouble() ?? 0.0;
         String? fechaVentaStr = venta['fecha_venta']?.toString();
-        DateTime fecha = DateTime.tryParse(fechaVentaStr ?? '') ?? DateTime.now();
-        String mesKey = DateFormat('MM/yyyy').format(fecha);
+        DateTime fecha = DateTime.tryParse(fechaVentaStr ?? '') ?? now;
         
+        String mesKey = DateFormat('MM/yyyy').format(fecha);
         salesByMonth[mesKey] = (salesByMonth[mesKey] ?? 0) + monto;
         
         String diaKey = DateFormat('yyyy-MM-dd').format(fecha);
         salesByDayListMap[diaKey] = (salesByDayListMap[diaKey] ?? 0) + monto;
         
-        // Día de la semana
-        int weekday = fecha.weekday;
-        String dayName = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][weekday - 1];
-        salesByDayMap[dayName] = (salesByDayMap[dayName] ?? 0) + monto;
+        int weekday = fecha.weekday; // 1 = Lun, 7 = Dom
+        if (weekday >= 1 && weekday <= 7) {
+          String dayName = weekDays[weekday - 1];
+          salesByDayMap[dayName] = (salesByDayMap[dayName] ?? 0.0) + monto;
+        }
         
-        // Origen
         String origen = venta['origen_venta'] as String? ?? 'Desconocido';
         if (origen == 'smart_quotation') {
           origen = 'Cotización';
@@ -267,17 +377,14 @@ class AnalyticsProvider with ChangeNotifier {
         }
         salesByOriginMap[origen] = (salesByOriginMap[origen] ?? 0) + monto;
         
-        // Método de pago
         String metodo = venta['metodo_pago'] as String? ?? 'Otro';
         salesByPaymentMap[metodo] = (salesByPaymentMap[metodo] ?? 0) + monto;
-        
-        // La ganancia neta se calculó globalmente fuera del bucle
       }
       
       // Promedio de margen
       double margin = totalVentas > 0 ? (totalGananciaNeta / totalVentas) * 100 : 0.0;
 
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future.delayed(const Duration(milliseconds: 300));
 
       // 2. ANALIZAR CLIENTES Y PRODUCTOS
       _currentStep = AnalyticsStep.clients;
@@ -285,62 +392,66 @@ class AnalyticsProvider with ChangeNotifier {
       _statusMessage = "Cruzando datos de clientes y productos populares...";
       notifyListeners();
 
-      // Top Productos
-      final topProductsQuery = await db.rawQuery('''
-        SELECT p.nombre, m.nombre as marca_nombre, pp.nombre_especifico as presentacion_nombre, SUM(vi.cantidad) as total_vendido, SUM(vi.cantidad * vi.precio_unitario) as monto_vendido
-        FROM venta_items vi
-        JOIN ventas v ON vi.venta_id = v.id
-        JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
-        JOIN productos p ON pp.producto_id = p.id
-        LEFT JOIN marcas m ON p.marca_id = m.id
-        WHERE v.negocio_id = ? AND v.is_archived = 0 AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
-        GROUP BY p.id
-        ORDER BY total_vendido DESC
-        LIMIT 5
-      ''', [_negocioId]);
-
-      // Top Clientes
-      final topClientsQuery = await db.rawQuery('''
-        SELECT c.nombre_completo, SUM(v.monto_total) as total_comprado, COUNT(v.id) as num_compras
-        FROM ventas v
-        JOIN clientes c ON v.cliente_id = c.id
-        WHERE v.negocio_id = ? AND v.is_archived = 0 AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
-        GROUP BY c.id
-        ORDER BY total_comprado DESC
-        LIMIT 5
-      ''', [_negocioId]);
-
-      // Top Categorías
-      final topCategoriesQuery = await db.rawQuery('''
-        SELECT c.nombre, 
-               SUM(vi.cantidad) as total_vendido,
-               SUM(vi.cantidad * vi.precio_unitario) as total_ingresos
-        FROM venta_items vi
-        JOIN ventas v ON vi.venta_id = v.id
-        JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
-        JOIN productos p ON pp.producto_id = p.id
-        JOIN categorias c ON p.categoria_id = c.id
-        WHERE v.negocio_id = ? AND v.is_archived = 0 AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
-        GROUP BY c.id
-        ORDER BY total_vendido DESC
-        LIMIT 5
-      ''', [_negocioId]);
-
-      // Liquidez Recuperada
-      final liquidityQuery = await db.rawQuery('''
-        SELECT SUM(vi.subtotal) as total_liquidez
-        FROM venta_items vi
-        JOIN ventas v ON vi.venta_id = v.id
-        JOIN paquetes p ON vi.bundle_id = p.id
-        WHERE v.negocio_id = ? AND v.is_archived = 0 AND p.tipo_promocion = 'liquidez_costo' AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
-      ''', [_negocioId]);
-      
+      List<Map<String, dynamic>> topProductsQuery = [];
+      List<Map<String, dynamic>> topClientsQuery = [];
+      List<Map<String, dynamic>> topCategoriesQuery = [];
       double recoveredLiquidity = 0.0;
-      if (liquidityQuery.isNotEmpty && liquidityQuery.first['total_liquidez'] != null) {
-        recoveredLiquidity = (liquidityQuery.first['total_liquidez'] as num).toDouble();
+
+      if (periodVentas.isNotEmpty) {
+        // Top Productos
+        topProductsQuery = await db.rawQuery('''
+          SELECT p.nombre, m.nombre as marca_nombre, pp.nombre_especifico as presentacion_nombre, 
+                 SUM(vi.cantidad) as total_vendido, 
+                 SUM(vi.cantidad * vi.precio_unitario) as monto_vendido
+          FROM venta_items vi
+          JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
+          JOIN productos p ON pp.producto_id = p.id
+          LEFT JOIN marcas m ON p.marca_id = m.id
+          WHERE vi.venta_id IN ($ventaIdsIn)
+          GROUP BY p.id
+          ORDER BY total_vendido DESC
+          LIMIT 5
+        ''');
+
+        // Top Clientes (con cliente_id y num_compras)
+        topClientsQuery = await db.rawQuery('''
+          SELECT c.id as cliente_id, c.nombre_completo, SUM(v.monto_total) as total_comprado, COUNT(v.id) as num_compras
+          FROM ventas v
+          JOIN clientes c ON v.cliente_id = c.id
+          WHERE v.id IN ($ventaIdsIn)
+          GROUP BY c.id
+          ORDER BY total_comprado DESC
+          LIMIT 5
+        ''');
+
+        // Top Categorías
+        topCategoriesQuery = await db.rawQuery('''
+          SELECT c.nombre, 
+                 SUM(vi.cantidad) as total_vendido,
+                 SUM(vi.cantidad * vi.precio_unitario) as total_ingresos
+          FROM venta_items vi
+          JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
+          JOIN productos p ON pp.producto_id = p.id
+          JOIN categorias c ON p.categoria_id = c.id
+          WHERE vi.venta_id IN ($ventaIdsIn)
+          GROUP BY c.id
+          ORDER BY total_vendido DESC
+          LIMIT 5
+        ''');
+
+        // Liquidez Recuperada
+        final liquidityQuery = await db.rawQuery('''
+          SELECT SUM(vi.subtotal) as total_liquidez
+          FROM venta_items vi
+          JOIN paquetes p ON vi.bundle_id = p.id
+          WHERE vi.venta_id IN ($ventaIdsIn) AND p.tipo_promocion = 'liquidez_costo'
+        ''');
+        if (liquidityQuery.isNotEmpty && liquidityQuery.first['total_liquidez'] != null) {
+          recoveredLiquidity = (liquidityQuery.first['total_liquidez'] as num).toDouble();
+        }
       }
 
-      // Valor del inventario
+      // Valor del inventario actual
       final inventoryValueQuery = await db.rawQuery('''
         SELECT SUM(pp.stock_actual * pp.precio_venta_final) as total_inv
         FROM presentaciones_producto pp
@@ -395,19 +506,17 @@ class AnalyticsProvider with ChangeNotifier {
         }
       }
 
-      // Ordenar: primero los de menor inactividad, al último los de mayor inactividad
       deadStockList.sort((a, b) => (a['dias_estancado'] as int).compareTo(b['dias_estancado'] as int));
-
       int deadStockCount = deadStockList.length;
 
-      // Índice de Rotación (Proxy: COGS total del periodo / Valor actual del inventario)
+      // Índice de Rotación
       double inventoryTurnoverRatio = 0.0;
       if (totalVentas > 0 && invValue > 0) {
         double cogs = totalVentas - totalGananciaNeta;
         inventoryTurnoverRatio = cogs / invValue;
       }
 
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future.delayed(const Duration(milliseconds: 300));
 
       // 3. PREDICCIONES Y QUIEBRE DE STOCK
       _currentStep = AnalyticsStep.insights;
@@ -415,7 +524,7 @@ class AnalyticsProvider with ChangeNotifier {
       _statusMessage = "Generando recomendaciones e insights...";
       notifyListeners();
 
-      // Alertas de Stock
+      // Alertas de Stock Crítico
       final lowStockQuery = await db.rawQuery('''
         SELECT pp.id as presentacion_id, p.id as producto_id, p.nombre, m.nombre as marca_nombre, pp.nombre_especifico as presentacion_nombre, pp.stock_actual, IFNULL(pp.stock_alerta, 5) as stock_alerta
         FROM presentaciones_producto pp
@@ -426,15 +535,13 @@ class AnalyticsProvider with ChangeNotifier {
         LIMIT 10
       ''', [_negocioId]);
 
-      // Procesar historial mensual
+      // Procesar historial mensual cronológicamente
       List<Map<String, dynamic>> monthlyList = salesByMonth.entries.map((e) => {
         'month': e.key,
         'amount': e.value
       }).toList();
       
-      // Ordenar cronológicamente (simplificado)
       monthlyList.sort((a, b) {
-         // Formato MM/yyyy
          List<String> partsA = (a['month'] as String).split('/');
          List<String> partsB = (b['month'] as String).split('/');
          if (partsA.length == 2 && partsB.length == 2) {
@@ -445,7 +552,6 @@ class AnalyticsProvider with ChangeNotifier {
          return 0;
       });
 
-      // Últimos 6 meses
       if (monthlyList.length > 6) {
          monthlyList = monthlyList.sublist(monthlyList.length - 6);
       }
@@ -455,14 +561,11 @@ class AnalyticsProvider with ChangeNotifier {
         'date': e.key,
         'amount': e.value
       }).toList();
-      
       dailyList.sort((a, b) => (a['date'] as String).compareTo(b['date'] as String));
 
-      await Future.delayed(const Duration(milliseconds: 500));
+      double avgTicket = periodVentas.isNotEmpty ? totalVentas / periodVentas.length : 0.0;
 
-      double avgTicket = ventasRows.isNotEmpty ? totalVentas / ventasRows.length : 0.0;
-
-      // Predicción suavizada usando media móvil simple (hasta 3 últimos meses)
+      // Predicción estadística simple
       double prediction = 0.0;
       if (monthlyList.length >= 2) {
         int limit = monthlyList.length < 3 ? monthlyList.length : 3;
@@ -471,37 +574,24 @@ class AnalyticsProvider with ChangeNotifier {
           sum += monthlyList[i]['amount'];
         }
         double avg = sum / limit;
-        
         double currentMonth = monthlyList.last['amount'];
         double rate = avg > 0 ? (currentMonth - avg) / avg : 0;
-        
-        // Limitar la tasa de crecimiento a máximo ±50% para evitar proyecciones disparatadas
         if (rate > 0.5) rate = 0.5;
         if (rate < -0.5) rate = -0.5;
-        
         prediction = currentMonth * (1 + rate);
         if (prediction < 0) prediction = 0;
       } else if (monthlyList.isNotEmpty) {
         prediction = monthlyList.last['amount'];
       }
 
-      double currentMonthValue = monthlyList.isNotEmpty ? monthlyList.last['amount'] : 0.0;
-      double previousMonthValue = monthlyList.length >= 2 ? monthlyList[monthlyList.length - 2]['amount'] : 0.0;
-      double growthRate = previousMonthValue > 0 ? ((currentMonthValue - previousMonthValue) / previousMonthValue) * 100 : 0.0;
-      if (growthRate > 999.0) growthRate = 999.0;
-      if (growthRate < -999.0) growthRate = -999.0;
-
       // Transformar mapas a listas
       List<Map<String, dynamic>> dayOfWeekList = salesByDayMap.entries.map((e) => <String, dynamic>{'name': e.key, 'amount': e.value}).toList();
       List<Map<String, dynamic>> originList = salesByOriginMap.entries.map((e) => <String, dynamic>{'name': e.key, 'amount': e.value}).toList();
       List<Map<String, dynamic>> paymentList = salesByPaymentMap.entries.map((e) => <String, dynamic>{'name': e.key, 'amount': e.value}).toList();
 
-      // Generar Insights Inteligentes (Noticias del Negocio)
+      // Insights Comerciales Inteligentes
       List<BusinessInsight> generatedInsights = [];
 
-      final currencyFmt = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-
-      // 1. Predicción de Quiebre (El más importante)
       if (lowStockQuery.isNotEmpty) {
         String topLow = lowStockQuery.first['nombre'].toString();
         int stockLow = int.tryParse(lowStockQuery.first['stock_actual']?.toString() ?? '0') ?? 0;
@@ -515,11 +605,10 @@ class AnalyticsProvider with ChangeNotifier {
         ));
       }
 
-      // 2. Capital Estancado (Oportunidad)
       if (deadStockCount > 0) {
         generatedInsights.add(BusinessInsight(
           "💡 Capital Estancado", 
-          "Tienes $deadStockCount productos sin ventas en más de 90 días, lo que representa ${currencyFmt.format(immobilizedCapital)} inmovilizados.", 
+          "Tienes $deadStockCount productos sin ventas en más de 90 días, lo que representa ${AppCurrency.format(immobilizedCapital)} inmovilizados.", 
           Icons.lightbulb_outline, InsightType.tip,
           suggestedAction: "Crea una 'Promoción de Liquidación' para recuperar este capital.",
           actionLabel: "Crear Promoción de Liquidación",
@@ -527,32 +616,30 @@ class AnalyticsProvider with ChangeNotifier {
         ));
       }
 
-      // 3. Cliente VIP
       if (topClientsQuery.isNotEmpty) {
         String topClient = topClientsQuery.first['nombre_completo']?.toString() ?? 'Desconocido';
         double topClientPurchases = (topClientsQuery.first['total_comprado'] as num?)?.toDouble() ?? 0.0;
         if (topClientPurchases > 0) {
           generatedInsights.add(BusinessInsight(
             "🏆 Cliente VIP",
-            "Tu mejor cliente es $topClient, con compras totales por ${currencyFmt.format(topClientPurchases)}.",
+            "Tu mejor cliente es $topClient, con compras totales por ${AppCurrency.format(topClientPurchases)}.",
             Icons.workspace_premium, InsightType.success,
             suggestedAction: "Envíale un mensaje ofreciéndole un beneficio exclusivo por su lealtad."
           ));
         }
       }
 
-      // 4. Crecimiento (Noticia Positiva)
       if (growthRate > 5) {
         generatedInsights.add(BusinessInsight(
           "📈 ¡Tendencia al Alza!", 
-          "Tus ventas crecieron un ${growthRate.toStringAsFixed(1)}% este mes (${currencyFmt.format(currentMonthValue)}) respecto al mes pasado (${currencyFmt.format(previousMonthValue)}).", 
+          "Tus ventas crecieron un ${growthRate.toStringAsFixed(1)}% (${AppCurrency.format(totalVentas)}) respecto al periodo anterior (${AppCurrency.format(prevTotalVentas)}).", 
           Icons.trending_up, InsightType.success,
           suggestedAction: "Identifica qué productos impulsaron esta alza y dales más visibilidad."
         ));
       } else if (growthRate < -10) {
         generatedInsights.add(BusinessInsight(
           "📉 Caída en Ventas", 
-          "Las ventas han bajado un ${growthRate.abs().toStringAsFixed(1)}% este mes (${currencyFmt.format(currentMonthValue)}).", 
+          "Las ventas bajaron un ${growthRate.abs().toStringAsFixed(1)}% (${AppCurrency.format(totalVentas)}) respecto al periodo anterior (${AppCurrency.format(prevTotalVentas)}).", 
           Icons.trending_down, InsightType.warning,
           suggestedAction: "Revisa si te falta stock de los productos estrella o lanza una promoción flash.",
           actionLabel: "Crear Oferta Flash",
@@ -560,44 +647,42 @@ class AnalyticsProvider with ChangeNotifier {
         ));
       }
 
-      // 5. Mejor Día (Insight de Marketing)
-      if (dayOfWeekList.isNotEmpty) {
+      if (dayOfWeekList.any((d) => (d['amount'] as double) > 0)) {
         var topDay = dayOfWeekList.reduce((curr, next) => (curr['amount'] as double) > (next['amount'] as double) ? curr : next);
-        generatedInsights.add(BusinessInsight(
-          "📅 Tu Mejor Día", 
-          "Los días ${topDay['name']} son los más fuertes, generando un promedio destacado de ingresos.", 
-          Icons.rocket_launch, InsightType.info,
-          suggestedAction: "Concentra tus campañas de publicidad y reposición de stock en estos días."
-        ));
+        if ((topDay['amount'] as double) > 0) {
+          generatedInsights.add(BusinessInsight(
+            "📅 Tu Mejor Día", 
+            "Los días ${topDay['name']} son los más fuertes de la semana, acumulando ${AppCurrency.format(topDay['amount'])}.", 
+            Icons.rocket_launch, InsightType.info,
+            suggestedAction: "Concentra tus campañas de publicidad y reposición de stock en estos días."
+          ));
+        }
       }
 
-      // 6. Categoría Estrella
       if (topCategoriesQuery.isNotEmpty) {
         String topCategory = topCategoriesQuery.first['nombre'].toString();
         double catAmount = (topCategoriesQuery.first['total_vendido'] as num?)?.toDouble() ?? 0.0;
         if (catAmount > 0) {
           generatedInsights.add(BusinessInsight(
             "📦 Categoría Estrella",
-            "La categoría '$topCategory' es la líder de ventas con ${catAmount.toInt()} unidades vendidas.",
+            "La categoría '$topCategory' es la líder con ${catAmount.toInt()} unidades vendidas.",
             Icons.category, InsightType.success,
             suggestedAction: "Expande el catálogo de esta categoría ya que tiene alta demanda."
           ));
         }
       }
 
-      // 7. Cálculo de FinancialHealthSummary
+      // Matriz de Diagnóstico de Salud Financiera (Margen × Crecimiento)
       String balanceHeadline = "";
       String balanceDescription = "";
       String healthLevel = "";
       String marginContext = "";
       
       String marginFmt = margin.toStringAsFixed(1);
-      String netProfitFmt = currencyFmt.format(totalGananciaNeta);
-      String totalSalesFmt = currencyFmt.format(totalVentas);
+      String growthFmt = growthRate.abs().toStringAsFixed(1);
+      String netProfitFmt = AppCurrency.format(totalGananciaNeta);
+      String totalSalesFmt = AppCurrency.format(totalVentas);
 
-      // ═══════════════════════════════════════════════════════════════
-      // PRIORIDAD MÁXIMA: Detectar si no hay ventas antes de evaluar margen
-      // ═══════════════════════════════════════════════════════════════
       if (totalVentas == 0 || totalTransactions == 0) {
         balanceHeadline = "Balance Total";
         balanceDescription = "Aún no se han registrado ventas en el periodo seleccionado. "
@@ -605,55 +690,48 @@ class AnalyticsProvider with ChangeNotifier {
             "rentabilidad, márgenes y recomendaciones personalizadas para tu negocio.";
         healthLevel = 'noData';
         marginContext = "";
-      } else if (margin >= 25) {
+      } else if (margin >= 20 && growthRate >= 0) {
         balanceHeadline = "¡Tu negocio es una máquina de generar! 🚀";
         balanceDescription = "Tu margen de $marginFmt% supera el promedio. Has generado $netProfitFmt de ganancia neta sobre $totalSalesFmt en ingresos.";
         healthLevel = 'excellent';
-      } else if (margin >= 15) {
+        marginContext = "Estás en el escenario ideal: vendes más y con excelente rentabilidad.";
+      } else if (margin >= 15 && growthRate >= -15) {
         balanceHeadline = "Negocio saludable y con potencial 💪";
-        balanceDescription = "Tu margen de $marginFmt% está dentro del rango saludable. De cada S/ 100 que vendes, te quedan S/ $marginFmt limpios. Optimiza costos de proveedor para acercarte al 25%.";
+        balanceDescription = "Tu margen de $marginFmt% está dentro del rango saludable. De cada S/ 100 que vendes, te quedan S/ $marginFmt limpios.";
         healthLevel = 'healthy';
+        marginContext = growthRate >= 0 
+            ? "Mantienes un ritmo de crecimiento positivo y sostenido." 
+            : "Tus ventas tuvieron una ligera oscilación, pero tu rentabilidad se mantiene firme.";
+      } else if (margin >= 15 && growthRate < -15) {
+        balanceHeadline = "Buen margen, pero alerta por caída en ventas ⚠️";
+        balanceDescription = "Tu margen de $marginFmt% es sólido ($netProfitFmt limpios), pero tus ventas cayeron un $growthFmt% respecto al periodo anterior. Necesitas reactivar la demanda urgentemente.";
+        healthLevel = 'warning';
+        marginContext = "Tu ganancia unitaria es buena, pero el volumen de facturación disminuyó. Lanza promociones o contacta a tus clientes frecuentes.";
       } else if (margin >= 5) {
         balanceHeadline = "Margen ajustado, pero hay oportunidad ⚡";
-        balanceDescription = "Tu margen de $marginFmt% indica que tus costos consumen la mayor parte de tus ingresos. Revisa si puedes negociar mejores precios con proveedores o incrementar tus precios de venta.";
+        balanceDescription = "Tu margen de $marginFmt% indica que tus costos consumen la mayor parte de tus ingresos. Revisa si puedes negociar mejores precios con proveedores.";
         healthLevel = 'warning';
+        marginContext = growthRate >= 0
+            ? "Cuidado: estás vendiendo más pero ganando poco por cada venta."
+            : "Alerta doble: las ventas cayeron y el margen es reducido. Revisa tu estructura de precios.";
       } else {
         balanceHeadline = "⚠️ Alerta: Tu negocio necesita atención urgente";
         balanceDescription = "Con un margen de $marginFmt%, estás operando al límite. Si los costos suben incluso un poco, podrías operar en pérdidas. Acción inmediata: revisa la estructura de precios.";
         healthLevel = 'critical';
+        marginContext = "Riesgo de pérdidas operativas si los costos de reposición aumentan.";
       }
 
-      // Contexto de margen — Solo mostrar cuando hay ventas reales
-      if (totalVentas > 0 && totalTransactions > 0) {
-        if (growthRate > 10 && margin >= 15) {
-          marginContext = "Estás en el escenario ideal: vendes más y con buen margen.";
-        } else if (growthRate > 10 && margin < 15) {
-          marginContext = "Cuidado: tus ventas crecen pero tu margen es delgado. Estás vendiendo más pero ganando poco por cada venta.";
-        } else if (growthRate < -10) {
-          marginContext = "Tus ventas están cayendo. Te sugerimos armar un paquete de ofertas con tu stock estancado para reactivar el flujo.";
-        } else {
-          marginContext = "Mantienes un ritmo estable. Busca oportunidades de optimizar costos para mejorar tu margen neto.";
-        }
-      }
-
-      // Smart Insight: Volumen vs. Valor
       String? categoryInsight;
       if (topCategoriesQuery.length >= 2) {
         String topByVolume = topCategoriesQuery.first['nombre'].toString();
-        
         var sortedByRevenue = List<Map<String, dynamic>>.from(topCategoriesQuery)
-          ..sort((a, b) => ((b['total_ingresos'] as num?) ?? 0)
-              .compareTo((a['total_ingresos'] as num?) ?? 0));
+          ..sort((a, b) => ((b['total_ingresos'] as num?) ?? 0).compareTo((a['total_ingresos'] as num?) ?? 0));
         String topByRevenue = sortedByRevenue.first['nombre'].toString();
         
         if (topByVolume != topByRevenue) {
-          categoryInsight = "💡 Tu categoría '$topByVolume' atrae más clientes "
-              "(mayor volumen), pero '$topByRevenue' es la que más "
-              "ingresos genera. ¡Asegura siempre el stock de ambas!";
+          categoryInsight = "💡 Tu categoría '$topByVolume' atrae más clientes (mayor volumen), pero '$topByRevenue' es la que más ingresos genera. ¡Asegura siempre el stock de ambas!";
         } else {
-          categoryInsight = "⭐ Tu categoría '$topByVolume' lidera tanto en "
-              "volumen como en ingresos. Es tu pilar financiero. "
-              "Expande su catálogo para maximizar resultados.";
+          categoryInsight = "⭐ Tu categoría '$topByVolume' lidera tanto en volumen como en ingresos. Es tu pilar financiero. Expande su catálogo para maximizar resultados.";
         }
       }
 
@@ -694,14 +772,17 @@ class AnalyticsProvider with ChangeNotifier {
         insights: generatedInsights,
         financialHealth: financialHealth,
         categoryInsight: categoryInsight,
+        effectiveCollectionRate: effectiveCollectionRate,
+        averageMarginPerSale: margin,
+        previousPeriodSales: prevTotalVentas,
+        periodStartDate: startDate,
+        periodEndDate: endDate,
       );
 
       _progress = 1.0;
       _statusMessage = "¡Análisis completado exitosamente!";
       _currentStep = AnalyticsStep.done;
       
-      // Guardar snapshot diario si el periodo es global (ej. Todo o Mes)
-      // Para simplicidad, siempre guardamos el estado actual si hay datos
       if (_negocioId != null) {
         try {
           String todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());

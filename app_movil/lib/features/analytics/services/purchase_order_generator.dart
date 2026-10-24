@@ -4,12 +4,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
 
 class PurchaseOrderGenerator {
   static Future<File> exportToPdf(List<SmartRestockItem> items, String businessName) async {
     final pdf = pw.Document();
-    final currencyFormat = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     
     // Calcular el total general fuera del build para evitar sumas duplicadas (bug de pdf generation)
     double grandTotal = 0;
@@ -62,8 +62,8 @@ class PurchaseOrderGenerator {
               "${item.currentStock} / ${item.rop}",
               item.velocityPerDay.toStringAsFixed(1),
               item.suggestedQty.toString(),
-              currencyFormat.format(item.cost),
-              currencyFormat.format(rowTotal)
+              AppCurrency.format(item.cost),
+              AppCurrency.format(rowTotal)
             ];
           }).toList();
           
@@ -79,7 +79,7 @@ class PurchaseOrderGenerator {
                 children: [
                   pw.Text("Resumen Ejecutivo", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey800)),
                   pw.SizedBox(height: 4),
-                  pw.Text("Esta orden sugiere el reabastecimiento de ${items.length} productos críticos cuyo stock actual está en o por debajo de su punto de reorden (ROP). La inversión total proyectada es de ${currencyFormat.format(grandTotal)}.", style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey800)),
+                  pw.Text("Esta orden sugiere el reabastecimiento de ${items.length} productos críticos cuyo stock actual está en o por debajo de su punto de reorden (ROP). La inversión total proyectada es de ${AppCurrency.format(grandTotal)}.", style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey800)),
                 ],
               ),
             ),
@@ -129,7 +129,7 @@ class PurchaseOrderGenerator {
                     children: [
                       pw.Text("Total de Inversión Sugerida", style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
                       pw.SizedBox(height: 4),
-                      pw.Text(currencyFormat.format(grandTotal), style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
+                      pw.Text(AppCurrency.format(grandTotal), style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
                     ]
                   )
                 )

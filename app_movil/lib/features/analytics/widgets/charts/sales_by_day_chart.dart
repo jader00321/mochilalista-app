@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class SalesByDayChart extends StatefulWidget {
   final AnalyticsData data;
   final bool isDark;
-  final String Function(double) formatCurrency;
+  final String Function(double)? formatCurrency;
 
   const SalesByDayChart({
     super.key,
     required this.data,
     required this.isDark,
-    required this.formatCurrency,
+    this.formatCurrency,
   });
 
   @override
@@ -21,15 +22,25 @@ class SalesByDayChart extends StatefulWidget {
 class _SalesByDayChartState extends State<SalesByDayChart> {
   int _selectedBarIndex = -1;
 
+  String _format(double amount) {
+    if (widget.formatCurrency != null) return widget.formatCurrency!(amount);
+    return AppCurrency.format(amount);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.data.salesByDayOfWeek.isEmpty) return const SizedBox.shrink();
 
     double maxVal = 0;
     double totalVal = 0;
-    for (var d in widget.data.salesByDayOfWeek) {
-      if (d['amount'] > maxVal) maxVal = d['amount'];
-      totalVal += d['amount'];
+    int bestDayIndex = -1;
+    for (int i = 0; i < widget.data.salesByDayOfWeek.length; i++) {
+      final double amt = (widget.data.salesByDayOfWeek[i]['amount'] as num).toDouble();
+      if (amt > maxVal) {
+        maxVal = amt;
+        bestDayIndex = i;
+      }
+      totalVal += amt;
     }
 
     double avgVal = widget.data.salesByDayOfWeek.isNotEmpty ? totalVal / widget.data.salesByDayOfWeek.length : 0;
@@ -54,7 +65,25 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Ventas por Día", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Ventas por Día", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 2),
+                  Text(
+                    bestDayIndex != -1 && maxVal > 0
+                        ? "Mejor día: ${widget.data.salesByDayOfWeek[bestDayIndex]['name']} (${_format(maxVal)})"
+                        : "Distribución semanal de lunes a domingo",
+                    style: TextStyle(
+                      fontSize: 12, 
+                      color: bestDayIndex != -1 && maxVal > 0 
+                          ? (widget.isDark ? Colors.amberAccent : Colors.orange[800]) 
+                          : (widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                      fontWeight: bestDayIndex != -1 && maxVal > 0 ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
               Icon(Icons.touch_app, size: 16, color: Colors.grey[400]),
             ],
           ),
@@ -64,7 +93,7 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
-                maxY: maxVal * 1.2,
+                maxY: maxVal > 0 ? maxVal * 1.25 : 100,
                 barTouchData: BarTouchData(
                   handleBuiltInTouches: false,
                   touchCallback: (FlTouchEvent event, barTouchResponse) {
@@ -97,9 +126,34 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
                           int todayIndex = DateTime.now().weekday - 1;
                           String todayName = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][todayIndex];
                           bool isToday = dayName == todayName;
+                          bool isBest = i == bestDayIndex && maxVal > 0;
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(dayName, style: TextStyle(fontSize: 12, fontWeight: isToday ? FontWeight.bold : FontWeight.normal, color: isToday ? (widget.isDark ? Colors.white : Colors.black) : (widget.isDark ? Colors.grey[400] : Colors.grey[600]))),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  dayName, 
+                                  style: TextStyle(
+                                    fontSize: 12, 
+                                    fontWeight: isBest || isToday ? FontWeight.bold : FontWeight.normal, 
+                                    color: isBest 
+                                        ? (widget.isDark ? Colors.amberAccent : Colors.orange[800])
+                                        : (isToday ? (widget.isDark ? Colors.white : Colors.black) : (widget.isDark ? Colors.grey[400] : Colors.grey[600]))
+                                  )
+                                ),
+                                if (isBest)
+                                  Container(
+                                    width: 4,
+                                    height: 4,
+                                    margin: const EdgeInsets.only(top: 2),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.amber,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           );
                         }
                         return const SizedBox.shrink();
@@ -117,24 +171,30 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
                   String todayName = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][todayIndex];
                   bool isToday = e.value['name'] == todayName;
                   bool isTouched = e.key == _selectedBarIndex;
+                  bool isBest = e.key == bestDayIndex && maxVal > 0;
+                  final double amt = (e.value['amount'] as num).toDouble();
                   
                   return BarChartGroupData(
                     x: e.key,
                     barRods: [
                       BarChartRodData(
-                        toY: maxVal > 0 ? maxVal * 1.2 : 10,
+                        toY: maxVal > 0 ? maxVal * 1.25 : 100,
                         color: widget.isDark ? Colors.white10 : Colors.grey[200],
                         width: isTouched ? 20 : 16,
                         borderRadius: BorderRadius.circular(16),
-                        rodStackItems: e.value['amount'] > 0 ? [
+                        rodStackItems: amt > 0 ? [
                           BarChartRodStackItem(
                             0,
-                            e.value['amount'],
-                            isTouched ? Colors.deepPurpleAccent : (isToday 
-                                ? Colors.amberAccent[400]! 
-                                : (maxVal > 0 
-                                    ? Color.lerp(Colors.blue[300], Colors.greenAccent[400], e.value['amount'] / maxVal)!
-                                    : Colors.blue[300]!)),
+                            amt,
+                            isTouched 
+                                ? Colors.deepPurpleAccent 
+                                : (isBest 
+                                    ? Colors.amberAccent[700]!
+                                    : (isToday 
+                                        ? Colors.tealAccent[400]! 
+                                        : (maxVal > 0 
+                                            ? Color.lerp(Colors.blue[300], Colors.greenAccent[400], amt / maxVal)!
+                                            : Colors.blue[300]!))),
                           )
                         ] : [],
                       ),
@@ -191,12 +251,12 @@ class _SalesByDayChartState extends State<SalesByDayChart> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("$name — ${widget.formatCurrency(amount)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text("$name — ${_format(amount)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   const SizedBox(height: 4),
                   Text(
                     isAboveAvg 
-                      ? "Vendiste ${widget.formatCurrency(amount)} los días $name. Esto es un ${diffPct.abs().toStringAsFixed(1)}% por encima de tu promedio diario de ${widget.formatCurrency(avgVal)}. ¡Aprovecha este día para lanzar ofertas!"
-                      : "Los días $name generaste ${widget.formatCurrency(amount)}, un ${diffPct.abs().toStringAsFixed(1)}% por debajo del promedio (${widget.formatCurrency(avgVal)}). Considera promociones flash para impulsar este día.",
+                      ? "Vendiste ${_format(amount)} los días $name. Esto es un ${diffPct.abs().toStringAsFixed(1)}% por encima de tu promedio diario de ${_format(avgVal)}. ¡Aprovecha este día para lanzar ofertas!"
+                      : "Los días $name generaste ${_format(amount)}, un ${diffPct.abs().toStringAsFixed(1)}% por debajo del promedio (${_format(avgVal)}). Considera promociones flash para impulsar este día.",
                     style: TextStyle(color: Colors.grey[600], fontSize: 12, height: 1.4)
                   ),
                 ],

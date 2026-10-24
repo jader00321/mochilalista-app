@@ -301,7 +301,14 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverAppBar(
-                title: const Text("Directorio de Clientes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+                title: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Directorio de Clientes",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                  ),
+                ),
                 elevation: 0,
                 pinned: false,
                 floating: true,
@@ -423,7 +430,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              "${clients.length} clientes", 
+                              "${clients.length} ${clients.length == 1 ? 'cliente' : 'clientes'}", 
                               style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 15)
                             ),
                             GestureDetector(
@@ -462,7 +469,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.only(top: 12, bottom: 120),
+                padding: const EdgeInsets.only(top: 16, bottom: 140),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) => ClientCard(

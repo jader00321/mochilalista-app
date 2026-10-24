@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
 class SmartUpdateModal extends StatelessWidget {
@@ -15,6 +16,7 @@ class SmartUpdateModal extends StatelessWidget {
   final VoidCallback? onUpdateNames;
   final VoidCallback? onSyncBundles;
   final VoidCallback? onSyncUnits;
+  final VoidCallback? onOpenManualEdit;
 
   const SmartUpdateModal({
     super.key,
@@ -29,11 +31,11 @@ class SmartUpdateModal extends StatelessWidget {
     this.onUpdateNames,
     this.onSyncBundles,
     this.onSyncUnits,
+    this.onOpenManualEdit,
   });
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final stockIssues = validation.stockWarnings;
     final priceIssues = validation.priceChanges;
     final nameIssues = validation.nameChanges;
@@ -41,67 +43,51 @@ class SmartUpdateModal extends StatelessWidget {
     final unitIssues = validation.unitChanges;
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black87;
 
     bool hasNoRealIssues = stockIssues.isEmpty && priceIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty && unitIssues.isEmpty;
+    bool onlyPriceIssues = priceIssues.isNotEmpty && stockIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty && unitIssues.isEmpty;
+    bool onlyStockIssues = stockIssues.isNotEmpty && priceIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty && unitIssues.isEmpty;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
-            const SizedBox(height: 20),
-            
+    return InteractiveSheetWrapper(
+      title: hasNoRealIssues ? "Todo en Orden" : "Centro de Resoluciones",
+      icon: hasNoRealIssues ? Icons.check_circle : Icons.build_circle,
+      iconColor: hasNoRealIssues ? (isDark ? Colors.green[300] : Colors.green[700]) : (isDark ? Colors.orange[300] : Colors.orange[800]),
+      maxHeightFactor: 0.90,
+      applyEffectiveBottomPadding: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             if (hasNoRealIssues) ...[
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[100], shape: BoxShape.circle),
-                    child: Icon(Icons.check_circle, color: isDark ? Colors.green[300] : Colors.green[700], size: 32),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(child: Text("Todo en orden", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor))),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text("Hemos revisado el inventario y todos los productos de esta cotización están disponibles y con los precios correctos.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 15)),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.green[700] : Colors.green[700], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                  child: const Text("CONTINUAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.5)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Hemos revisado el inventario y todos los productos de esta cotización están disponibles y con los precios correctos.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 15)),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 55,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.green[700] : Colors.green[700], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                        child: const Text("CONTINUAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.5)),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ] else ...[
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[100], shape: BoxShape.circle),
-                    child: Icon(Icons.build_circle, color: isDark ? Colors.orange[300] : Colors.orange[900], size: 32),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(child: Text("Centro de Resoluciones", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor))),
-                ],
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text("El inventario ha cambiado desde que se creó esta cotización. Revisa y aplica los cambios si lo deseas.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 14)),
               ),
-              const SizedBox(height: 12),
-              Text("El inventario ha cambiado desde que se creó esta cotización. Revisa y aplica los cambios si lo deseas.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 15)),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
           
               Flexible(
                 child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     children: [
                       // 1. BLOQUE DE STOCK (Agotados)
@@ -150,17 +136,19 @@ class SmartUpdateModal extends StatelessWidget {
                             ],
                           ),
                         ),
-                        ...priceIssues.map((p) => _buildPriceRow(p, currency, isDark, context)),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity, height: 50,
-                          child: OutlinedButton.icon(
-                            onPressed: () { Navigator.pop(context); onUpdatePrices(); },
-                            icon: const Icon(Icons.refresh, size: 20),
-                            label: const Text("Actualizar Todo a Precios de Hoy", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800], side: BorderSide(color: isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        ...priceIssues.map((p) => _buildPriceRow(p, isDark, context)),
+                        if (!onlyPriceIssues) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity, height: 50,
+                            child: OutlinedButton.icon(
+                              onPressed: () { Navigator.pop(context); onUpdatePrices(); },
+                              icon: const Icon(Icons.refresh, size: 20),
+                              label: const Text("Actualizar Todo a Precios de Hoy", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.orange[300] : Colors.orange[800], side: BorderSide(color: isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            ),
                           ),
-                        ),
+                        ],
                         Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),
                       ],
 
@@ -263,16 +251,43 @@ class SmartUpdateModal extends StatelessWidget {
           
               const SizedBox(height: 10),
           
-              // BOTÓN GLOBAL (ACCIÓN RÁPIDA)
+              // BOTÓN GLOBAL (ACCIÓN RÁPIDA ADAPTATIVA)
               SizedBox(
                 width: double.infinity, height: 60,
                 child: ElevatedButton.icon(
-                  onPressed: () { Navigator.pop(context); onFixAll(); },
-                  icon: const Icon(Icons.auto_awesome, size: 24),
-                  label: const Text("CORREGIR Y ACTUALIZAR TODO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    if (onlyPriceIssues) {
+                      onUpdatePrices();
+                    } else if (onlyStockIssues) {
+                      onFixStock();
+                    } else {
+                      onFixAll();
+                    }
+                  },
+                  icon: Icon(
+                    onlyPriceIssues
+                        ? Icons.check_circle_outline
+                        : (onlyStockIssues ? Icons.delete_sweep : Icons.auto_awesome),
+                    size: 24,
+                  ),
+                  label: Text(
+                    onlyPriceIssues
+                        ? "ACEPTAR TODOS LOS PRECIOS DE HOY"
+                        : (onlyStockIssues
+                            ? "CORREGIR PRODUCTOS AGOTADOS"
+                            : "CORREGIR Y ACTUALIZAR TODO"),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5),
+                  ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark ? Colors.green[700] : Colors.green[700], foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: isDark ? 0 : 4,
+                    backgroundColor: onlyPriceIssues
+                        ? (isDark ? Colors.orange[800] : Colors.orange[700])
+                        : (onlyStockIssues
+                            ? (isDark ? Colors.red[800] : Colors.red[700])
+                            : (isDark ? Colors.green[700] : Colors.green[700])),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: isDark ? 0 : 4,
                   ),
                 ),
               ),
@@ -286,8 +301,7 @@ class SmartUpdateModal extends StatelessWidget {
             ]
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildSectionHeader(String title, IconData icon, Color color) {
@@ -304,7 +318,7 @@ class SmartUpdateModal extends StatelessWidget {
   }
 
   // 🔥 TARJETA DE PRECIO MEJORADA (Mantiene diseño original)
-  Widget _buildPriceRow(PriceChange p, NumberFormat currency, bool isDark, BuildContext context) {
+  Widget _buildPriceRow(PriceChange p, bool isDark, BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -324,7 +338,7 @@ class SmartUpdateModal extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text("Cotizado Originalmente:", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 12)),
-                    Text(currency.format(p.oldPrice), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.grey[300] : Colors.black87)),
+                    Text(AppCurrency.format(p.oldPrice), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.grey[300] : Colors.black87)),
                   ],
                 ),
               ),
@@ -338,7 +352,7 @@ class SmartUpdateModal extends StatelessWidget {
                       children: [
                         Icon(p.newPrice > p.oldPrice ? Icons.arrow_upward : Icons.arrow_downward, size: 16, color: isDark ? Colors.orange[300] : Colors.orange),
                         const SizedBox(width: 4),
-                        Text(currency.format(p.newPrice), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: isDark ? Colors.orange[300] : Colors.orange[900])),
+                        Text(AppCurrency.format(p.newPrice), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: isDark ? Colors.orange[300] : Colors.orange[900])),
                       ],
                     ),
                   ],
@@ -378,7 +392,7 @@ class SmartUpdateModal extends StatelessWidget {
           
           Row(
             children: [
-              if (s.available > 0)
+              if (s.available > 0) ...[
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
@@ -390,7 +404,26 @@ class SmartUpdateModal extends StatelessWidget {
                     style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), backgroundColor: isDark ? Colors.green[700] : Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                   ),
                 ),
-              if (s.available > 0) const SizedBox(width: 8),
+                const SizedBox(width: 8),
+              ] else if (onOpenManualEdit != null) ...[
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onOpenManualEdit!();
+                    },
+                    icon: const Icon(Icons.swap_horiz, size: 16),
+                    label: const Text("Sustituir Ítem", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12), 
+                      backgroundColor: isDark ? Colors.blue[700] : Colors.blue[600], 
+                      foregroundColor: Colors.white, 
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               Expanded(
                 child: _HoldToConfirmButton(
                   isDark: isDark,

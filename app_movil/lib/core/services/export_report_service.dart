@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 
 enum ExportScope { currentView, pendingOnly, soldOnly, full }
@@ -24,7 +25,6 @@ class ExportReportService {
     int? activeTabIndex,
   }) async {
     final pdf = pw.Document();
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
     final rangeFormat = DateFormat('dd/MM/yyyy');
 
@@ -53,7 +53,7 @@ class ExportReportService {
         _buildKpiBox("En Revisión", "$inProcessCount", PdfColors.orange700),
         _buildKpiBox("Preparadas", "$readyCount", PdfColors.teal700),
         _buildKpiBox("Alertas", "$alertCount", PdfColors.red700),
-        _buildKpiBox("Acumulado", currency.format(totalSales), PdfColors.blue700),
+        _buildKpiBox("Acumulado", AppCurrency.format(totalSales), PdfColors.blue700),
       ];
     } else if (scope == ExportScope.pendingOnly) {
       reportTitle = "Cotizaciones Pendientes";
@@ -63,7 +63,7 @@ class ExportReportService {
         _buildKpiBox("En Revisión", "${inProcessList.length}", PdfColors.orange700),
         _buildKpiBox("Preparadas", "${readyAndPacksList.length}", PdfColors.teal700),
         _buildKpiBox("Total Pend.", "${allQuotes.length}", PdfColors.purple700),
-        _buildKpiBox("Proyectado", currency.format(proj), PdfColors.blue700),
+        _buildKpiBox("Proyectado", AppCurrency.format(proj), PdfColors.blue700),
       ];
     } else if (scope == ExportScope.soldOnly) {
       reportTitle = "Ventas Realizadas";
@@ -73,9 +73,9 @@ class ExportReportService {
       double avg = soldList.isEmpty ? 0 : totalInc / soldList.length;
       kpis = [
         _buildKpiBox("Ventas", "${soldList.length}", PdfColors.green700),
-        _buildKpiBox("Ingresos", currency.format(totalInc), PdfColors.amber700),
+        _buildKpiBox("Ingresos", AppCurrency.format(totalInc), PdfColors.amber700),
         _buildKpiBox("Prods Vend.", "$itemsSold", PdfColors.purple700),
-        _buildKpiBox("Ticket Prom.", currency.format(avg), PdfColors.blue700),
+        _buildKpiBox("Ticket Prom.", AppCurrency.format(avg), PdfColors.blue700),
       ];
     } else if (scope == ExportScope.full) {
       reportTitle = "Reporte Completo";
@@ -84,9 +84,9 @@ class ExportReportService {
       double proj = readyAndPacksList.fold(0.0, (s, q) => s + q.totalAmount) + inProcessList.fold(0.0, (s, q) => s + q.totalAmount);
       kpis = [
         _buildKpiBox("Total Cotiz.", "${allQuotes.length}", PdfColors.blueGrey700),
-        _buildKpiBox("Proyectado", currency.format(proj), PdfColors.orange700),
+        _buildKpiBox("Proyectado", AppCurrency.format(proj), PdfColors.orange700),
         _buildKpiBox("Ventas", "${soldList.length}", PdfColors.green700),
-        _buildKpiBox("Ingresos", currency.format(totalInc), PdfColors.amber700),
+        _buildKpiBox("Ingresos", AppCurrency.format(totalInc), PdfColors.amber700),
       ];
     }
 
@@ -170,7 +170,7 @@ class ExportReportService {
                       q.itemCount.toString(),
                       q.type == 'ai_scan' ? 'IA' : (q.type == 'pack' ? 'Pack' : 'Manual'),
                       _mapStatusToEs(q.status),
-                      currency.format(q.totalAmount),
+                      AppCurrency.format(q.totalAmount),
                       date != null ? DateFormat('dd/MM HH:mm').format(date) : '-',
                     ];
                   }),
@@ -246,7 +246,7 @@ class ExportReportService {
       final date = DateTime.tryParse(q.createdAt);
       final dateStr = date != null ? DateFormat('dd/MM/yyyy HH:mm').format(date) : '-';
       final typeStr = q.type == 'ai_scan' ? 'IA' : (q.type == 'pack' ? 'Pack' : 'Manual');
-      buffer.writeln("${q.id},\"${q.clientName ?? 'Sin Cliente'}\",$typeStr,${_mapStatusToEs(q.status)},${q.itemCount},${q.totalAmount},$dateStr");
+      buffer.writeln("${q.id},\"${q.clientName ?? 'Sin Cliente'}\",$typeStr,${_mapStatusToEs(q.status)},${q.itemCount},\"${AppCurrency.format(q.totalAmount)}\",$dateStr");
     }
 
     await file.writeAsString(buffer.toString());

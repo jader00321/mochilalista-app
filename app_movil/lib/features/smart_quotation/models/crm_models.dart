@@ -382,6 +382,56 @@ class SaleModel {
       'fecha_venta': saleDate.isEmpty ? DateTime.now().toIso8601String() : saleDate,
     };
   }
+
+  SaleModel copyWith({
+    int? id,
+    int? sequentialNumber,
+    int? negocioId,
+    int? creadoPorUsuarioId,
+    int? quotationId,
+    int? clientId,
+    String? clientName,
+    String? origenVenta,
+    bool? isArchived,
+    String? paymentMethod,
+    String? paymentStatus,
+    String? deliveryStatus,
+    String? deliveryDate,
+    double? totalAmount,
+    double? paidAmount,
+    double? discount,
+    double? abonoInicial,
+    double? porcentajeInteres,
+    String? saleDate,
+    String? motivoAnulacion,
+    String? notes,
+    List<InstallmentModel>? installments,
+  }) {
+    return SaleModel(
+      id: id ?? this.id,
+      sequentialNumber: sequentialNumber ?? this.sequentialNumber,
+      negocioId: negocioId ?? this.negocioId,
+      creadoPorUsuarioId: creadoPorUsuarioId ?? this.creadoPorUsuarioId,
+      quotationId: quotationId ?? this.quotationId,
+      clientId: clientId ?? this.clientId,
+      clientName: clientName ?? this.clientName,
+      origenVenta: origenVenta ?? this.origenVenta,
+      isArchived: isArchived ?? this.isArchived,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      deliveryStatus: deliveryStatus ?? this.deliveryStatus,
+      deliveryDate: deliveryDate ?? this.deliveryDate,
+      totalAmount: totalAmount ?? this.totalAmount,
+      paidAmount: paidAmount ?? this.paidAmount,
+      discount: discount ?? this.discount,
+      abonoInicial: abonoInicial ?? this.abonoInicial,
+      porcentajeInteres: porcentajeInteres ?? this.porcentajeInteres,
+      saleDate: saleDate ?? this.saleDate,
+      motivoAnulacion: motivoAnulacion ?? this.motivoAnulacion,
+      notes: notes ?? this.notes,
+      installments: installments ?? this.installments,
+    );
+  }
 }
 
 class SalesStatsModel {

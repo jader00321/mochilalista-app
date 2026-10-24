@@ -11,6 +11,10 @@ import 'package:app_movil/features/catalog/models/provider_model.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/features/scanner/services/invoice_file_service.dart';
+import 'package:app_movil/features/scanner/services/invoice_pdf_report_service.dart';
+import 'package:app_movil/features/scanner/widgets/shared/download_feedback_modal.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
 
 class InvoiceDetailScreen extends StatefulWidget {
   final int invoiceId;
@@ -310,6 +314,60 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     return encoder.convert(jsonInput);
   }
 
+  Future<void> _downloadScannedImage([String? providerName]) async {
+    if (_invoice == null) return;
+    if (_invoice!.imagenUrl.trim().isEmpty ||
+        _invoice!.imagenUrl == 'local_ia_scan' ||
+        _invoice!.imagenUrl == 'null') {
+      CustomSnackBar.show(
+        context,
+        message: "Esta factura no cuenta con una imagen original disponible para descargar.",
+        isError: true,
+      );
+      return;
+    }
+
+    final invProv = Provider.of<InventoryProvider>(context, listen: false);
+    final String resolvedProviderName = (providerName != null && providerName.isNotEmpty && providerName != "Sin proveedor")
+        ? providerName
+        : invProv.getProviderName(_invoice!.proveedorId);
+
+    await DownloadFeedbackModal.show(
+      context,
+      title: "Descargando Imagen",
+      loadingMessage: "Guardando foto de comprobante en la carpeta Descargas...",
+      downloadTask: () => InvoiceFileService.saveScannedImageToDownloads(
+        sourcePath: _invoice!.imagenUrl,
+        displayId: _invoice!.displayId,
+        providerName: resolvedProviderName,
+      ),
+    );
+  }
+
+  Future<void> _downloadPdfReport(String? providerName, {String? providerRuc}) async {
+    if (_invoice == null) return;
+    final auth = Provider.of<AuthProvider>(context, listen: false).user;
+    final invProv = Provider.of<InventoryProvider>(context, listen: false);
+    final String resolvedProviderName = (providerName != null && providerName.isNotEmpty && providerName != "Sin proveedor")
+        ? providerName
+        : invProv.getProviderName(_invoice!.proveedorId);
+    final provider = invProv.providers.where((p) => p.id == _invoice!.proveedorId).firstOrNull;
+    final String? resolvedProviderRuc = providerRuc ?? provider?.ruc;
+
+    await DownloadFeedbackModal.show(
+      context,
+      title: "Generando Reporte PDF",
+      loadingMessage: "Estructurando auditoría y datos extraídos en formato ejecutivo...",
+      downloadTask: () => InvoicePdfReportService.generateAndSavePdfReport(
+        invoice: _invoice!,
+        providerName: resolvedProviderName,
+        providerRuc: resolvedProviderRuc,
+        currentUser: auth,
+        linkedPresentations: _linkedPresentations,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -334,6 +392,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
     final statusColor = _getStatusColor(_invoice!.estado, isDark);
     final providerName = invProv.getProviderName(_invoice!.proveedorId);
+    final provider = invProv.providers.where((p) => p.id == _invoice!.proveedorId).firstOrNull;
+    final String? providerRuc = provider?.ruc;
 
     // Obtener los ítems extraídos del JSON (facturas escaneadas con IA)
     List<dynamic> extractedItems = [];
@@ -355,8 +415,18 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.teal[800],
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: const [
-          InfoTooltipButton(
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_rounded),
+            tooltip: "Descargar Imagen Escaneada",
+            onPressed: () => _downloadScannedImage(providerName),
+          ),
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            tooltip: "Descargar Reporte PDF",
+            onPressed: () => _downloadPdfReport(providerName, providerRuc: providerRuc),
+          ),
+          const InfoTooltipButton(
             title: "Detalle y Auditoría de Factura",
             description:
                 "Visor interactivo con división de pantalla: compara la foto original de la factura contra los datos extraídos por IA o registrados manualmente.",
@@ -649,7 +719,66 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+
+                      // ACCIONES PROFESIONALES DE DESCARGA
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.download_rounded, size: 18),
+                              label: const Text(
+                                "Descargar Foto",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.blue.withValues(alpha: 0.5)
+                                      : Colors.blue.shade300,
+                                ),
+                                foregroundColor: isDark
+                                    ? Colors.blue[300]
+                                    : Colors.blue[800],
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              onPressed: () => _downloadScannedImage(providerName),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                              label: const Text(
+                                "Reporte PDF",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isDark
+                                    ? Colors.teal.shade700
+                                    : Colors.teal.shade800,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 2,
+                              ),
+                              onPressed: () => _downloadPdfReport(providerName, providerRuc: providerRuc),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
 
                       // 3. TARJETA DE PROVEEDOR
                       Container(
@@ -1110,6 +1239,13 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                           const SizedBox(height: 12),
                                       itemBuilder: (ctx, i) {
                                         final item = extractedItems[i];
+                                        final String itemDesc = item['descripcion_detectada']?.toString().trim() ?? "Sin descripción";
+                                        final String? parent = item['producto_padre_estimado']?.toString().trim();
+                                        final String? variant = item['variante_detectada']?.toString().trim();
+                                        final String? brand = item['marca_detectada']?.toString().trim();
+                                        final String? code = (item['codigo_detectada'] ?? item['codigo_detectado'])?.toString().trim();
+                                        final String? uSale = item['unidad_venta']?.toString().trim();
+
                                         return Container(
                                           padding: const EdgeInsets.all(12),
                                           decoration: BoxDecoration(
@@ -1127,47 +1263,58 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Text(
-                                                item['descripcion_detectada'] ??
-                                                    "Sin descripción",
-                                                style: TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: isDark
-                                                      ? Colors.white
-                                                      : Colors.black87,
-                                                ),
+                                              Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                    decoration: BoxDecoration(
+                                                      color: (isDark ? Colors.blue[900] : Colors.blue[50])?.withValues(alpha: 0.8),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                      border: Border.all(
+                                                        color: (isDark ? Colors.blue[700] : Colors.blue[200])!,
+                                                        width: 0.8,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      '#${(i + 1).toString().padLeft(2, '0')}',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w800,
+                                                        color: isDark ? Colors.blue[200] : Colors.blue[800],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Text(
+                                                      itemDesc.isEmpty ? "Sin descripción" : itemDesc,
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: isDark
+                                                            ? Colors.white
+                                                            : Colors.black87,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                               const SizedBox(height: 8),
                                               Wrap(
                                                 spacing: 12,
                                                 runSpacing: 8,
                                                 children: [
-                                                  _auditTag(
-                                                    "Padre",
-                                                    item['producto_padre_estimado'] ?? "N/A",
-                                                    isDark,
-                                                  ),
-                                                  _auditTag(
-                                                    "Variante",
-                                                    item['variante_detectada'] ?? "N/A",
-                                                    isDark,
-                                                  ),
-                                                  _auditTag(
-                                                    "Marca",
-                                                    item['marca_detectada'] ?? "N/A",
-                                                    isDark,
-                                                  ),
-                                                  _auditTag(
-                                                    "Código",
-                                                    item['codigo_detectada'] ?? item['codigo_detectado'] ?? "N/A",
-                                                    isDark,
-                                                  ),
-                                                  _auditTag(
-                                                    "U. Venta",
-                                                    item['unidad_venta'] ?? "Unidad",
-                                                    isDark,
-                                                  ),
+                                                  if (parent != null && parent.isNotEmpty && parent != 'N/A')
+                                                    _auditTag("Padre", parent, isDark),
+                                                  if (variant != null && variant.isNotEmpty && variant != 'N/A')
+                                                    _auditTag("Variante", variant, isDark),
+                                                  if (brand != null && brand.isNotEmpty && brand != 'N/A')
+                                                    _auditTag("Marca", brand, isDark),
+                                                  if (code != null && code.isNotEmpty && code != 'N/A')
+                                                    _auditTag("Código", code, isDark),
+                                                  if (uSale != null && uSale.isNotEmpty)
+                                                    _auditTag("U. Venta", uSale, isDark),
                                                 ],
                                               ),
                                               const SizedBox(height: 12),

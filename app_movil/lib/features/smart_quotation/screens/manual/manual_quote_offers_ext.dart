@@ -122,12 +122,19 @@ extension _ManualQuoteOffersExt on _ManualQuotationScreenState {
                         icon: Icon(Icons.add_shopping_cart, color: isDark ? Colors.white : Colors.black87),
                         onPressed: () {
                           final fakePresId = -(bundle.id);
+                          final double? bundleCost = (bundle.costoTotalCalculado != null && bundle.costoTotalCalculado! > 0)
+                              ? bundle.costoTotalCalculado
+                              : promoProv.calculateBundleCost(bundle.id);
+
                           updateState(() {
                             final index = _items.indexWhere((p) => p.presentationId == fakePresId);
                             if (index != -1) {
                                int newQty = (_quantities[fakePresId] ?? 0) + 1;
                                if (newQty <= maxStock) {
                                   _quantities[fakePresId] = newQty;
+                                  if ((_items[index].cost == null || _items[index].cost! <= 0) && bundleCost != null) {
+                                    _items[index] = _items[index].copyWith(cost: bundleCost);
+                                  }
                                   CustomSnackBar.show(context, message: "Cantidad actualizada", isError: false);
                                } else {
                                   CustomSnackBar.show(context, message: "No hay más stock", isError: true);
@@ -146,6 +153,7 @@ extension _ManualQuoteOffersExt on _ManualQuotationScreenState {
                                 imageUrl: bundle.imagenUrl,
                                 unit: "Paquete",
                                 bundleId: bundle.id,
+                                cost: bundleCost,
                               );
                               _items.add(matched);
                               _quantities[fakePresId] = 1; 

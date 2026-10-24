@@ -16,6 +16,8 @@ class InfoTooltipButton extends StatelessWidget {
   final List<InfoTip> tips;
   final Color? iconColor;
   final double iconSize;
+  final EdgeInsetsGeometry? padding;
+  final BoxConstraints? constraints;
 
   const InfoTooltipButton({
     super.key,
@@ -24,6 +26,8 @@ class InfoTooltipButton extends StatelessWidget {
     this.tips = const [],
     this.iconColor,
     this.iconSize = 22,
+    this.padding,
+    this.constraints,
   });
 
   void _showInfoSheet(BuildContext context) {
@@ -47,6 +51,8 @@ class InfoTooltipButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return IconButton(
+      padding: padding ?? const EdgeInsets.all(8.0),
+      constraints: constraints,
       icon: Icon(
         Icons.info_outline_rounded,
         size: iconSize,

@@ -358,7 +358,7 @@ void main() {
     });
 
     testWidgets('PresentationDiscountSection muestra en vivo la resta en modo S/ Fijo', (tester) async {
-      final valorCtrl = TextEditingController(text: "1.90");
+      final valorCtrl = TextEditingController(text: "12.00");
 
       await tester.pumpWidget(
         MaterialApp(
@@ -388,7 +388,7 @@ void main() {
 
       // Verificar que se renderiza el enunciado explicativo
       expect(
-        find.text("Se restará del precio de venta: S/ 13.90 - S/ 1.90 = S/ 12.00"),
+        find.text("Descuento aplicado: S/ 1.90 menos sobre el precio normal de S/ 13.90 (-14%)"),
         findsOneWidget,
       );
       // Verificar contenedor integrado de precio final
@@ -425,7 +425,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text("El descuento debe ser menor al precio regular (S/ 13.90)"),
+        find.text("La oferta debe ser menor al precio regular (S/ 13.90)"),
         findsOneWidget,
       );
     });
@@ -492,12 +492,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Cambiar a pestaña "S/ Nuevo"
-      await tester.tap(find.text("S/ Nuevo"));
+      // Cambiar a pestaña "S/ Fijo"
+      await tester.tap(find.text("S/ Fijo"));
       await tester.pumpAndSettle();
 
       // Ingresar 2.00 (mayor al precio base 1.00)
-      final inputField = find.widgetWithText(TextField, "Nuevo Precio (S/)");
+      final inputField = find.widgetWithText(TextField, "Precio Oferta (S/)");
       await tester.enterText(inputField, "2.00");
       await tester.pumpAndSettle();
 

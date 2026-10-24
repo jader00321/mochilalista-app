@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/analytics/services/predictive_service.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 class PredictiveAnalyticsScreen extends StatefulWidget {
@@ -19,7 +19,6 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
   bool _isLoading = true;
   String? _error;
 
-  final currencyFmt = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
   // Simulador state
   double _salesSimulationPct = 0.0; // -50% to +100%
@@ -233,7 +232,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
               curve: Curves.easeOutQuart,
               builder: (context, value, child) {
                 return Text(
-                  currencyFmt.format(value),
+                  AppCurrency.format(value),
                   style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w900, letterSpacing: -1),
                 );
               },
@@ -428,7 +427,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                     curve: Curves.easeOutQuart,
                     builder: (context, value, child) {
                       return Text(
-                        currencyFmt.format(value),
+                        AppCurrency.format(value),
                         style: TextStyle(
                           fontSize: 32, 
                           fontWeight: FontWeight.bold, 
@@ -450,7 +449,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                       curve: Curves.easeOutQuart,
                       builder: (context, value, child) {
                         return Text(
-                          "${currencyFmt.format(value)} vs proy. base",
+                          "${AppCurrency.format(value)} vs proy. base",
                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: diffProfit >= 0 ? Colors.green : Colors.redAccent),
                         );
                       },
@@ -620,7 +619,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                            }
                         }
                         return LineTooltipItem(
-                          "$dateStr\n${currencyFmt.format(spot.y)}",
+                          "$dateStr\n${AppCurrency.format(spot.y)}",
                           TextStyle(color: spot.barIndex == 0 ? Colors.purpleAccent : Colors.blueAccent, fontWeight: FontWeight.bold),
                         );
                       }).toList();
@@ -693,21 +692,21 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text("Beneficio", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                          Text(currencyFmt.format(netProfit), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.purpleAccent)),
+                          Text(AppCurrency.format(netProfit), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.purpleAccent)),
                         ],
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text("Inventario", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                          Text(currencyFmt.format(invValue), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueAccent)),
+                          Text(AppCurrency.format(invValue), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueAccent)),
                         ],
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           const Text("Ventas", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                          Text(currencyFmt.format(dailySales), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green)),
+                          Text(AppCurrency.format(dailySales), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green)),
                         ],
                       ),
                     ],

@@ -25,8 +25,10 @@ class SalesHistoryScreen extends StatefulWidget {
 class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _currentTabIndex = 0; 
-  final GlobalKey<NestedScrollViewState> _nestedScrollKey = GlobalKey();
+  bool _showKpis = true;
+  bool _showFilters = true;
   bool _showBackToTop = false;
+  late final List<ScrollController> _tabControllers;
 
   @override
   void initState() {
@@ -41,15 +43,22 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
       case 'archivadas': initialIndex = 3; break;
     }
     
+    _tabControllers = List.generate(4, (_) => ScrollController());
     _tabController = TabController(length: 4, vsync: this, initialIndex: initialIndex);
     _currentTabIndex = initialIndex;
     
     _tabController.addListener(() {
       if (!mounted) return;
-      if (_tabController.index != _currentTabIndex) {
+      if (!_tabController.indexIsChanging && _tabController.index != _currentTabIndex) {
         _currentTabIndex = _tabController.index;
         final tabs = ['todas', 'smart_quotation', 'pos_rapido', 'archivadas'];
         Provider.of<SaleProvider>(context, listen: false).setTab(tabs[_currentTabIndex]);
+        if (!_showKpis || !_showFilters) {
+          setState(() {
+            _showKpis = true;
+            _showFilters = true;
+          });
+        }
       }
     });
 
@@ -61,6 +70,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
 
   @override
   void dispose() {
+    for (final controller in _tabControllers) {
+      controller.dispose();
+    }
     _tabController.dispose();
     super.dispose();
   }
@@ -213,17 +225,74 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     }
   }
 
-  void _scrollToTop() async {
-    final state = _nestedScrollKey.currentState;
-    if (state != null) {
-      // Animar inner primero (la lista), luego outer (el header)
-      for (final position in state.innerController.positions) {
-        position.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-      }
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (!state.mounted) return;
-      state.outerController.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOutCubic);
+  DateTime _lastToggleTime = DateTime.fromMillisecondsSinceEpoch(0);
+
+  void _scrollToTop() {
+    final activeController = _tabControllers[_tabController.index];
+    if (activeController.hasClients) {
+      activeController.animateTo(0, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
     }
+    _lastToggleTime = DateTime.now();
+    setState(() {
+      _showKpis = true;
+      _showFilters = true;
+      _showBackToTop = false;
+    });
+  }
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis == Axis.vertical) {
+      final currentOffset = notification.metrics.pixels;
+      final maxScroll = notification.metrics.maxScrollExtent;
+      final now = DateTime.now();
+      final elapsedSinceToggle = now.difference(_lastToggleTime).inMilliseconds;
+
+      // 1. Regla del Tope Superior: Si estamos en el tope (pixels <= 15), forzar siempre expansión
+      if (currentOffset <= 15) {
+        if (!_showKpis || !_showFilters) {
+          _lastToggleTime = now;
+          setState(() {
+            _showKpis = true;
+            _showFilters = true;
+          });
+        }
+      } else if (elapsedSinceToggle > 280) {
+        // Cooldown de 280ms para evitar rebotes (jitter) durante AnimatedSize
+        if (notification is ScrollUpdateNotification) {
+          final delta = notification.scrollDelta ?? 0.0;
+          if (delta > 8 && currentOffset > 60) {
+            // Scroll hacia abajo: ocultar suavemente si la lista tiene recorrido
+            if ((_showKpis || _showFilters) && maxScroll > 80) {
+              _lastToggleTime = now;
+              setState(() {
+                _showKpis = false;
+                _showFilters = false;
+              });
+            }
+          } else if (delta < -8) {
+            // Scroll hacia arriba: reaparecen los filtros de inmediato
+            if (!_showFilters) {
+              _lastToggleTime = now;
+              setState(() {
+                _showFilters = true;
+              });
+            }
+            if (currentOffset < 45 && !_showKpis) {
+              _lastToggleTime = now;
+              setState(() {
+                _showKpis = true;
+              });
+            }
+          }
+        }
+      }
+
+      final shouldShowTop = currentOffset > 150;
+      if (shouldShowTop != _showBackToTop) {
+        setState(() => _showBackToTop = shouldShowTop);
+      }
+    }
+    return false;
   }
 
   @override
@@ -237,6 +306,113 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         backgroundColor: bgColor,
+        appBar: AppBar(
+          title: const Text("Historial de Ventas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+          backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
+          foregroundColor: Colors.white,
+          elevation: 0,
+          actions: [
+            const InfoTooltipButton(
+              title: "Historial de Ventas",
+              description:
+                  "Registro cronológico y financiero de todas las transacciones realizadas por Cotizaciones, Caja Rápida o Ventas a Crédito.",
+              tips: [
+                InfoTip(
+                  icon: Icons.tab_rounded,
+                  text:
+                      "Usa las pestañas para separar ventas por Cotización Inteligente, Caja Rápida o Anuladas.",
+                ),
+                InfoTip(
+                  icon: Icons.filter_alt_outlined,
+                  text:
+                      "Filtra por método de pago (Efectivo, Yape/Plin, Crédito) o rango de fechas.",
+                ),
+                InfoTip(
+                  icon: Icons.file_download_outlined,
+                  text:
+                      "Exporta tus reportes financieros consolidados en formato PDF o Excel (CSV).",
+                ),
+                InfoTip(
+                  icon: Icons.receipt_long_rounded,
+                  text:
+                      "Toca cualquier venta para ver su detalle, desglose de ítems o reimprimir comprobante.",
+                ),
+              ],
+            ),
+            IconButton(
+              icon: const Icon(Icons.file_download, size: 26),
+              tooltip: "Exportar Reportes",
+              onPressed: () {
+                final provider = Provider.of<SaleProvider>(context, listen: false);
+                ExportOptionsModal.showCombinable(
+                  context,
+                  initialTab: provider.currentTab,
+                  initialFinancialFilter: provider.financialStatus,
+                  activePeriodLabel: provider.activeQuickFilter == 'seis_meses'
+                      ? '6 Meses'
+                      : (provider.activeQuickFilter == 'hoy' ? 'Hoy' : 'Periodo Activo'),
+                  onCountRequest: (sel) async {
+                    if (sel.scope == 'current') {
+                      var list = List<SaleModel>.from(provider.salesHistory);
+                      if (sel.operationType != 'all_active') {
+                        if (sel.operationType == 'archived') {
+                          list = list.where((s) => s.isArchived).toList();
+                        } else {
+                          list = list.where((s) => s.origenVenta == sel.operationType).toList();
+                        }
+                      }
+                      if (sel.financialStatus != 'todos') {
+                        if (sel.financialStatus == 'pagados') {
+                          list = list.where((s) => s.isFullyPaid).toList();
+                        } else if (sel.financialStatus == 'con_deuda') {
+                          list = list.where((s) => s.pendingDebt > 0.01).toList();
+                        }
+                      }
+                      if (sel.grouping == 'specific_method' && sel.specificPaymentMethod != null) {
+                        list = list.where((s) {
+                          final pm = sel.specificPaymentMethod!;
+                          if (pm == 'yape_plin') return s.paymentMethod == 'yape' || s.paymentMethod == 'plin' || s.paymentMethod == 'yape_plin';
+                          return s.paymentMethod == pm;
+                        }).toList();
+                      }
+                      return list.length;
+                    } else {
+                      return await provider.countForExport(
+                        ignoreDateFilter: sel.scope == 'full_history',
+                        onlyArchived: sel.operationType == 'archived',
+                        origenVenta: sel.operationType == 'archived' || sel.operationType == 'all_active' ? null : sel.operationType,
+                        financialStatus: sel.financialStatus != 'todos' ? sel.financialStatus : null,
+                        paymentMethod: sel.grouping == 'specific_method' ? sel.specificPaymentMethod : null,
+                      );
+                    }
+                  },
+                  onExport: _handleExportCombinable,
+                );
+              },
+            ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(48),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              physics: const BouncingScrollPhysics(),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+              indicatorColor: Colors.orange,
+              indicatorWeight: 3,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white60,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              tabs: const [
+                Tab(text: "Todas"),
+                Tab(text: "Cotizaciones Vendidas"),
+                Tab(text: "Caja Rápida"),
+                Tab(text: "Archivadas / Anuladas"),
+              ],
+            ),
+          ),
+        ),
         floatingActionButton: _showBackToTop
             ? FloatingActionButton(
                 heroTag: "btn_scroll_top_history",
@@ -251,190 +427,67 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
             : null,
         body: Stack(
           children: [
-            NotificationListener<ScrollUpdateNotification>(
-              onNotification: (notification) {
-            if (notification.metrics.axis == Axis.vertical) {
-              bool shouldShow = notification.metrics.pixels > 120;
-              if (shouldShow != _showBackToTop) {
-                setState(() => _showBackToTop = shouldShow);
-              }
-            }
-            return false;
-          },
-          child: NestedScrollView(
-            key: _nestedScrollKey,
-            headerSliverBuilder: (context, innerBoxIsScrolled) {
-              return [
-              SliverAppBar(
-                title: const Text("Historial de Ventas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-                backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
-                foregroundColor: Colors.white,
-                elevation: 0,
-                pinned: true,
-                stretch: true,
-                actions: [
-                  const InfoTooltipButton(
-                    title: "Historial de Ventas",
-                    description:
-                        "Registro cronológico y financiero de todas las transacciones realizadas por Cotizaciones, Caja Rápida o Ventas a Crédito.",
-                    tips: [
-                      InfoTip(
-                        icon: Icons.tab_rounded,
-                        text:
-                            "Usa las pestañas para separar ventas por Cotización Inteligente, Caja Rápida o Anuladas.",
+            NotificationListener<ScrollNotification>(
+              onNotification: _onScrollNotification,
+              child: Column(
+                children: [
+                  if (isGuest)
+                    Container(
+                      width: double.infinity,
+                      color: Colors.orange.withValues(alpha: 0.15),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.orange[700]),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "Modo Exploración. Registra tu negocio para empezar a ver tus métricas de ventas e ingresos reales aquí.",
+                              style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
+                            ),
+                          ),
+                        ],
                       ),
-                      InfoTip(
-                        icon: Icons.filter_alt_outlined,
-                        text:
-                            "Filtra por método de pago (Efectivo, Yape/Plin, Crédito) o rango de fechas.",
-                      ),
-                      InfoTip(
-                        icon: Icons.file_download_outlined,
-                        text:
-                            "Exporta tus reportes financieros consolidados en formato PDF o Excel (CSV).",
-                      ),
-                      InfoTip(
-                        icon: Icons.receipt_long_rounded,
-                        text:
-                            "Toca cualquier venta para ver su detalle, desglose de ítems o reimprimir comprobante.",
-                      ),
-                    ],
+                    ),
+                  // Bloque 1: KPIs Colapsables con AnimatedSize
+                  ClipRect(
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOutCubic,
+                      child: _showKpis
+                          ? const HistoryDashboardCards()
+                          : const SizedBox(width: double.infinity, height: 0),
+                    ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.file_download, size: 26),
-                    tooltip: "Exportar Reportes",
-                    onPressed: () {
-                      final provider = Provider.of<SaleProvider>(context, listen: false);
-                      ExportOptionsModal.showCombinable(
-                        context,
-                        initialTab: provider.currentTab,
-                        initialFinancialFilter: provider.financialStatus,
-                        activePeriodLabel: provider.activeQuickFilter == 'seis_meses'
-                            ? '6 Meses'
-                            : (provider.activeQuickFilter == 'hoy' ? 'Hoy' : 'Periodo Activo'),
-                        onCountRequest: (sel) async {
-                          if (sel.scope == 'current') {
-                            var list = List<SaleModel>.from(provider.salesHistory);
-                            if (sel.operationType != 'all_active') {
-                              if (sel.operationType == 'archived') {
-                                list = list.where((s) => s.isArchived).toList();
-                              } else {
-                                list = list.where((s) => s.origenVenta == sel.operationType).toList();
-                              }
-                            }
-                            if (sel.financialStatus != 'todos') {
-                              if (sel.financialStatus == 'pagados') {
-                                list = list.where((s) => s.isFullyPaid).toList();
-                              } else if (sel.financialStatus == 'con_deuda') {
-                                list = list.where((s) => s.pendingDebt > 0.01).toList();
-                              }
-                            }
-                            if (sel.grouping == 'specific_method' && sel.specificPaymentMethod != null) {
-                              list = list.where((s) {
-                                final pm = sel.specificPaymentMethod!;
-                                if (pm == 'yape_plin') return s.paymentMethod == 'yape' || s.paymentMethod == 'plin' || s.paymentMethod == 'yape_plin';
-                                return s.paymentMethod == pm;
-                              }).toList();
-                            }
-                            return list.length;
-                          } else {
-                            return await provider.countForExport(
-                              ignoreDateFilter: sel.scope == 'full_history',
-                              onlyArchived: sel.operationType == 'archived',
-                              origenVenta: sel.operationType == 'archived' || sel.operationType == 'all_active' ? null : sel.operationType,
-                              financialStatus: sel.financialStatus != 'todos' ? sel.financialStatus : null,
-                              paymentMethod: sel.grouping == 'specific_method' ? sel.specificPaymentMethod : null,
-                            );
-                          }
-                        },
-                        onExport: _handleExportCombinable,
-                      );
-                    },
+                  // Bloque 2: Buscador Fijo (Siempre visible y accesible, nunca tapado)
+                  const HistorySearchBar(),
+                  // Bloque 3: Filtros Reactivos Colapsables / Reaparecen al subir
+                  ClipRect(
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOutCubic,
+                      child: _showFilters
+                          ? const HistoryFilterChips()
+                          : const SizedBox(width: double.infinity, height: 0),
+                    ),
+                  ),
+                  // Bloque 4: TabBarView con aislamiento estricto por tabKey
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        SalesListBuilder(tabKey: 'todas', scrollController: _tabControllers[0]),
+                        SalesListBuilder(tabKey: 'smart_quotation', scrollController: _tabControllers[1]),
+                        SalesListBuilder(tabKey: 'pos_rapido', scrollController: _tabControllers[2]),
+                        SalesListBuilder(tabKey: 'archivadas', scrollController: _tabControllers[3]),
+                      ],
+                    ),
                   ),
                 ],
-                bottom: TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  indicatorColor: Colors.orange,
-                  indicatorWeight: 3,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white54,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  tabs: const [
-                    Tab(text: "Todas"),
-                    Tab(text: "Cotizaciones Vendidas"),
-                    Tab(text: "Caja Rápida"),
-                    Tab(text: "Archivadas / Anuladas"),
-                  ],
-                ),
               ),
-              if (isGuest)
-                SliverToBoxAdapter(
-                  child: Container(
-                    width: double.infinity,
-                    color: Colors.orange.withValues(alpha: 0.15),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.orange[700]),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            "Modo Exploración. Registra tu negocio para empezar a ver tus métricas de ventas e ingresos reales aquí.",
-                            style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
-                          )
-                        )
-                      ]
-                    )
-                  ),
-                ),
-              // Cards: Collapses on scroll down
-              const SliverToBoxAdapter(
-                child: HistoryDashboardCards(),
-              ),
-              // Search Bar: Pinned to always stay visible
-              SliverAppBar(
-                automaticallyImplyLeading: false,
-                pinned: true,
-                floating: false,
-                elevation: 0,
-                backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
-                toolbarHeight: 0,
-                bottom: const PreferredSize(
-                  preferredSize: Size.fromHeight(56),
-                  child: HistorySearchBar(),
-                ),
-              ),
-              // Filter Chips: Floating + Snap (reappears on scroll up)
-              SliverAppBar(
-                automaticallyImplyLeading: false,
-                pinned: false,
-                floating: true,
-                snap: true,
-                elevation: 0,
-                backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
-                toolbarHeight: 0,
-                bottom: const PreferredSize(
-                  preferredSize: Size.fromHeight(92),
-                  child: HistoryFilterChips(),
-                ),
-              ),
-            ];
-          },
-          body: TabBarView(
-            controller: _tabController,
-            children: const [
-              SalesListBuilder(),
-              SalesListBuilder(),
-              SalesListBuilder(),
-              SalesListBuilder(),
-            ],
-          ),
-        ),
-      ),
-      const DeepNavReturnPill(isBottom: true),
-    ],
+            ),
+            const DeepNavReturnPill(isBottom: true),
+          ],
         ),
       ),
     );

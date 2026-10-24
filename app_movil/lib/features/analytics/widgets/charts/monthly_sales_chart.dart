@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class MonthlySalesChart extends StatefulWidget {
   final AnalyticsData data;
   final bool isDark;
-  final String Function(double) formatCurrency;
+  final String Function(double)? formatCurrency;
 
   const MonthlySalesChart({
     super.key,
     required this.data,
     required this.isDark,
-    required this.formatCurrency,
+    this.formatCurrency,
   });
 
   @override
@@ -20,6 +21,18 @@ class MonthlySalesChart extends StatefulWidget {
 
 class _MonthlySalesChartState extends State<MonthlySalesChart> {
   Map<String, dynamic>? _selectedPoint;
+
+  String _format(double amount) {
+    if (widget.formatCurrency != null) return widget.formatCurrency!(amount);
+    return AppCurrency.format(amount);
+  }
+
+  String _formatCompact(double value) {
+    if (value >= 1000) {
+      return "S/ ${(value / 1000).toStringAsFixed(1)}k";
+    }
+    return "S/ ${value.toInt()}";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +51,7 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
       if (amount > maxY) maxY = amount;
     }
 
-    maxY = maxY * 1.2;
+    maxY = maxY * 1.25;
     if (maxY == 0) maxY = 100;
 
     return Container(
@@ -58,13 +71,27 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Evolución de Ventas", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Evolución de Ventas", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Icon(Icons.touch_app, size: 16, color: Colors.grey[400]),
+            ],
+          ),
           const SizedBox(height: 24),
           SizedBox(
-            height: 200,
+            height: 220,
             child: LineChart(
               LineChartData(
-                gridData: const FlGridData(show: false),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: widget.isDark ? Colors.white12 : Colors.grey[200]!,
+                    strokeWidth: 1,
+                    dashArray: [4, 4],
+                  ),
+                ),
                 titlesData: FlTitlesData(
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
@@ -92,15 +119,35 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
                           
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(label, style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12)),
+                            child: Text(label, style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 11)),
                           );
                         }
                         return const SizedBox.shrink();
                       },
-                      reservedSize: 30,
+                      reservedSize: 28,
                     ),
                   ),
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 52,
+                      interval: maxY / 3,
+                      getTitlesWidget: (value, meta) {
+                        if (value == 0 || value == meta.max) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6.0),
+                          child: Text(
+                            _formatCompact(value),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                   topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
@@ -113,6 +160,7 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
                   LineChartBarData(
                     spots: spots,
                     isCurved: true,
+                    curveSmoothness: 0.35,
                     color: Colors.blueAccent,
                     barWidth: 3,
                     isStrokeCapRound: true,
@@ -123,7 +171,7 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
-                        colors: [Colors.blueAccent.withValues(alpha: 0.3), Colors.blueAccent.withValues(alpha: 0.0)],
+                        colors: [Colors.blueAccent.withValues(alpha: 0.35), Colors.blueAccent.withValues(alpha: 0.0)],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
@@ -131,8 +179,24 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
                   ),
                 ],
                 lineTouchData: LineTouchData(
-                  handleBuiltInTouches: false,
+                  handleBuiltInTouches: true,
                   touchSpotThreshold: 40,
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (_) => widget.isDark ? const Color(0xFF1E293B) : Colors.black87,
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        int idx = spot.x.toInt();
+                        String label = '';
+                        if (idx >= 0 && idx < chartData.length) {
+                          label = "${chartData[idx][dateKey]}\n";
+                        }
+                        return LineTooltipItem(
+                          "$label${_format(spot.y)}",
+                          const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                        );
+                      }).toList();
+                    },
+                  ),
                   touchCallback: (FlTouchEvent event, LineTouchResponse? response) {
                     if (event is FlPanEndEvent || event is FlLongPressEnd) return;
                     if (event is FlTapUpEvent) {
@@ -194,14 +258,14 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
       if (parts.length == 3) displayDate = "${parts[2]}/${parts[1]}/${parts[0]}";
     }
 
-    String insightText = "Ventas totales: ${widget.formatCurrency(amount)}";
+    String insightText = "Ventas totales: ${_format(amount)}";
     if (hasPrev) {
       double diff = amount - prevAmount;
       double pct = prevAmount > 0 ? (diff / prevAmount) * 100 : 0;
       if (diff >= 0) {
-        insightText = "Vendiste ${widget.formatCurrency(amount)}. ¡Un aumento del ${pct.toStringAsFixed(1)}% respecto al periodo anterior!";
+        insightText = "Vendiste ${_format(amount)}. ¡Un aumento del ${pct.toStringAsFixed(1)}% respecto al periodo anterior!";
       } else {
-        insightText = "Vendiste ${widget.formatCurrency(amount)}. Esto representa una caída del ${pct.abs().toStringAsFixed(1)}% respecto al periodo anterior.";
+        insightText = "Vendiste ${_format(amount)}. Esto representa una caída del ${pct.abs().toStringAsFixed(1)}% respecto al periodo anterior.";
       }
     }
 
@@ -237,7 +301,7 @@ class _MonthlySalesChartState extends State<MonthlySalesChart> {
               ),
             ),
             Text(
-              widget.formatCurrency(amount),
+              _format(amount),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
             ),
           ],

@@ -10,6 +10,7 @@ import 'package:app_movil/features/smart_quotation/providers/workbench_provider.
 import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
 
 import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/detail_header_card.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/detail_client_card.dart';
@@ -314,60 +315,56 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
   }
 
   void _showDuplicateOptionsModal(int cotizacionId, bool isDark) {
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF23232F) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28))
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10)))),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Icon(Icons.content_copy, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 30),
-                  const SizedBox(width: 12),
-                  Text("Opciones de Duplicación", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text("Elige cómo deseas duplicar esta lista vendida sin alterar la original.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 15)),
-              const SizedBox(height: 24),
-              
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], child: Icon(Icons.shopping_cart_checkout, color: isDark ? Colors.blue[300] : Colors.blue)),
-                title: Text("Vender Nuevamente (Genérica)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                subtitle: Text("Crea una copia editable exacta para asignársela a un nuevo cliente.", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[500] : Colors.grey[600])),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _handleCloneToGeneric(cotizacionId);
-                },
-              ),
-              Divider(height: 20, color: isDark ? Colors.white10 : Colors.grey[200]),
-              
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.purple.withValues(alpha: 0.15) : Colors.purple[50], child: Icon(Icons.inventory_2, color: isDark ? Colors.purple[300] : Colors.purple)),
-                title: Text("Guardar como Plantilla (Pack)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                subtitle: Text("Convierte esta lista en un catálogo recurrente.", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[500] : Colors.grey[600])),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _handleConvertToPack(cotizacionId);
-                },
-              ),
-              const SizedBox(height: 20),
-            ],
+        return InteractiveSheetWrapper(
+          applyEffectiveBottomPadding: true,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.content_copy, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 28),
+                    const SizedBox(width: 12),
+                    Text("Opciones de Duplicación", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text("Elige cómo deseas duplicar esta lista vendida sin alterar la original.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14)),
+                const SizedBox(height: 20),
+                
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  leading: CircleAvatar(radius: 24, backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], child: Icon(Icons.shopping_cart_checkout, color: isDark ? Colors.blue[300] : Colors.blue)),
+                  title: Text("Vender Nuevamente (Genérica)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87)),
+                  subtitle: Text("Crea una copia editable exacta para asignársela a un nuevo cliente.", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600])),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleCloneToGeneric(cotizacionId);
+                  },
+                ),
+                Divider(height: 16, color: isDark ? Colors.white10 : Colors.grey[200]),
+                
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  leading: CircleAvatar(radius: 24, backgroundColor: isDark ? Colors.purple.withValues(alpha: 0.15) : Colors.purple[50], child: Icon(Icons.inventory_2, color: isDark ? Colors.purple[300] : Colors.purple)),
+                  title: Text("Guardar como Plantilla (Pack)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87)),
+                  subtitle: Text("Convierte esta lista en un catálogo recurrente.", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600])),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleConvertToPack(cotizacionId);
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         );
-      }
+      },
     );
   }
 
@@ -407,9 +404,29 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     final ctrl = TextEditingController(text: currentNote);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isClient = type == 'client';
+    final isLoan = type == 'loan';
     
-    final title = isClient ? (currentNote.isEmpty ? "Agregar Nota al Cliente" : "Editar Nota del Cliente") : (currentNote.isEmpty ? "Agregar Nota de Venta" : "Editar Nota de la Venta");
-    final color = isClient ? (isDark ? Colors.blue[300] : Colors.blue[800]) : (isDark ? Colors.orange[300] : Colors.orange[800]);
+    final String title;
+    final String hintText;
+    final Color color;
+    final IconData icon;
+
+    if (isClient) {
+      title = currentNote.isEmpty ? "Agregar Nota al Cliente" : "Editar Nota del Cliente";
+      hintText = "Escribe la observación general del cliente aquí...";
+      color = isDark ? Colors.blue[300]! : Colors.blue[800]!;
+      icon = Icons.assignment_ind;
+    } else if (isLoan) {
+      title = currentNote.isEmpty ? "Agregar Nota del Préstamo" : "Editar Nota del Préstamo";
+      hintText = "Escribe el motivo u observación del préstamo aquí...";
+      color = isDark ? Colors.amber[300]! : Colors.amber[800]!;
+      icon = Icons.monetization_on_outlined;
+    } else {
+      title = currentNote.isEmpty ? "Agregar Nota de Venta" : "Editar Nota de la Venta";
+      hintText = "Escribe los detalles o nota de la venta aquí...";
+      color = isDark ? Colors.orange[300]! : Colors.orange[800]!;
+      icon = Icons.speaker_notes;
+    }
 
     final bool? confirm = await showDialog(
       context: context,
@@ -418,7 +435,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            Icon(isClient ? Icons.assignment_ind : Icons.speaker_notes, color: color),
+            Icon(icon, color: color),
             const SizedBox(width: 10),
             Expanded(child: Text(title, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 18))),
           ],
@@ -428,7 +445,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
           maxLines: 4,
           style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16),
           decoration: InputDecoration(
-            hintText: "Escribe la nota aquí...",
+            hintText: hintText,
             hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey),
             filled: true,
             fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
@@ -459,6 +476,14 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
             _saleData!['cliente_notas'] = newText;
           });
         }
+      } else if (isLoan) {
+        success = await saleProv.updateSaleNote(id, newText);
+        if (success) {
+          setState(() {
+            _saleData!['nota_prestamo'] = newText;
+            _saleData!['notes'] = newText;
+          });
+        }
       } else {
         success = await saleProv.updateQuotationNote(id, newText);
         if (success) {
@@ -480,67 +505,105 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     }
   }
 
-  void _showAddNoteMenu(int cotizacionId, int? clientId, String currentSaleNote, String currentClientNote, bool isDark) {
-    showModalBottomSheet(
+  void _showAddNoteMenu({
+    required int cotizacionId,
+    required int? clientId,
+    required String currentSaleNote,
+    required String currentClientNote,
+    required bool isDark,
+    required bool isLoan,
+    required int saleId,
+  }) {
+    InteractiveSheetWrapper.show(
       context: context,
-      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF23232F) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28))
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10)))),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Icon(Icons.edit_note, color: isDark ? Colors.amber[300] : Colors.amber[800], size: 30),
-                  const SizedBox(width: 12),
-                  Text("Gestionar Notas", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text("¿Qué tipo de nota deseas agregar o modificar?", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 15)),
-              const SizedBox(height: 24),
-              
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[50], child: Icon(Icons.speaker_notes, color: isDark ? Colors.orange[300] : Colors.orange[800])),
-                title: Text(currentSaleNote.isEmpty ? "Agregar Nota de Venta" : "Editar Nota de Venta", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                subtitle: Text("Detalles exclusivos para este recibo en particular.", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[500] : Colors.grey[600])),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if(cotizacionId > 0) {
-                     _showEditNoteDialog(type: 'sale', currentNote: currentSaleNote, id: cotizacionId);
-                  } else {
-                     _showSnack("No se puede agregar nota a esta venta (ID Inválido)", isError: true);
-                  }
-                },
-              ),
-              
-              if (clientId != null && clientId > 0) ...[
-                Divider(height: 20, color: isDark ? Colors.white10 : Colors.grey[200]),
+        return InteractiveSheetWrapper(
+          applyEffectiveBottomPadding: true,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.edit_note, color: isDark ? Colors.amber[300] : Colors.amber[800], size: 28),
+                    const SizedBox(width: 12),
+                    Text("Gestionar Notas", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  isLoan
+                      ? "¿Qué tipo de nota deseas registrar en este préstamo?"
+                      : "¿Qué tipo de nota deseas agregar o modificar?",
+                  style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14),
+                ),
+                const SizedBox(height: 20),
+                
                 ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  leading: CircleAvatar(radius: 26, backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], child: Icon(Icons.assignment_ind, color: isDark ? Colors.blue[300] : Colors.blue[800])),
-                  title: Text(currentClientNote.isEmpty ? "Agregar Nota al Cliente (CRM)" : "Editar Nota del Cliente", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                  subtitle: Text("Se guardará en el perfil general del cliente.", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[500] : Colors.grey[600])),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  leading: CircleAvatar(
+                    radius: 24,
+                    backgroundColor: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[50],
+                    child: Icon(
+                      isLoan ? Icons.monetization_on_outlined : Icons.speaker_notes,
+                      color: isDark ? Colors.orange[300] : Colors.orange[800],
+                    ),
+                  ),
+                  title: Text(
+                    currentSaleNote.isEmpty
+                        ? (isLoan ? "Agregar Motivo del Préstamo" : "Agregar Nota de Venta")
+                        : (isLoan ? "Editar Motivo del Préstamo" : "Editar Nota de Venta"),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87),
+                  ),
+                  subtitle: Text(
+                    isLoan
+                        ? "Motivo, condiciones o acuerdos particulares de este préstamo."
+                        : "Detalles exclusivos para este recibo en particular.",
+                    style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600]),
+                  ),
                   onTap: () {
                     Navigator.pop(ctx);
-                    _showEditNoteDialog(type: 'client', currentNote: currentClientNote, id: clientId);
+                    if (isLoan) {
+                      _showEditNoteDialog(type: 'loan', currentNote: currentSaleNote, id: saleId);
+                    } else if (cotizacionId > 0) {
+                      _showEditNoteDialog(type: 'sale', currentNote: currentSaleNote, id: cotizacionId);
+                    } else {
+                      _showEditNoteDialog(type: 'loan', currentNote: currentSaleNote, id: saleId);
+                    }
                   },
                 ),
+                
+                if (clientId != null && clientId > 0) ...[
+                  Divider(height: 16, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    leading: CircleAvatar(
+                      radius: 24,
+                      backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50],
+                      child: Icon(Icons.assignment_ind, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                    ),
+                    title: Text(
+                      currentClientNote.isEmpty ? "Agregar Nota al Cliente (CRM)" : "Editar Nota del Cliente",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87),
+                    ),
+                    subtitle: Text(
+                      "Se guardará en el perfil general del cliente.",
+                      style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600]),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showEditNoteDialog(type: 'client', currentNote: currentClientNote, id: clientId);
+                    },
+                  ),
+                ],
+                const SizedBox(height: 16),
               ],
-              const SizedBox(height: 20),
-            ],
+            ),
           ),
         );
-      }
+      },
     );
   }
 
@@ -558,7 +621,6 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     final items = _saleData!['items'] as List<dynamic>? ?? [];
     final origenVenta = _saleData!['origen_venta'];
     final styles = _getOrigenStyles(origenVenta, isDark);
-    
 
     final dateFormat = DateFormat('dd/MM/yyyy - hh:mm a');
     final String dateString = _saleData!['fecha_venta'] != null ? dateFormat.format(DateTime.parse(_saleData!['fecha_venta'])) : "";
@@ -567,6 +629,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     final bool isLoan = origenVenta == 'prestamo_personal';
     final int cotizacionId = _saleData!['cotizacion_id'] ?? 0;
     final int? clientId = _saleData!['cliente_id'];
+    final int effectiveSaleId = widget.saleId ?? (_saleData!['id'] as int? ?? 0);
 
     // Extraer datos de la cotización origen si existe
     final Map<String, dynamic>? cotizacion = _saleData!['cotizacion'] as Map<String, dynamic>?;
@@ -575,7 +638,9 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     final String imageUrl = "";
 
     final String clientNote = _saleData!['cliente_notas'] ?? ""; 
-    final String saleNote = cotizacion?['notas'] ?? ""; 
+    final String saleNote = isLoan 
+        ? (_saleData!['nota_prestamo'] ?? "") 
+        : (cotizacion?['notas'] ?? _saleData!['nota_prestamo'] ?? ""); 
 
     double totalAmount = (_saleData!['monto_total'] ?? 0).toDouble();
     final double paidAmount = (_saleData!['monto_pagado'] ?? 0).toDouble();
@@ -585,20 +650,43 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
     
     final List<dynamic> cuotasRaw = _saleData!['cuotas'] ?? [];
 
-    return Stack(
-      children: [
-        Scaffold(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          try {
+            Provider.of<SaleProvider>(context, listen: false).silentRefresh();
+          } catch (_) {}
+        }
+      },
+      child: Stack(
+        children: [
+          Scaffold(
           backgroundColor: bgColor,
           appBar: AppBar(
-            title: Text(isLoan ? "Préstamo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}" : "Recibo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}", style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 20)),
-            backgroundColor: Colors.transparent,
-            iconTheme: IconThemeData(color: textColor),
+            title: Text(
+              isLoan
+                  ? "Préstamo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}"
+                  : "Recibo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}",
+              style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 20),
+            ),
+            backgroundColor: bgColor,
+            surfaceTintColor: Colors.transparent,
             elevation: 0,
+            iconTheme: IconThemeData(color: textColor),
             actions: [
               IconButton(
                 icon: const Icon(Icons.note_add),
                 tooltip: "Añadir o Editar Notas",
-                onPressed: () => _showAddNoteMenu(cotizacionId, clientId, saleNote, clientNote, isDark),
+                onPressed: () => _showAddNoteMenu(
+                  cotizacionId: cotizacionId,
+                  clientId: clientId,
+                  currentSaleNote: saleNote,
+                  currentClientNote: clientNote,
+                  isDark: isDark,
+                  isLoan: isLoan,
+                  saleId: effectiveSaleId,
+                ),
               ),
               PopupMenuButton<String>(
                 color: isDark ? const Color(0xFF23232F) : Colors.white,
@@ -644,12 +732,13 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                   clientNote: clientNote,
                   cotizacionId: cotizacionId,
                   clientId: clientId,
+                  saleId: effectiveSaleId,
                   isDark: isDark,
                   isLoan: isLoan,
                   onEditTap: (type, currentNote, id) => _showEditNoteDialog(
-                    type: type, 
+                    type: (isLoan || type == 'loan') ? 'loan' : type, 
                     currentNote: currentNote, 
-                    id: id
+                    id: (isLoan || type == 'loan') ? effectiveSaleId : id,
                   ),
                 ),
 
@@ -685,7 +774,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                     cardColor: cardColor,
                     textColor: textColor,
                   ),
-                const SizedBox(height: 100),
+                SizedBox(height: kBottomNavigationBarHeight + MediaQuery.of(context).padding.bottom + 60),
               ],
             ),
           ),
@@ -715,10 +804,11 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                   SizedBox(height: 24),
                   Text("Procesando...", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))
                 ],
-              )
+              ),
             ),
-          )
-      ],
+          ),
+        ],
+      ),
     );
   }
 }

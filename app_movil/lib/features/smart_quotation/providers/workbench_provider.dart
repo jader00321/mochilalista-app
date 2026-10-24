@@ -465,6 +465,10 @@ class WorkbenchProvider with ChangeNotifier {
     notifyListeners();
     try {
       final db = await dbHelper.database;
+      final qCheck = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      if (qCheck.isNotEmpty && qCheck.first['status'] == 'SOLD') {
+        throw Exception("No se puede convertir a plantilla una cotización que ya fue vendida.");
+      }
       await db.update('smart_quotations', {'type': 'pack', 'is_template': 1}, where: 'id = ?', whereArgs: [id]);
       await loadDashboard();
       return id; 
@@ -504,6 +508,10 @@ class WorkbenchProvider with ChangeNotifier {
   Future<bool> renameQuotation(int id, String newName, {int? clientId}) async {
     try {
       final db = await dbHelper.database;
+      final qCheck = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      if (qCheck.isNotEmpty && qCheck.first['status'] == 'SOLD') {
+        throw Exception("No se puede renombrar una cotización que ya fue vendida.");
+      }
       Map<String, dynamic> updateData = {"client_name": newName};
       if (clientId != null) {
         updateData["client_id"] = clientId;

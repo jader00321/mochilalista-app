@@ -108,23 +108,21 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  flex: 4, 
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                    child: Container(
-                      color: isDark ? Colors.white10 : Colors.grey[50],
-                      padding: const EdgeInsets.all(12),
-                      child: Hero(
-                        tag: "cat_${pres.id}",
-                        child: Material(
-                          type: MaterialType.transparency,
-                          child: UniversalImage(
-                            path: pres.imagenUrl ?? prod.imagenUrl,
-                            productName: prod.nombre,
-                            categoryName: catalogProv.getCategoryName(prod.categoriaId),
-                            fit: BoxFit.contain,
-                          ),
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: Container(
+                    height: 125,
+                    color: isDark ? Colors.white10 : Colors.grey[50],
+                    padding: const EdgeInsets.all(12),
+                    child: Hero(
+                      tag: "cat_${pres.id}",
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: UniversalImage(
+                          path: pres.imagenUrl ?? prod.imagenUrl,
+                          productName: prod.nombre,
+                          categoryName: catalogProv.getCategoryName(prod.categoriaId),
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ),
@@ -132,217 +130,251 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                 ),
                 
                 Expanded(
-                  flex: 7, 
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (brandName.isNotEmpty)
-                          Text(
-                            brandName.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 10.5, 
-                              fontWeight: FontWeight.w900, 
-                              color: isDark ? Colors.indigo[300] : Colors.indigo[800], 
-                              letterSpacing: 0.5
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 3.0),
+                            child: Text(
+                              brandName.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10.5, 
+                                fontWeight: FontWeight.w900, 
+                                color: isDark ? Colors.indigo[300] : Colors.indigo[800], 
+                                letterSpacing: 0.5,
+                              ),
+                              maxLines: 1, 
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
                           ),
-                        const SizedBox(height: 3),
                         
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        RichText(
+                          maxLines: 3, 
+                          overflow: TextOverflow.ellipsis,
+                          text: TextSpan(
                             children: [
-                              RichText(
-                                maxLines: 3, 
-                                overflow: TextOverflow.ellipsis,
-                                text: TextSpan(
-                                  children: [
-                                    TextSpan(
-                                      text: "${prod.nombre} ", 
-                                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, height: 1.25, color: textColor)
-                                    ),
-                                    if (pres.nombreEspecifico != null && pres.nombreEspecifico!.isNotEmpty)
-                                      TextSpan(
-                                        text: pres.nombreEspecifico!, 
-                                        style: TextStyle(fontSize: 13.5, color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w800, height: 1.25)
-                                      ),
-                                  ],
-                                ),
+                              TextSpan(
+                                text: "${prod.nombre} ", 
+                                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, height: 1.25, color: textColor),
                               ),
-                              
-                              const SizedBox(height: 5),
-                              
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, 
-                                  borderRadius: BorderRadius.circular(6)
+                              if (pres.nombreEspecifico != null && pres.nombreEspecifico!.isNotEmpty)
+                                TextSpan(
+                                  text: pres.nombreEspecifico!, 
+                                  style: TextStyle(fontSize: 13.5, color: isDark ? Colors.teal[300] : Colors.teal[700], fontWeight: FontWeight.w800, height: 1.25),
                                 ),
-                                child: Text(
-                                  salesUnitBadge.toUpperCase(), 
-                                  style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[700])
-                                ),
-                              ),
                             ],
                           ),
                         ),
                         
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.end,
+                        const SizedBox(height: 5),
+                        
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, 
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            salesUnitBadge.toUpperCase(), 
+                            style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                          ),
+                        ),
+                        
+                        const Spacer(),
+                        const SizedBox(height: 6),
+
+                        // PARTE INFERIOR: FINANZAS Y BOTÓN ACCIÓN (Anclada al fondo de la tarjeta)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Expanded( 
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // 🔥 Píldora Financiera Factor-Aware a 2 líneas limpias (Solo Modo Comerciante)
-                                  AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 200),
-                                    child: widget.isStoreMode
-                                        ? const SizedBox.shrink(key: ValueKey('store_mode_empty'))
-                                        : Padding(
-                                            key: ValueKey('cost_${pres.id}_${costoPresentacion}_$tieneCosto'),
-                                            padding: const EdgeInsets.only(bottom: 3),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
+                            // 1. Píldora Financiera Factor-Aware (Costo y Margen con ancho completo, sin FittedBox)
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              child: widget.isStoreMode
+                                  ? const SizedBox.shrink(key: ValueKey('store_mode_empty'))
+                                  : Padding(
+                                      key: ValueKey('cost_${pres.id}_${costoPresentacion}_$tieneCosto'),
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Línea 1: Costo con punto indicador
+                                          Wrap(
+                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                            children: [
+                                              Container(
+                                                width: 6,
+                                                height: 6,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: tieneCosto
+                                                      ? (margenPorcentual >= 30
+                                                          ? (isDark ? Colors.green[400] : Colors.green[700])
+                                                          : (margenPorcentual >= 15
+                                                              ? (isDark ? Colors.amber[400] : Colors.orange[800])
+                                                              : (isDark ? Colors.red[400] : Colors.red[700])))
+                                                      : (isDark ? Colors.grey[500] : Colors.grey[400]),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                tieneCosto
+                                                    ? "C: S/ ${costoPresentacion.toStringAsFixed(2)}"
+                                                    : "Sin costo",
+                                                style: TextStyle(
+                                                  fontSize: 11.0,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          // Línea 2: Ganancia y Margen porcentual con Wrap sin achicar letra
+                                          if (tieneCosto) ...[
+                                            const SizedBox(height: 1.5),
+                                            Wrap(
+                                              crossAxisAlignment: WrapCrossAlignment.center,
                                               children: [
-                                                // Línea 1: Costo con punto indicador
-                                                FittedBox(
-                                                  fit: BoxFit.scaleDown,
-                                                  alignment: Alignment.centerLeft,
-                                                  child: Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Container(
-                                                        width: 6,
-                                                        height: 6,
-                                                        decoration: BoxDecoration(
-                                                          shape: BoxShape.circle,
-                                                          color: tieneCosto
-                                                              ? (margenPorcentual >= 30
-                                                                  ? (isDark ? Colors.green[400] : Colors.green[700])
-                                                                  : (margenPorcentual >= 15
-                                                                      ? (isDark ? Colors.amber[400] : Colors.orange[800])
-                                                                      : (isDark ? Colors.red[400] : Colors.red[700])))
-                                                              : (isDark ? Colors.grey[500] : Colors.grey[400]),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 4),
-                                                      Text(
-                                                        tieneCosto
-                                                            ? "C: S/ ${costoPresentacion.toStringAsFixed(2)}"
-                                                            : "Sin costo",
-                                                        style: TextStyle(
-                                                          fontSize: 11.0,
-                                                          fontWeight: FontWeight.w600,
-                                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                                        ),
-                                                      ),
-                                                    ],
+                                                Text(
+                                                  "G: S/ ${gananciaPresentacion.toStringAsFixed(2)}",
+                                                  style: TextStyle(
+                                                    fontSize: 11.0,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: gananciaPresentacion >= 0
+                                                        ? (isDark ? Colors.green[300] : Colors.green[800])
+                                                        : (isDark ? Colors.red[300] : Colors.red[800]),
                                                   ),
                                                 ),
-                                                // Línea 2: Ganancia y Margen porcentual
-                                                if (tieneCosto) ...[
-                                                  const SizedBox(height: 1.5),
-                                                  FittedBox(
-                                                    fit: BoxFit.scaleDown,
-                                                    alignment: Alignment.centerLeft,
-                                                    child: Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Text(
-                                                          "G: S/ ${gananciaPresentacion.toStringAsFixed(2)}",
-                                                          style: TextStyle(
-                                                            fontSize: 11.0,
-                                                            fontWeight: FontWeight.bold,
-                                                            color: gananciaPresentacion >= 0
-                                                                ? (isDark ? Colors.green[300] : Colors.green[800])
-                                                                : (isDark ? Colors.red[300] : Colors.red[800]),
-                                                          ),
-                                                        ),
-                                                        Padding(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 2.5),
-                                                          child: Text(
-                                                            "·",
-                                                            style: TextStyle(
-                                                              fontSize: 11.0,
-                                                              fontWeight: FontWeight.w900,
-                                                              color: isDark ? Colors.grey[600] : Colors.grey[400],
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        Text(
-                                                          "${margenPorcentual >= 0 ? '+' : ''}${margenPorcentual.toStringAsFixed(0)}%",
-                                                          style: TextStyle(
-                                                            fontSize: 11.0,
-                                                            fontWeight: FontWeight.w900,
-                                                            color: margenPorcentual >= 30
-                                                                ? (isDark ? Colors.green[400] : Colors.green[700])
-                                                                : (margenPorcentual >= 15
-                                                                    ? (isDark ? Colors.amber[400] : Colors.orange[800])
-                                                                    : (isDark ? Colors.red[400] : Colors.red[700])),
-                                                          ),
-                                                        ),
-                                                      ],
+                                                Padding(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                                                  child: Text(
+                                                    "·",
+                                                    style: TextStyle(
+                                                      fontSize: 11.0,
+                                                      fontWeight: FontWeight.w900,
+                                                      color: isDark ? Colors.grey[600] : Colors.grey[400],
                                                     ),
                                                   ),
-                                                ],
+                                                ),
+                                                Text(
+                                                  "${margenPorcentual >= 0 ? '+' : ''}${margenPorcentual.toStringAsFixed(0)}%",
+                                                  style: TextStyle(
+                                                    fontSize: 11.0,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: margenPorcentual >= 30
+                                                        ? (isDark ? Colors.green[400] : Colors.green[700])
+                                                        : (margenPorcentual >= 15
+                                                            ? (isDark ? Colors.amber[400] : Colors.orange[800])
+                                                            : (isDark ? Colors.red[400] : Colors.red[700])),
+                                                  ),
+                                                ),
                                               ],
                                             ),
-                                          ),
-                                  ),
-                                  if (hasOffer)
-                                    Text(
-                                      "S/ ${pres.precioVentaFinal.toStringAsFixed(2)}",
-                                      style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey[400], decoration: TextDecoration.lineThrough, fontWeight: FontWeight.bold),
-                                      maxLines: 1,
-                                    ),
-                                  FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      "S/ ${effectivePrice.toStringAsFixed(2)}",
-                                      style: TextStyle(
-                                        fontSize: 18, 
-                                        fontWeight: FontWeight.w900, 
-                                        color: hasOffer ? (isDark ? Colors.red[400] : Colors.red[700]) : (isDark ? Colors.blue[300] : const Color(0xFF2E7D32))
+                                          ],
+                                        ],
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
                             ),
-                            const SizedBox(width: 8),
-                            if (!isOutOfStock)
-                              InkWell(
-                                onTap: () {
-                                  HapticFeedback.lightImpact();
-                                  final currentWrapper = InventoryWrapper(
-                                    product: prod,
-                                    presentation: pres,
+
+                            // 2. Precios y Botón de Acción con Adaptación por Fila (compatible 100% con IntrinsicHeight)
+                            Builder(
+                              builder: (context) {
+                                final bool isLongPrice = effectivePrice >= 1000 || (hasOffer && pres.precioVentaFinal >= 1000);
+
+                                final priceColumn = Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (hasOffer)
+                                      Text(
+                                        "S/ ${pres.precioVentaFinal.toStringAsFixed(2)}",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isDark ? Colors.grey[500] : Colors.grey[400],
+                                          decoration: TextDecoration.lineThrough,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 1,
+                                      ),
+                                    Text(
+                                      "S/ ${effectivePrice.toStringAsFixed(2)}",
+                                      style: TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w900,
+                                        color: hasOffer
+                                            ? (isDark ? Colors.red[400] : Colors.red[700])
+                                            : (isDark ? Colors.blue[300] : const Color(0xFF2E7D32)),
+                                      ),
+                                    ),
+                                  ],
+                                );
+
+                                final addButton = !isOutOfStock
+                                    ? InkWell(
+                                        onTap: () {
+                                          HapticFeedback.lightImpact();
+                                          final currentWrapper = InventoryWrapper(
+                                            product: prod,
+                                            presentation: pres,
+                                          );
+                                          catalogProv.addToCart(currentWrapper, 1);
+                                          CustomSnackBar.show(
+                                            context,
+                                            message: "Agregado a caja: ${currentWrapper.displayNameDetail}",
+                                            isError: false,
+                                          );
+                                        },
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(7),
+                                          decoration: BoxDecoration(
+                                            color: isDark
+                                                ? Theme.of(context).primaryColor.withValues(alpha: 0.2)
+                                                : Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Icon(
+                                            Icons.add,
+                                            color: isDark ? Colors.blue[300] : Theme.of(context).primaryColor,
+                                            size: 22,
+                                          ),
+                                        ),
+                                      )
+                                    : const SizedBox.shrink();
+
+                                if (isLongPrice && !isOutOfStock) {
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      priceColumn,
+                                      const SizedBox(height: 4),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: addButton,
+                                      ),
+                                    ],
                                   );
-                                  catalogProv.addToCart(currentWrapper, 1);
-                                  CustomSnackBar.show(
-                                    context,
-                                    message: "Agregado a caja: ${currentWrapper.displayNameDetail}",
-                                    isError: false,
-                                  );
-                                },
-                                borderRadius: BorderRadius.circular(10),
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: isDark ? Theme.of(context).primaryColor.withValues(alpha: 0.2) : Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(10)
-                                  ),
-                                  child: Icon(Icons.add, color: isDark ? Colors.blue[300] : Theme.of(context).primaryColor, size: 24),
-                                ),
-                              )
+                                }
+
+                                return Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Expanded(child: priceColumn),
+                                    if (!isOutOfStock) ...[
+                                      const SizedBox(width: 6),
+                                      addButton,
+                                    ],
+                                  ],
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ],

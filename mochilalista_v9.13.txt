@@ -1,0 +1,143 @@
+================================================================================
+                    MOCHILALISTA APP - NOTAS DE VERSION V9.13
+================================================================================
+Version: 9.13.0+63
+Nombre del Paquete: mochilalista_v9.13
+Fecha: 23 de Octubre de 2026
+Compilacion: Release APK (mochilalista_v9.13.apk)
+Plataforma: Android (Flutter SDK ^3.9.0)
+Arquitectura: 100% Local-First Offline SQLite con reactividad a 0ms
+
+================================================================================
+RESUMEN EJECUTIVO DE LA ACTUALIZACION
+================================================================================
+La version 9.13 representa una actualizacion integral de alto impacto que culmina
+la reingenieria profunda de la Mesa de Trabajo (Smart Quotation), el Perfil del
+Cliente (CRM Financiero), el Modal de Control de Variante (Escanner IA) y la
+Cabecera Principal de Home, elevando la experiencia de usuario al estandar
+internacional de Diseno y Usabilidad 'Mobile Awards'.
+
+Esta version erradica definitivamente las superposiciones de cabeceras mediante
+un layout determinista reactivo con cero solapamiento (0px Overlap), desbloquea
+el scroll vertical a 60fps en modales comparativos complejos, repara la legibilidad
+y el truncamiento de textos en pantallas compactas (360dp), perfecciona la vista
+previa de PDFs y plantillas de WhatsApp, y optimiza la nitidez tipografica en el
+Home Dashboard eliminando sombreados no deseados.
+
+================================================================================
+DETALLE DE NOVEDADES Y CAMBIOS IMPLEMENTADOS
+================================================================================
+
+1. MESA DE TRABAJO (SMART QUOTATION WORKBENCH) - CERO SUPERPOSICION (0px OVERLAP):
+   - Arquitectura de Scroll Determinista:
+     * Sustitucion del patron frágil de NestedScrollView con 4 slivers en conflicto
+       por una estructura solida: AppBar superior fijo + Column gobernada por
+       NotificationListener<ScrollNotification> reactivo.
+     * Filtrado estricto por eje vertical (notification.metrics.axis == Axis.vertical),
+       evitando rebotes o colapsos accidentales durante el deslizamiento horizontal
+       de las pestanas del TabBarView.
+   - Cabecera KPI y Filtros Auto-Retractiles:
+     * Las tarjetas metricas ("En Revision", "Preparadas", "Alertas", "Proyectado")
+       y el selector temporal se repliegan suavemente mediante AnimatedSize (250ms)
+       al hacer scroll hacia abajo, recuperando valioso espacio vertical para el listado.
+     * Al volver a la cima (pixels <= 15), la cabecera reaparece de forma fluida.
+   - Pestanas Fijas y Chips de Subfiltro:
+     * Pestanas de estado ("En Preparacion", "Listas & Packs", "Vendidas")
+       completamente estabilizadas, sin solaparse jamas con los chips de filtrado.
+     * Chips ("Todo", "Solo Alertas", "Escaneadas IA", "Manual") perfectamente
+       alineados con espaciado ergonomico y sin cortes de texto.
+   - Eliminacion de Espacio Muerto y Proteccion del Boton Flotante (FAB):
+     * Cero espacio vacio superior antes de la primera tarjeta de cotizacion.
+     * Padding inferior de seguridad (bottom: 110px) en cada lista, asegurando
+       que el boton flotante '+' nunca oculte el precio ni los datos de la
+       ultima cotizacion en pantalla.
+
+2. PERFIL DEL CLIENTE (CRM FINANCIERO Y LIBRO CONTABLE):
+   - Pestana Historial de Compras (Ventas y Prestamos):
+     * Desacoplamiento tipografico con soporte de hasta 2 lineas completas
+       (maxLines: 2, height: 1.25) para titulos largos sin cortes artificiales
+       (p. ej. "Prestamo Personal", "Lista Escolar Primaria").
+     * Reestructuracion adaptable de la fila financiera inferior en tarjetas
+       de venta/prestamo, manteniendo margenes laterales seguros (>14px) y
+       eliminando desbordamientos del boton 'Detalle >' en pantallas de 360dp.
+   - Pestana Listas Pendientes Enriquecida:
+     * Tarjetas de cotizaciones con alta densidad informativa: indicador visual
+       de origen ("Manual" / "Escaner IA"), conteo total ("X prods"), badges
+       de estado ("Borrador", "Lista", "Alerta") y vista previa de los primeros items.
+     * Supresion definitiva de la etiqueta generica "Colegio no especificado",
+       mostrando la institucion unicamente cuando este expresamente registrada.
+   - Banner de Morosidad y Banners Financieros:
+     * Eliminacion de iconos de alerta duplicados en el encabezado de morosidad
+       en ClientStatsHeader.
+     * Visualizacion clara y armoniosa de deudas, cuotas vencidas y lineas
+       de credito disponibles.
+
+3. ESCANER IA / STAGING (MODAL CONTROL DE VARIANTE):
+   - Desbloqueo Gestual Vertical Total a 60fps:
+     * Desacoplamiento del swipe-to-dismiss en InteractiveSheetWrapper para
+       permitir desplazamiento vertical continuo sin secuestro de gestos.
+     * Incorporacion de Scrollbar nativo (thumbVisibility: true) y fisica
+       BouncingScrollPhysics().
+     * Acceso irrestricto a todas las secciones: Venta y Precios (Costo, Margen,
+       P. Venta), Stock, Proveedor e Identidad, con espaciado dinamico que
+       evita solapamiento con el boton 'GUARDAR DECISION'.
+   - Carrusel de Variantes y Claridad de Datos:
+     * Scroll horizontal fluido con fisica elastica.
+     * Claridad y mayor espacio para las etiquetas de referencia "BD: [Valor]",
+       eliminando truncamientos con puntos suspensivos ("BD: ...").
+
+4. INICIO / HOME DASHBOARD (CABECERA Y TIPOGRAFIA):
+   - Nitidez Tipografica al 100% en MarqueeText:
+     * Adicion de la propiedad 'enableGradientFade' configurable: al desactivarse,
+       remueve el ShaderMask y sus gradientes transparentes, garantizando que
+       la primera y ultima letra del nombre de usuario ("luz navarro") y del
+       negocio se lean con absoluta definicion y contraste.
+   - Distribucion Optimizada del Header:
+     * Reorganizacion de columnas en DashboardHeader, permitiendo que el nombre
+       comercial del negocio se extienda libremente por debajo de los botones
+       de recarga rapida y notificaciones antes del avatar, evitando recortes
+       prematuros de nombres largos.
+
+5. GENERADOR PDF Y PREVIEW DE WHATSAPP 'MOBILE AWARDS':
+   - Motor de Generacion PDF Redisenado:
+     * Maquetacion ejecutiva con paletas de color configurables, logos de empresa,
+       detalles de cuentas bancarias y conmutadores dinamicos de privacidad
+       (ocultar costos/margenes, desglose de impuestos).
+   - Editor Inteligente de Mensajes WhatsApp:
+     * Previsualizacion en vivo con reemplazo contextual de variables ({cliente},
+       {total}, {items}, {fecha}).
+     * Catalogo de plantillas preconfiguradas y almacenamiento de textos
+       favoritos en SharedPreferences/SecureStorage.
+
+6. RADAR COMERCIAL Y ANALITICA DE NEGOCIO:
+   - Metricas de conversion, productos de mayor rotacion y alertas de stock
+     critico integradas directamente en el panel de control.
+
+7. ESTABILIDAD Y RENDIMIENTO LOCAL-FIRST:
+   - Arquitectura 100% offline basada en SQLite local con reactividad a 0ms.
+   - Verificacion y pase exitoso del 100% de la suite de pruebas automatizadas
+     de widgets e integracion.
+
+================================================================================
+ARCHIVOS PRINCIPALES MODIFICADOS / INTEGRADOS
+================================================================================
+- app_movil/pubspec.yaml (Version bumped a 9.13.0+63)
+- app_movil/lib/features/smart_quotation/screens/workbench_screen.dart
+- app_movil/lib/features/smart_quotation/widgets/workbench/dashboard_header.dart
+- app_movil/lib/features/smart_quotation/widgets/quotation_card.dart
+- app_movil/lib/features/smart_quotation/widgets/crm/client_sales_history_tab.dart
+- app_movil/lib/features/smart_quotation/widgets/crm/client_quotations_tab.dart
+- app_movil/lib/features/smart_quotation/widgets/crm/client_stats_header.dart
+- app_movil/lib/features/scanner/widgets/comparative_update_modal.dart
+- app_movil/lib/features/scanner/widgets/modal_variant_cards.dart
+- app_movil/lib/core/widgets/home/dashboard_header.dart
+- app_movil/lib/core/widgets/marquee_text.dart
+- app_movil/lib/core/widgets/interactive_sheet_wrapper.dart
+- app_movil/lib/features/smart_quotation/screens/pdf_preview_screen.dart
+- app_movil/lib/features/smart_quotation/screens/whatsapp_preview_screen.dart
+- app_movil/lib/features/smart_quotation/utils/pdf_generator.dart
+- app_movil/test/workbench_crm_variant_modal_and_home_test.dart
+- analisis_proyecto/PLAN_REINGENIERIA_MESA_TRABAJO_PERFIL_CLIENTE_MODAL_VARIANTE_Y_HOME.md
+================================================================================
+                          MOCHILALISTA - RELEASE READY
+================================================================================

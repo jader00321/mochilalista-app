@@ -22,7 +22,7 @@ extension _ModalPurchaseSection on _ComparativeUpdateModalState {
         children: [
           // HEADER retráctil
           InkWell(
-            onTap: () => updateState(() => _showProveedor = !_showProveedor),
+            onTap: () => _toggleAccordion('proveedor'),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

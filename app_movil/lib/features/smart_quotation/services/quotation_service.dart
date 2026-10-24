@@ -64,6 +64,56 @@ class QuotationService {
       List<BundleChange> bundleChanges = [];
       List<UnitChange> unitChanges = [];
 
+      // 1. Acumular demanda total en unidades base por presentación para detectar colisiones y desabastecimiento
+      Map<int, int> totalDemandPerPres = {};
+      Map<int, int> factorPerPres = {};
+      Map<int, int> currentStockPerPres = {};
+
+      for (var item in iRows) {
+        if (item['bundle_id'] != null) {
+          int bId = item['bundle_id'] as int;
+          int qty = (item['quantity'] as int?) ?? 1;
+          final bItems = await db.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bId]);
+          for (var bItem in bItems) {
+            int pId = bItem['presentacion_id'] as int;
+            int reqQty = (bItem['cantidad_requerida'] as int?) ?? 1;
+            if (!factorPerPres.containsKey(pId)) {
+              final prRows = await db.query('presentaciones_producto', columns: ['stock_actual', 'unidades_por_venta'], where: 'id = ?', whereArgs: [pId]);
+              if (prRows.isNotEmpty) {
+                int factor = (prRows.first['unidades_por_venta'] as int?) ?? 1;
+                if (factor <= 0) factor = 1;
+                factorPerPres[pId] = factor;
+                currentStockPerPres[pId] = (prRows.first['stock_actual'] as int?) ?? 0;
+              } else {
+                factorPerPres[pId] = 1;
+                currentStockPerPres[pId] = 0;
+              }
+            }
+            int factor = factorPerPres[pId]!;
+            int totalBaseUnits = reqQty * qty * factor;
+            totalDemandPerPres[pId] = (totalDemandPerPres[pId] ?? 0) + totalBaseUnits;
+          }
+        } else if (item['presentation_id'] != null) {
+          int pId = item['presentation_id'] as int;
+          int qty = (item['quantity'] as int?) ?? 1;
+          if (!factorPerPres.containsKey(pId)) {
+            final prRows = await db.query('presentaciones_producto', columns: ['stock_actual', 'unidades_por_venta'], where: 'id = ?', whereArgs: [pId]);
+            if (prRows.isNotEmpty) {
+              int factor = (prRows.first['unidades_por_venta'] as int?) ?? 1;
+              if (factor <= 0) factor = 1;
+              factorPerPres[pId] = factor;
+              currentStockPerPres[pId] = (prRows.first['stock_actual'] as int?) ?? 0;
+            } else {
+              factorPerPres[pId] = 1;
+              currentStockPerPres[pId] = 0;
+            }
+          }
+          int factor = factorPerPres[pId]!;
+          int totalBaseUnits = qty * factor;
+          totalDemandPerPres[pId] = (totalDemandPerPres[pId] ?? 0) + totalBaseUnits;
+        }
+      }
+
       for (var item in iRows) {
         if (item['bundle_id'] != null) {
           int bId = item['bundle_id'] as int;
@@ -74,31 +124,32 @@ class QuotationService {
           for (var bItem in bItems) {
             int pId = bItem['presentacion_id'] as int;
             int reqQty = (bItem['cantidad_requerida'] as int?) ?? 1;
-            int totalDeduct = reqQty * qty;
-            
-            final prRows = await db.query('presentaciones_producto', where: 'id = ?', whereArgs: [pId]);
-            if (prRows.isNotEmpty) {
-              int currentStock = prRows.first['stock_actual'] as int;
-              if (currentStock < totalDeduct) {
-                hasIssues = true;
-                canSell = false;
-                warnings.add(StockWarning(
-                  itemId: item['id'] as int,
-                  productName: itemName ?? "Paquete",
-                  requested: totalDeduct,
-                  available: currentStock,
-                  message: "Un componente del paquete no tiene stock suficiente.",
-                ));
-              }
-            } else {
+            int factor = factorPerPres[pId] ?? 1;
+            int totalDeductBase = reqQty * qty * factor;
+            int demandedBase = totalDemandPerPres[pId] ?? totalDeductBase;
+            int currentStock = currentStockPerPres[pId] ?? 0;
+
+            if (!currentStockPerPres.containsKey(pId) || (currentStock == 0 && !factorPerPres.containsKey(pId))) {
               hasIssues = true;
               canSell = false;
               warnings.add(StockWarning(
                 itemId: item['id'] as int,
                 productName: itemName ?? "Paquete",
-                requested: totalDeduct,
+                requested: reqQty * qty,
                 available: 0,
-                message: "Un componente del paquete ya no existe.",
+                message: "Un componente del paquete ya no existe en el catálogo.",
+              ));
+            } else if (currentStock < demandedBase) {
+              hasIssues = true;
+              canSell = false;
+              int availableUnits = (currentStock / factor).floor();
+              int reqTotal = (demandedBase / factor).ceil();
+              warnings.add(StockWarning(
+                itemId: item['id'] as int,
+                productName: itemName ?? "Paquete",
+                requested: reqTotal,
+                available: availableUnits,
+                message: "Componente sin stock suficiente (requiere $reqTotal, disponible $availableUnits).",
               ));
             }
           }
@@ -239,7 +290,7 @@ class QuotationService {
         
         final pres = prRows.first;
         
-        // --- Validación de Nombre ---
+        // --- Validación de Nombre y Variante/Presentación ---
         String? itemName = item['product_name'] as String?;
         String? realName;
         final prodRows = await db.query('productos', where: 'id = ?', whereArgs: [item['product_id']]);
@@ -247,6 +298,9 @@ class QuotationService {
            realName = prodRows.first['nombre'] as String?;
         }
         
+        String? itemSpecific = item['specific_name'] as String?;
+        String? realSpecific = pres['nombre_especifico'] as String?;
+
         if (itemName != null && realName != null && itemName.toLowerCase() != realName.toLowerCase()) {
            hasIssues = true;
            nameChanges.add(NameChange(
@@ -254,6 +308,14 @@ class QuotationService {
               oldName: itemName,
               newName: realName,
               message: "El nombre del producto cambió en el catálogo."
+           ));
+        } else if (itemSpecific != null && realSpecific != null && itemSpecific.toLowerCase() != realSpecific.toLowerCase()) {
+           hasIssues = true;
+           nameChanges.add(NameChange(
+              itemId: item['id'] as int,
+              oldName: "${itemName ?? ''} ($itemSpecific)",
+              newName: "${itemName ?? ''} ($realSpecific)",
+              message: "La presentación o variante cambió en el catálogo."
            ));
         }
 
@@ -289,15 +351,23 @@ class QuotationService {
           ));
         }
 
-        // --- Validación de stock ---
-        if (currentStock < (item['quantity'] as int)) {
+        // --- Validación de stock Factor-Aware y Acumulada ---
+        int factor = factorPerPres[pId] ?? 1;
+        int demandedBase = totalDemandPerPres[pId] ?? ((item['quantity'] as int) * factor);
+        
+        if (currentStock < demandedBase) {
           hasIssues = true;
           canSell = false;
+          int availableUnits = (currentStock / factor).floor();
+          int requestedUnits = (demandedBase / factor).ceil();
           warnings.add(StockWarning(
             itemId: item['id'] as int,
             productName: itemName ?? "Desconocido",
-            requested: item['quantity'] as int,
-            available: currentStock
+            requested: requestedUnits,
+            available: availableUnits,
+            message: demandedBase > ((item['quantity'] as int) * factor)
+                ? "Stock insuficiente por demanda acumulada en la lista (requiere $requestedUnits, disponible $availableUnits)."
+                : "Stock insuficiente (requiere $requestedUnits, disponible $availableUnits)."
           ));
         }
 
@@ -351,6 +421,10 @@ class QuotationService {
           
           targetId = await txn.insert('smart_quotations', qData);
         } else {
+          final current = await txn.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+          if (current.isNotEmpty && current.first['status'] == 'SOLD') {
+            throw Exception("No se puede modificar una cotización que ya ha sido vendida.");
+          }
           await txn.update('smart_quotations', qData, where: 'id = ?', whereArgs: [id]);
           await txn.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]); 
         }
@@ -404,7 +478,14 @@ class QuotationService {
   Future<bool> updateQuotationStatus(int id, String status) async {
     try {
       final db = await dbHelper.database;
-      await db.update('smart_quotations', {'status': status}, where: 'id = ?', whereArgs: [id]);
+      final currentRows = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      if (currentRows.isNotEmpty) {
+        final currentStatus = currentRows.first['status'] as String?;
+        if (currentStatus == 'SOLD') {
+          throw Exception("Una cotización vendida es inmutable y no puede cambiar de estado.");
+        }
+      }
+      await db.update('smart_quotations', {'status': status, 'updated_at': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [id]);
       return true;
     } catch (e) { throw Exception("Error al actualizar estado local: $e"); }
   }
@@ -412,6 +493,10 @@ class QuotationService {
   Future<bool> refreshQuotation(int id, {bool fixPrices = true, bool fixStock = false, bool fixNames = false, bool fixBundles = false}) async {
     try {
       final db = await dbHelper.database;
+      final currentRows = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      if (currentRows.isNotEmpty && currentRows.first['status'] == 'SOLD') {
+        throw Exception("No se puede sincronizar ni modificar una cotización vendida.");
+      }
       final items = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
       
       await db.transaction((txn) async {
@@ -565,6 +650,10 @@ class QuotationService {
   Future<void> hardDeleteQuotation(int id) async {
     try {
       final db = await dbHelper.database;
+      final currentRows = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      if (currentRows.isNotEmpty && currentRows.first['status'] == 'SOLD') {
+        throw Exception("Una cotización vendida no se puede eliminar; forma parte del historial de ventas.");
+      }
       await db.transaction((txn) async {
         await txn.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
         await txn.delete('smart_quotations', where: 'id = ?', whereArgs: [id]);

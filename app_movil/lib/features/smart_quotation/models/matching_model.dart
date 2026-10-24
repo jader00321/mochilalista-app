@@ -259,3 +259,43 @@ class MatchPair {
     };
   }
 }
+
+/// Estado en memoria por variante dentro de los modales de detalle de Caja Rápida y Cotización Manual (Fase 4.1)
+class VariantDetailState {
+  final int presentationId;
+  int quantity;
+  bool isDiscountActive;
+  double price;
+  String discountInput;
+  bool isCustomPrice;
+  String? customName;
+
+  VariantDetailState({
+    required this.presentationId,
+    required this.quantity,
+    required this.isDiscountActive,
+    required this.price,
+    required this.discountInput,
+    required this.isCustomPrice,
+    this.customName,
+  });
+
+  VariantDetailState copyWith({
+    int? quantity,
+    bool? isDiscountActive,
+    double? price,
+    String? discountInput,
+    bool? isCustomPrice,
+    String? customName,
+  }) {
+    return VariantDetailState(
+      presentationId: presentationId,
+      quantity: quantity ?? this.quantity,
+      isDiscountActive: isDiscountActive ?? this.isDiscountActive,
+      price: price ?? this.price,
+      discountInput: discountInput ?? this.discountInput,
+      isCustomPrice: isCustomPrice ?? this.isCustomPrice,
+      customName: customName ?? this.customName,
+    );
+  }
+}

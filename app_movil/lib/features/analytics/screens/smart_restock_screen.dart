@@ -6,6 +6,7 @@ import 'package:app_movil/features/analytics/services/inventory_intelligence_ser
 import 'package:app_movil/core/widgets/product_nomenclature_label.dart';
 import 'package:app_movil/features/analytics/screens/audit_trail_screen.dart';
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/analytics/services/purchase_order_generator.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
@@ -51,7 +52,6 @@ class SmartRestockScreen extends StatefulWidget {
 
 class _SmartRestockScreenState extends State<SmartRestockScreen> {
   final InventoryIntelligenceService _biService = InventoryIntelligenceService();
-  final NumberFormat _currencyFmt = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
   
   bool _isLoading = true;
   List<SmartRestockItem> _items = [];
@@ -387,7 +387,7 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
                           },
                         ),
                         Text(
-                          _currencyFmt.format(item.suggestedQty * item.cost),
+                          AppCurrency.format(item.suggestedQty * item.cost),
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -471,7 +471,7 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
               children: [
                 const Text('Inversión Total Sugerida', style: TextStyle(fontSize: 12, color: Colors.grey)),
                 Text(
-                  _currencyFmt.format(totalInvestment),
+                  AppCurrency.format(totalInvestment),
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue),
                 ),
               ],

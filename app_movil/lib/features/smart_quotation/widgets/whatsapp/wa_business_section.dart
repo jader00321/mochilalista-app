@@ -25,6 +25,26 @@ class WaBusinessSection extends StatelessWidget {
     required this.onDataChanged,
   });
 
+  void _insertPaymentSnippet(String snippet) {
+    final text = paymentCtrl.text;
+    final selection = paymentCtrl.selection;
+    if (selection.isValid && selection.start >= 0) {
+      final newText = text.replaceRange(selection.start, selection.end, snippet);
+      paymentCtrl.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: selection.start + snippet.length),
+      );
+    } else {
+      if (text.trim().isEmpty) {
+        paymentCtrl.text = snippet;
+      } else {
+        paymentCtrl.text = "$text\n$snippet";
+      }
+      paymentCtrl.selection = TextSelection.collapsed(offset: paymentCtrl.text.length);
+    }
+    onDataChanged();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -73,8 +93,65 @@ class WaBusinessSection extends StatelessWidget {
             ),
             
             const SizedBox(height: 24),
-            Text("Cuentas Bancarias / Yape / Plin", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey)),
+            // Subtítulo limpio que jamás choca contra el título
+            Text(
+              "Cuentas Bancarias / Yape / Plin",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.grey[300] : Colors.grey[800]),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Toca un chip para insertar rápidamente:",
+              style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+            ),
             const SizedBox(height: 8),
+
+            // Chips rápidos de medios de pago en Wrap visible
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _buildPaymentQuickChip(
+                  label: "+ 📱 Yape",
+                  color: const Color(0xFF732282),
+                  isDark: isDark,
+                  onTap: () {
+                    final p = phoneCtrl.text.replaceAll(' ', '');
+                    final snippet = "📱 Yape: ${p.isNotEmpty ? p : '[Mi Teléfono]'}";
+                    _insertPaymentSnippet(snippet);
+                  },
+                ),
+                _buildPaymentQuickChip(
+                  label: "+ 📱 Plin",
+                  color: const Color(0xFF00A3E0),
+                  isDark: isDark,
+                  onTap: () {
+                    final p = phoneCtrl.text.replaceAll(' ', '');
+                    final snippet = "📱 Plin: ${p.isNotEmpty ? p : '[Mi Teléfono]'}";
+                    _insertPaymentSnippet(snippet);
+                  },
+                ),
+                _buildPaymentQuickChip(
+                  label: "+ 🏦 BCP",
+                  color: const Color(0xFF002A64),
+                  isDark: isDark,
+                  onTap: () => _insertPaymentSnippet("🏦 BCP Soles: "),
+                ),
+                _buildPaymentQuickChip(
+                  label: "+ 🏦 BBVA",
+                  color: const Color(0xFF004481),
+                  isDark: isDark,
+                  onTap: () => _insertPaymentSnippet("🏦 BBVA: "),
+                ),
+                _buildPaymentQuickChip(
+                  label: "+ 🏛️ CCI",
+                  color: isDark ? Colors.teal[300]! : Colors.teal[800]!,
+                  isDark: isDark,
+                  onTap: () => _insertPaymentSnippet("🏛️ CCI Interbancario: "),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
             TextField(
               controller: paymentCtrl,
               maxLines: 4,
@@ -103,6 +180,37 @@ class WaBusinessSection extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentQuickChip({
+    required String label,
+    required Color color,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: isDark ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.4), width: 1),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : color,
+            ),
+          ),
         ),
       ),
     );

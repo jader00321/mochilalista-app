@@ -15,6 +15,18 @@ extension _ManualQuoteDataExt on _ManualQuotationScreenState {
     return savings > 0 ? savings : 0.0;
   }
 
+  double get _estimatedTotalProfit {
+    return _items.fold(0.0, (sum, item) {
+      final price = _overriddenPrices[item.presentationId] ?? (item.offerPrice ?? item.price);
+      final cost = item.cost;
+      if (cost != null && cost > 0) {
+        final qty = _quantities[item.presentationId] ?? 1;
+        return sum + ((price - cost) * qty);
+      }
+      return sum;
+    });
+  }
+
   void _generateDynamicName() async {
     if (_isGeneratingName) return;
     
@@ -106,6 +118,7 @@ extension _ManualQuoteDataExt on _ManualQuotationScreenState {
           String realSpecificName = qItem.specificName ?? "";
           double currentPrice = qItem.originalUnitPrice;
           double? currentOffer;
+          double? currentCost;
           
           if (qItem.bundleId != null) {
             try {
@@ -120,28 +133,37 @@ extension _ManualQuoteDataExt on _ManualQuotationScreenState {
               realSpecificName = bundle.descripcion ?? "";
               
               currentPrice = bundle.precioVentaTotal;
+              currentCost = (bundle.costoTotalCalculado != null && bundle.costoTotalCalculado! > 0)
+                  ? bundle.costoTotalCalculado
+                  : promoProv.calculateBundleCost(bundle.id);
             } catch(e) { debugPrint("Paquete no encontrado: $e"); }
           } else {
             try {
               final realProduct = await invProv.fetchProductById(qItem.productId ?? 0);
               if (realProduct != null) {
-                 final presIndex = realProduct.presentaciones.indexWhere((p) => p.id == qItem.presentationId);
-                 if (presIndex != -1) {
-                   final pres = realProduct.presentaciones[presIndex];
-                   realStock = pres.stockActual;
-                   realImageUrl = pres.imagenUrl ?? realProduct.imagenUrl;
-                   currentUnit = pres.unidadVenta ?? "Unidad";
-                   currentConversion = pres.unidadesPorVenta;
-                   
-                   realProductName = realProduct.nombre;
-                   realBrandName = realProduct.marcaNombre ?? qItem.brandName ?? "";
-                   realSpecificName = pres.nombreEspecifico ?? "";
-                   
-                   currentPrice = pres.precioVentaFinal;
-                   currentOffer = (pres.precioOferta != null && pres.precioOferta! > 0) 
-                       ? pres.precioOferta 
-                       : null;
-                 }
+                final presIndex = realProduct.presentaciones.indexWhere((p) => p.id == qItem.presentationId);
+                if (presIndex != -1) {
+                  final pres = realProduct.presentaciones[presIndex];
+                  realStock = pres.stockActual;
+                  realImageUrl = pres.imagenUrl ?? realProduct.imagenUrl;
+                  currentUnit = pres.unidadVenta ?? "Unidad";
+                  currentConversion = pres.unidadesPorVenta;
+                  
+                  realProductName = realProduct.nombre;
+                  realBrandName = realProduct.marcaNombre ?? qItem.brandName ?? "";
+                  realSpecificName = pres.nombreEspecifico ?? "";
+                  
+                  currentPrice = pres.precioVentaFinal;
+                  currentOffer = (pres.precioOferta != null && pres.precioOferta! > 0) 
+                      ? pres.precioOferta 
+                      : null;
+                  final double presCost = pres.costoPresentacionFinal;
+                  currentCost = presCost > 0
+                      ? presCost
+                      : (pres.factorGananciaVenta != null && pres.factorGananciaVenta! > 0
+                          ? pres.precioVentaFinal / pres.factorGananciaVenta!
+                          : null);
+                }
               }
             } catch(e) { debugPrint("Producto no encontrado: $e"); }
           }
@@ -173,17 +195,24 @@ extension _ManualQuoteDataExt on _ManualQuotationScreenState {
             conversionFactor: currentConversion,
             isOriginalItem: true,
             bundleId: qItem.bundleId,
+            cost: currentCost,
           );
 
           
           _quantities[matched.presentationId] = qItem.quantity;
           
           if (qItem.isManualPrice) {
-             _overriddenPrices[matched.presentationId] = qItem.unitPriceApplied;
-          } else if (!qItem.isManualPrice && qItem.bundleId == null) {
-             if ((qItem.unitPriceApplied - effectivePrice).abs() > 0.01) {
-                 _overriddenPrices[matched.presentationId] = qItem.unitPriceApplied;
-             }
+            _overriddenPrices[matched.presentationId] = qItem.unitPriceApplied;
+          } else if (qItem.bundleId == null) {
+            // 🛡️ Micro-caso borde: Si la presentación en BD tiene oferta activa pero en la cotización
+            // guardada se cobró el precio base regular (oferta desactivada) o un precio especial:
+            final bool hasDbOffer = currentOffer != null && currentOffer > 0;
+            final bool isDifferentFromEffective = (qItem.unitPriceApplied - effectivePrice).abs() > 0.01;
+            final bool isRegularPriceWhileDbHasOffer = hasDbOffer && (qItem.unitPriceApplied - currentPrice).abs() < 0.01;
+
+            if (isDifferentFromEffective || isRegularPriceWhileDbHasOffer) {
+              _overriddenPrices[matched.presentationId] = qItem.unitPriceApplied;
+            }
           }
           
           if (qItem.productName == null || qItem.productName!.isEmpty) {

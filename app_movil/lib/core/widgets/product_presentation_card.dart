@@ -347,7 +347,7 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
                     onDiscountTypeChanged: (type) {
                       widget.onBeforeDiscreteMutation?.call();
                       setState(() {
-                        widget.controllerMap['tipoDescuento'] = type;
+                        _engine.switchDiscountType(type);
                       });
                       widget.onDiscreteMutationCompleted?.call();
                     },

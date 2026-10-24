@@ -3,14 +3,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 
 class AnalyticsExportService {
-  static final currencyFmt = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-
   static Future<File> exportToPdf(AnalyticsData data, String businessName) async {
     final pdf = pw.Document();
+    final DateFormat df = DateFormat('dd/MM/yyyy');
+    final String periodLabel = data.periodStartDate != null && data.periodEndDate != null
+        ? "Periodo: ${df.format(data.periodStartDate!)} al ${df.format(data.periodEndDate!)}"
+        : "Periodo Activo";
     
     // Función de ayuda para tablas
     pw.Widget buildSectionTitle(String title) {
@@ -31,12 +33,19 @@ class AnalyticsExportService {
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text("Reporte de Estadísticas", style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo900)),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text("Reporte de Estadísticas", style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo900)),
+                    pw.SizedBox(height: 4),
+                    pw.Text(periodLabel, style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
+                  ],
+                ),
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
                     pw.Text(businessName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-                    pw.Text(DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()), style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+                    pw.Text(DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()), style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
                   ],
                 )
               ],
@@ -60,14 +69,14 @@ class AnalyticsExportService {
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.indigo900),
               data: [
                 ['Métrica', 'Valor'],
-                ['Ventas Totales', currencyFmt.format(data.totalSales)],
-                ['Ganancia Neta', currencyFmt.format(data.netProfit)],
+                ['Ventas Totales', AppCurrency.format(data.totalSales)],
+                ['Ganancia Neta', AppCurrency.format(data.netProfit)],
                 ['Margen de Ganancia', '${data.estimatedMarginPercentage.toStringAsFixed(1)}%'],
-                ['Ticket Promedio', currencyFmt.format(data.averageTicket)],
+                ['Ticket Promedio', AppCurrency.format(data.averageTicket)],
                 ['Transacciones', '${data.totalTransactions}'],
-                ['Crecimiento Mensual', '${data.salesGrowthRate > 0 ? '+' : ''}${data.salesGrowthRate.toStringAsFixed(1)}%'],
-                ['Valor de Inventario', currencyFmt.format(data.inventoryValue)],
-                ['Proyección Próx. Mes', currencyFmt.format(data.nextMonthPrediction)],
+                ['Crecimiento', '${data.salesGrowthRate > 0 ? '+' : ''}${data.salesGrowthRate.toStringAsFixed(1)}%'],
+                ['Valor de Inventario', AppCurrency.format(data.inventoryValue)],
+                ['Proyección Próx. Periodo', AppCurrency.format(data.nextMonthPrediction)],
               ],
             ),
             
@@ -88,7 +97,7 @@ class AnalyticsExportService {
               headerDecoration: const pw.BoxDecoration(color: PdfColors.teal100),
               data: [
                 ['#', 'Cliente', 'Total Comprado'],
-                ...data.topClients.asMap().entries.map((e) => ['${e.key + 1}', e.value['nombre_completo'], currencyFmt.format(e.value['total_comprado'])]),
+                ...data.topClients.asMap().entries.map((e) => ['${e.key + 1}', e.value['nombre_completo'], AppCurrency.format(e.value['total_comprado'])]),
               ],
             ),
             

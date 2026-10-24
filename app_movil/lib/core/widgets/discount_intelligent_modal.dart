@@ -41,7 +41,7 @@ class DiscountIntelligentModal extends StatefulWidget {
 
 class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
   bool _isActive = false;
-  String _tipoDescuento = 'monto'; // 'monto' o 'porcentaje'
+  String _tipoDescuento = 'fijo'; // 'fijo' o 'porcentaje'
   final TextEditingController _valorCtrl = TextEditingController();
 
   double _precioBase = 0.0;
@@ -60,13 +60,16 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
     _isActive = hasOffer;
 
     if (hasOffer) {
-      _tipoDescuento = widget.presentation.tipoDescuento ?? 'monto';
+      _tipoDescuento = (widget.presentation.tipoDescuento == 'porcentaje')
+          ? 'porcentaje'
+          : 'fijo';
       if (_tipoDescuento == 'porcentaje') {
         _valorCtrl.text =
             (widget.presentation.valorDescuento ?? 0.0).toStringAsFixed(0);
       } else {
         _valorCtrl.text =
-            (widget.presentation.valorDescuento ?? 0.0).toStringAsFixed(2);
+            (widget.presentation.precioOferta ?? widget.presentation.valorDescuento ?? 0.0)
+                .toStringAsFixed(2);
       }
       if (widget.presentation.precioOferta != null &&
           widget.presentation.precioOferta! > 0) {
@@ -110,10 +113,15 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
       return;
     }
 
-    if (_tipoDescuento == 'porcentaje') {
+    final bool isFijo = _tipoDescuento == 'fijo' || _tipoDescuento == 'monto';
+    if (!isFijo) {
       _nuevoPrecioFinal = _precioBase - (_precioBase * (valor / 100));
     } else {
-      _nuevoPrecioFinal = _precioBase - valor;
+      if (valor < _precioBase) {
+        _nuevoPrecioFinal = valor;
+      } else {
+        _nuevoPrecioFinal = _precioBase;
+      }
     }
 
     if (_nuevoPrecioFinal < 0) _nuevoPrecioFinal = 0;
@@ -173,8 +181,7 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
       double newPercent = ((_precioBase - roundedOffer) / _precioBase) * 100;
       _valorCtrl.text = newPercent.toStringAsFixed(2);
     } else {
-      double newMonto = _precioBase - roundedOffer;
-      _valorCtrl.text = newMonto.toStringAsFixed(2);
+      _valorCtrl.text = roundedOffer.toStringAsFixed(2);
     }
 
     _activeRoundingTarget = targetFraction;
@@ -220,7 +227,7 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
     final textColor = widget.isDark ? Colors.white : Colors.black87;
     final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     final double valor = double.tryParse(_valorCtrl.text) ?? 0.0;
-    final bool isFijo = _tipoDescuento == 'monto';
+    final bool isFijo = _tipoDescuento == 'fijo' || _tipoDescuento == 'monto';
     final bool hasValidDiscount =
         _isActive && _nuevoPrecioFinal > 0 && _nuevoPrecioFinal < _precioBase;
 
@@ -341,48 +348,19 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
                         Expanded(
                           child: GestureDetector(
                             onTap: () {
-                              setState(() {
-                                _tipoDescuento = 'monto';
-                                _activeRoundingTarget = null;
-                                _precioOfertaExacto = null;
-                                _recalcularPrecio();
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                color: _tipoDescuento == 'monto'
-                                    ? Colors.purple
-                                    : (widget.isDark
-                                        ? Colors.white10
-                                        : Colors.grey[200]),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                "Monto Fijo (S/)",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: _tipoDescuento == 'monto'
-                                      ? Colors.white
-                                      : (widget.isDark
-                                          ? Colors.grey[400]
-                                          : Colors.grey[700]),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _tipoDescuento = 'porcentaje';
-                                _activeRoundingTarget = null;
-                                _precioOfertaExacto = null;
-                                _recalcularPrecio();
-                              });
+                              if (_tipoDescuento != 'porcentaje') {
+                                double val = double.tryParse(_valorCtrl.text) ?? 0.0;
+                                if (_precioBase > 0 && val > 0 && val < _precioBase) {
+                                  double calcPercent = ((_precioBase - val) / _precioBase) * 100;
+                                  _valorCtrl.text = calcPercent.round().toString();
+                                }
+                                setState(() {
+                                  _tipoDescuento = 'porcentaje';
+                                  _activeRoundingTarget = null;
+                                  _precioOfertaExacto = null;
+                                  _recalcularPrecio();
+                                });
+                              }
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -396,10 +374,53 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
                               ),
                               alignment: Alignment.center,
                               child: Text(
-                                "Porcentaje (%)",
+                                "% Porcentaje",
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: _tipoDescuento == 'porcentaje'
+                                      ? Colors.white
+                                      : (widget.isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[700]),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              if (_tipoDescuento != 'fijo') {
+                                double val = double.tryParse(_valorCtrl.text) ?? 0.0;
+                                if (_precioBase > 0 && val > 0 && val < 100) {
+                                  double calcOffer = _precioBase * (1 - (val / 100));
+                                  _valorCtrl.text = calcOffer.toStringAsFixed(2);
+                                }
+                                setState(() {
+                                  _tipoDescuento = 'fijo';
+                                  _activeRoundingTarget = null;
+                                  _precioOfertaExacto = null;
+                                  _recalcularPrecio();
+                                });
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: isFijo
+                                    ? Colors.purple
+                                    : (widget.isDark
+                                        ? Colors.white10
+                                        : Colors.grey[200]),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                "S/ Fijo",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: isFijo
                                       ? Colors.white
                                       : (widget.isDark
                                           ? Colors.grey[400]
@@ -425,8 +446,8 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
                         color: textColor,
                       ),
                       decoration: InputDecoration(
-                        labelText: _tipoDescuento == 'monto'
-                            ? "Monto a descontar (S/)"
+                        labelText: isFijo
+                            ? "Precio Oferta S/"
                             : "Porcentaje de descuento (%)",
                         labelStyle: TextStyle(
                           color: widget.isDark
@@ -434,8 +455,8 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
                               : Colors.grey[600],
                           fontSize: 14,
                         ),
-                        prefixText: _tipoDescuento == 'monto' ? "S/ " : null,
-                        suffixText: _tipoDescuento == 'porcentaje' ? "%" : null,
+                        prefixText: isFijo ? "S/ " : null,
+                        suffixText: !isFijo ? "%" : null,
                         prefixStyle: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -464,7 +485,7 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
                       ),
                     ),
 
-                    // Enunciado explicativo en modo S/ Fijo (Opción 2)
+                    // Enunciado explicativo en modo S/ Fijo
                     if (isFijo) ...[
                       const SizedBox(height: 10),
                       if (valor > 0 && valor < _precioBase) ...[
@@ -497,7 +518,7 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  "Se restará del precio de venta: S/ ${_precioBase.toStringAsFixed(2)} - S/ ${valor.toStringAsFixed(2)} = S/ ${(_precioBase - valor).toStringAsFixed(2)}",
+                                  "Descuento aplicado: S/ ${(_precioBase - valor).toStringAsFixed(2)} menos sobre el precio normal de S/ ${_precioBase.toStringAsFixed(2)} (-$discountPercentRounded%)",
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
@@ -540,7 +561,7 @@ class _DiscountIntelligentModalState extends State<DiscountIntelligentModal> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  "El descuento debe ser menor al precio regular (S/ ${_precioBase.toStringAsFixed(2)})",
+                                  "El precio de oferta (S/ ${valor.toStringAsFixed(2)}) debe ser menor al precio regular (S/ ${_precioBase.toStringAsFixed(2)})",
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,

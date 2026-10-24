@@ -106,7 +106,10 @@ class QuickSaleProvider with ChangeNotifier {
     return profit > 0 ? profit : 0.0;
   }
 
-  int getQuantity(int presentationId) => _currentState.quantities[presentationId] ?? 1;
+  int getQuantity(int presentationId) {
+    if (!_currentState.cart.any((p) => p.presentationId == presentationId)) return 0;
+    return _currentState.quantities[presentationId] ?? 1;
+  }
   
   double getEffectivePrice(int presentationId) {
     final item = _currentState.cart.firstWhere((p) => p.presentationId == presentationId);
@@ -233,6 +236,7 @@ class QuickSaleProvider with ChangeNotifier {
       imageUrl: bundle.imagenUrl,
       unit: "Paquete",
       bundleId: bundle.id,
+      cost: bundle.costoTotalCalculado,
     );
 
     _currentState.cart.add(matched);
@@ -255,15 +259,21 @@ class QuickSaleProvider with ChangeNotifier {
           final maxStock = product.stock > 0 ? product.stock : 1;
           final combinedQty = (existingQty + newQty).clamp(1, maxStock);
           
-          // Remover el ítem viejo y sus propiedades
+          // Calcular el índice destino ajustado tras eliminar el ítem previo
+          final targetIndex = existingTargetIndex > index ? existingTargetIndex - 1 : existingTargetIndex;
+
+          // Remover el ítem viejo y sus propiedades huérfanas
           _currentState.cart.removeAt(index);
           _currentState.quantities.remove(oldPresentationId);
           _currentState.overridePrices.remove(oldPresentationId);
           
-          // Actualizar la cantidad del ítem existente
+          // Actualizar el ítem existente fusionado con sus datos más recientes
+          _currentState.cart[targetIndex] = product;
           _currentState.quantities[product.presentationId] = combinedQty;
           if (newOverridePrice != null) {
             _currentState.overridePrices[product.presentationId] = newOverridePrice;
+          } else {
+            _currentState.overridePrices.remove(product.presentationId);
           }
           notifyListeners();
 

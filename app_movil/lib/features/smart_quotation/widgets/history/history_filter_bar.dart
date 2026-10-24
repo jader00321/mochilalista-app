@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class Debouncer {
   final int milliseconds;
@@ -49,17 +50,17 @@ class _HistorySearchBarState extends State<HistorySearchBar> {
 
     return Container(
       color: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
       child: TextField(
         controller: _searchCtrl,
-        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16),
+        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15),
         decoration: InputDecoration(
           hintText: "Buscar por cliente, #recibo, DNI...",
           hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey),
-          prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey),
+          prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey, size: 20),
           suffixIcon: provider.searchQuery.isNotEmpty 
             ? IconButton(
-                icon: Icon(Icons.clear, color: isDark ? Colors.white : Colors.black87), 
+                icon: Icon(Icons.clear, color: isDark ? Colors.white : Colors.black87, size: 18), 
                 onPressed: () {
                   _searchCtrl.clear();
                   provider.setSearchQuery(""); 
@@ -68,11 +69,11 @@ class _HistorySearchBarState extends State<HistorySearchBar> {
               ) 
             : null,
           isDense: true,
-          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          suffixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          prefixIconConstraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+          suffixIconConstraints: const BoxConstraints(minWidth: 34, minHeight: 34),
           filled: true, 
           fillColor: isDark ? const Color(0xFF23232F) : Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+          contentPadding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
         ),
         onChanged: (val) {
@@ -119,14 +120,13 @@ class HistoryFilterChips extends StatelessWidget {
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      backgroundColor: Colors.transparent,
       builder: (_) {
         Widget buildPeriodTile(String title, IconData icon, String targetFilter) {
           final bool isActive = provider.activeQuickFilter == targetFilter;
           return Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             decoration: BoxDecoration(
               color: isActive ? (isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.withValues(alpha: 0.08)) : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
@@ -139,7 +139,7 @@ class HistoryFilterChips extends StatelessWidget {
                 style: TextStyle(
                   fontWeight: isActive ? FontWeight.bold : FontWeight.normal, 
                   color: isActive ? (isDark ? Colors.blue[300] : Colors.blue[900]) : textColor
-                )
+                ),
               ),
               trailing: isActive ? Icon(Icons.check_circle, color: isDark ? Colors.blue[300] : Colors.blue[700]) : null,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -151,15 +151,15 @@ class HistoryFilterChips extends StatelessWidget {
           );
         }
 
-        return Container(
-          decoration: BoxDecoration(color: surfaceColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-          padding: const EdgeInsets.symmetric(vertical: 24),
+        return InteractiveSheetWrapper(
+          title: "Filtrar periodo de tiempo",
+          icon: Icons.calendar_today_rounded,
+          iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
+          backgroundColor: surfaceColor,
+          applyEffectiveBottomPadding: true,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 40, height: 5, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-              Text("Filtrar periodo de tiempo:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
-              const SizedBox(height: 16),
               buildPeriodTile("Hoy", Icons.today, 'hoy'),
               buildPeriodTile("Esta Semana", Icons.calendar_view_week, 'semana'),
               buildPeriodTile("Este Mes", Icons.calendar_month, 'este_mes'),
@@ -167,15 +167,15 @@ class HistoryFilterChips extends StatelessWidget {
               buildPeriodTile("Todo el Tiempo", Icons.all_inclusive, 'todo'),
               const SizedBox(height: 4),
               Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: ListTile(
                   leading: Icon(Icons.edit_calendar, color: isDark ? Colors.orange[300] : Colors.orange[800]),
                   title: Text(
                     provider.activeQuickFilter == 'personalizado' ? "Rango Personalizado (Activo)" : "Rango Personalizado...", 
                     style: TextStyle(
                       fontWeight: FontWeight.bold, 
-                      color: isDark ? Colors.orange[300] : Colors.orange[800]
-                    )
+                      color: isDark ? Colors.orange[300] : Colors.orange[800],
+                    ),
                   ),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   onTap: () {
@@ -184,11 +184,11 @@ class HistoryFilterChips extends StatelessWidget {
                   },
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
             ],
           ),
         );
-      }
+      },
     );
   }
 
@@ -196,14 +196,13 @@ class HistoryFilterChips extends StatelessWidget {
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    showModalBottomSheet(
+    InteractiveSheetWrapper.show(
       context: context,
-      backgroundColor: Colors.transparent,
       builder: (_) {
         Widget buildSortTile(String title, IconData icon, String targetSortBy, String targetOrder) {
           final bool isActive = (provider.currentSortBy == targetSortBy && provider.currentOrder == targetOrder);
           return Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             decoration: BoxDecoration(
               color: isActive ? (isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.withValues(alpha: 0.08)) : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
@@ -216,7 +215,7 @@ class HistoryFilterChips extends StatelessWidget {
                 style: TextStyle(
                   fontWeight: isActive ? FontWeight.bold : FontWeight.normal, 
                   color: isActive ? (isDark ? Colors.blue[300] : Colors.blue[900]) : textColor
-                )
+                ),
               ),
               trailing: isActive ? Icon(Icons.check_circle, color: isDark ? Colors.blue[300] : Colors.blue[700]) : null,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -228,25 +227,25 @@ class HistoryFilterChips extends StatelessWidget {
           );
         }
 
-        return Container(
-          decoration: BoxDecoration(color: surfaceColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-          padding: const EdgeInsets.symmetric(vertical: 24),
+        return InteractiveSheetWrapper(
+          title: "Ordenar resultados por",
+          icon: Icons.swap_vert_rounded,
+          iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
+          backgroundColor: surfaceColor,
+          applyEffectiveBottomPadding: true,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 40, height: 5, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-              Text("Ordenar resultados por:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
-              const SizedBox(height: 16),
               buildSortTile("Más recientes primero", Icons.calendar_today, "fecha_venta", "desc"),
               buildSortTile("Más antiguas primero", Icons.history, "fecha_venta", "asc"),
               buildSortTile("Mayor importe primero", Icons.arrow_upward, "monto_total", "desc"),
               buildSortTile("Menor importe primero", Icons.arrow_downward, "monto_total", "asc"),
               buildSortTile("Mayor deuda pendiente", Icons.money_off, "deuda_pendiente", "desc"),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
             ],
           ),
         );
-      }
+      },
     );
   }
 

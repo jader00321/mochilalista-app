@@ -52,7 +52,7 @@ extension _ManualQuoteCatalogExt on _ManualQuotationScreenState {
           }
         });
       },
-      onCatalogUpdated: (presId, newStockBase, newPrice, newOfferPrice) {
+      onCatalogUpdated: (presId, newStockBase, newPrice, newOfferPrice, newCost) {
         updateState(() {
           final idx = _items.indexWhere((p) => p.presentationId == presId);
           if (idx != -1) {
@@ -62,44 +62,86 @@ extension _ManualQuoteCatalogExt on _ManualQuotationScreenState {
               stock: newStockBase ~/ factor,
               price: newPrice ?? oldP.price,
               offerPrice: newOfferPrice,
+              clearOfferPrice: newOfferPrice == null,
+              cost: newCost ?? oldP.cost,
             );
             _items[idx] = updatedP;
             if (_overriddenPrices.containsKey(presId)) {
               final oldEffective = oldP.effectivePrice;
-              if ((_overriddenPrices[presId]! - oldEffective).abs() < 0.01) {
-                _overriddenPrices[presId] = updatedP.effectivePrice;
+              final isTrackingCatalog = (_overriddenPrices[presId]! - oldEffective).abs() < 0.01 ||
+                  (_overriddenPrices[presId]! - oldP.price).abs() < 0.01;
+              if (isTrackingCatalog) {
+                // Si el ítem no tenía un descuento especial manual personalizado activo,
+                // removemos la clave para que tome directamente el nuevo precio u oferta de catálogo a 0ms
+                _overriddenPrices.remove(presId);
               }
             }
           }
         });
       },
       onConfirm: (newProd, newQty, newPrice, newName) {
-          updateState(() {
-            if (newProd.presentationId != item.presentationId) {
-              _items.removeAt(index); _quantities.remove(item.presentationId); _overriddenPrices.remove(item.presentationId); _customNames.remove(item.presentationId);
-              _items.insert(index, newProd); _quantities[newProd.presentationId] = newQty;
-              if (!auth.isCommunityClient && newPrice != null) _overriddenPrices[newProd.presentationId] = newPrice;
-              if (newName != null) {
-                 _customNames[newProd.presentationId] = newName;
+        updateState(() {
+          if (newProd.presentationId != item.presentationId) {
+            final currentIndex = _items.indexWhere((p) => p.presentationId == item.presentationId);
+            final removeIdx = currentIndex != -1 ? currentIndex : index;
+            if (removeIdx >= 0 && removeIdx < _items.length) {
+              _items.removeAt(removeIdx);
+            }
+            _quantities.remove(item.presentationId);
+            _overriddenPrices.remove(item.presentationId);
+            _customNames.remove(item.presentationId);
+
+            final existingIdx = _items.indexWhere((p) => p.presentationId == newProd.presentationId);
+            if (existingIdx != -1) {
+              final existingQty = _quantities[newProd.presentationId] ?? 0;
+              final totalQty = existingQty + newQty;
+              final maxStock = newProd.stock;
+              _quantities[newProd.presentationId] = (maxStock > 0 && totalQty > maxStock) ? maxStock : totalQty;
+              _items[existingIdx] = newProd;
+              if (!auth.isCommunityClient && newPrice != null) {
+                _overriddenPrices[newProd.presentationId] = newPrice;
               } else {
-                 _customNames.remove(newProd.presentationId);
+                _overriddenPrices.remove(newProd.presentationId);
+              }
+              if (newName != null) {
+                _customNames[newProd.presentationId] = newName;
               }
             } else {
-              _quantities[item.presentationId] = newQty;
+              final insertIdx = removeIdx.clamp(0, _items.length);
+              _items.insert(insertIdx, newProd);
+              _quantities[newProd.presentationId] = newQty;
               if (!auth.isCommunityClient && newPrice != null) {
-                _overriddenPrices[item.presentationId] = newPrice;
+                _overriddenPrices[newProd.presentationId] = newPrice;
               } else {
-                _overriddenPrices.remove(item.presentationId);
+                _overriddenPrices.remove(newProd.presentationId);
               }
               if (newName != null) {
-                 _customNames[item.presentationId] = newName;
+                _customNames[newProd.presentationId] = newName;
               } else {
-                 _customNames.remove(item.presentationId);
+                _customNames.remove(newProd.presentationId);
               }
             }
-            _hasUnsavedChanges = true;
-          });
-        },
+          } else {
+            final currentIndex = _items.indexWhere((p) => p.presentationId == item.presentationId);
+            final targetIdx = currentIndex != -1 ? currentIndex : index;
+            if (targetIdx >= 0 && targetIdx < _items.length) {
+              _items[targetIdx] = newProd;
+            }
+            _quantities[item.presentationId] = newQty;
+            if (!auth.isCommunityClient && newPrice != null) {
+              _overriddenPrices[item.presentationId] = newPrice;
+            } else {
+              _overriddenPrices.remove(item.presentationId);
+            }
+            if (newName != null) {
+              _customNames[item.presentationId] = newName;
+            } else {
+              _customNames.remove(item.presentationId);
+            }
+          }
+          _hasUnsavedChanges = true;
+        });
+      },
       );
   }
 

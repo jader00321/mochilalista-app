@@ -12,11 +12,12 @@ class ClientFilterBar extends StatelessWidget {
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
 
     return Container(
-      height: 50,
+      height: 48,
       color: bgColor,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         children: [
           _buildFilterChip(
             label: "Con Deuda",
@@ -26,7 +27,7 @@ class ClientFilterBar extends StatelessWidget {
             isDark: isDark,
             onSelected: (_) => provider.toggleDebtFilter(),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           _buildFilterChip(
             label: "Por Entregar",
             icon: Icons.local_shipping,
@@ -35,21 +36,32 @@ class ClientFilterBar extends StatelessWidget {
             isDark: isDark,
             onSelected: (_) => provider.toggleDeliveryFilter(),
           ),
-          const SizedBox(width: 10),
-          _buildConfidenceChip(provider, isDark),
+          const SizedBox(width: 8),
+          _buildConfidenceChip(context, provider, isDark),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChip({required String label, required IconData icon, required bool isSelected, required Color activeColor, required bool isDark, required Function(bool) onSelected}) {
+  Widget _buildFilterChip({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required Color activeColor,
+    required bool isDark,
+    required Function(bool) onSelected,
+  }) {
     return FilterChip(
       label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 20, color: isSelected ? activeColor : (isDark ? Colors.grey[500] : Colors.grey)),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontSize: 15)),
+          Icon(
+            icon,
+            size: 18,
+            color: isSelected ? activeColor : (isDark ? Colors.grey[500] : Colors.grey[600]),
+          ),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(fontSize: 14)),
         ],
       ),
       selected: isSelected,
@@ -58,58 +70,179 @@ class ClientFilterBar extends StatelessWidget {
       selectedColor: activeColor.withValues(alpha: 0.15),
       labelStyle: TextStyle(
         color: isSelected ? activeColor : (isDark ? Colors.white70 : Colors.black87),
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
       ),
       showCheckmark: false,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: isSelected ? activeColor.withValues(alpha: 0.5) : (isDark ? Colors.white10 : Colors.grey.shade300))),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected
+              ? activeColor.withValues(alpha: 0.5)
+              : (isDark ? Colors.white10 : Colors.grey.shade300),
+        ),
+      ),
     );
   }
 
-  Widget _buildConfidenceChip(TrackingProvider provider, bool isDark) {
+  Widget _buildConfidenceChip(BuildContext context, TrackingProvider provider, bool isDark) {
     bool isSelected = provider.filterConfidenceLevel != "todos";
-    String label = isSelected ? provider.filterConfidenceLevel.toUpperCase() : "Nivel Confianza";
-    Color activeColor = isDark ? Colors.purple[300]! : Colors.purple;
+    String label = isSelected ? provider.filterConfidenceLevel.toUpperCase() : "Confianza";
+    Color activeColor = _getConfidenceColor(provider.filterConfidenceLevel, isDark);
 
     return InputChip(
       label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.shield, size: 20, color: isSelected ? activeColor : (isDark ? Colors.grey[500] : Colors.grey)),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontSize: 15)),
-          if (!isSelected) ...[
-            const SizedBox(width: 6),
-            Icon(Icons.arrow_drop_down, size: 22, color: isDark ? Colors.grey[400] : Colors.grey),
-          ]
+          Icon(
+            Icons.shield,
+            size: 18,
+            color: isSelected ? activeColor : (isDark ? Colors.grey[500] : Colors.grey[600]),
+          ),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 4),
+          Icon(
+            isSelected ? Icons.arrow_drop_down : Icons.arrow_drop_down,
+            size: 20,
+            color: isSelected ? activeColor : (isDark ? Colors.grey[400] : Colors.grey[600]),
+          ),
         ],
       ),
       selected: isSelected,
       backgroundColor: isDark ? const Color(0xFF23232F) : Colors.grey[100],
       selectedColor: activeColor.withValues(alpha: 0.15),
       labelStyle: TextStyle(
-        color: isSelected ? activeColor : (isDark ? Colors.white70 : Colors.black87), 
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500
+        color: isSelected ? activeColor : (isDark ? Colors.white70 : Colors.black87),
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
       ),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14), 
-        side: BorderSide(color: isSelected ? activeColor.withValues(alpha: 0.5) : (isDark ? Colors.white10 : Colors.grey.shade300))
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected
+              ? activeColor.withValues(alpha: 0.5)
+              : (isDark ? Colors.white10 : Colors.grey.shade300),
+        ),
       ),
       showCheckmark: false,
-      onPressed: () {
-        String next;
-        switch (provider.filterConfidenceLevel) {
-          case 'todos': next = 'excelente'; break;
-          case 'excelente': next = 'bueno'; break;
-          case 'bueno': next = 'regular'; break;
-          case 'regular': next = 'moroso'; break;
-          default: next = 'todos';
-        }
-        provider.setConfidenceFilter(next);
+      onPressed: () => _showConfidenceSelectorSheet(context, provider, isDark),
+      onDeleted: isSelected ? () => provider.setConfidenceFilter('todos') : null,
+      deleteIcon: Icon(Icons.close, size: 16, color: activeColor),
+    );
+  }
+
+  Color _getConfidenceColor(String level, bool isDark) {
+    switch (level.toLowerCase()) {
+      case 'excelente':
+        return isDark ? Colors.green[400]! : Colors.green[700]!;
+      case 'bueno':
+        return isDark ? Colors.blue[300]! : Colors.blue[700]!;
+      case 'regular':
+        return isDark ? Colors.orange[300]! : Colors.orange[800]!;
+      case 'moroso':
+        return isDark ? Colors.red[400]! : Colors.red[700]!;
+      default:
+        return isDark ? Colors.purple[300]! : Colors.purple;
+    }
+  }
+
+  void _showConfidenceSelectorSheet(BuildContext context, TrackingProvider provider, bool isDark) {
+    final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    final options = [
+      {'val': 'todos', 'label': 'Todos los niveles', 'desc': 'Ver todos los clientes', 'icon': Icons.people_outline, 'color': Colors.grey},
+      {'val': 'excelente', 'label': 'Excelente', 'desc': 'Pago puntual y clientes VIP', 'icon': Icons.star, 'color': Colors.green},
+      {'val': 'bueno', 'label': 'Bueno', 'desc': 'Confiable, historial de pago normal', 'icon': Icons.thumb_up, 'color': Colors.blue},
+      {'val': 'regular', 'label': 'Regular', 'desc': 'Observado con retrasos ocasionales', 'icon': Icons.warning_amber, 'color': Colors.orange},
+      {'val': 'moroso', 'label': 'Moroso', 'desc': 'Deuda crítica, solo pago de contado', 'icon': Icons.block, 'color': Colors.red},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Icon(Icons.shield, color: Colors.purple, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Filtrar por Nivel de Confianza",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...options.map((opt) {
+                final isSelected = provider.filterConfidenceLevel == opt['val'];
+                final optColor = opt['color'] as Color;
+
+                return ListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: optColor.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(opt['icon'] as IconData, color: optColor, size: 20),
+                  ),
+                  title: Text(
+                    opt['label'] as String,
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 15,
+                    ),
+                  ),
+                  subtitle: Text(
+                    opt['desc'] as String,
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle, color: Colors.purple, size: 22)
+                      : null,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onTap: () {
+                    provider.setConfidenceFilter(opt['val'] as String);
+                    Navigator.pop(ctx);
+                  },
+                );
+              }),
+            ],
+          ),
+        );
       },
-      onDeleted: isSelected ? () {
-        provider.setConfidenceFilter('todos');
-      } : null,
-      deleteIcon: Icon(Icons.close, size: 20, color: activeColor),
     );
   }
 }

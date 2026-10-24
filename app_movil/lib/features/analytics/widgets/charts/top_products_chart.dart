@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/widgets/product_nomenclature_label.dart';
 
 class TopProductsChart extends StatefulWidget {
@@ -96,7 +97,7 @@ class _TopProductsChartState extends State<TopProductsChart> {
                             ),
                             if (p['monto_vendido'] != null)
                               Text(
-                                "S/ ${(p['monto_vendido'] as num).toDouble().toStringAsFixed(2)}",
+                                AppCurrency.format((p['monto_vendido'] as num).toDouble()),
                                 style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                           ],
@@ -159,9 +160,9 @@ class _TopProductsChartState extends State<TopProductsChart> {
     if (p['monto_vendido'] != null) {
       double monto = (p['monto_vendido'] as num).toDouble();
       if (index == 0) {
-        insightText = "🥇 $name es tu ESTRELLA ABSOLUTA: $totalVendido unidades y S/ ${monto.toStringAsFixed(2)}. Este producto sostiene tu negocio. Negocia mejores precios con tu proveedor por volumen.";
+        insightText = "🥇 $name es tu ESTRELLA ABSOLUTA: $totalVendido unidades y ${AppCurrency.format(monto)}. Este producto sostiene tu negocio. Negocia mejores precios con tu proveedor por volumen.";
       } else {
-        insightText = "$name ha generado S/ ${monto.toStringAsFixed(2)} en $totalVendido unidades vendidas. No dejes que se quede sin stock.";
+        insightText = "$name ha generado ${AppCurrency.format(monto)} en $totalVendido unidades vendidas. No dejes que se quede sin stock.";
       }
     } else {
       if (index == 0) {

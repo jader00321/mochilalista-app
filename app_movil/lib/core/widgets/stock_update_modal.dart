@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/features/catalog/screens/product_edit_screen.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class StockUpdateModal extends StatefulWidget {
@@ -40,12 +41,10 @@ class StockUpdateModal extends StatefulWidget {
 class _StockUpdateModalState extends State<StockUpdateModal> {
   // Modo: 0 = Sumar mercancía recibida, 1 = Fijar stock total exacto
   int _selectedMode = 1;
-  
-  // Granularidad: 0 = Por Unidad de Venta (xFactor), 1 = Por Unidad Base (x1)
-  int _unitGranularity = 0;
 
   late TextEditingController ctrl;
   bool _isSaving = false;
+  late int _currentStockBase;
 
   int get _factor => widget.presentation.unidadesPorVenta > 0
       ? widget.presentation.unidadesPorVenta
@@ -55,8 +54,6 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
 
   bool get _hasFactor => _factor > 1;
 
-  int get _currentStockBase => widget.presentation.stockActual;
-
   int get _currentStockSalesUnits => _currentStockBase ~/ _factor;
 
   int get _currentStockRemainder => _currentStockBase % _factor;
@@ -65,30 +62,19 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
 
   int get _calculatedNewStockBase {
     if (_selectedMode == 0) {
-      if (_unitGranularity == 0 && _hasFactor) {
-        return _currentStockBase + (_parsedInput * _factor);
-      } else {
-        return _currentStockBase + _parsedInput;
-      }
+      return _currentStockBase + (_parsedInput * _factor);
     } else {
-      if (_unitGranularity == 0 && _hasFactor) {
-        return _parsedInput * _factor;
-      } else {
-        return _parsedInput;
-      }
+      return _parsedInput * _factor;
     }
   }
 
   int get _calculatedNewStockSalesUnits => _calculatedNewStockBase ~/ _factor;
 
-  int get _calculatedNewStockRemainder => _calculatedNewStockBase % _factor;
-
   @override
   void initState() {
     super.initState();
-    final initialStock = (_unitGranularity == 0 && _hasFactor)
-        ? _currentStockSalesUnits
-        : _currentStockBase;
+    _currentStockBase = widget.presentation.stockActual;
+    final initialStock = _selectedMode == 0 ? 1 : _currentStockSalesUnits;
     ctrl = TextEditingController(text: initialStock.toString());
     ctrl.addListener(() => setState(() {}));
   }
@@ -107,28 +93,41 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
       if (mode == 0) {
         ctrl.text = "1";
       } else {
-        if (_unitGranularity == 0 && _hasFactor) {
-          ctrl.text = _currentStockSalesUnits.toString();
-        } else {
-          ctrl.text = _currentStockBase.toString();
-        }
+        ctrl.text = _currentStockSalesUnits.toString();
       }
     });
   }
 
-  void _onGranularityChanged(int gran) {
-    if (_unitGranularity == gran) return;
-    HapticFeedback.selectionClick();
+  void _squareStock() {
+    HapticFeedback.mediumImpact();
     setState(() {
-      _unitGranularity = gran;
-      if (_selectedMode == 0) {
-        ctrl.text = gran == 0 ? "1" : _factor.toString();
-      } else {
-        ctrl.text = gran == 0
-            ? _currentStockSalesUnits.toString()
-            : _currentStockBase.toString();
+      _currentStockBase = (_currentStockBase ~/ _factor) * _factor;
+      if (_selectedMode == 1) {
+        ctrl.text = (_currentStockBase ~/ _factor).toString();
       }
     });
+  }
+
+  void _navigateToEdit() {
+    final nav = Navigator.of(context);
+    nav.pop();
+    Product? targetProduct;
+    for (final item in widget.provider.items) {
+      if (item.presentation.id == widget.presentation.id) {
+        targetProduct = item.product;
+        break;
+      }
+    }
+    if (targetProduct != null) {
+      nav.push(
+        MaterialPageRoute(
+          builder: (_) => ProductEditScreen(
+            productToEdit: targetProduct!,
+            initialPresentationId: widget.presentation.id,
+          ),
+        ),
+      );
+    }
   }
 
   void _update(int val) {
@@ -146,18 +145,6 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
     _update(_parsedInput + amount);
   }
 
-  void _squareToExactMultiple(int targetMultipleBase) {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _selectedMode = 1; // Cambiar a Fijar Stock Total para cuadrar sin residuo
-      if (_unitGranularity == 0 && _hasFactor) {
-        ctrl.text = (targetMultipleBase ~/ _factor).toString();
-      } else {
-        ctrl.text = targetMultipleBase.toString();
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
@@ -165,7 +152,6 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
     final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     final int resultingBase = _calculatedNewStockBase;
     final int resultingSalesUnits = _calculatedNewStockSalesUnits;
-    final int resultingRemainder = _calculatedNewStockRemainder;
 
     final bool isOutOfStock = resultingBase <= 0;
     final bool isCritical = resultingBase > 0 && resultingSalesUnits <= (widget.presentation.stockAlerta ?? 5);
@@ -347,82 +333,111 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                       "Unidad de ingreso:",
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.indigo[200] : Colors.indigo[900]),
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ChoiceChip(
-                          label: Text("Por $_unidadVenta (x$_factor)"),
-                          selected: _unitGranularity == 0,
-                          onSelected: (v) => _onGranularityChanged(0),
-                          selectedColor: isDark ? Colors.blue[800] : Colors.blue[100],
-                          labelStyle: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: _unitGranularity == 0
-                                ? (isDark ? Colors.white : Colors.blue[900])
-                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.blue[800] : Colors.blue[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check, size: 12, color: isDark ? Colors.white : Colors.blue[900]),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Por $_unidadVenta (x$_factor)",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.blue[900],
+                            ),
                           ),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        const SizedBox(width: 6),
-                        ChoiceChip(
-                          label: const Text("Por Unidad base (x1)"),
-                          selected: _unitGranularity == 1,
-                          onSelected: (v) => _onGranularityChanged(1),
-                          selectedColor: isDark ? Colors.blue[800] : Colors.blue[100],
-                          labelStyle: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: _unitGranularity == 1
-                                ? (isDark ? Colors.white : Colors.blue[900])
-                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
 
-            // Banner de Cuadratura si hay unidades sueltas
-            if (_hasFactor && _currentStockRemainder > 0) ...[
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: isDark ? Colors.amber[400]! : Colors.amber.shade300),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 18, color: isDark ? Colors.amber[300] : Colors.amber[800]),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Hay $_currentStockRemainder u. suelta(s) fuera del múltiplo de $_unidadVenta (x$_factor).",
-                        style: TextStyle(fontSize: 11, color: isDark ? Colors.amber[200] : Colors.amber[900]),
-                      ),
+              // Banner Inteligente Condicional de Unidades Residuales
+              if (_currentStockRemainder > 0) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? Colors.amber[400]! : Colors.amber[800]!,
+                      width: 1.2,
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: () => _squareToExactMultiple(_currentStockSalesUnits * _factor),
-                      icon: const Icon(Icons.bolt, size: 14),
-                      label: const Text("⚡ Cuadrar", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isDark ? Colors.amber[500] : Colors.amber[700],
-                        foregroundColor: Colors.black87,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        visualDensity: VisualDensity.compact,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 16,
+                            color: isDark ? Colors.amber[300]! : Colors.amber[900]!,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              "Hay $_currentStockRemainder u. base suelta(s) que no completan un $_unidadVenta (x$_factor).${_selectedMode == 1 ? ' Al fijar stock total, esas unidades sueltas se reemplazarán por el nuevo total exacto.' : ' Al sumar compra se conservarán intactas.'}",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.amber[200] : Colors.amber[900],
+                                height: 1.25,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                                side: BorderSide(color: isDark ? Colors.amber[400]! : Colors.amber[800]!),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: _navigateToEdit,
+                              icon: const Icon(Icons.build_outlined, size: 13),
+                              label: const Text(
+                                "🛠️ Ir a Editar",
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isDark ? Colors.amber[700] : Colors.amber[800],
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                elevation: 0,
+                              ),
+                              onPressed: _squareStock,
+                              icon: const Icon(Icons.flash_on, size: 13),
+                              label: const Text(
+                                "⚡ Cuadrar aquí",
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ],
 
             SizedBox(height: isKeyboardOpen ? 12 : 20),
@@ -453,6 +468,7 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                     style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87),
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (_) => setState(() {}),
                     scrollPadding: const EdgeInsets.only(bottom: 90),
                     decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 8)),
                   ),
@@ -487,7 +503,7 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
 
             const SizedBox(height: 16),
 
-            // Preview del Stock Resultante
+            // Preview del Stock Resultante (Verdad Contable)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -539,7 +555,9 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                   const SizedBox(height: 4),
                   Text(
                     _hasFactor
-                        ? "Resultado: $resultingSalesUnits $_unidadVenta = $resultingBase unidades base${resultingRemainder > 0 ? ' (+$resultingRemainder suelta)' : ''}"
+                        ? (resultingBase % _factor == 0
+                            ? "Resultado: $resultingSalesUnits $_unidadVenta = $resultingBase unidades base"
+                            : "Resultado: $resultingSalesUnits $_unidadVenta (+ ${resultingBase % _factor} u. base suelta) = $resultingBase unidades base")
                         : "Resultado: $resultingBase unidades disponibles",
                     style: TextStyle(
                       fontSize: 12,

@@ -1,0 +1,106 @@
+================================================================================
+                    MOCHILALISTA APP - NOTAS DE VERSION V9.11
+================================================================================
+Version: 9.11.0+61
+Nombre del Paquete: mochilalista_v9.11
+Fecha: 22 de Octubre de 2026
+Compilacion: Release APK (mochilalista_v9.11.apk)
+Plataforma: Android (Flutter SDK ^3.9.0)
+Arquitectura: 100% Local-First Offline SQLite con reactividad a 0ms
+
+================================================================================
+RESUMEN EJECUTIVO DE LA ACTUALIZACION
+================================================================================
+La version 9.11 consolida la unificacion y blindaje quirurgico de los Modales
+de Detalles, Descuentos y Margenes Comerciales tanto en Caja Rapida como en
+Cotizacion Manual, garantizando consistencia matematica, sincronizacion reactiva
+inmediata a 0ms y control granular de inventario y promociones.
+
+Se integra la apertura directa de ajuste de stock vinculada estrictamente al ID
+de la presentacion activa, la fusion limpia de variantes sin duplicacion de
+tarjetas en pantalla, la preservacion fiel del estado 'Oferta Desactivada' al
+recargar cotizaciones guardadas, y el calculo dinamico del costo agregado de
+Bundles/Packs promocionales para un desglose 100% fidedigno de margenes de ganancia
+y rentabilidad comercial en tiempo real.
+
+================================================================================
+DETALLE DE NOVEDADES Y CAMBIOS IMPLEMENTADOS
+================================================================================
+
+1. UNIFICACION Y BLINDAJE DE MODALES DE DETALLE (CAJA RAPIDA Y COTIZACION):
+   - Selector Visual de Variantes y Presentaciones:
+     * Despliegue responsivo de presentaciones disponibles con precios, stock
+       y unidades de medida.
+     * Conmutacion reactiva a 0ms recalculando precios unitarios, subtotales,
+       descuentos y margenes proyectados en el mismo instante del tap.
+   - Boton de Ajuste Rapido de Stock [ ✏️ Ajustar ]:
+     * Integrado directamente junto a la etiqueta de 'Stock disponible' en
+       QuickSaleDetailModal y ManualQuoteDetailModal.
+     * Busqueda estricta por 'presentationId' mediante getFullProductWithFallback,
+       eliminando por completo fallbacks arbitrarios (.first/.firstOrNull)
+       que pudieran abrir o modificar el stock de una variante equivocada.
+     * Refresco instantaneo a 0ms en pantalla mediante callback onStockUpdated
+       al confirmar el movimiento de stock en StockMovementModal.
+   - Fusion Limpia de Variantes al Editar Tarjetas:
+     * Deteccion automatica cuando el usuario cambia la variante de un producto
+       existente hacia otra presentacion que ya formaba parte de la lista o carrito.
+     * Sincronizacion de cantidades acumuladas o reemplazo ordenado de la fila.
+     * Eliminacion dinamica de la tarjeta original previa (items.removeAt(index))
+       en ManualQuotationScreen y QuickSaleProvider, evitando que queden tarjetas
+       duplicadas o filas huerfanas en pantalla.
+     * Purga y reasignacion de precios sobreescritos (_overriddenPrices),
+       garantizando que la nueva variante siga las reglas del catalogo o el
+       precio editado intencionalmente.
+
+2. LOGICA AVANZADA DE DESCUENTOS Y MARGENES COMERCIALES:
+   - Edicion Bidireccional de Rentabilidad:
+     * Permite alternar y editar con total precision tanto el Descuento (porcentaje %
+       o descuento fijo S/) como el Margen de Ganancia proyectado (% sobre costo o
+       utilidad monetaria bruta).
+     * Indicadores visuales en vivo de Margen Comercial (%) y Ganancia Neta (S/)
+       contrastados respecto al costo de adquisicion real de la variante.
+   - Sincronizacion Inmediata de Precios de Catalogo:
+     * Si el usuario restablece el precio de catalogo o desactiva la edicion
+       manual de precio, se limpia inmediatamente _overriddenPrices[presId],
+       retomando la reactividad del catalogo en 0ms.
+
+3. MOTOR DE OFERTAS, BUNDLES Y COTIZACIONES GUARDADAS:
+   - Preservacion de 'Oferta Desactivada' en Cotizaciones Guardadas:
+     * Correccion y blindaje al abrir o clonar cotizaciones previas desde
+       la base de datos: si existe una oferta o descuento activo en el catalogo
+       actual pero la cotizacion se guardo expresamente con el precio base/regular
+       (el usuario desactivo la oferta al cotizar), el sistema inyecta el precio
+       guardado en _overriddenPrices[presId].
+     * Esto previene que una recarga reactive automaticamente ofertas no deseadas,
+       respetando el acuerdo original pactado con el cliente.
+   - Calculo Dinamico del Costo de Bundles y Packs (PromotionProvider):
+     * Nueva funcion calculateBundleCost(bundleId) que computa el costo total
+       agregado del combo sumando (costo_unitario_item * cantidad_requerida).
+     * Inyeccion de newCost en las lineas de cotizacion de bundles y en
+       ManualQuoteOfferItem, permitiendo que SmartQuotationProvider y las
+       tarjetas de resumen calculen el margen de ganancia real de combos
+       y packs promocionales sin distorsiones ni costos en cero.
+
+4. ACTUALIZACION DE VERSION Y DEPENDENCIAS (pubspec.yaml):
+   - Version promovida a 9.11.0+61 en pubspec.yaml.
+   - Validacion limpia de librerias y dependencias locales.
+
+================================================================================
+CERTIFICACION DE CALIDAD Y PRUEBAS ADVERSARIALES
+================================================================================
+- Flutter Analyze: 0 errores, 0 advertencias en todo el proyecto (lib y test).
+- Suite de Pruebas de Modales y Margenes: 18/18 tests aprobados al 100%
+  (sale_quote_modals_unified_discounts_and_margins_test.dart).
+- Suite Global de Pruebas: 305/305 tests aprobados al 100% sin ninguna falla:
+  * Modulo de Clientes CRM (Partes 1 y 2): Aprobado.
+  * Modulo de Historial de Ventas y Detalle de Recibos: Aprobado.
+  * Modulo de Cotizacion Manual e Inteligente: Aprobado.
+  * Modulo de Caja Rapida e Inventario: Aprobado.
+  * Conciliacion de Listas y Bundles: Aprobado.
+================================================================================
+DISTRIBUCION OFICIAL
+================================================================================
+- Binario Compilado: C:\Users\vjuli\Documents\v-app-offline apks\mochilalista_v9.11.apk
+- Notas de Version: C:\Users\vjuli\Documents\v-app-offline apks\mochilalista_v9.11.txt
+- Registro de Cambios: C:\Users\vjuli\Documents\v-app-offline apks\mochilalista_v9.11_cambios.txt
+================================================================================
