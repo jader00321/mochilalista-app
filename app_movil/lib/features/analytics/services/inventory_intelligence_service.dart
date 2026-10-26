@@ -1,6 +1,7 @@
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:math' as math;
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class InventoryIntelligenceService {
   final LocalDatabase _dbHelper = LocalDatabase.instance;
@@ -129,7 +130,11 @@ class InventoryIntelligenceService {
   /// Calcula el Punto de Reorden (ROP)
   /// Fórmula: (Sales Velocity × Lead Time) + Safety Stock
   /// Lead Time por defecto: 7 días
-  Future<Map<String, dynamic>> calculateReorderPoint(int presentationId, int currentStock, {int leadTimeDays = 7, int daysHistory = 30}) async {
+  Future<Map<String, dynamic>> calculateReorderPoint(
+    int presentationId, 
+    int currentStock, 
+    {int leadTimeDays = 7, int daysHistory = 30, int? configuredAlertStock}
+  ) async {
     double velocity = await calculateSalesVelocity(presentationId, days: daysHistory);
     final stats = await getDailyStats(presentationId, days: daysHistory);
     
@@ -140,38 +145,92 @@ class InventoryIntelligenceService {
     // Safety Stock con desviación estándar de demanda y lead time constante:
     // SS = Z * StdDev * sqrt(LeadTime)
     double safetyStock = zScore * stddev * math.sqrt(leadTimeDays);
+    double dynamicRop = (velocity * leadTimeDays) + safetyStock;
     
-    double rop = (velocity * leadTimeDays) + safetyStock;
+    // Punto de reorden final: Si hay ventas, el ROP se basa en la velocidad real.
+    // Si no hay ventas (velocity == 0), usamos configuredAlertStock (o 5 por defecto)
+    int finalRop;
+    if (velocity <= 0) {
+      finalRop = configuredAlertStock ?? 5;
+    } else {
+      finalRop = math.max(1, dynamicRop.ceil());
+    }
+
+    // Cantidad Óptima a comprar (EOQ simplificado para 30 días de cobertura)
+    double eoq = 30 * velocity;
+    int suggestedQty = 0;
     
-    // Cantidad Óptima a comprar (EOQ simplificado para cubrir 30 días)
-    double eoq = (30 * velocity); // Sugerir compra para 1 mes
-    
+    // Solo sugerir compra si el stock actual está en o por debajo del ROP
+    if (currentStock <= finalRop) {
+      if (velocity <= 0) {
+        suggestedQty = math.max(1, finalRop - currentStock);
+      } else {
+        int targetStock = finalRop + math.max(1, eoq.ceil());
+        suggestedQty = math.max(1, targetStock - currentStock);
+      }
+    } else {
+      suggestedQty = 0; // Si Stock > ROP, no requiere compra urgente
+    }
+
     // Predictivo: Días para agotarse
     double daysToStockout = velocity > 0 ? (currentStock / velocity) : 999.0;
-    String stockoutDate = velocity > 0 
+    String stockoutDate = (velocity > 0 && daysToStockout <= 365)
         ? DateTime.now().add(Duration(days: daysToStockout.ceil())).toIso8601String() 
         : "";
 
+    // Formateo humano adaptativo de velocidad
+    String velocityDisplay;
+    if (velocity <= 0) {
+      velocityDisplay = "Sin ventas";
+    } else if (velocity < 0.1) {
+      velocityDisplay = "${(velocity * 30).toStringAsFixed(1)}/mes";
+    } else {
+      velocityDisplay = "${velocity.toStringAsFixed(1)}/d";
+    }
+
+    // Jerarquía semántica de estado
+    String status;
+    if (currentStock == 0) {
+      status = "agotado";
+    } else if (currentStock <= finalRop) {
+      status = "critico";
+    } else if (currentStock <= (finalRop * 1.5).ceil()) {
+      status = "preventivo";
+    } else {
+      status = "saludable";
+    }
+
     return {
       'velocity_per_day': velocity,
+      'velocity_display': velocityDisplay,
       'max_daily_sales': stats['max']?.ceil() ?? 0,
       'safety_stock': safetyStock.ceil(),
-      'rop': rop.ceil(), // Redondeamos al número entero mayor
-      'suggested_order_qty': eoq.ceil(),
+      'rop': finalRop,
+      'suggested_order_qty': suggestedQty,
       'days_to_stockout': daysToStockout,
       'stockout_date': stockoutDate,
+      'status': status,
     };
   }
 
   /// Recupera la línea de tiempo (Audit Trail) de un producto/presentación
+  /// con resolución relacional de IDs y filtro de ruido por redondeo flotante.
   Future<List<Map<String, dynamic>>> getAuditTrail(int presentationId, int productId, {int limit = 50, int offset = 0}) async {
     final db = await _dbHelper.database;
-    
-    // Unimos los movimientos numéricos (stock_ledger) con los cambios de metadata (product_history)
-    // Para simplificar, obtenemos ambos y los combinamos en Dart, ordenando por fecha.
+
+    // Obtener catálogo de categorías y marcas para resolución de nombres
+    final catRows = await db.rawQuery('SELECT id, nombre FROM categorias');
+    final Map<int, String> catMap = {
+      for (var r in catRows) (r['id'] as num).toInt(): r['nombre'] as String
+    };
+
+    final brandRows = await db.rawQuery('SELECT id, nombre FROM marcas');
+    final Map<int, String> brandMap = {
+      for (var r in brandRows) (r['id'] as num).toInt(): r['nombre'] as String
+    };
     
     final ledgerRows = await db.rawQuery('''
-      SELECT 'STOCK_OP' as source_type, tipo_transaccion as accion, cantidad, costo_unitario, precio_venta, fecha_registro as fecha
+      SELECT 'STOCK_OP' as source_type, tipo_transaccion as accion, cantidad, costo_unitario, precio_venta, origen_id, fecha_registro as fecha
       FROM stock_ledger
       WHERE presentation_id = ?
     ''', [presentationId]);
@@ -183,9 +242,63 @@ class InventoryIntelligenceService {
          OR (entidad_tipo = 'PRODUCTO' AND entidad_id = ?)
     ''', [presentationId, productId]);
 
+    List<Map<String, dynamic>> processedHistory = [];
+
+    for (var r in historyRows) {
+      String accion = r['accion']?.toString() ?? '';
+      String? valAnt = r['valor_anterior']?.toString();
+      String? valNuevo = r['valor_nuevo']?.toString();
+
+      Map<String, dynamic> item = Map<String, dynamic>.from(r);
+
+      if (accion == 'costo_unitario_calculado' || accion == 'precio_venta_final') {
+        double dAnt = double.tryParse(valAnt ?? '') ?? 0.0;
+        double dNuevo = double.tryParse(valNuevo ?? '') ?? 0.0;
+
+        // Filtrar ruido de micro-redondeo flotante
+        if ((dNuevo - dAnt).abs() < 0.005) {
+          continue; // Descartar evento espurio
+        }
+
+        item['valor_anterior_label'] = AppCurrency.format(dAnt);
+        item['valor_nuevo_label'] = AppCurrency.format(dNuevo);
+      } else if (accion == 'categoria_id') {
+        int? idAnt = int.tryParse(valAnt ?? '');
+        int? idNuevo = int.tryParse(valNuevo ?? '');
+
+        String labelAnt = (idAnt == null || idAnt == 0)
+            ? 'Inicial'
+            : (catMap[idAnt] ?? 'Categoría #$idAnt');
+        String labelNuevo = (idNuevo == null || idNuevo == 0)
+            ? 'Sin categoría'
+            : (catMap[idNuevo] ?? 'Categoría #$idNuevo');
+
+        item['valor_anterior_label'] = labelAnt;
+        item['valor_nuevo_label'] = labelNuevo;
+      } else if (accion == 'marca_id') {
+        int? idAnt = int.tryParse(valAnt ?? '');
+        int? idNuevo = int.tryParse(valNuevo ?? '');
+
+        String labelAnt = (idAnt == null || idAnt == 0)
+            ? 'Inicial'
+            : (brandMap[idAnt] ?? 'Marca #$idAnt');
+        String labelNuevo = (idNuevo == null || idNuevo == 0)
+            ? 'Sin marca'
+            : (brandMap[idNuevo] ?? 'Marca #$idNuevo');
+
+        item['valor_anterior_label'] = labelAnt;
+        item['valor_nuevo_label'] = labelNuevo;
+      } else if (accion == 'descuento') {
+        item['valor_anterior_label'] = valAnt ?? 'Sin descuento';
+        item['valor_nuevo_label'] = valNuevo ?? '';
+      }
+
+      processedHistory.add(item);
+    }
+
     List<Map<String, dynamic>> combined = [];
     combined.addAll(ledgerRows);
-    combined.addAll(historyRows);
+    combined.addAll(processedHistory);
 
     // Ordenar descendente (más reciente primero)
     combined.sort((a, b) {
@@ -194,7 +307,7 @@ class InventoryIntelligenceService {
       return dateB.compareTo(dateA);
     });
 
-    // Paginación en memoria (sqlite union all is complex with different schemas)
+    // Paginación en memoria
     if (offset >= combined.length) return [];
     int end = offset + limit;
     if (end > combined.length) end = combined.length;

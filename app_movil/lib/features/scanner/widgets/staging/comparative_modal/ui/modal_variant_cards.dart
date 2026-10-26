@@ -149,10 +149,15 @@ extension _ModalVariantCards on _ComparativeUpdateModalState {
     String? isPrefix, 
     VoidCallback? onTextChanged,
     Widget? trailing,
+    bool isThreeColumns = false,
   }) {
+    final horizontalPad = isThreeColumns ? 6.0 : 12.0;
+    final textPad = isThreeColumns ? 4.0 : 10.0;
+    final fontSize = isThreeColumns ? 13.0 : 14.0;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPad, vertical: 8),
       decoration: BoxDecoration(
         color: widget.isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey[50], 
         borderRadius: BorderRadius.circular(10), 
@@ -161,53 +166,56 @@ extension _ModalVariantCards on _ComparativeUpdateModalState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Línea 1: Checkbox + Label + Referencia BD (Organizado para 0 recortes)
+          // Línea 1: Checkbox + Label + Referencia BD (Organizado para 0 recortes con FittedBox)
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: SizedBox(
-                  width: 20, height: 20,
-                  child: Checkbox(
-                    value: isChecked, 
-                    onChanged: onChanged, 
-                    activeColor: Colors.blue, 
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+              SizedBox(
+                width: 18, height: 18,
+                child: Checkbox(
+                  value: isChecked, 
+                  onChanged: onChanged, 
+                  activeColor: Colors.blue, 
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      label, 
-                      style: TextStyle(
-                        fontSize: 12, 
-                        fontWeight: FontWeight.w700, 
-                        color: widget.isDark ? Colors.white70 : Colors.black87,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        label, 
+                        style: TextStyle(
+                          fontSize: isThreeColumns ? 11.5 : 12, 
+                          fontWeight: FontWeight.w700, 
+                          color: widget.isDark ? Colors.white70 : Colors.black87,
+                        ),
+                        maxLines: 1,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                     if (dbValue.isNotEmpty && dbValue != 'null' && dbValue != 'N/A') ...[
                       const SizedBox(height: 1),
-                      Text(
-                        "BD: $dbValue", 
-                        style: TextStyle(
-                          fontSize: 9.5, 
-                          color: isChecked 
-                              ? (widget.isDark ? Colors.grey[500] : Colors.grey[600]) 
-                              : (widget.isDark ? Colors.blue[300] : Colors.blue[700]), 
-                          decoration: isChecked ? TextDecoration.lineThrough : null,
-                          fontStyle: FontStyle.italic,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          "BD: $dbValue", 
+                          style: TextStyle(
+                            fontSize: 9.0, 
+                            color: isChecked 
+                                ? (widget.isDark ? Colors.grey[500] : Colors.grey[600]) 
+                                : (widget.isDark ? Colors.blue[300] : Colors.blue[700]), 
+                            decoration: isChecked ? TextDecoration.lineThrough : null,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          maxLines: 1, 
                         ),
-                        maxLines: 1, 
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ],
@@ -216,7 +224,7 @@ extension _ModalVariantCards on _ComparativeUpdateModalState {
             ],
           ),
           const SizedBox(height: 6),
-          // Línea 2: TextField a ancho completo
+          // Línea 2: TextField con espacio ampliado para números completos sin cortar
           Row(
             children: [
               Expanded(
@@ -227,11 +235,20 @@ extension _ModalVariantCards on _ComparativeUpdateModalState {
                     enabled: isChecked,
                     onChanged: (_) => onTextChanged?.call(),
                     keyboardType: isText ? TextInputType.text : const TextInputType.numberWithOptions(decimal: true),
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isChecked ? (widget.isDark ? Colors.white : Colors.black) : Colors.grey),
+                    textAlign: isThreeColumns ? TextAlign.center : TextAlign.start,
+                    style: TextStyle(
+                      fontSize: fontSize, 
+                      fontWeight: FontWeight.bold, 
+                      color: isChecked ? (widget.isDark ? Colors.white : Colors.black) : Colors.grey,
+                    ),
                     decoration: InputDecoration(
-                      prefixText: isPrefix,
-                      prefixStyle: TextStyle(color: widget.isDark ? Colors.white70 : Colors.black87, fontSize: 13, fontWeight: FontWeight.bold),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                      prefixText: isPrefix != null ? "$isPrefix " : null,
+                      prefixStyle: TextStyle(
+                        color: widget.isDark ? Colors.white70 : Colors.black87, 
+                        fontSize: fontSize, 
+                        fontWeight: FontWeight.bold,
+                      ),
+                      contentPadding: EdgeInsets.symmetric(horizontal: textPad, vertical: 0),
                       isDense: true,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey.shade300)),
                       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: widget.isDark ? Colors.white24 : Colors.grey.shade300)),

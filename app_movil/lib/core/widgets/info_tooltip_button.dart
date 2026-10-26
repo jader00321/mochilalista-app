@@ -30,7 +30,12 @@ class InfoTooltipButton extends StatelessWidget {
     this.constraints,
   });
 
-  void _showInfoSheet(BuildContext context) {
+  static void showInfoModal({
+    required BuildContext context,
+    required String title,
+    required String description,
+    List<InfoTip> tips = const [],
+  }) {
     FocusManager.instance.primaryFocus?.unfocus();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -45,6 +50,15 @@ class InfoTooltipButton extends StatelessWidget {
     ).whenComplete(() {
       FocusManager.instance.primaryFocus?.unfocus();
     });
+  }
+
+  void _showInfoSheet(BuildContext context) {
+    showInfoModal(
+      context: context,
+      title: title,
+      description: description,
+      tips: tips,
+    );
   }
 
   @override

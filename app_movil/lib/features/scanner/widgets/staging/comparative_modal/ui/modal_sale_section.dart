@@ -8,18 +8,17 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
       unidadesPorLote: widget.variant.originalUnidadesPorLote
     );
 
-    double cantComprada = double.tryParse(_cantidadUmpCtrl.text) ?? widget.variant.cantidadUmpComprada;
-    int unidPorLote = int.tryParse(_unidLoteCtrl.text) ?? widget.variant.unidadesPorLote;
-    int totalUnidadesBase = (cantComprada * unidPorLote).toInt();
-    
-    int factorVenta = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
+    int totalUnidadesBase = _calculatedTotalUnitsBase;
+    int factorVenta = _activeFactorVenta;
+    String unidadActiva = _activeUnidadVenta;
     int stockFinal = factorVenta > 0 ? (totalUnidadesBase ~/ factorVenta) : 0;
+    int sobrante = factorVenta > 0 ? (totalUnidadesBase % factorVenta) : 0;
 
     // Resumen para header colapsado
     String summaryCosto = _costoCtrl.text.isEmpty ? '0.00' : _costoCtrl.text;
     String summaryPrecio = _precioCtrl.text.isEmpty ? '0.00' : _precioCtrl.text;
-    String summaryUnidad = _uVentaCtrl.text.isEmpty ? 'Unidad' : _uVentaCtrl.text;
-    String summaryFactor = _uVentaFactorCtrl.text.isEmpty ? '1' : _uVentaFactorCtrl.text;
+    String summaryUnidad = unidadActiva;
+    String summaryFactor = factorVenta.toString();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -118,7 +117,7 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
                     ),
                   ]),
 
-                  // SmartUnitSelector
+                  // SmartUnitSelector solo selector desplegable (cero inputs duplicados)
                   if (isNuevo || widget.variant.updateUnidadVenta)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
@@ -127,11 +126,12 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
                         factorCtrl: _uVentaFactorCtrl,
                         isDark: widget.isDark,
                         isCompact: true,
+                        showInputs: false,
                         onChanged: (_, __, ___) => _onUnidadVentaChanged(),
                       ),
                     ),
 
-                  // Resumen Unidades y Stock Final
+                  // Resumen de Stock Físico Base y Disponible en Venta
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     margin: const EdgeInsets.only(bottom: 10),
@@ -145,24 +145,35 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
                       children: [
                         Column(
                           children: [
-                            Text("Unid. Base", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
+                            Text("Stock Base Total", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600)),
                             const SizedBox(height: 2),
-                            Text("$totalUnidadesBase", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[800])),
+                            Text("$totalUnidadesBase unid.", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[800])),
                           ],
                         ),
                         Container(width: 1, height: 28, color: widget.isDark ? Colors.white24 : Colors.black12),
                         Column(
                           children: [
-                            Text("Stock (${_uVentaCtrl.text})", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
+                            Text("Disponible en Venta", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600)),
                             const SizedBox(height: 2),
-                            Text("$stockFinal", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.blue[300] : Colors.blue[800])),
+                            Builder(builder: (_) {
+                              String label = _ComparativeUpdateModalState._formatUnitLabel(stockFinal, unidadActiva);
+                              if (sobrante > 0 && stockFinal > 0) {
+                                label += " (+$sobrante sueltas)";
+                              } else if (sobrante > 0 && stockFinal == 0) {
+                                label = "0 $unidadActiva ($sobrante sueltas)";
+                              }
+                              return Text(
+                                label,
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.blue[300] : Colors.blue[800]),
+                              );
+                            }),
                           ],
                         ),
                       ],
                     ),
                   ),
 
-                  // Sub-bloque 2: Costo Pres. + Margen + P. Venta (3 campos en fila)
+                  // Sub-bloque 2: Costo Pres. + Margen + P. Venta (3 campos en fila sin recortes)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -174,6 +185,7 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
                           isNuevo ? true : widget.variant.updateCosto,
                           isNuevo ? (v) {} : (v) => updateState(() => widget.variant.updateCosto = v!),
                           isPrefix: "S/",
+                          isThreeColumns: true,
                           onTextChanged: () => _recalcularModal(fromMargen: true),
                         ),
                       ),
@@ -186,6 +198,7 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
                           isNuevo ? true : widget.variant.updatePrecio,
                           isNuevo ? (v) {} : (v) => updateState(() => widget.variant.updatePrecio = v!),
                           isPrefix: "x",
+                          isThreeColumns: true,
                           onTextChanged: () => _recalcularModal(fromMargen: true),
                         ),
                       ),
@@ -198,6 +211,7 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
                           isNuevo ? true : widget.variant.updatePrecio,
                           isNuevo ? (v) {} : (v) => updateState(() => widget.variant.updatePrecio = v!),
                           isPrefix: "S/",
+                          isThreeColumns: true,
                           onTextChanged: () => _recalcularModal(fromMargen: false),
                         ),
                       ),

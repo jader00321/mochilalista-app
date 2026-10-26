@@ -14,7 +14,7 @@ class PurchaseOrderGenerator {
     // Calcular el total general fuera del build para evitar sumas duplicadas (bug de pdf generation)
     double grandTotal = 0;
     for (var item in items) {
-      grandTotal += item.suggestedQty * item.cost;
+      grandTotal += item.orderQty * item.cost;
     }
     
     pdf.addPage(
@@ -44,14 +44,14 @@ class PurchaseOrderGenerator {
             'Producto',
             'Marca',
             'Stock / ROP',
-            'Vel.(u/d)',
-            'Sugerido',
+            'Velocidad',
+            'Cant. Pedir',
             'Costo U.',
             'Total'
           ];
           
           final tableData = items.map((item) {
-            final double rowTotal = item.suggestedQty * item.cost;
+            final double rowTotal = item.orderQty * item.cost;
             final String title = item.presentationName != 'Unidad' && item.presentationName.isNotEmpty
                   ? "${item.productName} - ${item.presentationName}"
                   : item.productName;
@@ -60,8 +60,8 @@ class PurchaseOrderGenerator {
               title,
               item.brandName,
               "${item.currentStock} / ${item.rop}",
-              item.velocityPerDay.toStringAsFixed(1),
-              item.suggestedQty.toString(),
+              item.velocityDisplay,
+              item.orderQty.toString(),
               AppCurrency.format(item.cost),
               AppCurrency.format(rowTotal)
             ];

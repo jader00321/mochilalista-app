@@ -1,12 +1,12 @@
 import 'dart:io'; 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart'; 
 import 'package:app_movil/features/smart_quotation/services/matching_service.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
 import 'package:app_movil/features/promotions/models/bundle_model.dart';
 import 'package:app_movil/features/promotions/models/bundle_item_model.dart';
 import 'package:app_movil/features/promotions/repositories/promotion_repository.dart';
@@ -332,6 +332,7 @@ class MatchingProvider with ChangeNotifier {
     String status, {
       String? manualClientName, String? manualClientPhone, String? manualClientDni, String? manualClientAddress, String? manualClientEmail, String? manualClientNotes,
       bool updateClientData = true, String? institutionName, String? gradeLevel, String? type, bool isClientRole = false, 
+      String? quoteTitle, String? quoteNotes,
     }
   ) async {
     final activeState = _currentState;
@@ -348,8 +349,8 @@ class MatchingProvider with ChangeNotifier {
       }
 
       activeState.metadata ??= ExtractedMetadata();
-      if (institutionName != null && institutionName.isNotEmpty) activeState.metadata!.institutionName = institutionName;
-      if (gradeLevel != null && gradeLevel.isNotEmpty) activeState.metadata!.gradeLevel = gradeLevel;
+      activeState.metadata!.institutionName = (institutionName != null && institutionName.trim().isNotEmpty) ? institutionName.trim() : null;
+      activeState.metadata!.gradeLevel = (gradeLevel != null && gradeLevel.trim().isNotEmpty) ? gradeLevel.trim() : null;
 
       String? uploadedImageUrl;
       if (activeState.localImageFile != null) {
@@ -393,29 +394,26 @@ class MatchingProvider with ChangeNotifier {
         }
       }
 
-      final timeStr = DateFormat('dd-HHmm').format(DateTime.now()); 
-      String finalQuoteName = "";
-      String typeLabel = type == "ai_scan" ? "IA" : "Manual";
+      String finalQuoteName = quoteTitle?.trim() ?? "";
+      if (finalQuoteName.isEmpty) {
+        int? count;
+        if (finalClientId != null) {
+          try {
+            final list = await _clientService.getPendingQuotations(finalClientId);
+            count = list.length + 1;
+          } catch (_) {}
+        }
 
-      if (isClientRole) {
-          final String name = (manualClientName != null && manualClientName.isNotEmpty) ? manualClientName : "Cliente";
-          finalQuoteName = "$name - Pedido $typeLabel #$timeStr"; 
-      } else {
-          if (rawClientName.isEmpty) {
-              finalQuoteName = "Cotización $typeLabel #$timeStr";
-          } else {
-              if (finalClientId != null) {
-                 try {
-                    final list = await _clientService.getPendingQuotations(finalClientId);
-                    int count = list.length + 1;
-                    finalQuoteName = "$rawClientName #$timeStr ($count) - $typeLabel";
-                 } catch(e) {
-                    finalQuoteName = "$rawClientName #$timeStr - $typeLabel";
-                 }
-              } else {
-                 finalQuoteName = "$rawClientName #$timeStr - $typeLabel";
-              }
-          }
+        finalQuoteName = QuotationNamingEngine.generateTitle(
+          selectedClient: activeState.selectedClient,
+          typedClientName: rawClientName,
+          schoolName: institutionName,
+          gradeLevel: gradeLevel,
+          quotationType: type ?? 'ai_scan',
+          clientListIndex: count,
+          isClientRole: isClientRole,
+          clientUserName: manualClientName,
+        );
       }
 
       double finalAmount = 0.0;
@@ -431,6 +429,7 @@ class MatchingProvider with ChangeNotifier {
         "client_name": finalQuoteName, 
         "institution_name": activeState.metadata?.institutionName,
         "grade_level": activeState.metadata?.gradeLevel,
+        "notas": quoteNotes?.trim(),
         "total_amount": double.parse(finalAmount.toStringAsFixed(2)),
         "total_savings": double.parse(finalSavings.toStringAsFixed(2)),
         "status": status, 

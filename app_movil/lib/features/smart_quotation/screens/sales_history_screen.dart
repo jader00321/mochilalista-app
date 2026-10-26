@@ -53,6 +53,8 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
         _currentTabIndex = _tabController.index;
         final tabs = ['todas', 'smart_quotation', 'pos_rapido', 'archivadas'];
         Provider.of<SaleProvider>(context, listen: false).setTab(tabs[_currentTabIndex]);
+        _lastToggleTime = DateTime.now();
+        _accumulatedDelta = 0.0;
         if (!_showKpis || !_showFilters) {
           setState(() {
             _showKpis = true;
@@ -226,6 +228,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
   }
 
   DateTime _lastToggleTime = DateTime.fromMillisecondsSinceEpoch(0);
+  double _accumulatedDelta = 0.0;
 
   void _scrollToTop() {
     final activeController = _tabControllers[_tabController.index];
@@ -233,6 +236,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
       activeController.animateTo(0, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
     }
     _lastToggleTime = DateTime.now();
+    _accumulatedDelta = 0.0;
     setState(() {
       _showKpis = true;
       _showFilters = true;
@@ -241,56 +245,75 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
   }
 
   bool _onScrollNotification(ScrollNotification notification) {
-    if (notification.metrics.axis == Axis.vertical) {
-      final currentOffset = notification.metrics.pixels;
-      final maxScroll = notification.metrics.maxScrollExtent;
-      final now = DateTime.now();
-      final elapsedSinceToggle = now.difference(_lastToggleTime).inMilliseconds;
+    // 🛡️ Filtro estricto de eje vertical: ignorar cualquier desplazamiento horizontal
+    if (notification.metrics.axis != Axis.vertical) return false;
 
-      // 1. Regla del Tope Superior: Si estamos en el tope (pixels <= 15), forzar siempre expansión
-      if (currentOffset <= 15) {
-        if (!_showKpis || !_showFilters) {
-          _lastToggleTime = now;
-          setState(() {
-            _showKpis = true;
-            _showFilters = true;
-          });
+    final currentOffset = notification.metrics.pixels;
+    final maxScroll = notification.metrics.maxScrollExtent;
+    final now = DateTime.now();
+    final elapsedSinceToggle = now.difference(_lastToggleTime).inMilliseconds;
+
+    // 1. Regla del Tope Real: Si estamos en el tope absoluto (currentOffset <= 5), forzar siempre expansión
+    if (currentOffset <= 5) {
+      if (!_showKpis || !_showFilters) {
+        _lastToggleTime = now;
+        _accumulatedDelta = 0.0;
+        setState(() {
+          _showKpis = true;
+          _showFilters = true;
+        });
+      }
+    } else if (elapsedSinceToggle > 350) {
+      // Cooldown de 350ms para ignorar desplazamientos del motor de renderizado durante AnimatedSize
+      if (notification is ScrollUpdateNotification) {
+        final delta = notification.scrollDelta ?? 0.0;
+
+        // Reiniciar acumulador si el usuario cambia de dirección
+        if ((delta > 0 && _accumulatedDelta < 0) || (delta < 0 && _accumulatedDelta > 0)) {
+          _accumulatedDelta = 0.0;
         }
-      } else if (elapsedSinceToggle > 280) {
-        // Cooldown de 280ms para evitar rebotes (jitter) durante AnimatedSize
-        if (notification is ScrollUpdateNotification) {
-          final delta = notification.scrollDelta ?? 0.0;
-          if (delta > 8 && currentOffset > 60) {
-            // Scroll hacia abajo: ocultar suavemente si la lista tiene recorrido
-            if ((_showKpis || _showFilters) && maxScroll > 80) {
-              _lastToggleTime = now;
-              setState(() {
-                _showKpis = false;
-                _showFilters = false;
-              });
-            }
-          } else if (delta < -8) {
-            // Scroll hacia arriba: reaparecen los filtros de inmediato
-            if (!_showFilters) {
-              _lastToggleTime = now;
-              setState(() {
-                _showFilters = true;
-              });
-            }
-            if (currentOffset < 45 && !_showKpis) {
-              _lastToggleTime = now;
-              setState(() {
-                _showKpis = true;
-              });
-            }
+        _accumulatedDelta += delta;
+
+        // Caso A: Scroll hacia abajo (ocultar)
+        if (_accumulatedDelta > 15 && currentOffset > 60) {
+          // Guarda dinámica: solo colapsar si hay suficiente recorrido para no rebotar
+          if ((_showKpis || _showFilters) && maxScroll > 220) {
+            _lastToggleTime = now;
+            _accumulatedDelta = 0.0;
+            setState(() {
+              _showKpis = false;
+              _showFilters = false;
+            });
+          }
+        } 
+        // Caso B: Scroll hacia arriba (reaparecer)
+        // Cero aperturas por rebote: Requiere arrastre activo del usuario (dragDetails != null)
+        // y no encontrarse en zona de rebote inferior
+        else if (_accumulatedDelta < -24 && 
+                 notification.dragDetails != null && 
+                 currentOffset < maxScroll - 25 && 
+                 !notification.metrics.outOfRange) {
+          if (!_showFilters) {
+            _lastToggleTime = now;
+            _accumulatedDelta = 0.0;
+            setState(() {
+              _showFilters = true;
+            });
+          }
+          if (currentOffset < 45 && !_showKpis) {
+            _lastToggleTime = now;
+            _accumulatedDelta = 0.0;
+            setState(() {
+              _showKpis = true;
+            });
           }
         }
       }
+    }
 
-      final shouldShowTop = currentOffset > 150;
-      if (shouldShowTop != _showBackToTop) {
-        setState(() => _showBackToTop = shouldShowTop);
-      }
+    final shouldShowTop = currentOffset > 150;
+    if (shouldShowTop != _showBackToTop) {
+      setState(() => _showBackToTop = shouldShowTop);
     }
     return false;
   }

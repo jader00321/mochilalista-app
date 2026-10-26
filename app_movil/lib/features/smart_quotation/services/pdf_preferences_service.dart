@@ -15,8 +15,12 @@ class PdfPreferencesService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final Map<String, dynamic> data = config.toJson();
-      // Omitimos customClientName para no contaminar nuevos documentos con nombres de clientes pasados
+      // Omitimos datos efímeros por documento para no contaminar nuevos documentos
       data.remove('customClientName');
+      data.remove('customInstitutionName');
+      data.remove('customGradeLevel');
+      data.remove('customNotes');
+      data.remove('customPaymentInfo');
       await prefs.setString(_prefKey, jsonEncode(data));
       return true;
     } catch (e) {

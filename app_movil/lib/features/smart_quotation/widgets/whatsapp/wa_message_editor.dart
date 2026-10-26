@@ -67,18 +67,25 @@ class WaMessageEditor extends StatelessWidget {
     onChanged(messageCtrl.text);
   }
 
-  void _insertSnippet(String snippet) {
+  void _toggleSnippet({
+    required bool isPresent,
+    required String snippetToInsert,
+    required Pattern patternToRemove,
+  }) {
     onBeforeChange?.call();
-    final text = messageCtrl.text;
-    final selection = messageCtrl.selection;
-    if (selection.isValid && selection.start >= 0) {
-      final newText = text.replaceRange(selection.start, selection.end, snippet);
-      messageCtrl.value = TextEditingValue(
-        text: newText,
-        selection: TextSelection.collapsed(offset: selection.start + snippet.length),
-      );
+    String text = messageCtrl.text;
+    if (isPresent) {
+      text = text.replaceAll(patternToRemove, '');
+      text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+      messageCtrl.text = text;
+      messageCtrl.selection = TextSelection.collapsed(offset: messageCtrl.text.length);
     } else {
-      messageCtrl.text = "$text\n$snippet";
+      if (text.trim().isEmpty) {
+        text = snippetToInsert;
+      } else {
+        text = "${text.trim()}\n\n$snippetToInsert";
+      }
+      messageCtrl.text = text;
       messageCtrl.selection = TextSelection.collapsed(offset: messageCtrl.text.length);
     }
     onChanged(messageCtrl.text);
@@ -87,6 +94,12 @@ class WaMessageEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textColor = isDark ? Colors.white : Colors.black87;
+    final currentText = messageCtrl.text;
+    final bool hasValidity = currentText.contains(RegExp(r'validez|días calendario|promoción por tiempo limitado', caseSensitive: false));
+    final bool hasDelivery = currentText.contains(RegExp(r'entrega|envíos|estado del pedido', caseSensitive: false));
+    final bool hasAccounts = currentText.contains(RegExp(r'MEDIOS DE PAGO|CUENTAS DE ABONO|Medios de Pago|Cuentas de Abono', caseSensitive: false));
+    final bool hasGreeting = currentText.contains(RegExp(r'¡Hola|Estimad|Buen día|Buenos días', caseSensitive: false));
+    final bool hasThanks = currentText.contains(RegExp(r'¡Muchas gracias|Muchas gracias|Gracias por su preferencia|Gracias por tu preferencia|¡Gracias!', caseSensitive: false));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,6 +149,23 @@ class WaMessageEditor extends StatelessWidget {
             final styles = WhatsAppMessageStyle.values;
             const Color activeColor = Color(0xFF00A884);
 
+            String getStylePreview(WhatsAppMessageStyle style) {
+              switch (style) {
+                case WhatsAppMessageStyle.commercial:
+                  return "📄 *COTIZACIÓN FORMAL*\n• 2x Cuaderno A4: S/ 12.00\n💰 *TOTAL A PAGAR: S/ 12.00*\n💳 *Medios de pago:* Yape / BCP";
+                case WhatsAppMessageStyle.compact:
+                  return "⚡ *RESUMEN DIRECTO:* 2 productos | Total a pagar: *S/ 12.00*";
+                case WhatsAppMessageStyle.urgentOffer:
+                  return "🔥 *¡CIERRE DE OFERTA!*\n🎉 *¡Ahorro Total: S/ 18.00!*\n⏳ Válido por 7 días calendario.";
+                case WhatsAppMessageStyle.accountDebt:
+                  return "🔔 *ESTADO DE CUENTA*\n💵 Abonado: S/ 50.00\n⚠️ *Saldo Pendiente: S/ 30.00*";
+                case WhatsAppMessageStyle.followUp:
+                  return "🤝 ¡Hola! ¿Pudiste revisar la cotización que te enviamos? Con gusto ajustamos lo que necesites.";
+                case WhatsAppMessageStyle.deliveryReady:
+                  return "📦 *PEDIDO LISTO:* Tu pedido está empaquetado y listo para despacho o retiro en tienda.";
+              }
+            }
+
             Widget buildStyleCard(WhatsAppMessageStyle style) {
               final isSelected = config.style == style;
               return GestureDetector(
@@ -144,6 +174,7 @@ class WaMessageEditor extends StatelessWidget {
                     context,
                     title: style.label,
                     description: style.description,
+                    exampleSnippet: getStylePreview(style),
                     icon: Icons.auto_awesome,
                   );
                 },
@@ -342,47 +373,72 @@ class WaMessageEditor extends StatelessWidget {
                   // 1. Validez 7 días
                   _buildSnippetChip(
                     context: context,
-                    label: "+ ⏳ Validez 7 días",
-                    snippetDescription: "Inserta cláusula formal de validez por 7 días de la oferta.",
+                    label: hasValidity ? "Validez 7 días" : "+ ⏳ Validez 7 días",
+                    isSelected: hasValidity,
+                    snippetDescription: "Inserta o elimina cláusula formal de validez por 7 días de la oferta.",
                     isDark: isDark,
-                    onTap: () => _insertSnippet("⏳ *Validez de la oferta:* 7 días calendario a partir de hoy."),
+                    onTap: () => _toggleSnippet(
+                      isPresent: hasValidity,
+                      snippetToInsert: "⏳ *Validez de la oferta:* 7 días calendario a partir de hoy.",
+                      patternToRemove: RegExp(r'⏳\s*\*?(Validez[^\n]*|Promoción por tiempo limitado[^\n]*)\*?\n?([^\n]*días calendario[^\n]*\n*)?', caseSensitive: false),
+                    ),
                   ),
                   // 2. Envío / Entrega
                   _buildSnippetChip(
                     context: context,
-                    label: "+ 🚚 Envío / Entrega",
-                    snippetDescription: "Agrega nota de coordinación para entrega a domicilio o retiro.",
+                    label: hasDelivery ? "Envío / Entrega" : "+ 🚚 Envío / Entrega",
+                    isSelected: hasDelivery,
+                    snippetDescription: "Agrega o quita nota de coordinación para entrega a domicilio o retiro.",
                     isDark: isDark,
-                    onTap: () => _insertSnippet("🚚 *Entrega:* Coordinamos envíos a domicilio o recojo directo en tienda."),
+                    onTap: () => _toggleSnippet(
+                      isPresent: hasDelivery,
+                      snippetToInsert: "🚚 *Entrega:* Coordinamos envíos a domicilio o recojo directo en tienda.",
+                      patternToRemove: RegExp(r'(🚚|📦)\s*\*?(Entrega|ESTADO DEL PEDIDO|Envíos)[^\n]*\*?\n?([\s\S]*?)(?=(\n\s*\n|⏳|💳|🤝|🙏|$))', caseSensitive: false),
+                    ),
                   ),
                   // 3. Mis Cuentas
                   _buildSnippetChip(
                     context: context,
-                    label: "+ 💳 Mis Cuentas",
-                    snippetDescription: "Inserta tus cuentas bancarias y números de Yape/Plin configurados.",
+                    label: hasAccounts ? "Mis Cuentas" : "+ 💳 Mis Cuentas",
+                    isSelected: hasAccounts,
+                    snippetDescription: "Inserta o elimina tus cuentas bancarias y números de pago configurados.",
                     isDark: isDark,
                     onTap: () {
                       final acc = paymentAccountsText != null && paymentAccountsText!.trim().isNotEmpty
                           ? paymentAccountsText!.trim()
                           : "📱 Yape / Plin / Transferencia bancaria disponible al solicitar.";
-                      _insertSnippet("💳 *Medios de Pago:*\n$acc");
+                      _toggleSnippet(
+                        isPresent: hasAccounts,
+                        snippetToInsert: "💳 *Medios de Pago:*\n$acc",
+                        patternToRemove: RegExp(r'💳\s*\*?(MEDIOS DE PAGO|CUENTAS DE ABONO|Medios de Pago|Cuentas de Abono)[^\n]*\*?\n?([\s\S]*?)(?=(\n\s*\n|📦|🚚|⏳|🤝|🙏|$))', caseSensitive: false),
+                      );
                     },
                   ),
                   // 4. Saludo
                   _buildSnippetChip(
                     context: context,
-                    label: "+ 👋 Saludo",
-                    snippetDescription: "Inserta saludo comercial cordial al inicio del mensaje.",
+                    label: hasGreeting ? "Saludo" : "+ 👋 Saludo",
+                    isSelected: hasGreeting,
+                    snippetDescription: "Inserta o elimina saludo comercial cordial al inicio del mensaje.",
                     isDark: isDark,
-                    onTap: () => _insertSnippet("👋 ¡Hola! Te comparto la información detallada:"),
+                    onTap: () => _toggleSnippet(
+                      isPresent: hasGreeting,
+                      snippetToInsert: "👋 ¡Hola! Te comparto la información detallada:",
+                      patternToRemove: RegExp(r'👋\s*\*?¡?Hola[^\n]*\*?\n?|Estimad[^\n]*\n?|Buenos? días[^\n]*\n?', caseSensitive: false),
+                    ),
                   ),
                   // 5. Agradecimiento
                   _buildSnippetChip(
                     context: context,
-                    label: "+ 🙏 Agradecimiento",
-                    snippetDescription: "Inserta frase de agradecimiento y confianza profesional.",
+                    label: hasThanks ? "Agradecimiento" : "+ 🙏 Agradecimiento",
+                    isSelected: hasThanks,
+                    snippetDescription: "Inserta o retira frase de agradecimiento y confianza profesional.",
                     isDark: isDark,
-                    onTap: () => _insertSnippet("🙏 ¡Muchas gracias por tu preferencia y confianza!"),
+                    onTap: () => _toggleSnippet(
+                      isPresent: hasThanks,
+                      snippetToInsert: "🙏 ¡Muchas gracias por tu preferencia y confianza!",
+                      patternToRemove: RegExp(r'(🤝|🙏)\s*\*?¡?Gracias[^\n]*\*?\n?', caseSensitive: false),
+                    ),
                   ),
                 ],
               ),
@@ -528,12 +584,16 @@ class WaMessageEditor extends StatelessWidget {
   Widget _buildSnippetChip({
     required BuildContext context,
     required String label,
+    required bool isSelected,
     required String snippetDescription,
     required bool isDark,
     required VoidCallback onTap,
   }) {
+    final Color activeColor = const Color(0xFF00A884);
     return Material(
-      color: isDark ? const Color(0xFF252535) : Colors.white,
+      color: isSelected
+          ? (isDark ? activeColor.withValues(alpha: 0.22) : activeColor.withValues(alpha: 0.12))
+          : (isDark ? const Color(0xFF252535) : Colors.white),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,
@@ -546,19 +606,34 @@ class WaMessageEditor extends StatelessWidget {
           );
         },
         borderRadius: BorderRadius.circular(8),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.grey[300] : Colors.grey[800],
+            border: Border.all(
+              color: isSelected ? activeColor : (isDark ? Colors.white10 : Colors.grey.shade300),
+              width: isSelected ? 1.5 : 1.0,
             ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isSelected) ...[
+                const Icon(Icons.check, size: 12, color: Color(0xFF00A884)),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: isSelected
+                      ? (isDark ? const Color(0xFF25D366) : const Color(0xFF007A5E))
+                      : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                ),
+              ),
+            ],
           ),
         ),
       ),

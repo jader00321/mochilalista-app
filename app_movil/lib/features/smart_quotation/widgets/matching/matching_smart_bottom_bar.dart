@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 /// 🏆 MatchingSmartBottomBar (Mobile Awards Standard)
 /// Barra inferior fija para la Conciliación IA / Cotización Inteligente.
@@ -62,7 +63,7 @@ class MatchingSmartBottomBar extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 2),
                       child: Text(
-                        "Ahorro: S/ ${provider.totalSavingsAmount.toStringAsFixed(2)}",
+                        "Ahorro: ${AppCurrency.format(provider.totalSavingsAmount)}",
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -93,7 +94,7 @@ class MatchingSmartBottomBar extends StatelessWidget {
                             ),
                           )
                         : Text(
-                            "S/ ${provider.totalNetAmount.toStringAsFixed(2)}",
+                            AppCurrency.format(provider.totalNetAmount),
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w900,

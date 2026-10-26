@@ -24,6 +24,7 @@ import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_detail_
 import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_evidence_panel.dart';       
 import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_item_list_row.dart';        
 import 'package:app_movil/features/smart_quotation/widgets/detalle/quotation_action_buttons.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
 
 
 class QuotationDetailScreen extends StatefulWidget {
@@ -502,16 +503,36 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: "Nombre o Cliente",
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.restore_outlined),
+              tooltip: "Restaurar nombre automático",
+              onPressed: () {
+                controller.text = QuotationNamingEngine.generateTitle(
+                  typedClientName: _fullQuotation?.clientName,
+                  schoolName: _fullQuotation?.institutionName,
+                  gradeLevel: _fullQuotation?.gradeLevel,
+                  quotationType: _fullQuotation?.type ?? 'manual',
+                );
+              },
+            ),
           ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
           ElevatedButton(
             onPressed: () async {
-              final newName = controller.text.trim();
+              String newName = controller.text.trim();
+              if (newName.isEmpty) {
+                newName = QuotationNamingEngine.generateTitle(
+                  typedClientName: _fullQuotation?.clientName,
+                  schoolName: _fullQuotation?.institutionName,
+                  gradeLevel: _fullQuotation?.gradeLevel,
+                  quotationType: _fullQuotation?.type ?? 'manual',
+                );
+              }
               if (newName.isNotEmpty) {
                 Navigator.pop(ctx);
                 final workbenchProv = Provider.of<WorkbenchProvider>(context, listen: false);

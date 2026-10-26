@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart'; 
 import 'package:workmanager/workmanager.dart';
@@ -92,6 +94,7 @@ void callbackDispatcher() {
 void main() async { 
   WidgetsFlutterBinding.ensureInitialized(); 
   await dotenv.load(fileName: ".env"); 
+  await initializeDateFormatting('es', null);
 
   // 🔥 INICIALIZAR WORKMANAGER
   // La tarea solo se registra mediante el BackupProvider cuando el usuario activa la opción
@@ -192,6 +195,16 @@ class MochilaListaApp extends StatelessWidget {
             title: 'MochilaLista',
             debugShowCheckedModeBanner: false,
             themeMode: themeProvider.themeMode, 
+            locale: const Locale('es', 'ES'),
+            supportedLocales: const [
+              Locale('es', 'ES'),
+              Locale('en', 'US'),
+            ],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ], 
             
             theme: ThemeData(
               brightness: Brightness.light,

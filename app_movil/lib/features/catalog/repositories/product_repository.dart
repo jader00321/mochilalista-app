@@ -2,6 +2,7 @@ import 'package:app_movil/core/database/local_db.dart';
 
 import 'package:app_movil/core/database/product_queries.dart';
 import 'package:app_movil/core/utils/app_logger.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/scanner/services/spanish_lemmatizer.dart';
 
 class ProductRepository {
@@ -117,8 +118,18 @@ class ProductRepository {
           queryParams['sortDir']?.toString().toUpperCase() == 'DESC'
           ? 'DESC'
           : 'ASC';
+      String sortBy = queryParams['sortBy']?.toString().toLowerCase() ?? '';
       String orderClause;
-      if (queryParams['q'] != null && queryParams['q'].toString().trim().isNotEmpty) {
+
+      if (sortBy == 'recent') {
+        orderClause = "ORDER BY pr.id DESC, p.id DESC";
+      } else if (sortBy == 'oldest') {
+        orderClause = "ORDER BY pr.id ASC, p.id ASC";
+      } else if (sortBy == 'price') {
+        orderClause = "ORDER BY IFNULL(pr.precio_oferta, pr.precio_venta_final) $sortDir, LOWER(p.nombre) ASC";
+      } else if (sortBy == 'name') {
+        orderClause = "ORDER BY LOWER(p.nombre) $sortDir";
+      } else if (queryParams['q'] != null && queryParams['q'].toString().trim().isNotEmpty) {
         orderClause = "ORDER BY LOWER(p.nombre) $sortDir";
       } else {
         orderClause = "ORDER BY pr.id DESC";
@@ -430,7 +441,72 @@ class ProductRepository {
 
   Future<int> insertPresentation(Map<String, dynamic> data) async {
     final db = await _dbHelper.database;
-    return await db.insert('presentaciones_producto', data);
+    int presId = await db.insert('presentaciones_producto', data);
+
+    int stock = (data['stock_actual'] as num?)?.toInt() ?? 0;
+    if (stock > 0) {
+      int prodId = (data['producto_id'] as num?)?.toInt() ?? 0;
+      int negocioId = 0;
+      if (prodId > 0) {
+        final pRows = await db.query(
+          'productos',
+          columns: ['negocio_id'],
+          where: 'id = ?',
+          whereArgs: [prodId],
+        );
+        if (pRows.isNotEmpty) {
+          negocioId = (pRows.first['negocio_id'] as num?)?.toInt() ?? 0;
+        }
+      }
+
+      await db.insert('stock_ledger', {
+        'presentation_id': presId,
+        'negocio_id': negocioId,
+        'tipo_transaccion': 'INVENTARIO_INICIAL',
+        'cantidad': stock,
+        'costo_unitario': (data['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0,
+        'precio_venta': (data['precio_venta_final'] as num?)?.toDouble() ?? 0.0,
+        'fecha_registro': DateTime.now().toIso8601String(),
+      });
+    }
+
+    // Registrar descuento inicial si la presentación nace con oferta activa
+    await _recordInitialDiscountTxn(db, presId, data);
+
+    return presId;
+  }
+
+  Future<void> _recordInitialDiscountTxn(
+    dynamic txnOrDb,
+    int presentationId,
+    Map<String, dynamic> data,
+  ) async {
+    final double price = (data['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
+    final double? offer = (data['precio_oferta'] as num?)?.toDouble();
+    final String? type = data['tipo_descuento']?.toString();
+    final double val = (data['valor_descuento'] as num?)?.toDouble() ?? 0.0;
+
+    final bool hasOffer = offer != null && offer > 0 && offer < price;
+    if (hasOffer) {
+      String presTag = (data['nombre_especifico'] != null &&
+              data['nombre_especifico'].toString().trim().isNotEmpty &&
+              data['nombre_especifico'].toString().trim() != 'Unidad')
+          ? ' (${data['nombre_especifico'].toString().trim()})'
+          : '';
+
+      String valNuevo = (type == 'porcentaje')
+          ? 'Oferta activada$presTag: ${val.toStringAsFixed(val.truncateToDouble() == val ? 0 : 1)}% OFF → Precio Oferta: ${AppCurrency.format(offer)}'
+          : 'Oferta activada$presTag: -${AppCurrency.format(val)} OFF → Precio Oferta: ${AppCurrency.format(offer)}';
+
+      await txnOrDb.insert('product_history', {
+        'entidad_tipo': 'PRESENTACION',
+        'entidad_id': presentationId,
+        'campo_modificado': 'descuento',
+        'valor_anterior': 'Sin descuento',
+        'valor_nuevo': valNuevo,
+        'fecha_cambio': DateTime.now().toIso8601String(),
+      });
+    }
   }
 
   Future<int> updatePresentation(int id, Map<String, dynamic> data) async {
@@ -507,12 +583,113 @@ class ProductRepository {
         String oldVal = old[field]?.toString() ?? '';
         String newVal = data[field]?.toString() ?? '';
         if (oldVal != newVal) {
+          // Si es campo monetario, ignorar diferencias despreciables por coma flotante
+          if (field == 'precio_venta_final' || field == 'costo_unitario_calculado') {
+            double oldNum = double.tryParse(oldVal) ?? 0.0;
+            double newNum = double.tryParse(newVal) ?? 0.0;
+            if ((newNum - oldNum).abs() < 0.005) {
+              continue;
+            }
+          }
+
           await txn.insert('product_history', {
             'entidad_tipo': 'PRESENTACION',
             'entidad_id': id,
             'campo_modificado': field,
             'valor_anterior': oldVal,
             'valor_nuevo': newVal,
+            'fecha_cambio': DateTime.now().toIso8601String(),
+          });
+        }
+      }
+    }
+
+    // Interceptar cambios en Descuentos y Promociones para product_history (REGLA TÉCNICA 1)
+    final bool hasDiscountKey = data.containsKey('precio_oferta') ||
+        data.containsKey('tipo_descuento') ||
+        data.containsKey('valor_descuento');
+
+    if (hasDiscountKey) {
+      double oldPrice = (old['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
+      double? oldOffer = (old['precio_oferta'] as num?)?.toDouble();
+      String? oldType = old['tipo_descuento']?.toString();
+      double oldVal = (old['valor_descuento'] as num?)?.toDouble() ?? 0.0;
+      bool oldHasOffer = oldOffer != null && oldOffer > 0 && oldOffer < oldPrice;
+
+      double newPrice = data.containsKey('precio_venta_final')
+          ? ((data['precio_venta_final'] as num?)?.toDouble() ?? oldPrice)
+          : oldPrice;
+      double? newOffer = data.containsKey('precio_oferta')
+          ? (data['precio_oferta'] == null
+              ? null
+              : (data['precio_oferta'] as num?)?.toDouble())
+          : oldOffer;
+      String? newType = data.containsKey('tipo_descuento')
+          ? data['tipo_descuento']?.toString()
+          : oldType;
+      double newVal = data.containsKey('valor_descuento')
+          ? ((data['valor_descuento'] as num?)?.toDouble() ?? 0.0)
+          : oldVal;
+      bool newHasOffer = newOffer != null && newOffer > 0 && newOffer < newPrice;
+
+      String presTag = (old['nombre_especifico'] != null &&
+              old['nombre_especifico'].toString().trim().isNotEmpty &&
+              old['nombre_especifico'].toString().trim() != 'Unidad')
+          ? ' (${old['nombre_especifico'].toString().trim()})'
+          : '';
+
+      String formatOfferLabel(String? type, double val, double offer) {
+        if (type == 'porcentaje') {
+          String pctStr = val.toStringAsFixed(val.truncateToDouble() == val ? 0 : 1);
+          return '$pctStr% OFF$presTag (${AppCurrency.format(offer)})';
+        } else {
+          return '-${AppCurrency.format(val)} OFF$presTag (${AppCurrency.format(offer)})';
+        }
+      }
+
+      if (!oldHasOffer && newHasOffer) {
+        // 1. DESCUENTO_ACTIVADO
+        String valNuevo = (newType == 'porcentaje')
+            ? 'Oferta activada$presTag: ${newVal.toStringAsFixed(newVal.truncateToDouble() == newVal ? 0 : 1)}% OFF → Precio Oferta: ${AppCurrency.format(newOffer)}'
+            : 'Oferta activada$presTag: -${AppCurrency.format(newVal)} OFF → Precio Oferta: ${AppCurrency.format(newOffer)}';
+
+        await txn.insert('product_history', {
+          'entidad_tipo': 'PRESENTACION',
+          'entidad_id': id,
+          'campo_modificado': 'descuento',
+          'valor_anterior': 'Sin descuento',
+          'valor_nuevo': valNuevo,
+          'fecha_cambio': DateTime.now().toIso8601String(),
+        });
+      } else if (oldHasOffer && !newHasOffer) {
+        // 2. DESCUENTO_ELIMINADO
+        String valAnt = formatOfferLabel(oldType, oldVal, oldOffer);
+        String valNuevo = 'Oferta finalizada$presTag → Regresa a precio normal: ${AppCurrency.format(newPrice)}';
+
+        await txn.insert('product_history', {
+          'entidad_tipo': 'PRESENTACION',
+          'entidad_id': id,
+          'campo_modificado': 'descuento',
+          'valor_anterior': valAnt,
+          'valor_nuevo': valNuevo,
+          'fecha_cambio': DateTime.now().toIso8601String(),
+        });
+      } else if (oldHasOffer && newHasOffer) {
+        // 3. DESCUENTO_MODIFICADO
+        bool diffOffer = (oldOffer - newOffer).abs() > 0.005;
+        bool diffType = oldType != newType;
+        bool diffVal = (oldVal - newVal).abs() > 0.005;
+
+        if (diffOffer || diffType || diffVal) {
+          String valAnt = formatOfferLabel(oldType, oldVal, oldOffer);
+          String valNuevo = formatOfferLabel(newType, newVal, newOffer);
+
+          await txn.insert('product_history', {
+            'entidad_tipo': 'PRESENTACION',
+            'entidad_id': id,
+            'campo_modificado': 'descuento',
+            'valor_anterior': valAnt,
+            'valor_nuevo': valNuevo,
             'fecha_cambio': DateTime.now().toIso8601String(),
           });
         }
@@ -717,8 +894,27 @@ class ProductRepository {
         }
         pres.remove('id');
         pres.remove('db_id');
+        int stock = (pres['stock_actual'] as num?)?.toInt() ?? 0;
+        double cost = (pres['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
+        double price = (pres['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
+        final presCopy = Map<String, dynamic>.from(pres);
         pres.removeWhere((key, _) => !_kPresentacionColumns.contains(key));
-        await txn.insert('presentaciones_producto', pres);
+        int newPresId = await txn.insert('presentaciones_producto', pres);
+
+        if (stock > 0) {
+          await txn.insert('stock_ledger', {
+            'presentation_id': newPresId,
+            'negocio_id': negocioId,
+            'tipo_transaccion': 'INVENTARIO_INICIAL',
+            'cantidad': stock,
+            'costo_unitario': cost,
+            'precio_venta': price,
+            'fecha_registro': DateTime.now().toIso8601String(),
+          });
+        }
+
+        // Registrar descuento inicial si nace con oferta activa
+        await _recordInitialDiscountTxn(txn, newPresId, presCopy);
       }
     });
   }
@@ -920,8 +1116,27 @@ class ProductRepository {
         pres['producto_id'] = productId;
         pres.remove('id');
         pres.remove('db_id');
+        int stock = (pres['stock_actual'] as num?)?.toInt() ?? 0;
+        double cost = (pres['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
+        double price = (pres['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
+        final presCopy = Map<String, dynamic>.from(pres);
         pres.removeWhere((key, _) => !_kPresentacionColumns.contains(key));
-        await txn.insert('presentaciones_producto', pres);
+        int newPresId = await txn.insert('presentaciones_producto', pres);
+
+        if (stock > 0) {
+          await txn.insert('stock_ledger', {
+            'presentation_id': newPresId,
+            'negocio_id': negocioId,
+            'tipo_transaccion': 'INVENTARIO_INICIAL',
+            'cantidad': stock,
+            'costo_unitario': cost,
+            'precio_venta': price,
+            'fecha_registro': DateTime.now().toIso8601String(),
+          });
+        }
+
+        // Registrar descuento inicial si nace con oferta activa
+        await _recordInitialDiscountTxn(txn, newPresId, presCopy);
       }
     });
   }

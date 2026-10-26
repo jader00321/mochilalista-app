@@ -7,6 +7,7 @@ import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart'; 
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
 
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
@@ -304,6 +305,19 @@ class QuickActionsBottomSheet extends StatelessWidget {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 filled: true,
                 fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.restore_outlined),
+                  color: isDark ? Colors.amber[300] : Colors.orange[800],
+                  tooltip: "Restaurar nombre automático",
+                  onPressed: isSaving ? null : () {
+                    textCtrl.text = QuotationNamingEngine.generateTitle(
+                      typedClientName: quotation.clientName,
+                      schoolName: quotation.institutionName,
+                      gradeLevel: quotation.gradeLevel,
+                      quotationType: quotation.type,
+                    );
+                  },
+                ),
               ),
               autofocus: true,
               textCapitalization: TextCapitalization.words,
@@ -318,7 +332,15 @@ class QuickActionsBottomSheet extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
                 ),
                 onPressed: isSaving ? null : () async {
-                  final newName = textCtrl.text.trim();
+                  String newName = textCtrl.text.trim();
+                  if (newName.isEmpty) {
+                    newName = QuotationNamingEngine.generateTitle(
+                      typedClientName: quotation.clientName,
+                      schoolName: quotation.institutionName,
+                      gradeLevel: quotation.gradeLevel,
+                      quotationType: quotation.type,
+                    );
+                  }
                   if (newName.isNotEmpty && newName != quotation.clientName) {
                     setStateModal(() => isSaving = true);
                     

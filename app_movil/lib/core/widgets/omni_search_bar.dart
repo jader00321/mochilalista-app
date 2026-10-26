@@ -135,9 +135,14 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
       _loadDatabaseCounts();
       _loadRecentDefaults();
+      // ⏱️ Coordinación de foco para entrada limpia y continua sin doble salto
+      Future.delayed(const Duration(milliseconds: 220), () {
+        if (mounted) {
+          _focusNode.requestFocus();
+        }
+      });
     });
   }
 
@@ -800,7 +805,8 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
     return InteractiveSheetWrapper(
       title: "Búsqueda Omnicanal Local",
       maxHeightFactor: 0.92,
-      applyEffectiveBottomPadding: true,
+      maintainFixedHeightOnKeyboard: true,
+      applyEffectiveBottomPadding: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -817,7 +823,7 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
             child: TextField(
               controller: _searchCtrl,
               focusNode: _focusNode,
-              autofocus: true,
+              autofocus: false,
               style: TextStyle(
                 color: isDark ? Colors.white : Colors.black87,
                 fontSize: 16,
@@ -1011,11 +1017,14 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
                           ),
                         ),
                       )
-                    : ListView.builder(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.only(bottom: 24),
-                        itemCount: listItems.length,
-                        itemBuilder: (context, index) {
+                    : Builder(
+                        builder: (ctx) {
+                          final bottomKeyboardInset = MediaQuery.viewInsetsOf(ctx).bottom;
+                          return ListView.builder(
+                            physics: const BouncingScrollPhysics(),
+                            padding: EdgeInsets.only(bottom: bottomKeyboardInset + 24),
+                            itemCount: listItems.length,
+                            itemBuilder: (context, index) {
                           final item = listItems[index];
                           if (item is _HeaderItem) {
                             return _buildSectionHeader(item.title, item.count, isDark);
@@ -1037,7 +1046,9 @@ class _OmniSearchSheetState extends State<_OmniSearchSheet> {
                           }
                           return const SizedBox.shrink();
                         },
-                      ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

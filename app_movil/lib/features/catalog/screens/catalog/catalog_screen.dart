@@ -32,6 +32,8 @@ import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dar
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
 import 'package:app_movil/features/catalog/screens/catalog/widgets/catalog_filter_header.dart';
 
+import 'package:app_movil/features/catalog/screens/catalog/widgets/catalog_sort_modal.dart';
+
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
 
@@ -48,10 +50,16 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
   bool _isOffersExpanded = false;
   bool _isStoreMode = false;
 
+  // 🛡️ MOTOR DE SCROLL ANTI-REBOTE (Mobile Awards Quality)
+  bool _showRetractableSections = true;
+  bool _showBottomCart = true;
+  DateTime _lastToggleTime = DateTime.now();
+  double _accumulatedDelta = 0.0;
+  int _lastItemCount = 0;
+
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _silentRefreshIfNeeded();
     });
@@ -74,16 +82,76 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
     }
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+
+    final currentOffset = notification.metrics.pixels;
+    final maxScroll = notification.metrics.maxScrollExtent;
+    final now = DateTime.now();
+    final elapsedSinceToggle = now.difference(_lastToggleTime).inMilliseconds;
+
+    // 1. Regla del Tope Real: Si estamos en el tope absoluto (currentOffset <= 5), forzar siempre expansión
+    if (currentOffset <= 5) {
+      if (!_showRetractableSections || !_showBottomCart) {
+        _lastToggleTime = now;
+        _accumulatedDelta = 0.0;
+        setState(() {
+          _showRetractableSections = true;
+          _showBottomCart = true;
+        });
+      }
+    } else if (elapsedSinceToggle > 350) {
+      if (notification is ScrollUpdateNotification) {
+        final delta = notification.scrollDelta ?? 0.0;
+
+        // Reiniciar acumulador si el usuario cambia de dirección
+        if ((delta > 0 && _accumulatedDelta < 0) || (delta < 0 && _accumulatedDelta > 0)) {
+          _accumulatedDelta = 0.0;
+        }
+        _accumulatedDelta += delta;
+
+        // Caso A: Scroll hacia abajo (ocultar secciones retráctiles y barra inferior)
+        if (_accumulatedDelta > 15 && currentOffset > 60) {
+          if ((_showRetractableSections || _showBottomCart) && maxScroll > 220) {
+            _lastToggleTime = now;
+            _accumulatedDelta = 0.0;
+            setState(() {
+              _showRetractableSections = false;
+              _showBottomCart = false;
+            });
+          }
+        }
+        // Caso B: Scroll hacia arriba (reaparecer)
+        // Cero aperturas por rebote: Requiere arrastre activo del usuario (dragDetails != null)
+        // y no encontrarse en zona de sobre-desplazamiento / rebote
+        else if (_accumulatedDelta < -24 &&
+                 notification.dragDetails != null &&
+                 currentOffset < maxScroll - 25 &&
+                 !notification.metrics.outOfRange) {
+          if (!_showRetractableSections || !_showBottomCart) {
+            _lastToggleTime = now;
+            _accumulatedDelta = 0.0;
+            setState(() {
+              _showRetractableSections = true;
+              _showBottomCart = true;
+            });
+          }
+        }
+      }
+    }
+
+    // Scroll-to-top button
+    final shouldShowTop = currentOffset > 300;
+    if (shouldShowTop != _showScrollToTop) {
+      setState(() => _showScrollToTop = shouldShowTop);
+    }
+
+    // Paginación infinita al acercarse al final
+    if (currentOffset >= maxScroll - 200) {
       Provider.of<CatalogProvider>(context, listen: false).loadMoreItems();
     }
-    if (_scrollController.offset > 300 && !_showScrollToTop) {
-      setState(() => _showScrollToTop = true);
-    } else if (_scrollController.offset <= 300 && _showScrollToTop) {
-      setState(() => _showScrollToTop = false);
-    }
+
+    return false;
   }
 
   void _scrollToTop() {
@@ -438,7 +506,10 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
           message: "Agregado al Carrito: ${targetWrapper.displayNameDetail}",
           isError: false,
         );
-        setState(() => _isBottomMenuExpanded = true);
+        setState(() {
+          _isBottomMenuExpanded = true;
+          _showBottomCart = true;
+        });
       },
       onAddToList: (qty, [selectedPres]) {
         final targetWrapper = (selectedPres != null)
@@ -453,7 +524,10 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
           message: "Agregado a tu Lista: ${targetWrapper.displayNameDetail}",
           backgroundColor: Colors.orange[800]!,
         );
-        setState(() => _isBottomMenuExpanded = true);
+        setState(() {
+          _isBottomMenuExpanded = true;
+          _showBottomCart = true;
+        });
       },
     );
   }
@@ -489,6 +563,47 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
     );
   }
 
+  Widget _buildStoreModeBanner(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.amber[900]!.withValues(alpha: 0.2)
+            : Colors.amber[50],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: Colors.amber.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.verified_user_outlined,
+            size: 18,
+            color: Colors.amber,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              "Modo Tienda: Costos y márgenes ocultos para atención directa al cliente.",
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: isDark
+                    ? Colors.amber[200]
+                    : Colors.amber[900],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -500,11 +615,156 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
     final auth = Provider.of<AuthProvider>(context);
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
+    final int currentTotalCount = provider.cartCount + provider.utilityCount;
+    if (currentTotalCount > _lastItemCount) {
+      _showBottomCart = true;
+    }
+    _lastItemCount = currentTotalCount;
+
     final bool canPop = Navigator.canPop(context);
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: bgColor,
+
+      appBar: AppBar(
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Catálogo de Ventas",
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w900,
+              color: textColor,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+        backgroundColor: isDark
+            ? const Color(0xFF14141C)
+            : Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        titleSpacing: canPop ? 4 : 16,
+        leading: canPop
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, size: 22),
+                onPressed: () => Navigator.pop(context),
+                color: isDark ? Colors.blue[300] : Colors.blue[800],
+                tooltip: "Volver",
+              )
+            : null,
+        actions: [
+          const InfoTooltipButton(
+            title: "Catálogo de Ventas",
+            description:
+                "Muestra todos tus productos con stock disponible, presentaciones, precios y ofertas en un formato visual para ventas rápidas.",
+            tips: [
+              InfoTip(
+                icon: Icons.touch_app_outlined,
+                text:
+                    "Toca un producto para abrir sus opciones y agregarlo al Carrito o a tu Lista.",
+              ),
+              InfoTip(
+                icon: Icons.filter_list_rounded,
+                text:
+                    "Usa el botón de filtros o las categorías para encontrar rápidamente lo que necesitas.",
+              ),
+              InfoTip(
+                icon: Icons.point_of_sale_rounded,
+                text:
+                    "Pasa los ítems de tu carrito directamente a Caja Rápida o Cotización Manual.",
+              ),
+            ],
+          ),
+          Tooltip(
+            message: _isStoreMode
+                ? "Desactivar Modo Tienda"
+                : "Activar Modo Tienda (Ocultar costos y datos privados)",
+            child: InkWell(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                setState(() => _isStoreMode = !_isStoreMode);
+                CustomSnackBar.show(
+                  context,
+                  message: _isStoreMode
+                      ? "Modo Tienda Activado: Listo para mostrar a clientes en mostrador"
+                      : "Modo Tienda Desactivado: Vista de comerciante",
+                  isError: false,
+                );
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                margin: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: _isStoreMode
+                      ? (isDark
+                          ? Colors.amber[900]!.withValues(alpha: 0.6)
+                          : Colors.amber[100])
+                      : (isDark ? Colors.white10 : Colors.grey[100]),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _isStoreMode
+                        ? Colors.amber
+                        : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _isStoreMode
+                          ? Icons.storefront
+                          : Icons.storefront_outlined,
+                      size: 20,
+                      color: _isStoreMode
+                          ? (isDark
+                              ? Colors.amber[300]
+                              : Colors.amber[900])
+                          : (isDark
+                              ? Colors.grey[400]
+                              : Colors.grey[700]),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Tienda",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: _isStoreMode
+                            ? (isDark
+                                ? Colors.amber[300]
+                                : Colors.amber[900])
+                            : (isDark
+                                ? Colors.grey[400]
+                                : Colors.grey[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.refresh,
+              color: isDark ? Colors.grey[400] : Colors.grey,
+              size: 26,
+            ),
+            onPressed: _onRefresh,
+          ),
+        ],
+      ),
 
       floatingActionButton: AnimatedScale(
         scale: _showScrollToTop ? 1.0 : 0.0,
@@ -525,206 +785,52 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
         onTap: () => FocusScope.of(context).unfocus(),
         behavior: HitTestBehavior.translucent,
         child: SafeArea(
+          top: false,
           child: Stack(
             children: [
-              RefreshIndicator(
-                onRefresh: _onRefresh,
-                color: Colors.blue[800],
-                child: CustomScrollView(
-                  controller: _scrollController,
-                  slivers: [
-                SliverAppBar(
-                  title: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      "Catálogo de Ventas",
-                      style: TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w900,
-                        color: textColor,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                  ),
-                  backgroundColor: isDark
-                      ? const Color(0xFF14141C)
-                      : Colors.white,
-                  elevation: 0,
-                  floating: true,
-                  snap: true,
-                  centerTitle: false,
-                  titleSpacing: canPop ? 4 : 16,
-                  leading: canPop
-                      ? IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_new, size: 22),
-                          onPressed: () => Navigator.pop(context),
-                          color: isDark ? Colors.blue[300] : Colors.blue[800],
-                          tooltip: "Volver",
-                        )
-                      : null,
-                  actions: [
-                    const InfoTooltipButton(
-                      title: "Catálogo de Ventas",
-                      description:
-                          "Muestra todos tus productos con stock disponible, presentaciones, precios y ofertas en un formato visual para ventas rápidas.",
-                      tips: [
-                        InfoTip(
-                          icon: Icons.touch_app_outlined,
-                          text:
-                              "Toca un producto para abrir sus opciones y agregarlo al Carrito o a tu Lista.",
-                        ),
-                        InfoTip(
-                          icon: Icons.filter_list_rounded,
-                          text:
-                              "Usa el botón de filtros o las categorías para encontrar rápidamente lo que necesitas.",
-                        ),
-                        InfoTip(
-                          icon: Icons.point_of_sale_rounded,
-                          text:
-                              "Pasa los ítems de tu carrito directamente a Caja Rápida o Cotización Manual.",
-                        ),
-                      ],
-                    ),
-                    Tooltip(
-                      message: _isStoreMode
-                          ? "Desactivar Modo Tienda"
-                          : "Activar Modo Tienda (Ocultar costos y datos privados)",
-                      child: InkWell(
-                        onTap: () {
-                          HapticFeedback.mediumImpact();
-                          setState(() => _isStoreMode = !_isStoreMode);
-                          CustomSnackBar.show(
-                            context,
-                            message: _isStoreMode
-                                ? "Modo Tienda Activado: Listo para mostrar a clientes en mostrador"
-                                : "Modo Tienda Desactivado: Vista de comerciante",
-                            isError: false,
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(10),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          margin: const EdgeInsets.symmetric(
-                            vertical: 8,
-                            horizontal: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _isStoreMode
-                                ? (isDark
-                                    ? Colors.amber[900]!.withValues(alpha: 0.6)
-                                    : Colors.amber[100])
-                                : (isDark ? Colors.white10 : Colors.grey[100]),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: _isStoreMode
-                                  ? Colors.amber
-                                  : Colors.transparent,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _isStoreMode
-                                    ? Icons.storefront
-                                    : Icons.storefront_outlined,
-                                size: 20,
-                                color: _isStoreMode
-                                    ? (isDark
-                                        ? Colors.amber[300]
-                                        : Colors.amber[900])
-                                    : (isDark
-                                        ? Colors.grey[400]
-                                        : Colors.grey[700]),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                "Tienda",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: _isStoreMode
-                                      ? (isDark
-                                          ? Colors.amber[300]
-                                          : Colors.amber[900])
-                                      : (isDark
-                                          ? Colors.grey[400]
-                                          : Colors.grey[700]),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.refresh,
-                        color: isDark ? Colors.grey[400] : Colors.grey,
-                        size: 26,
-                      ),
-                      onPressed: _onRefresh,
-                    ),
-                  ],
-                ),
-
-                if (_isStoreMode)
-                  SliverToBoxAdapter(
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.amber[900]!.withValues(alpha: 0.2)
-                            : Colors.amber[50],
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.amber.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.verified_user_outlined,
-                            size: 18,
-                            color: Colors.amber,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              "Modo Tienda: Costos y márgenes ocultos para atención directa al cliente.",
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? Colors.amber[200]
-                                    : Colors.amber[900],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                SliverToBoxAdapter(
-                  child: CatalogHeader(
+              Column(
+                children: [
+                  // 📌 1. NIVEL 1: Fila Fija del Buscador propio del catálogo
+                  CatalogHeader(
                     onFilterTap: () => LiveFilterBottomSheet.show(context),
+                    onSortTap: () => CatalogSortModal.show(context, provider),
+                    showCategories: false,
                   ),
-                ),
 
-                CatalogFilterHeader(provider: provider, isDark: isDark),
+                  // 🔄 2. NIVEL 2: Secciones Retráctiles en Column Superior (FUERA del CustomScrollView)
+                  ClipRect(
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeInOutCubic,
+                      child: _showRetractableSections
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_isStoreMode) _buildStoreModeBanner(isDark),
+                                CatalogCategoriesBar(provider: provider, isDark: isDark),
+                                CatalogCounterBar(
+                                  provider: provider,
+                                  isDark: isDark,
+                                  onSortTap: () => CatalogSortModal.show(context, provider),
+                                ),
+                              ],
+                            )
+                          : const SizedBox(width: double.infinity, height: 0),
+                    ),
+                  ),
 
-                // Panel de Ofertas
+                  // 📦 3. NIVEL 3: Grid de Productos Desacoplado
+                  Expanded(
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: _handleScrollNotification,
+                      child: RefreshIndicator(
+                        onRefresh: _onRefresh,
+                        color: Colors.blue[800],
+                        child: CustomScrollView(
+                          controller: _scrollController,
+                          slivers: [
+
+                      // Panel de Ofertas
                 if (promoProv.bundles.isNotEmpty)
                   SliverToBoxAdapter(
                     child: Builder(
@@ -1128,11 +1234,15 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
               ],
             ),
           ),
-          const DeepNavReturnPill(isBottom: true),
-        ],
+        ),
       ),
-    ),
+    ],
   ),
+  const DeepNavReturnPill(isBottom: true),
+],
+),
+),
+),
       bottomNavigationBar: _buildDynamicBottomBar(provider, isDark, auth),
     );
   }
@@ -1143,9 +1253,17 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
     AuthProvider auth,
   ) {
     final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 8);
+    final int totalItems = prov.cartCount + prov.utilityCount;
+    final bool hasItems = totalItems > 0;
+    final bool isVisible = _isBottomMenuExpanded || (hasItems && _showBottomCart);
 
+    final double barHeight = !_isBottomMenuExpanded
+        ? (56.0 + effectiveBottom)
+        : (116.0 + effectiveBottom);
+
+    Widget barContent;
     if (!_isBottomMenuExpanded) {
-      return Container(
+      barContent = Container(
         height: 56 + effectiveBottom,
         padding: EdgeInsets.only(bottom: effectiveBottom),
         decoration: BoxDecoration(
@@ -1172,7 +1290,7 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
               Text(
                 auth.isCommunityClient
                     ? "VER MI PEDIDO (${prov.utilityCount})"
-                    : "VER CARRITO Y LISTA (${prov.cartCount + prov.utilityCount})",
+                    : "VER CARRITO Y LISTA ($totalItems)",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -1183,74 +1301,91 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
           ),
         ),
       );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A24) : Colors.white,
-        boxShadow: [
-          if (!isDark)
-            const BoxShadow(
-              color: Colors.black12,
-              blurRadius: 20,
-              offset: Offset(0, -5),
-            ),
-        ],
-        border: Border(
-          top: BorderSide(color: isDark ? Colors.white10 : Colors.transparent),
+    } else {
+      barContent = Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1A24) : Colors.white,
+          boxShadow: [
+            if (!isDark)
+              const BoxShadow(
+                color: Colors.black12,
+                blurRadius: 20,
+                offset: Offset(0, -5),
+              ),
+          ],
+          border: Border(
+            top: BorderSide(color: isDark ? Colors.white10 : Colors.transparent),
+          ),
         ),
-      ),
-      padding: EdgeInsets.only(bottom: effectiveBottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          InkWell(
-            onTap: () => setState(() => _isBottomMenuExpanded = false),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Icon(
-                Icons.keyboard_arrow_down,
-                color: isDark ? Colors.grey[400] : Colors.grey,
+        padding: EdgeInsets.only(bottom: effectiveBottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _isBottomMenuExpanded = false),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Icon(
+                  Icons.keyboard_arrow_down,
+                  color: isDark ? Colors.grey[400] : Colors.grey,
+                ),
               ),
             ),
-          ),
-          Container(
-            height: 76,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _BottomSummaryBtn(
-                    icon: Icons.playlist_add_check,
-                    label: auth.isCommunityClient ? "Mi Pedido" : "Mi Lista",
-                    count: prov.utilityCount,
-                    total: prov.utilityTotal,
-                    color: Colors.orange,
-                    isDark: isDark,
-                    onTap: () {
-                      _showListPreview(context, false, isDark, auth);
-                    },
-                  ),
-                ),
-                if (!auth.isCommunityClient) ...[
-                  const SizedBox(width: 12),
+            Container(
+              height: 76,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
                   Expanded(
                     child: _BottomSummaryBtn(
-                      icon: Icons.shopping_cart,
-                      label: "Caja Rápida",
-                      count: prov.cartCount,
-                      total: prov.cartTotal,
-                      color: Colors.green,
+                      icon: Icons.playlist_add_check,
+                      label: auth.isCommunityClient ? "Mi Pedido" : "Mi Lista",
+                      count: prov.utilityCount,
+                      total: prov.utilityTotal,
+                      color: Colors.orange,
                       isDark: isDark,
-                      onTap: () =>
-                          _showListPreview(context, true, isDark, auth),
+                      onTap: () {
+                        _showListPreview(context, false, isDark, auth);
+                      },
                     ),
                   ),
+                  if (!auth.isCommunityClient) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _BottomSummaryBtn(
+                        icon: Icons.shopping_cart,
+                        label: "Caja Rápida",
+                        count: prov.cartCount,
+                        total: prov.cartTotal,
+                        color: Colors.green,
+                        isDark: isDark,
+                        onTap: () =>
+                            _showListPreview(context, true, isDark, auth),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+      );
+    }
+
+    return AnimatedSlide(
+      offset: isVisible ? Offset.zero : const Offset(0, 1.0),
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeInOutCubic,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeInOutCubic,
+        height: isVisible ? barHeight : 0.0,
+        clipBehavior: Clip.hardEdge,
+        decoration: const BoxDecoration(),
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: barContent,
+        ),
       ),
     );
   }

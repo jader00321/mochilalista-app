@@ -383,6 +383,16 @@ class SaleModel {
     };
   }
 
+  Map<String, dynamic> toMap() {
+    final map = toSqlite();
+    map['cliente_nombre'] = clientName;
+    map['notas'] = notes;
+    map['nota_prestamo'] = notes;
+    map['abono_inicial'] = abonoInicial;
+    map['porcentaje_interes'] = porcentajeInteres;
+    return map;
+  }
+
   SaleModel copyWith({
     int? id,
     int? sequentialNumber,

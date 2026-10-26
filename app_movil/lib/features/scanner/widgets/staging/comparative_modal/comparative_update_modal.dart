@@ -60,6 +60,9 @@ class ComparativeUpdateModal extends StatefulWidget {
     );
   }
 
+  static String formatUnitLabelForTest(int count, String unit) => 
+      _ComparativeUpdateModalState._formatUnitLabel(count, unit);
+
   @override
   State<ComparativeUpdateModal> createState() => _ComparativeUpdateModalState();
 }
@@ -212,11 +215,96 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     super.dispose();
   }
 
+  bool get _isNuevoVariant => widget.variant.matchPresentacion.estado == "NUEVO_EN_PADRE";
+
+  String get _activeUnidadVenta {
+    final isChecked = _isNuevoVariant || widget.variant.updateUnidadVenta;
+    if (isChecked) {
+      final text = _uVentaCtrl.text.trim();
+      return text.isNotEmpty ? text : 'Unidad';
+    }
+    return widget.variant.unidadVenta.isNotEmpty ? widget.variant.unidadVenta : 'Unidad';
+  }
+
+  int get _activeFactorVenta {
+    final isChecked = _isNuevoVariant || widget.variant.updateUnidadVenta;
+    if (isChecked) {
+      final parsed = int.tryParse(_uVentaFactorCtrl.text);
+      return (parsed != null && parsed >= 1) ? parsed : 1;
+    }
+    return widget.variant.unidadesPorVenta >= 1 ? widget.variant.unidadesPorVenta : 1;
+  }
+
+  static String _formatUnitLabel(int count, String rawUnit) {
+    final unit = rawUnit.trim().isEmpty ? 'Unidad' : rawUnit.trim();
+    final lower = unit.toLowerCase();
+
+    if (lower == 'par') {
+      return count == 1 ? '1 Par' : '$count Pares';
+    }
+    if (lower == 'unidad' || lower == 'unid' || lower == 'und') {
+      return count == 1 ? '1 Unidad' : '$count Unidades';
+    }
+    if (lower == 'caja') {
+      return count == 1 ? '1 Caja' : '$count Cajas';
+    }
+    if (lower == 'docena') {
+      return count == 1 ? '1 Docena' : '$count Docenas';
+    }
+    if (lower == 'paquete' || lower == 'paq') {
+      return count == 1 ? '1 Paquete' : '$count Paquetes';
+    }
+    if (lower == 'ciento') {
+      return count == 1 ? '1 Ciento' : '$count Cientos';
+    }
+    if (lower == 'millar') {
+      return count == 1 ? '1 Millar' : '$count Millares';
+    }
+    if (lower == 'gruesa') {
+      return count == 1 ? '1 Gruesa' : '$count Gruesas';
+    }
+    if (lower == 'blister' || lower == 'blíster') {
+      return count == 1 ? '1 Blíster' : '$count Blísters';
+    }
+    if (lower == 'set') {
+      return count == 1 ? '1 Set' : '$count Sets';
+    }
+    if (lower == 'kit') {
+      return count == 1 ? '1 Kit' : '$count Kits';
+    }
+    if (lower == 'rollo') {
+      return count == 1 ? '1 Rollo' : '$count Rollos';
+    }
+    if (lower == 'bolsa') {
+      return count == 1 ? '1 Bolsa' : '$count Bolsas';
+    }
+    if (lower == 'tira') {
+      return count == 1 ? '1 Tira' : '$count Tiras';
+    }
+    if (lower == 'pliego') {
+      return count == 1 ? '1 Pliego' : '$count Pliegos';
+    }
+
+    if (count == 1) {
+      return '1 $unit';
+    }
+
+    if (lower.endsWith('s') || lower.endsWith('x')) {
+      return '$count $unit';
+    }
+    final vowels = ['a', 'e', 'i', 'o', 'u', 'á', 'é', 'í', 'ó', 'ú'];
+    if (vowels.any((v) => lower.endsWith(v))) {
+      return '$count ${unit}s';
+    }
+    return '$count ${unit}es';
+  }
+
   // ============================================================================
   // FASE 2: SISTEMA REFACTORIZADO DE RECÁLCULOS CON CADENA DE DEPENDENCIAS
   // ============================================================================
 
   void _onUnidadVentaChanged() {
+    widget.variant.resetStockAuthorizationFlags();
     String nuevaU = _uVentaCtrl.text.trim().toLowerCase();
     int currentFactor = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
     int factor = currentFactor;
@@ -270,6 +358,7 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
   }
 
   void _recalculateFromPurchase({required bool keepTotal}) {
+    widget.variant.resetStockAuthorizationFlags();
     double cantidadUMP = double.tryParse(_cantidadUmpCtrl.text) ?? 0.0;
     double precioUMP = double.tryParse(_precioUmpCtrl.text) ?? 0.0;
     double pagoTotal = double.tryParse(_pagoTotalCtrl.text) ?? 0.0;
@@ -341,8 +430,9 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     int unidLote = int.tryParse(_unidLoteCtrl.text) ?? 1;
     int factorVenta = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
     
-    // 1. Marcar override
+    // 1. Marcar override y reiniciar autorizaciones
     widget.variant.stockIngresanteOverride = nuevoStockBase;
+    widget.variant.resetStockAuthorizationFlags();
     
     // 2. Recalcular cantidad de empaques hacia atrás (pago total se mantiene)
     if (unidLote > 0) {
@@ -399,9 +489,13 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     if (widget.variant.updateCodigoBarra) widget.variant.codigoBarra = _codigoBarraCtrl.text.isEmpty ? null : _codigoBarraCtrl.text;
     if (widget.variant.updateMarca) widget.variant.editedMarca = _marcaCtrl.text;
     
-    if (widget.variant.updateUnidadVenta) {
+    if (widget.variant.updateUnidadVenta ||
+        _uVentaCtrl.text != widget.variant.unidadVenta ||
+        (int.tryParse(_uVentaFactorCtrl.text) != null &&
+            int.tryParse(_uVentaFactorCtrl.text) != widget.variant.unidadesPorVenta)) {
       widget.variant.unidadVenta = _uVentaCtrl.text;
       widget.variant.unidadesPorVenta = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
+      widget.variant.updateUnidadVenta = true;
     }
 
     if (widget.variant.updateCosto) {
@@ -421,16 +515,17 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
       widget.variant.unidadesPorLote = int.tryParse(_unidLoteCtrl.text) ?? widget.variant.unidadesPorLote;
     }
     
-    double cantUmp = double.tryParse(_cantidadUmpCtrl.text) ?? widget.variant.cantidadUmpComprada;
-    int unLote = int.tryParse(_unidLoteCtrl.text) ?? widget.variant.unidadesPorLote;
-    
-    // FASE 1 FIX: calculatedStock en UNIDADES BASE para comparar con _stockIngresanteCtrl
-    int calculatedStock = (cantUmp * unLote).toInt();
+    int baselineStock = (widget.variant.originalCantidadUmpComprada * widget.variant.originalUnidadesPorLote).toInt();
+    if (baselineStock <= 0) {
+      baselineStock = (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
+    }
     int? enteredStock = int.tryParse(_stockIngresanteCtrl.text);
     
-    if (enteredStock == calculatedStock) {
+    if (enteredStock != null && enteredStock != baselineStock) {
+      widget.variant.stockIngresanteOverride = enteredStock;
+    } else if (enteredStock == baselineStock && widget.variant.sourceVariantUuid == null) {
       widget.variant.stockIngresanteOverride = null;
-    } else {
+    } else if (enteredStock != null) {
       widget.variant.stockIngresanteOverride = enteredStock;
     }
     
@@ -445,37 +540,71 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     widget.onConfirm();
   }
 
-  int get _leftoverSuelto {
-    int factor = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
+  int get _calculatedTotalUnitsBase {
+    int stockBD = (widget.dbData['stock_actual'] ?? 0) as int;
     double cantComprada = double.tryParse(_cantidadUmpCtrl.text) ?? widget.variant.cantidadUmpComprada;
     int unidLote = int.tryParse(_unidLoteCtrl.text) ?? widget.variant.unidadesPorLote;
+    int ingresoBase = int.tryParse(_stockIngresanteCtrl.text) ?? (cantComprada * unidLote).toInt();
     
-    int totalUnidadesBase = int.tryParse(_stockIngresanteCtrl.text) ?? (cantComprada * unidLote).toInt();
+    bool isSumar = widget.variant.stockOperation == 'sumar';
+    bool isExisting = widget.variant.matchPresentacion.estado.contains("MATCH");
+    if (isExisting && isSumar) {
+      return stockBD + ingresoBase;
+    }
+    return ingresoBase;
+  }
+
+  int get _leftoverSuelto {
+    int factor = _activeFactorVenta;
+    int totalUnits = _calculatedTotalUnitsBase;
+    if (factor <= 1 || totalUnits <= 0) return 0;
     
-    var validation = UnitCatalogService.validateStockForUnit(
-      totalUnitsBase: totalUnidadesBase,
-      presentationFactor: factor,
-      baseUnitCost: 0.0, 
-      unitName: _uVentaCtrl.text,
-    );
+    int completas = totalUnits ~/ factor;
+    int sobrante = totalUnits % factor;
     
-    if (validation.status == StockValidationStatus.hasLeftover) {
-      bool alreadyCreated = widget.group.variantes.any((v) => 
-        v.nombreEspecifico.contains("Sobrante") && v.stockIngresanteOverride == validation.leftover
-      );
-      if (alreadyCreated) return 0;
-      return validation.leftover;
+    if (completas >= 1 && sobrante > 0) {
+      return sobrante;
     }
     return 0;
+  }
+
+  void _applyStockAdjustmentInLive(int newStockIngresante) {
+    widget.variant.stockIngresanteOverride = newStockIngresante;
+    widget.variant.resetStockAuthorizationFlags();
+    _stockIngresanteCtrl.text = newStockIngresante.toString();
+    
+    // Recalcular costos y precios coherentes
+    double costoUnitBase = widget.variant.originalCostoUnitario > 0 
+        ? widget.variant.originalCostoUnitario 
+        : ((double.tryParse(_pagoTotalCtrl.text) ?? 0.0) / (newStockIngresante > 0 ? newStockIngresante : 1));
+    int factorVenta = _activeFactorVenta;
+    double costoPres = costoUnitBase * factorVenta;
+    _costoCtrl.text = costoPres.toStringAsFixed(2);
+    _recalcularModal(fromMargen: true);
+    
+    updateState(() {});
+  }
+
+  void _completarLoteEnModal() {
+    int stockBD = (widget.dbData['stock_actual'] ?? 0) as int;
+    int factor = _activeFactorVenta;
+    int needed = factor - (widget.variant.stockOperation == 'sumar' ? stockBD : 0);
+    int targetIngreso = needed > 0 ? needed : factor;
+    int currentIngreso = int.tryParse(_stockIngresanteCtrl.text) ?? widget.variant.stockIngresanteBase;
+    int delta = targetIngreso - currentIngreso;
+    if (delta > 0) {
+      widget.provider.completeBatchToFullPackage(widget.variant.uuidTemporal, delta);
+    }
+    _applyStockAdjustmentInLive(targetIngreso);
   }
 
   void _crearVarianteSobrante() {
     int sobrante = _leftoverSuelto;
     if (sobrante > 0) {
-      _applyChanges(); // Guardar cambios de esta variante
-      _wasConfirmed = true;
-      
       widget.provider.createLeftoverVariant(widget.variant.uuidTemporal, sobrante);
+      
+      int adjustedStock = widget.variant.stockIngresanteOverride ?? (widget.variant.stockIngresanteBase - sobrante);
+      _applyStockAdjustmentInLive(adjustedStock);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -483,9 +612,26 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 2),
         ));
-        Navigator.pop(context);
       }
     }
+  }
+
+  List<int> _calculateExactDivisors(int totalBase, int currentFactor) {
+    if (totalBase <= 0) return [];
+    List<int> divisores = [];
+    List<int> candidates = [1, 2, 3, 4, 5, 6, 8, 10, 12, 24, 25, 50, 100, 144];
+    for (int d in candidates) {
+      if (d <= totalBase && totalBase % d == 0 && d != currentFactor) {
+        divisores.add(d);
+      }
+    }
+    for (int d = 1; d <= totalBase && d <= 144; d++) {
+      if (totalBase % d == 0 && d != currentFactor && !divisores.contains(d)) {
+        divisores.add(d);
+      }
+    }
+    divisores.sort();
+    return divisores;
   }
 
   @override

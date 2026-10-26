@@ -671,6 +671,13 @@ class SalesService {
       if (vRows.isEmpty) throw Exception("Venta no encontrada");
       Map<String, dynamic> saleMap = Map<String, dynamic>.from(vRows.first);
 
+      // Normalización estricta: nunca null para campos contables y de préstamos
+      saleMap['porcentaje_interes'] = (saleMap['porcentaje_interes'] as num?)?.toDouble() ?? 0.0;
+      saleMap['abono_inicial'] = (saleMap['abono_inicial'] as num?)?.toDouble() ?? 0.0;
+      saleMap['monto_total'] = (saleMap['monto_total'] as num?)?.toDouble() ?? 0.0;
+      saleMap['monto_pagado'] = (saleMap['monto_pagado'] as num?)?.toDouble() ?? 0.0;
+      saleMap['descuento_aplicado'] = (saleMap['descuento_aplicado'] as num?)?.toDouble() ?? 0.0;
+
       if (saleMap['cliente_id'] != null) {
         final clientService = ClientService();
         final cData = await clientService.getClientById(saleMap['cliente_id']);

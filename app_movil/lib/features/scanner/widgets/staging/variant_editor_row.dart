@@ -81,8 +81,8 @@ class VariantEditorRowState extends State<VariantEditorRow> {
     // Venta
     _nombreCtrl.text = widget.variant.nombreEspecifico;
     _codigoBarraCtrl.text = widget.variant.codigoBarra ?? "";
-    _unidadVentaCtrl.text = widget.variant.unidadVenta;
-    _unidadesVentaCtrl.text = widget.variant.unidadesPorVenta.toString();
+    _unidadVentaCtrl.text = widget.variant.effectiveUnidadVenta;
+    _unidadesVentaCtrl.text = widget.variant.effectiveFactorVenta.toString();
     _margenCtrl.text = widget.variant.factorGananciaVentaSugerido.toStringAsFixed(2);
     _precioVentaCtrl.text = widget.variant.precioVentaSugerido.toStringAsFixed(2);
     
@@ -111,8 +111,8 @@ class VariantEditorRowState extends State<VariantEditorRow> {
     // Esto asegura que si el modal modifica la memoria, la UI la absorba correctamente.
     if (_nombreCtrl.text != widget.variant.nombreEspecifico) _nombreCtrl.text = widget.variant.nombreEspecifico;
     if (_codigoBarraCtrl.text != (widget.variant.codigoBarra ?? "")) _codigoBarraCtrl.text = widget.variant.codigoBarra ?? "";
-    if (_unidadVentaCtrl.text != widget.variant.unidadVenta) _unidadVentaCtrl.text = widget.variant.unidadVenta;
-    if (_unidadesVentaCtrl.text != widget.variant.unidadesPorVenta.toString()) _unidadesVentaCtrl.text = widget.variant.unidadesPorVenta.toString();
+    if (_unidadVentaCtrl.text != widget.variant.effectiveUnidadVenta) _unidadVentaCtrl.text = widget.variant.effectiveUnidadVenta;
+    if (_unidadesVentaCtrl.text != widget.variant.effectiveFactorVenta.toString()) _unidadesVentaCtrl.text = widget.variant.effectiveFactorVenta.toString();
     if (_margenCtrl.text != widget.variant.factorGananciaVentaSugerido.toStringAsFixed(2)) _margenCtrl.text = widget.variant.factorGananciaVentaSugerido.toStringAsFixed(2);
     if (_precioVentaCtrl.text != widget.variant.precioVentaSugerido.toStringAsFixed(2)) _precioVentaCtrl.text = widget.variant.precioVentaSugerido.toStringAsFixed(2);
     
@@ -262,6 +262,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
       widget.variant.codigoBarra = _codigoBarraCtrl.text.isEmpty ? null : _codigoBarraCtrl.text;
       widget.variant.unidadVenta = _unidadVentaCtrl.text;
       widget.variant.unidadesPorVenta = unidPorVenta;
+      widget.variant.updateUnidadVenta = true;
       
       widget.variant.umpCompra = _umpCompraCtrl.text;
       widget.variant.cantidadUmpComprada = cantComprada;
@@ -272,6 +273,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
       widget.variant.costoUnitarioSugerido = costoPresentacionReal;
       widget.variant.factorGananciaVentaSugerido = margen;
       widget.variant.precioVentaSugerido = pVenta;
+      widget.variant.resetStockAuthorizationFlags();
     });
   }
 
@@ -284,9 +286,257 @@ class VariantEditorRowState extends State<VariantEditorRow> {
       isDark: widget.isDark,
       provider: widget.provider,
       onConfirm: () {
+        _initControllers();
         widget.provider.notifyUIUpdate();
         Navigator.pop(context);
       },
+    );
+  }
+
+  Widget _buildStockAlertBlock({required bool isVariantMatch}) {
+    final int stockBD = isVariantMatch ? (widget.variant.matchPresentacion.datos?.stockActual ?? 0) : 0;
+    final int totalBase = widget.variant.calculateTotalUnitsBase(stockActualBD: stockBD);
+    final int factor = widget.variant.effectiveFactorVenta;
+    final String unidad = widget.variant.effectiveUnidadVenta;
+    final int completas = factor > 0 ? (totalBase ~/ factor) : totalBase;
+    final int sobrante = factor > 0 ? (totalBase % factor) : 0;
+
+    // Caso 1: Factor 1 o sin residuo (Stock exacto)
+    if (factor <= 1 || sobrante == 0) {
+      if (completas == 0 && totalBase == 0) {
+        return const SizedBox.shrink();
+      }
+      return Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: widget.isDark ? Colors.green.withValues(alpha: 0.12) : Colors.green.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, size: 15, color: widget.isDark ? Colors.green[300] : Colors.green[700]),
+            const SizedBox(width: 6),
+            Text(
+              "Stock exacto: $completas $unidad ($totalBase unid. base)",
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[800]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Caso 2: Déficit Real (completas == 0 && totalBase > 0)
+    if (completas == 0) {
+      if (widget.variant.allowDeficitApproved) {
+        return Container(
+          margin: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: widget.isDark ? Colors.amber.withValues(alpha: 0.12) : Colors.amber.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: widget.isDark ? Colors.amber.withValues(alpha: 0.3) : Colors.amber.shade300),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 15, color: Colors.amber[800]),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  "0 $unidad ($totalBase unid. base - Déficit autorizado)",
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber[900]),
+                ),
+              ),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    widget.variant.allowDeficitApproved = false;
+                  });
+                  widget.provider.notifyUIUpdate();
+                },
+                child: Text("Modificar", style: TextStyle(fontSize: 11, color: Colors.blue[700], decoration: TextDecoration.underline)),
+              ),
+            ],
+          ),
+        );
+      }
+
+      final int faltan = factor - totalBase;
+      return Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: widget.isDark ? Colors.red.withValues(alpha: 0.12) : Colors.red.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: widget.isDark ? Colors.red.withValues(alpha: 0.4) : Colors.red.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.error_outline, size: 16, color: widget.isDark ? Colors.red[300] : Colors.red[700]),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    "Stock Insuficiente: Hay $totalBase unid. base pero se vende por $unidad (x$factor). Faltan $faltan unid. para armar 1 paquete.",
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.red[200] : Colors.red[900]),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    widget.provider.adaptVariantUnit(widget.variant.uuidTemporal);
+                    _initControllers();
+                  },
+                  icon: const Icon(Icons.bolt, size: 14),
+                  label: const Text("Adaptar a Unidad (x1)", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red[700],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    minimumSize: const Size(0, 30),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    widget.provider.completeBatchToFullPackage(widget.variant.uuidTemporal, faltan);
+                    _initControllers();
+                  },
+                  icon: const Icon(Icons.edit, size: 14),
+                  label: Text("Completar a 1 $unidad", style: const TextStyle(fontSize: 11)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: widget.isDark ? Colors.red[200] : Colors.red[800],
+                    side: BorderSide(color: widget.isDark ? Colors.red[300]! : Colors.red.shade300),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    minimumSize: const Size(0, 30),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      widget.variant.allowDeficitApproved = true;
+                    });
+                    widget.provider.notifyUIUpdate();
+                  },
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: const Size(0, 30),
+                  ),
+                  child: Text(
+                    "Autorizar registro en 0",
+                    style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[300] : Colors.grey[700], decoration: TextDecoration.underline),
+                  ),
+                ),
+              ],
+            )
+          ],
+        ),
+      );
+    }
+
+    // Caso 3: Sobrante (completas >= 1 && sobrante > 0)
+    if (widget.variant.allowLeftoverInReserve) {
+      return Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: widget.isDark ? Colors.teal.withValues(alpha: 0.12) : Colors.teal.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: widget.isDark ? Colors.teal.withValues(alpha: 0.3) : Colors.teal.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.check_circle_outline, size: 15, color: widget.isDark ? Colors.teal[300] : Colors.teal[800]),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                "✅ $completas $unidad (+$sobrante unid. en reserva base)",
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.teal[200] : Colors.teal[900]),
+              ),
+            ),
+            InkWell(
+              onTap: () {
+                setState(() {
+                  widget.variant.allowLeftoverInReserve = false;
+                });
+                widget.provider.notifyUIUpdate();
+              },
+              child: Text("Modificar", style: TextStyle(fontSize: 11, color: Colors.blue[700], decoration: TextDecoration.underline)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: widget.isDark ? Colors.orange.withValues(alpha: 0.12) : Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: widget.isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 16, color: widget.isDark ? Colors.orange[300] : Colors.orange[800]),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  "Sobrante detectado: Forman $completas $unidad completas, pero sobran $sobrante unid. sueltas.",
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[200] : Colors.orange[900]),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () {
+                  widget.provider.createLeftoverVariant(widget.variant.uuidTemporal, sobrante);
+                  _initControllers();
+                },
+                icon: const Icon(Icons.add, size: 14),
+                label: Text("Enviar $sobrante unid. a 'Unidad (x1)'", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange[800],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: const Size(0, 30),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  widget.provider.authorizeLeftoverInReserve(widget.variant.uuidTemporal);
+                  _initControllers();
+                },
+                icon: const Icon(Icons.archive_outlined, size: 14),
+                label: const Text("Conservar en reserva base", style: TextStyle(fontSize: 11)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: widget.isDark ? Colors.orange[200] : Colors.orange[900],
+                  side: BorderSide(color: widget.isDark ? Colors.orange[300]! : Colors.orange.shade300),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: const Size(0, 30),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -340,152 +590,121 @@ class VariantEditorRowState extends State<VariantEditorRow> {
           if (widget.group.matchProducto.estado.contains("MATCH"))
             _buildVariantCards(),
 
-          // 🔥 VARIANTE EXISTENTE (Diseño Adaptativo + Matemática corregida)
+          // 🔥 VARIANTE EXISTENTE (Diseño Adaptativo + Matemática unificada)
           if (isVariantMatch) ...[
-             // BANNER O ETIQUETA DE DISCREPANCIA (Phase 2 Mejorada)
+             // BANNER O ETIQUETA DE DISCREPANCIA (si difiere la factura y no se ha editado)
              Builder(builder: (ctx) {
-               bool sameUnit = (widget.variant.unidadesPorVenta == (widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1));
-               if (!sameUnit) {
-                 int totalUnidadesBase = widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
-                 var validation = UnitCatalogService.validateStockForUnit(
-                   totalUnitsBase: totalUnidadesBase,
-                   presentationFactor: widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1,
-                   baseUnitCost: 0,
-                   unitName: widget.variant.matchPresentacion.datos?.unidadVenta ?? '',
+               bool sameUnit = (widget.variant.unidadesPorVenta == widget.variant.effectiveFactorVenta);
+               if (!sameUnit && !widget.variant.updateUnidadVenta) {
+                 return Container(
+                   margin: const EdgeInsets.only(bottom: 12),
+                   child: Row(
+                     children: [
+                       Icon(Icons.info_outline, size: 14, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                       const SizedBox(width: 6),
+                       Expanded(
+                         child: Text(
+                           "Unidad adaptada: Factura [x${widget.variant.unidadesPorVenta}] → Sistema [x${widget.variant.effectiveFactorVenta}]",
+                           style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontStyle: FontStyle.italic),
+                         ),
+                       ),
+                     ],
+                   ),
                  );
-
-                 // Si el stock CUADRA (exact) o solo tiene sobrante (que se maneja aparte), mostrar etiqueta sutil.
-                 if (validation.status == StockValidationStatus.exact || validation.status == StockValidationStatus.hasLeftover) {
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 14, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              "Unidad adaptada: Factura [x${widget.variant.unidadesPorVenta}] → Sistema [x${widget.variant.matchPresentacion.datos?.unidadesPorVenta}]",
-                              style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontStyle: FontStyle.italic),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                 } else {
-                    // Hay DÉFICIT de stock para formar el paquete de base de datos
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: widget.isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: widget.isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200)),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.warning_amber_rounded, size: 20, color: widget.isDark ? Colors.orange[300] : Colors.orange[700]),
-                              const SizedBox(width: 8),
-                              Expanded(child: Text("La factura indica paquetes de [x${widget.variant.unidadesPorVenta}], pero en tu sistema se vende en paquetes de [x${widget.variant.matchPresentacion.datos?.unidadesPorVenta}]. Tu stock actual ($totalUnidadesBase unid.) no alcanza para formar este paquete.", style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.orange[200] : Colors.orange[900]))),
-                            ]
-                          ),
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: OutlinedButton(
-                              onPressed: () {
-                                widget.provider.adoptDbUnitForVariant(widget.variant.uuidTemporal);
-                                _initControllers();
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: widget.isDark ? Colors.orange[300] : Colors.orange[700],
-                                side: BorderSide(color: widget.isDark ? Colors.orange[300]! : Colors.orange[700]!),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                minimumSize: const Size(0, 32),
-                              ),
-                              child: const Text("Adoptar unidad BD", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                            ),
-                          )
-                        ]
-                      )
-                    );
-                 }
                }
                return const SizedBox.shrink();
              }),
              Container(
                padding: const EdgeInsets.all(12),
                decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade200)),
-               child: Row(
-                 crossAxisAlignment: CrossAxisAlignment.center,
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.start,
                  children: [
-                   Expanded(
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Text(
-                           widget.variant.matchPresentacion.datos?.nombre ?? "", 
-                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.2),
-                           maxLines: 3, overflow: TextOverflow.ellipsis,
-                         ),
-                         const SizedBox(height: 6),
-                         Text(
-                           "Se venderá por: ${widget.variant.matchPresentacion.datos?.unidadVenta ?? 'Unidad'} (x${widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1})", 
-                           style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)
-                         ),
-                         const SizedBox(height: 8),
-                         Text(
-                           "Ingresarán al Stock: +${((widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote) / (widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1)).toInt()} Unid.", 
-                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700])
-                         ),
-                         const SizedBox(height: 8),
-                         Builder(builder: (ctx) {
-                           int totalUnidadesBase = (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
-                           double costoBaseIndiv = 0.0;
-                           if (widget.variant.cantidadUmpComprada > 0 && widget.variant.unidadesPorLote > 0) {
-                             costoBaseIndiv = widget.variant.totalPagoLote / (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote);
-                           }
-                           var validation = UnitCatalogService.validateStockForUnit(
-                             totalUnitsBase: totalUnidadesBase,
-                             presentationFactor: widget.variant.matchPresentacion.datos?.unidadesPorVenta ?? 1,
-                             baseUnitCost: costoBaseIndiv,
-                             unitName: widget.variant.matchPresentacion.datos?.unidadVenta ?? 'Unidad',
-                           );
-                           
-                           Color badgeColor = Colors.green;
-                           IconData badgeIcon = Icons.check_circle;
-                           String badgeText = "Stock cuadra perfectamente";
-                           
-                           if (validation.status == StockValidationStatus.deficit) {
-                             badgeColor = Colors.red; badgeIcon = Icons.error_outline; badgeText = "Faltan ${validation.deficit} unidades para completar 1 ${widget.variant.matchPresentacion.datos?.unidadVenta ?? 'Unidad'}";
-                           } else if (validation.status == StockValidationStatus.hasLeftover) {
-                             badgeColor = Colors.orange; badgeIcon = Icons.warning_amber; badgeText = "Sobran ${validation.leftover} unidades sueltas";
-                           }
-
-                           return Container(
-                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                             decoration: BoxDecoration(color: widget.isDark ? badgeColor.withValues(alpha: 0.1) : badgeColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: widget.isDark ? badgeColor.withValues(alpha: 0.3) : badgeColor.withValues(alpha: 0.3))),
-                             child: Row(
-                               mainAxisSize: MainAxisSize.min,
-                               children: [
-                                 Icon(badgeIcon, size: 14, color: widget.isDark ? badgeColor.withValues(alpha: 0.8) : badgeColor),
-                                 const SizedBox(width: 4),
-                                 Flexible(child: Text(badgeText, style: TextStyle(fontSize: 10, color: widget.isDark ? badgeColor.withValues(alpha: 0.8) : badgeColor, fontWeight: FontWeight.bold))),
-                               ],
+                   Row(
+                     crossAxisAlignment: CrossAxisAlignment.start,
+                     children: [
+                       Expanded(
+                         child: Column(
+                           crossAxisAlignment: CrossAxisAlignment.start,
+                           children: [
+                             Text(
+                               widget.variant.matchPresentacion.datos?.nombre ?? widget.variant.nombreEspecifico, 
+                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.2),
+                               maxLines: 3, overflow: TextOverflow.ellipsis,
                              ),
-                           );
-                         }),
-                       ],
-                     ),
+                             const SizedBox(height: 6),
+                             Text(
+                               "Se venderá por: ${widget.variant.effectiveUnidadVenta} (x${widget.variant.effectiveFactorVenta})", 
+                               style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)
+                             ),
+                             const SizedBox(height: 6),
+                             Builder(builder: (ctx) {
+                               final int stockBD = widget.variant.matchPresentacion.datos?.stockActual ?? 0;
+                               final int totalBase = widget.variant.calculateTotalUnitsBase(stockActualBD: stockBD);
+                               final int factor = widget.variant.effectiveFactorVenta;
+                               final int packIngreso = factor > 0 ? (widget.variant.stockIngresanteBase ~/ factor) : widget.variant.stockIngresanteBase;
+                               final int packTotal = factor > 0 ? (totalBase ~/ factor) : totalBase;
+                               final bool isSumar = widget.variant.stockOperation == 'sumar';
+
+                               return Column(
+                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                 children: [
+                                   Text(
+                                     "Ingresarán al Stock: +${widget.variant.stockIngresanteBase} unid. base (+$packIngreso ${widget.variant.effectiveUnidadVenta})", 
+                                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700])
+                                   ),
+                                   const SizedBox(height: 2),
+                                   Text(
+                                     isSumar 
+                                       ? "Inventario: $stockBD actual + ${widget.variant.stockIngresanteBase} ingreso = $totalBase unid. base ($packTotal ${widget.variant.effectiveUnidadVenta})"
+                                       : "Reemplazo de Stock: $totalBase unid. base ($packTotal ${widget.variant.effectiveUnidadVenta})",
+                                     style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
+                                   ),
+                                 ],
+                               );
+                             }),
+                           ],
+                         ),
+                       ),
+                       const SizedBox(width: 8),
+                       ElevatedButton.icon(
+                         icon: const Icon(Icons.tune, size: 16),
+                         label: const Text("Control de Variante", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                         style: ElevatedButton.styleFrom(
+                           backgroundColor: widget.isDark ? Colors.blue[800] : Colors.blue[600],
+                           foregroundColor: Colors.white,
+                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                         ),
+                         onPressed: () {
+                           Map<String, dynamic> dbData = {};
+                           final av = widget.variant.matchPresentacion.datos?.availablePresentations;
+                           if (av != null && av.isNotEmpty) {
+                             try {
+                               dbData = av.firstWhere((p) => p['id'] == widget.variant.matchPresentacion.datos?.id);
+                             } catch (_) {
+                               dbData = av.first;
+                             }
+                           }
+                           if (dbData.isEmpty) {
+                             final d = widget.variant.matchPresentacion.datos;
+                             dbData = {
+                               'id': d?.id,
+                               'nombre_especifico': d?.nombre,
+                               'unidad_venta': d?.unidadVenta ?? 'Unidad',
+                               'unidades_por_venta': d?.unidadesPorVenta ?? 1,
+                               'stock_actual': d?.stockActual ?? 0,
+                               'precio_venta': d?.precioVentaFinal ?? 0.0,
+                               'costo_unitario': d?.costoUnitarioCalculado ?? 0.0,
+                             };
+                           }
+                           _openComparativeModal(dbData);
+                         },
+                       ),
+                     ],
                    ),
-                   const SizedBox(width: 8),
-                   ElevatedButton.icon(
-                     icon: const Icon(Icons.compare_arrows, size: 16),
-                     label: const Text("Comparar", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                     style: ElevatedButton.styleFrom(backgroundColor: widget.isDark ? Colors.blue[800] : Colors.blue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0)),
-                     onPressed: () {
-                        final dbData = widget.variant.matchPresentacion.datos?.availablePresentations?.firstWhere((p) => p['id'] == widget.variant.matchPresentacion.datos?.id, orElse: () => {});
-                        if (dbData != null && dbData.isNotEmpty) _openComparativeModal(dbData);
-                     },
-                   )
+                   const SizedBox(height: 6),
+                   _buildStockAlertBlock(isVariantMatch: true),
                  ],
                ),
              )
@@ -717,72 +936,8 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // ALERTAS DE STOCK (Phase 3)
-                  Builder(builder: (ctx) {
-                    int totalUnidadesBase = widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
-                    double costoBaseIndiv = 0.0;
-                    if (widget.variant.cantidadUmpComprada > 0 && widget.variant.unidadesPorLote > 0) {
-                      costoBaseIndiv = widget.variant.totalPagoLote / (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote);
-                    }
-                    var validation = UnitCatalogService.validateStockForUnit(
-                      totalUnitsBase: totalUnidadesBase,
-                      presentationFactor: widget.variant.unidadesPorVenta,
-                      baseUnitCost: costoBaseIndiv,
-                      unitName: widget.variant.unidadVenta,
-                    );
-                    
-                    Color badgeColor = Colors.green;
-                    IconData badgeIcon = Icons.check_circle;
-                    String badgeText = "Stock ingresante cuadra perfectamente";
-                    
-                    if (validation.status == StockValidationStatus.deficit) {
-                      badgeColor = Colors.red; badgeIcon = Icons.error_outline; badgeText = "Faltan ${validation.deficit} unidades para armar 1 ${widget.variant.unidadVenta}";
-                    } else if (validation.status == StockValidationStatus.hasLeftover) {
-                      badgeColor = Colors.orange; badgeIcon = Icons.warning_amber; badgeText = "Sobran ${validation.leftover} unidades sueltas";
-                    }
-
-                    bool hasLeftoverDuplicate = widget.group.variantes.any((v) => v.sourceVariantUuid == widget.variant.uuidTemporal);
-                    
-                    if (validation.status == StockValidationStatus.exact && hasLeftoverDuplicate) {
-                       WidgetsBinding.instance.addPostFrameCallback((_) {
-                         if (mounted) widget.provider.removeLeftoverVariantForSource(widget.variant.uuidTemporal);
-                       });
-                    }
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(color: widget.isDark ? badgeColor.withValues(alpha: 0.1) : badgeColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6), border: Border.all(color: widget.isDark ? badgeColor.withValues(alpha: 0.3) : badgeColor.withValues(alpha: 0.3))),
-                          child: Row(
-                            children: [
-                              Icon(badgeIcon, size: 16, color: widget.isDark ? badgeColor.withValues(alpha: 0.8) : badgeColor),
-                              const SizedBox(width: 8),
-                              Expanded(child: Text(badgeText, style: TextStyle(fontSize: 11, color: widget.isDark ? badgeColor.withValues(alpha: 0.8) : badgeColor, fontWeight: FontWeight.bold))),
-                            ],
-                          ),
-                        ),
-                        if (validation.status == StockValidationStatus.hasLeftover && !hasLeftoverDuplicate) ...[
-                          const SizedBox(height: 8),
-                          OutlinedButton.icon(
-                            onPressed: () {
-                              widget.provider.createLeftoverVariant(widget.variant.uuidTemporal, validation.leftover);
-                            },
-                            icon: const Icon(Icons.add, size: 16),
-                            label: const Text("Crear variante con sobrante", style: TextStyle(fontSize: 11)),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.orange[700],
-                              side: BorderSide(color: Colors.orange[300]!),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              minimumSize: const Size(0, 32),
-                            ),
-                          ),
-                        ]
-                      ]
-                    );
-                  }),
+                  // ALERTAS DE STOCK (Phase 3 & 4: Matemática exacta y 1 toque)
+                  _buildStockAlertBlock(isVariantMatch: false),
                 ],
               ),
             ),

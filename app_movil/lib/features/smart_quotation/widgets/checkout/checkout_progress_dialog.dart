@@ -191,6 +191,7 @@ class _CheckoutProgressDialogState extends State<CheckoutProgressDialog> {
         "monto_total": widget.total,
         "monto_pagado": widget.paid,
         "descuento_aplicado": widget.discount,
+        "abono_inicial": widget.paid,
         "porcentaje_interes": widget.interestRate,
         "fecha_venta": DateTime.now().toIso8601String(),
       };

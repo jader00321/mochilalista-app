@@ -38,6 +38,10 @@ class ManualQuoteHeadersSection extends StatelessWidget {
   final VoidCallback onSearchClientTap;
   final VoidCallback onClearClient;
 
+  // Reactividad y restauración de título
+  final bool isAutoTitleMode;
+  final VoidCallback? onRestoreAutoTitle;
+
   const ManualQuoteHeadersSection({
     super.key,
     required this.isDark,
@@ -63,6 +67,8 @@ class ManualQuoteHeadersSection extends StatelessWidget {
     required this.onNewClientModeChanged,
     required this.onSearchClientTap,
     required this.onClearClient,
+    this.isAutoTitleMode = true,
+    this.onRestoreAutoTitle,
   });
 
   @override
@@ -109,14 +115,29 @@ class ManualQuoteHeadersSection extends StatelessWidget {
                     children: [
                       TextField(
                         controller: quoteTitleCtrl,
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
+                        style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold, color: textColor),
                         decoration: InputDecoration(
                           labelText: "Nombre / Título de la Cotización",
-                          labelStyle: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                          labelStyle: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                          floatingLabelBehavior: FloatingLabelBehavior.auto,
                           prefixIcon: Icon(Icons.description, color: isDark ? Colors.blue[300] : Colors.blue),
+                          suffixIcon: !isAutoTitleMode && onRestoreAutoTitle != null
+                              ? IconButton(
+                                  icon: const Icon(Icons.restore_outlined),
+                                  color: isDark ? Colors.amber[300] : Colors.orange[800],
+                                  tooltip: "Restaurar nombre automático",
+                                  onPressed: onRestoreAutoTitle,
+                                )
+                              : Tooltip(
+                                  message: "Nombre dinámico sincronizado",
+                                  child: Icon(Icons.auto_awesome, size: 18, color: isDark ? Colors.blue[300] : Colors.blue[600]),
+                                ),
                           filled: true,
-                          fillColor: isDark ? Colors.blue.withValues(alpha: 0.05) : Colors.blue.shade50,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          fillColor: isDark ? const Color(0xFF14141C) : Colors.blue.withValues(alpha: 0.05),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.blue[300]! : Colors.blue[700]!, width: 1.5)),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -127,11 +148,15 @@ class ManualQuoteHeadersSection extends StatelessWidget {
                         minLines: 1,
                         decoration: InputDecoration(
                           labelText: "Notas de Cotización (Opcional)",
-                          labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                          labelStyle: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                          floatingLabelBehavior: FloatingLabelBehavior.auto,
                           prefixIcon: Icon(Icons.sticky_note_2_outlined, color: isDark ? Colors.grey[400] : Colors.grey),
                           filled: true,
                           fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.blue[300]! : Colors.blue[700]!, width: 1.5)),
                         ),
                       ),
                     ],

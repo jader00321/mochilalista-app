@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
@@ -513,8 +513,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-      final expectedProfitText = "Ganancia ~${currency.format(15.50)}";
+      final expectedProfitText = "Ganancia ~${AppCurrency.format(15.50)}";
 
       // Ganancia total visible en el footer
       expect(find.text(expectedProfitText), findsOneWidget);
@@ -525,7 +524,7 @@ void main() {
 
       expect(find.text(expectedProfitText), findsNothing);
       // El total general sigue 100% visible
-      expect(find.text(currency.format(50.00)), findsOneWidget);
+      expect(find.text(AppCurrency.format(50.00)), findsOneWidget);
     });
   });
 

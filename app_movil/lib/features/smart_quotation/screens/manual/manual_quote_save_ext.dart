@@ -179,15 +179,15 @@ extension _ManualQuoteSaveExt on _ManualQuotationScreenState {
     String finalQuoteName = _quoteTitleCtrl.text.trim();
 
     if (finalQuoteName.isEmpty || finalQuoteName == "Cliente General") {
-        final uniqueCode = DateFormat('dd-HHmm').format(DateTime.now());
-        if (authProv.isCommunityClient) {
-            final String name = (authProv.user?.fullName != null && authProv.user!.fullName.isNotEmpty) ? authProv.user!.fullName : "Cliente";
-            finalQuoteName = "$name - Pedido Manual #$uniqueCode";
-        } else if (type == 'pack') {
-            finalQuoteName = _clientNameCtrl.text.isNotEmpty ? "Pack Escolar de ${_clientNameCtrl.text} #$uniqueCode" : "Pack Escolar #$uniqueCode";
-        } else {
-            finalQuoteName = _clientNameCtrl.text.isNotEmpty ? "${_clientNameCtrl.text} #$uniqueCode" : "Cotización Manual #$uniqueCode";
-        }
+      finalQuoteName = QuotationNamingEngine.generateTitle(
+        selectedClient: _selectedClient,
+        typedClientName: _clientNameCtrl.text,
+        schoolName: _schoolCtrl.text,
+        gradeLevel: _gradeCtrl.text,
+        quotationType: type,
+        isClientRole: authProv.isCommunityClient,
+        clientUserName: authProv.user?.fullName,
+      );
     }
 
     int? targetQuotationId = forceClone ? null : _currentQuotationId;

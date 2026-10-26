@@ -16,6 +16,7 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/models/user_model.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
@@ -58,10 +59,12 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
   bool _isUsingSelectedClient = false;
 
   // ↶ Pila de Historial Undo / Redo Blindada
+  // ↶ Pila de Historial Undo / Redo Blindada (1 Solo Toque Garantizado)
   final List<String> _undoStack = [];
   final List<String> _redoStack = [];
   bool _isApplyingUndoRedo = false;
   Timer? _typingDebounceTimer;
+  String _lastCommittedText = "";
 
   final _clientNameCtrl = TextEditingController();
   final _clientPhoneCtrl = TextEditingController();
@@ -107,46 +110,78 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       setState(() => _isManualEdit = true);
     }
     if (_isApplyingUndoRedo) return;
+
+    // Al iniciar una ráfaga de escritura, salvaguardamos el estado anterior en _undoStack
+    if (_typingDebounceTimer == null || !_typingDebounceTimer!.isActive) {
+      if (_lastCommittedText.isNotEmpty && _lastCommittedText != newText) {
+        if (_undoStack.isEmpty || _undoStack.last != _lastCommittedText) {
+          _undoStack.add(_lastCommittedText);
+          if (_undoStack.length > 50) _undoStack.removeAt(0);
+          _redoStack.clear();
+        }
+      }
+    }
+
     _typingDebounceTimer?.cancel();
     _typingDebounceTimer = Timer(const Duration(milliseconds: 350), () {
-      _recordUndoSnapshot(newText);
+      _lastCommittedText = newText;
+      if (mounted) setState(() {});
     });
   }
 
   void _recordUndoSnapshot([String? specificText]) {
     if (_isApplyingUndoRedo) return;
+    _typingDebounceTimer?.cancel();
     final current = specificText ?? _messageCtrl.text;
     if (_undoStack.isEmpty || _undoStack.last != current) {
       _undoStack.add(current);
       if (_undoStack.length > 50) _undoStack.removeAt(0);
       _redoStack.clear();
+      _lastCommittedText = current;
       if (mounted) setState(() {});
     }
   }
 
   void _handleUndo() {
+    _typingDebounceTimer?.cancel();
+    final currentText = _messageCtrl.text;
+
+    // Descartar del tope de _undoStack cualquier entrada que sea idéntica al texto actual
+    while (_undoStack.isNotEmpty && _undoStack.last == currentText) {
+      _undoStack.removeLast();
+    }
+
     if (_undoStack.isEmpty) return;
+
     HapticFeedback.selectionClick();
     _isApplyingUndoRedo = true;
-    final currentText = _messageCtrl.text;
     _redoStack.add(currentText);
     final previousText = _undoStack.removeLast();
     _messageCtrl.text = previousText;
     _messageCtrl.selection = TextSelection.collapsed(offset: previousText.length);
+    _lastCommittedText = previousText;
     _isManualEdit = true;
     setState(() {});
     _isApplyingUndoRedo = false;
   }
 
   void _handleRedo() {
+    _typingDebounceTimer?.cancel();
+    final currentText = _messageCtrl.text;
+
+    while (_redoStack.isNotEmpty && _redoStack.last == currentText) {
+      _redoStack.removeLast();
+    }
+
     if (_redoStack.isEmpty) return;
+
     HapticFeedback.selectionClick();
     _isApplyingUndoRedo = true;
-    final currentText = _messageCtrl.text;
     _undoStack.add(currentText);
     final nextText = _redoStack.removeLast();
     _messageCtrl.text = nextText;
     _messageCtrl.selection = TextSelection.collapsed(offset: nextText.length);
+    _lastCommittedText = nextText;
     _isManualEdit = true;
     setState(() {});
     _isApplyingUndoRedo = false;
@@ -393,32 +428,37 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
 
     // 2. SECCIÓN PRINCIPAL: ITEMS (O DETALLE DEL PRÉSTAMO CON PARIDAD CONTABLE)
     if (isLoan) {
-      final double totalDebt = (_saleData!['monto_total'] ?? _quotation!.totalAmount).toDouble();
+      final double totalWithInterest = (_saleData!['monto_total'] ?? _quotation!.totalAmount).toDouble();
       final double paid = (_saleData!['monto_pagado'] ?? 0.0).toDouble();
-      final double debt = totalDebt - paid > 0 ? totalDebt - paid : 0.0;
       final double interestRate = (_saleData!['porcentaje_interes'] ?? 0.0).toDouble();
+      final double abonoInicial = (_saleData!['abono_inicial'] ?? 0.0).toDouble();
 
-      double capital = totalDebt;
-      double interestAmount = 0.0;
-      if (interestRate > 0) {
-        capital = totalDebt / (1 + (interestRate / 100));
-        interestAmount = totalDebt - capital;
-      }
+      final double debtWithInterest = totalWithInterest - abonoInicial;
+      final double debtBase = (interestRate > 0 && debtWithInterest > 0)
+          ? debtWithInterest / (1 + (interestRate / 100))
+          : debtWithInterest;
+      final double interestAmount = debtWithInterest - debtBase;
+      final double capitalNeto = abonoInicial + debtBase;
+      final double debt = totalWithInterest - paid > 0 ? totalWithInterest - paid : 0.0;
+
+      final String rateLabel = interestRate > 0 ? '${interestRate.toStringAsFixed(1).replaceAll('.0', '')}%' : '0%';
+      final String interestDisplay = interestAmount > 0.01 
+          ? "+ ${AppCurrency.format(interestAmount)}" 
+          : AppCurrency.format(0.0);
 
       sb.writeln("🏦 *DETALLE DEL PRÉSTAMO*");
-      if (interestRate > 0) {
-        sb.writeln("▪ Capital Prestado: *${currency.format(capital).trim()}*");
-        sb.writeln("▪ Interés Acordado: *${interestRate.toStringAsFixed(1)}% (${currency.format(interestAmount).trim()})*");
-        sb.writeln("▪ Total a Devolver: *${currency.format(totalDebt).trim()}*");
-      } else {
-        sb.writeln("▪ Capital Registrado: *${currency.format(totalDebt).trim()}*");
-      }
+      sb.writeln("▪ Capital Prestado: *${AppCurrency.format(capitalNeto)}*");
+      sb.writeln("▪ Interés Aplicado ($rateLabel): *$interestDisplay*");
+      sb.writeln("▪ Total a Devolver: *${AppCurrency.format(totalWithInterest)}*");
 
+      if (abonoInicial > 0.01) {
+        sb.writeln("▪ Abono Inicial: *${AppCurrency.format(abonoInicial)}*");
+      }
       if (paid > 0.01) {
-        sb.writeln("▪ Monto Abonado: *${currency.format(paid).trim()}* ✅");
+        sb.writeln("▪ Monto Total Abonado: *${AppCurrency.format(paid)}* ✅");
       }
       if (debt > 0.01 && _config.showDebtInfo) {
-        sb.writeln("▪ *Saldo Pendiente por Pagar: ${currency.format(debt).trim()}* ⚠️");
+        sb.writeln("▪ *Saldo Pendiente por Pagar: ${AppCurrency.format(debt)}* ⚠️");
       } else if (debt <= 0.01) {
         sb.writeln("▪ Estado del Préstamo: *TOTALMENTE CANCELADO* ✅");
       }
@@ -600,12 +640,14 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
     }
 
     _messageCtrl.text = sb.toString();
+    _lastCommittedText = _messageCtrl.text;
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final authProv = Provider.of<AuthProvider>(context, listen: false);
 
     if (_isLoading) {
       return Scaffold(
@@ -626,10 +668,32 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          const InfoTooltipButton(
+          InfoTooltipButton(
             title: "Guía del Editor WhatsApp",
             description: "Personaliza tu mensaje con 6 estilos comerciales, formato rápido, "
                 "deshacer/rehacer ilimitado y vista previa en burbuja realista de WhatsApp.",
+            tips: const [
+              InfoTip(
+                icon: Icons.style_rounded,
+                text: "Escoge entre 6 estilos comerciales (Formal, Ejecutivo, Oferta Urgente, etc.) con 1 solo toque.",
+              ),
+              InfoTip(
+                icon: Icons.tune_rounded,
+                text: "Activa o desactiva subtotales, sección de ahorro, cuentas bancarias y datos de entrega al instante.",
+              ),
+              InfoTip(
+                icon: Icons.visibility_rounded,
+                text: "Toca el icono ⓘ en cualquier tarjeta para previsualizar el bloque exacto generado con tus datos reales.",
+              ),
+              InfoTip(
+                icon: Icons.history_rounded,
+                text: "Revierte o recupera cambios manuales de inmediato con respuesta garantizada en un solo toque.",
+              ),
+              InfoTip(
+                icon: Icons.chat_bubble_outline_rounded,
+                text: "Verifica la estética realista del mensaje antes del envío con scroll suave y edición directa en burbuja.",
+              ),
+            ],
           ),
           IconButton(
             icon: const Icon(Icons.restart_alt, size: 26),
@@ -682,6 +746,11 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                     config: _config,
                     isSale: isSale,
                     contextKey: _currentContextKey,
+                    quotation: _quotation,
+                    saleData: _saleData,
+                    businessName: authProv.currentBusiness?.commercialName,
+                    businessPhone: _bizPhoneCtrl.text,
+                    paymentAccountsText: _bizPaymentCtrl.text,
                     onChanged: () => setState(() => _regenerateMessage()),
                   ),
                   const SizedBox(height: 16),
@@ -936,8 +1005,8 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
 
       final initialPdfConfig = PdfConfig(
         documentTitle: isLoan
-            ? "COMPROBANTE DE PRESTAMO"
-            : (_saleData != null ? "COMPROBANTE DE PAGO" : "COTIZACION"),
+            ? "COMPROBANTE DE PRÉSTAMO"
+            : (_saleData != null ? "COMPROBANTE DE PAGO" : "COTIZACIÓN"),
         customClientName: _clientNameCtrl.text.trim().isNotEmpty ? _clientNameCtrl.text.trim() : null,
         showTransactionDetails: !isLoan,
         showInstallments: isLoan || (_saleData != null && _saleData!['cuotas'] != null),

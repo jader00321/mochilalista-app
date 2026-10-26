@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 
@@ -39,7 +39,6 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final surfaceColor = widget.isDark ? Theme.of(context).colorScheme.surface : Colors.white;
     final btnColor = widget.customColor ?? (widget.isDark ? Colors.green[700] : const Color(0xFF2E7D32));
     final bottomPadding = InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 8.0);
@@ -112,7 +111,7 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
                                             ),
                                           ),
                                           child: Text(
-                                            "Ganancia ~${currency.format(widget.estimatedProfit)}",
+                                            "Ganancia ~${AppCurrency.format(widget.estimatedProfit)}",
                                             style: TextStyle(
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
@@ -127,7 +126,7 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
                           ],
                         ],
                       ),
-                      Text(currency.format(widget.totalAmount), style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: widget.isDark ? Colors.green[400] : const Color(0xFF2E7D32))),
+                      Text(AppCurrency.format(widget.totalAmount), style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: widget.isDark ? Colors.green[400] : const Color(0xFF2E7D32))),
                     ],
                   ),
                   Text("${widget.itemCount} prod.", style: TextStyle(color: widget.isDark ? Colors.grey[300] : Colors.grey[800], fontSize: 16, fontWeight: FontWeight.bold)),
@@ -147,7 +146,7 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
                           children: [
                             Icon(Icons.local_offer, color: widget.isDark ? Colors.green[400] : Colors.green[700], size: 18),
                             const SizedBox(width: 8),
-                            Text("Ahorro aplicado: ${currency.format(widget.totalSavings)}", style: TextStyle(color: widget.isDark ? Colors.green[400] : Colors.green[700], fontSize: 14, fontWeight: FontWeight.bold)),
+                            Text("Ahorro aplicado: ${AppCurrency.format(widget.totalSavings)}", style: TextStyle(color: widget.isDark ? Colors.green[400] : Colors.green[700], fontSize: 14, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),

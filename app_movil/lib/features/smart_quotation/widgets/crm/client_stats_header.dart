@@ -299,17 +299,12 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                 flex: 3,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (ctx) => ClientFinanceActionsModal(
-                        client: widget.client,
-                        isDark: widget.isDark,
-                      ),
-                    ).then((_) {
-                      widget.onFinanceActionCompleted();
-                    });
+                    ClientFinanceActionsModal.show(
+                      context,
+                      client: widget.client,
+                      isDark: widget.isDark,
+                      onCompleted: widget.onFinanceActionCompleted,
+                    );
                   },
                   icon: const Icon(Icons.account_balance_wallet, size: 16),
                   label: const Text(

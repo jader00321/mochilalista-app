@@ -200,15 +200,15 @@ class _WaFinalPreviewModalState extends State<WaFinalPreviewModal> {
                 ),
                 Row(
                   children: [
-                    // Botón alternador entre Vista de Burbuja y Modo Edición
+                    // Botón alternador entre Vista de Burbuja y Modo Edición (Limpio, sin emojis duplicados)
                     TextButton.icon(
                       onPressed: () {
                         HapticFeedback.selectionClick();
                         setState(() => _isEditing = !_isEditing);
                       },
-                      icon: Icon(_isEditing ? Icons.visibility_outlined : Icons.edit_note_rounded, size: 18),
+                      icon: Icon(_isEditing ? Icons.check_rounded : Icons.edit_note_rounded, size: 18),
                       label: Text(
-                        _isEditing ? "✓ Listo" : "✏️ Editar texto",
+                        _isEditing ? "Listo" : "Editar texto",
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
                       ),
                       style: TextButton.styleFrom(
@@ -246,12 +246,14 @@ class _WaFinalPreviewModalState extends State<WaFinalPreviewModal> {
                   radius: const Radius.circular(8),
                   child: SingleChildScrollView(
                     controller: _scrollController,
-                    physics: const BouncingScrollPhysics(),
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                     padding: const EdgeInsets.only(left: 14, right: 14, top: 14, bottom: 36),
                     child: _isEditing
                         ? TextField(
                             controller: widget.messageCtrl,
+                            expands: false,
                             maxLines: null,
+                            keyboardType: TextInputType.multiline,
                             style: TextStyle(
                               fontSize: 14.5,
                               height: 1.45,
@@ -305,7 +307,7 @@ class _WaFinalPreviewModalState extends State<WaFinalPreviewModal> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            SelectableText.rich(
+            Text.rich(
               TextSpan(
                 children: _parseWhatsAppMarkdown(
                   widget.messageCtrl.text,

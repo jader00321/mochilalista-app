@@ -51,6 +51,10 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
   final TextEditingController _titleCtrl = TextEditingController();
   final TextEditingController _clientNameCtrl = TextEditingController();
   final TextEditingController _footerNoteCtrl = TextEditingController();
+  final TextEditingController _instNameCtrl = TextEditingController();
+  final TextEditingController _gradeLevelCtrl = TextEditingController();
+  final TextEditingController _notesCtrl = TextEditingController();
+  final TextEditingController _paymentAccountsCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -145,10 +149,15 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
     _titleCtrl.dispose();
     _clientNameCtrl.dispose();
     _footerNoteCtrl.dispose();
+    _instNameCtrl.dispose();
+    _gradeLevelCtrl.dispose();
+    _notesCtrl.dispose();
+    _paymentAccountsCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadData() async {
+    final authProv = Provider.of<AuthProvider>(context, listen: false);
     try {
       if (widget.saleId != null) {
         final saleProv = Provider.of<SaleProvider>(context, listen: false);
@@ -157,7 +166,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
         if (_saleData != null && _saleData!['cotizacion'] != null) {
           _quotation = SmartQuotationModel.fromJson(_saleData!['cotizacion']);
           final bool isLoan = _saleData!['origen_venta'] == 'prestamo_personal';
-          _config.documentTitle = isLoan ? "COMPROBANTE DE PRESTAMO" : "COMPROBANTE DE PAGO"; 
+          _config.documentTitle = isLoan ? "COMPROBANTE DE PRÉSTAMO" : "COMPROBANTE DE PAGO"; 
           _config.showTransactionDetails = !isLoan;
           _config.showInstallments = isLoan;
         }
@@ -165,7 +174,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
       else if (widget.quotationId != null) {
         final qProv = Provider.of<SmartQuotationProvider>(context, listen: false);
         _quotation = await qProv.getQuotationById(widget.quotationId!);
-        _config.documentTitle = "COTIZACION"; 
+        _config.documentTitle = "COTIZACIÓN"; 
         _config.showTransactionDetails = false;
       }
 
@@ -191,6 +200,13 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
         final bool hasNotes = _saleData != null && _saleData!['cliente_notas'] != null && _saleData!['cliente_notas'].toString().isNotEmpty;
         final bool hasInst = !isQuickSale && ((_quotation!.institutionName?.isNotEmpty ?? false) || (_quotation!.gradeLevel?.isNotEmpty ?? false));
         _config.showInstitutionInfo = hasInst || hasNotes;
+
+        // Precargar campos editables de institución, grado, notas y cuentas
+        _instNameCtrl.text = _quotation!.institutionName ?? "";
+        _gradeLevelCtrl.text = _quotation!.gradeLevel ?? "";
+        final rawNotes = _saleData != null ? _saleData!['cliente_notas']?.toString() : _quotation!.notas;
+        _notesCtrl.text = rawNotes ?? "";
+        _paymentAccountsCtrl.text = authProv.user?.business?.paymentInfo ?? "";
       }
     } catch (e) {
       debugPrint("⚠️ Error cargando datos de PDF: $e");
@@ -274,10 +290,31 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
         elevation: 0,
         actions: [
           const InfoTooltipButton(
+            iconColor: Colors.white,
             title: "Guía de Vista Previa PDF",
-            description: "Personaliza tu documento con 4 estilos ejecutivos, 6 paletas de color, "
-                "formato A4 o Ticket 80mm térmico. Puedes hacer zoom con dos dedos o doble toque, "
-                "descargar el PDF directamente en Descargas, compartirlo o imprimirlo.",
+            description: "Personaliza y genera documentos comerciales en alta definición, listos para imprimir en impresoras térmicas POS o compartir en formato ejecutivo.",
+            tips: [
+              InfoTip(
+                icon: Icons.aspect_ratio_rounded,
+                text: "Cambia entre Hoja A4 ejecutiva y Ticket térmico continuo de 80mm para impresoras POS.",
+              ),
+              InfoTip(
+                icon: Icons.dashboard_customize_outlined,
+                text: "Elige entre 4 plantillas estructurales y 6 paletas de color con opción de guardado por defecto.",
+              ),
+              InfoTip(
+                icon: Icons.pinch_outlined,
+                text: "Haz zoom libre con dos dedos o doble toque en cualquier parte del visor para revisar detalles.",
+              ),
+              InfoTip(
+                icon: Icons.person_search_outlined,
+                text: "Busca clientes en tu agenda o personaliza notas y cuentas de cobro al pie antes de generar.",
+              ),
+              InfoTip(
+                icon: Icons.share_outlined,
+                text: "Descarga el archivo PDF directamente en Descargas, imprímelo por Bluetooth/WiFi o compártelo al instante.",
+              ),
+            ],
           ),
           const SizedBox(width: 8),
         ],
@@ -759,47 +796,62 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                             children: [
                               _buildSectionTitle("Plantilla Estructural del PDF", Icons.dashboard_outlined, isDark),
-                              GridView.count(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                crossAxisCount: 2,
-                                childAspectRatio: 2.3,
-                                crossAxisSpacing: 10,
-                                mainAxisSpacing: 10,
-                                children: [
-                                  _buildLayoutSelectionCard(
-                                    title: "Ejecutivo Moderno",
-                                    subtitle: "Banda color superior",
-                                    icon: Icons.view_compact_outlined,
-                                    template: PdfLayoutTemplate.executiveModern,
-                                    isDark: isDark,
-                                    updateConfig: updateConfig,
-                                  ),
-                                  _buildLayoutSelectionCard(
-                                    title: "Corporativo Formal",
-                                    subtitle: "Bordes dobles formales",
-                                    icon: Icons.crop_square_outlined,
-                                    template: PdfLayoutTemplate.corporateFramed,
-                                    isDark: isDark,
-                                    updateConfig: updateConfig,
-                                  ),
-                                  _buildLayoutSelectionCard(
-                                    title: "Catálogo Comercial",
-                                    subtitle: "Destaca fotos y detalles",
-                                    icon: Icons.photo_library_outlined,
-                                    template: PdfLayoutTemplate.commercialCatalog,
-                                    isDark: isDark,
-                                    updateConfig: updateConfig,
-                                  ),
-                                  _buildLayoutSelectionCard(
-                                    title: "Mayorista Compacto",
-                                    subtitle: "Máxima densidad de datos",
-                                    icon: Icons.table_rows_outlined,
-                                    template: PdfLayoutTemplate.compactWholesale,
-                                    isDark: isDark,
-                                    updateConfig: updateConfig,
-                                  ),
-                                ],
+                              IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: _buildLayoutSelectionCard(
+                                        title: "Ejecutivo Moderno",
+                                        subtitle: "Banda color superior y cabeceras ejecutivas",
+                                        icon: Icons.view_compact_outlined,
+                                        template: PdfLayoutTemplate.executiveModern,
+                                        isDark: isDark,
+                                        updateConfig: updateConfig,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _buildLayoutSelectionCard(
+                                        title: "Corporativo Formal",
+                                        subtitle: "Bordes dobles formales y sellos de aprobación",
+                                        icon: Icons.crop_square_outlined,
+                                        template: PdfLayoutTemplate.corporateFramed,
+                                        isDark: isDark,
+                                        updateConfig: updateConfig,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: _buildLayoutSelectionCard(
+                                        title: "Catálogo Comercial",
+                                        subtitle: "Destaca fotos, badges y detalles de productos",
+                                        icon: Icons.photo_library_outlined,
+                                        template: PdfLayoutTemplate.commercialCatalog,
+                                        isDark: isDark,
+                                        updateConfig: updateConfig,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _buildLayoutSelectionCard(
+                                        title: "Mayorista Compacto",
+                                        subtitle: "Máxima densidad de datos para cotizaciones extensas",
+                                        icon: Icons.table_rows_outlined,
+                                        template: PdfLayoutTemplate.compactWholesale,
+                                        isDark: isDark,
+                                        updateConfig: updateConfig,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                               const SizedBox(height: 22),
 
@@ -1045,6 +1097,62 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                                         activeThumbColor: Colors.orange,
                                         onChanged: (v) => updateConfig(() => _config.showInstitutionInfo = v),
                                       ),
+                                      AnimatedSize(
+                                        duration: const Duration(milliseconds: 250),
+                                        curve: Curves.easeInOut,
+                                        child: !_config.showInstitutionInfo
+                                            ? const SizedBox.shrink()
+                                            : Padding(
+                                                padding: const EdgeInsets.only(top: 8, bottom: 4),
+                                                child: Column(
+                                                  children: [
+                                                    if (!isQuickSale) ...[
+                                                      TextField(
+                                                        controller: _instNameCtrl,
+                                                        style: TextStyle(color: textColor, fontSize: 13),
+                                                        decoration: InputDecoration(
+                                                          labelText: "Colegio / Institución",
+                                                          labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                                                          filled: true,
+                                                          fillColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                        ),
+                                                        onChanged: (v) => updateConfig(() => _config.customInstitutionName = v.trim().isEmpty ? null : v.trim()),
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      TextField(
+                                                        controller: _gradeLevelCtrl,
+                                                        style: TextStyle(color: textColor, fontSize: 13),
+                                                        decoration: InputDecoration(
+                                                          labelText: "Grado / Nivel / Sección",
+                                                          labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                                                          filled: true,
+                                                          fillColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                        ),
+                                                        onChanged: (v) => updateConfig(() => _config.customGradeLevel = v.trim().isEmpty ? null : v.trim()),
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                    ],
+                                                    TextField(
+                                                      controller: _notesCtrl,
+                                                      style: TextStyle(color: textColor, fontSize: 13),
+                                                      decoration: InputDecoration(
+                                                        labelText: isQuickSale ? "Nota de Venta / Observaciones" : "Notas / Observaciones del Cliente",
+                                                        labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                                                        filled: true,
+                                                        fillColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                      ),
+                                                      onChanged: (v) => updateConfig(() => _config.customNotes = v.trim().isEmpty ? null : v.trim()),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                      ),
                                     ],
                                     const SizedBox(height: 10),
                                     TextField(
@@ -1063,30 +1171,76 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                                     ),
                                     const SizedBox(height: 6),
                                     Wrap(
-                                       spacing: 6,
-                                       runSpacing: 6,
-                                       children: [
-                                         "+ ⏳ Válida por 7 días",
-                                         "+ ⏳ Válida por 15 días",
-                                         "+ 🚚 Entrega inmediata",
-                                         "+ 🧾 Precios incluyen IGV",
-                                         "+ 🤝 Gracias por su compra",
-                                       ].map((chipLabel) {
-                                         final cleanText = chipLabel.replaceFirst("+ ", "");
-                                         return ActionChip(
-                                           visualDensity: VisualDensity.compact,
-                                           label: Text(chipLabel, style: const TextStyle(fontSize: 11)),
-                                           onPressed: () {
-                                             updateConfig(() {
-                                               final current = _footerNoteCtrl.text.trim();
-                                               final newText = current.isEmpty ? cleanText : "$current. $cleanText";
-                                               _footerNoteCtrl.text = newText;
-                                               _config.footerNote = newText;
-                                             });
-                                           },
-                                         );
-                                       }).toList(),
-                                     ),
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: [
+                                        ("⏳ Válida por 7 días", "Válida por 7 días"),
+                                        ("⏳ Válida por 15 días", "Válida por 15 días"),
+                                        ("🚚 Entrega inmediata", "Entrega inmediata"),
+                                        ("🧾 Precios incluyen IGV", "Precios incluyen IGV"),
+                                        ("📦 Sujeto a stock", "Sujeto a stock"),
+                                        ("🛡️ Garantía de tienda", "Garantía de tienda"),
+                                        ("🤝 ¡Gracias por su compra!", "¡Gracias por su compra!"),
+                                      ].map((item) {
+                                        final displayLabel = item.$1;
+                                        final cleanText = item.$2;
+                                        final currentText = _footerNoteCtrl.text;
+                                        final isSelected = currentText.toLowerCase().contains(cleanText.toLowerCase()) ||
+                                            (cleanText.contains("¡Gracias") && currentText.toLowerCase().contains("gracias por su compra"));
+
+                                        return FilterChip(
+                                          visualDensity: VisualDensity.compact,
+                                          selected: isSelected,
+                                          showCheckmark: true,
+                                          checkmarkColor: Colors.white,
+                                          selectedColor: Colors.orange.shade700,
+                                          backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.grey.shade100,
+                                          side: BorderSide(color: isSelected ? Colors.orange : (isDark ? Colors.white24 : Colors.grey.shade300)),
+                                          label: Text(
+                                            displayLabel,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                            ),
+                                          ),
+                                          onSelected: (_) {
+                                            updateConfig(() {
+                                              if (isSelected) {
+                                                // Eliminar de forma limpia
+                                                String updated = currentText.replaceAll(cleanText, '');
+                                                if (cleanText.contains("¡Gracias")) {
+                                                  updated = updated.replaceAll(RegExp(r'¡?Gracias por su compra!?', caseSensitive: false), '');
+                                                }
+                                                updated = updated.replaceAll(RegExp(r'\.\s*\.'), '.').trim();
+                                                if (updated.startsWith('.')) updated = updated.substring(1).trim();
+                                                if (updated.endsWith('.')) updated = updated.substring(0, updated.length - 1).trim();
+                                                updated = updated.replaceAll(RegExp(r'\s+'), ' ');
+                                                _footerNoteCtrl.text = updated;
+                                                _config.footerNote = updated.isEmpty ? null : updated;
+                                              } else {
+                                                // Exclusión mutua: Válida por 7 días vs Válida por 15 días
+                                                String current = currentText.trim();
+                                                if (cleanText == "Válida por 7 días" && current.contains(RegExp(r'Válida por 15 días', caseSensitive: false))) {
+                                                  current = current.replaceAll(RegExp(r'Válida por 15 días', caseSensitive: false), cleanText);
+                                                  _footerNoteCtrl.text = current;
+                                                  _config.footerNote = current;
+                                                } else if (cleanText == "Válida por 15 días" && current.contains(RegExp(r'Válida por 7 días', caseSensitive: false))) {
+                                                  current = current.replaceAll(RegExp(r'Válida por 7 días', caseSensitive: false), cleanText);
+                                                  _footerNoteCtrl.text = current;
+                                                  _config.footerNote = current;
+                                                } else {
+                                                  if (current.endsWith('.')) current = current.substring(0, current.length - 1).trim();
+                                                  final newText = current.isEmpty ? cleanText : "$current. $cleanText";
+                                                  _footerNoteCtrl.text = newText;
+                                                  _config.footerNote = newText;
+                                                }
+                                              }
+                                            });
+                                          },
+                                        );
+                                      }).toList(),
+                                    ),
                                     const SizedBox(height: 10),
                                     SwitchListTile(
                                       contentPadding: EdgeInsets.zero,
@@ -1095,6 +1249,114 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                                       value: _config.showPaymentAccounts,
                                       activeThumbColor: Colors.orange,
                                       onChanged: (v) => updateConfig(() => _config.showPaymentAccounts = v),
+                                    ),
+                                    AnimatedSize(
+                                      duration: const Duration(milliseconds: 250),
+                                      curve: Curves.easeInOut,
+                                      child: !_config.showPaymentAccounts
+                                          ? const SizedBox.shrink()
+                                          : Padding(
+                                              padding: const EdgeInsets.only(top: 8, bottom: 4),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  TextField(
+                                                    controller: _paymentAccountsCtrl,
+                                                    maxLines: 2,
+                                                    style: TextStyle(color: textColor, fontSize: 13),
+                                                    decoration: InputDecoration(
+                                                      labelText: "Cuentas de Cobro / Instrucciones de Pago",
+                                                      hintText: "Ej: Yape/Plin: 999-888-777 | BCP: 191-xxxx...",
+                                                      labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                                                      filled: true,
+                                                      fillColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                    ),
+                                                    onChanged: (v) => updateConfig(() => _config.customPaymentInfo = v.trim().isEmpty ? null : v.trim()),
+                                                  ),
+                                                  const SizedBox(height: 6),
+                                                  Wrap(
+                                                    spacing: 6,
+                                                    runSpacing: 6,
+                                                    children: [
+                                                      ("📱 Yape", "Yape"),
+                                                      ("📱 Plin", "Plin"),
+                                                      ("🏦 BCP", "BCP"),
+                                                      ("🏦 CCI", "CCI"),
+                                                    ].map((item) {
+                                                      final displayLabel = item.$1;
+                                                      final rawType = item.$2;
+                                                      final current = _paymentAccountsCtrl.text;
+                                                      final isSelected = RegExp(r'\b' + rawType + r'\b', caseSensitive: false).hasMatch(current);
+
+                                                      return FilterChip(
+                                                        visualDensity: VisualDensity.compact,
+                                                        selected: isSelected,
+                                                        showCheckmark: true,
+                                                        checkmarkColor: Colors.white,
+                                                        selectedColor: Colors.orange.shade700,
+                                                        backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.grey.shade100,
+                                                        side: BorderSide(color: isSelected ? Colors.orange : (isDark ? Colors.white24 : Colors.grey.shade300)),
+                                                        label: Text(
+                                                          displayLabel,
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                                          ),
+                                                        ),
+                                                        onSelected: (_) {
+                                                          updateConfig(() {
+                                                            if (isSelected) {
+                                                              // Desmarcar y eliminar limpiamente sin duplicar
+                                                              final pattern = RegExp(
+                                                                r'(?:^|[|\n])\s*(?:[^\w\s]*\s*)?' + rawType + r'[:\s][^|\n]*',
+                                                                caseSensitive: false,
+                                                              );
+                                                              String updated = current.replaceAll(pattern, '');
+                                                              updated = updated.replaceAll(RegExp(r'\|\s*\|'), '|');
+                                                              updated = updated.replaceAll(RegExp(r'\n\s*\n'), '\n');
+                                                              updated = updated.trim();
+                                                              if (updated.startsWith('|')) updated = updated.substring(1).trim();
+                                                              if (updated.endsWith('|')) updated = updated.substring(0, updated.length - 1).trim();
+                                                              _paymentAccountsCtrl.text = updated;
+                                                              _config.customPaymentInfo = updated.isEmpty ? null : updated;
+                                                            } else {
+                                                              // Marcar y agregar texto limpio sin emojis
+                                                              final userPhone = authProv.user?.phone?.trim() ?? "";
+                                                              final bizPaymentInfo = authProv.user?.business?.paymentInfo ?? "";
+                                                              String accountNum = "";
+                                                              final m = RegExp(rawType + r'[:\s]+([0-9\s-]+)', caseSensitive: false).firstMatch(bizPaymentInfo);
+                                                              if (m != null && m.group(1) != null && m.group(1)!.trim().isNotEmpty) {
+                                                                accountNum = m.group(1)!.trim();
+                                                              } else if (rawType == 'Yape' || rawType == 'Plin') {
+                                                                accountNum = userPhone;
+                                                              }
+
+                                                              final entry = accountNum.isNotEmpty ? "$rawType: $accountNum" : "$rawType: ";
+                                                              String text = current.trim();
+                                                              String newText;
+                                                              if (text.isEmpty) {
+                                                                newText = entry;
+                                                              } else {
+                                                                if (text.contains('\n')) {
+                                                                  newText = "$text\n$entry";
+                                                                } else {
+                                                                  newText = "$text | $entry";
+                                                                }
+                                                              }
+                                                              _paymentAccountsCtrl.text = newText;
+                                                              _config.customPaymentInfo = newText;
+                                                            }
+                                                          });
+                                                        },
+                                                      );
+                                                    }).toList(),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
                                     ),
                                   ],
                                 ),
@@ -1363,52 +1625,64 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
 
     return InkWell(
       onTap: () => updateConfig(() => _config.layoutTemplate = template),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark ? Colors.blue.withValues(alpha: 0.18) : Colors.blue.withValues(alpha: 0.08))
               : (isDark ? const Color(0xFF14141E) : Colors.grey[50]),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? activeColor : (isDark ? Colors.white12 : Colors.grey.shade300),
             width: isSelected ? 2.0 : 0.8,
           ),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(icon, size: 22, color: isSelected ? activeColor : (isDark ? Colors.grey[400] : Colors.grey[600])),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
+            // Nivel 1: Fila superior con [Icono] + [Título completo] + [Check animado]
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: isSelected ? activeColor : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
                     title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 11.5,
+                      fontSize: 12,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                       color: isDark ? Colors.white : Colors.black87,
+                      height: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                ],
+                ),
+                const SizedBox(width: 4),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: isSelected
+                      ? Icon(Icons.check_circle_rounded, key: const ValueKey('checked'), size: 17, color: activeColor)
+                      : Icon(Icons.radio_button_unchecked_rounded, key: const ValueKey('unchecked'), size: 17, color: isDark ? Colors.white24 : Colors.grey.shade400),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            // Nivel 2: Descripción completa en 2 líneas limpias a todo el ancho sin cortes
+            Text(
+              subtitle,
+              maxLines: 2,
+              style: TextStyle(
+                fontSize: 10.5,
+                height: 1.3,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
               ),
             ),
-            if (isSelected) Icon(Icons.check_circle, size: 16, color: activeColor),
           ],
         ),
       ),

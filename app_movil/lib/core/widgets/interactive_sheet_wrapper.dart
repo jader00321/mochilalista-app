@@ -29,6 +29,7 @@ class InteractiveSheetWrapper extends StatefulWidget {
   final bool applyEffectiveBottomPadding;
   final double minBottomPadding;
   final ScrollController? scrollController;
+  final bool maintainFixedHeightOnKeyboard;
 
   const InteractiveSheetWrapper({
     super.key,
@@ -49,6 +50,7 @@ class InteractiveSheetWrapper extends StatefulWidget {
     this.applyEffectiveBottomPadding = true,
     this.minBottomPadding = 16.0,
     this.scrollController,
+    this.maintainFixedHeightOnKeyboard = false,
   });
 
   /// 🛡️ CÁLCULO UNIVERSAL DE BLINDAJE INFERIOR (BUG-07)
@@ -271,20 +273,25 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
 
     // 🛡️ REDUCCIÓN DINÁMICA DE VIEWPORT: Garantiza que el modal no colisione con el tope
     // de la pantalla ni provoque RenderFlex overflow cuando el teclado está abierto.
-    final safeAvailableHeight = math.max(160.0, screenHeight - keyboardInset - topPadding - 16.0);
+    // Con maintainFixedHeightOnKeyboard: true, preserva la altura exterior constante sin restar keyboardInset.
+    final safeAvailableHeight = widget.maintainFixedHeightOnKeyboard
+        ? math.max(160.0, screenHeight - topPadding - 16.0)
+        : math.max(160.0, screenHeight - keyboardInset - topPadding - 16.0);
     final maxAllowedHeight = math.min(screenHeight * widget.maxHeightFactor, safeAvailableHeight);
 
     // Cuando el teclado está abierto, la barra del sistema queda cubierta; usamos espaciado
     // compacto (12dp) para que el modal y su botón de acción queden pegados sobre el teclado sin doble padding.
-    final effectiveBottom = isKeyboardOpen
-        ? 12.0
-        : (widget.applyEffectiveBottomPadding
-            ? InteractiveSheetWrapper.getEffectiveBottomPadding(
-                context,
-                minPadding: widget.minBottomPadding,
-                includeKeyboard: false,
-              )
-            : 0.0);
+    final effectiveBottom = widget.maintainFixedHeightOnKeyboard
+        ? 0.0
+        : (isKeyboardOpen
+            ? 12.0
+            : (widget.applyEffectiveBottomPadding
+                ? InteractiveSheetWrapper.getEffectiveBottomPadding(
+                    context,
+                    minPadding: widget.minBottomPadding,
+                    includeKeyboard: false,
+                  )
+                : 0.0));
 
     final sheetBgColor = widget.backgroundColor ??
         (isDark ? const Color(0xFF1E1E28) : Colors.white);
@@ -300,7 +307,9 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
         : Color.lerp(Colors.grey[300], Colors.grey[600], _isDragging ? math.max(0.5, dragProgress) : dragProgress);
 
     return AnimatedPadding(
-      padding: EdgeInsets.only(bottom: keyboardInset),
+      padding: EdgeInsets.only(
+        bottom: widget.maintainFixedHeightOnKeyboard ? 0.0 : keyboardInset,
+      ),
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
       child: LayoutBuilder(
@@ -319,9 +328,9 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
               ),
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                onVerticalDragStart: _handleDragStart,
-                onVerticalDragUpdate: _handleDragUpdate,
-                onVerticalDragEnd: (d) => _handleDragEnd(d, totalHeight),
+                onVerticalDragStart: widget.enableDragToDismiss ? _handleDragStart : null,
+                onVerticalDragUpdate: widget.enableDragToDismiss ? _handleDragUpdate : null,
+                onVerticalDragEnd: widget.enableDragToDismiss ? (d) => _handleDragEnd(d, totalHeight) : null,
                 child: Container(
                   constraints: BoxConstraints(
                     maxHeight: maxAllowedHeight,
@@ -344,12 +353,12 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
                       // ZONA SUPERIOR CON HANDLE REACTIVO (ARRASTRE PRIORITARIO 1:1)
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onVerticalDragStart: (d) {
+                        onVerticalDragStart: widget.enableDragToDismiss ? (d) {
                           _isDraggingFromHandle = true;
                           _handleDragStart(d);
-                        },
-                        onVerticalDragUpdate: _handleDragUpdate,
-                        onVerticalDragEnd: (d) => _handleDragEnd(d, totalHeight),
+                        } : null,
+                        onVerticalDragUpdate: widget.enableDragToDismiss ? _handleDragUpdate : null,
+                        onVerticalDragEnd: widget.enableDragToDismiss ? (d) => _handleDragEnd(d, totalHeight) : null,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [

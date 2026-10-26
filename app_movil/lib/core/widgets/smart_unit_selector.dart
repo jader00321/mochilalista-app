@@ -8,6 +8,7 @@ class SmartUnitSelector extends StatefulWidget {
   final Function(String unitName, int factor, bool isAutomatic)? onChanged;
   final bool isCompact;
   final bool isMini;
+  final bool showInputs;
 
   const SmartUnitSelector({
     super.key,
@@ -17,6 +18,7 @@ class SmartUnitSelector extends StatefulWidget {
     this.onChanged,
     this.isCompact = false,
     this.isMini = false,
+    this.showInputs = true,
   });
 
   @override
@@ -77,6 +79,17 @@ class _SmartUnitSelectorState extends State<SmartUnitSelector> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.showInputs) {
+      // Modo selector desplegable sin inputs duplicados
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildToggleButton(),
+          _buildExpandedChips(),
+        ],
+      );
+    }
+
     if (widget.isMini) {
       // Modo ultra compacto para Tablas Comparativas (Clasificar y Confirmar)
       return Column(

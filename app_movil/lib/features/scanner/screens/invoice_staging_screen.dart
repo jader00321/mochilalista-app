@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
-import 'package:app_movil/core/services/unit_catalog_service.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 // Módulos UI
@@ -19,6 +18,7 @@ class InvoiceStagingScreen extends StatefulWidget {
 
 class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
   final ScrollController _scrollController = ScrollController();
+  final Map<String, GlobalKey> _groupKeys = {};
   bool _showScrollToTop = false;
 
   @override
@@ -195,10 +195,73 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
     }
   }
 
+  void _scrollToConflictGroup(ScannerProvider provider, String groupUuid) {
+    final staging = provider.stagingData;
+    if (staging == null) return;
+
+    final index = staging.productosAgrupados.indexWhere((g) => g.uuidTemporal == groupUuid);
+    if (index == -1) return;
+
+    provider.highlightGroup(groupUuid);
+
+    final estimatedOffset = (index * 420.0) + 120.0;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final targetScroll = estimatedOffset.clamp(0.0, maxScroll);
+
+    _scrollController.animateTo(
+      targetScroll,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+    ).then((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final key = _groupKeys[groupUuid];
+        if (key?.currentContext != null) {
+          Scrollable.ensureVisible(
+            key!.currentContext!,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            alignment: 0.1,
+          );
+        }
+      });
+    });
+
+    CustomSnackBar.show(
+      context,
+      message: "Mostrando producto #${index + 1} con observación de stock.",
+      isError: false,
+    );
+  }
+
+  void _scrollToFirstStockConflict(ScannerProvider provider) {
+    final staging = provider.stagingData;
+    if (staging == null) return;
+
+    for (int i = 0; i < staging.productosAgrupados.length; i++) {
+      final group = staging.productosAgrupados[i];
+      bool hasConflict = group.variantes.any((variant) {
+        if (!variant.isConfirmed) return false;
+        final int stockBD = variant.matchPresentacion.datos?.stockActual ?? 0;
+        final int totalBase = variant.calculateTotalUnitsBase(stockActualBD: stockBD);
+        final int factor = variant.effectiveFactorVenta;
+        if (factor > 1) {
+          if (totalBase ~/ factor == 0 && totalBase > 0 && !variant.allowDeficitApproved) return true;
+          if (totalBase % factor > 0 && totalBase ~/ factor >= 1 && !variant.allowLeftoverInReserve) return true;
+        }
+        return false;
+      });
+      if (hasConflict) {
+        _scrollToConflictGroup(provider, group.uuidTemporal);
+        return;
+      }
+    }
+    _showStockErrorModal(context, provider);
+  }
+
   void _showStockErrorModal(BuildContext context, ScannerProvider provider) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // Recolectar productos con error
+    // Recolectar productos con error según la base única de verdad
     List<Map<String, dynamic>> errors = [];
     final staging = provider.stagingData;
     if (staging != null) {
@@ -206,39 +269,32 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
         for (var variant in group.variantes) {
           if (!variant.isConfirmed) continue;
           
-          int totalUnidadesBase = variant.stockIngresanteOverride ?? (variant.cantidadUmpComprada * variant.unidadesPorLote).toInt();
-          
-          var validation = UnitCatalogService.validateStockForUnit(
-            totalUnitsBase: totalUnidadesBase,
-            presentationFactor: variant.unidadesPorVenta,
-            baseUnitCost: 0.0,
-            unitName: variant.unidadVenta,
-          );
-          
-          if (validation.status == StockValidationStatus.deficit) {
-            errors.add({
-              'name': variant.nombreEspecifico.isEmpty ? 'Variante Principal' : variant.nombreEspecifico,
-              'group': group.matchProducto.datos?.nombre ?? group.nombrePadre,
-              'status': validation.status,
-              'diff': validation.deficit,
-              'unit': variant.unidadVenta,
-            });
-          } else if (validation.status == StockValidationStatus.hasLeftover) {
-            int assignedLeftovers = 0;
-            for (var other in group.variantes) {
-              if (other != variant &&
-                  other.cantidadUmpComprada == 0 &&
-                  other.stockIngresanteOverride != null) {
-                assignedLeftovers += other.stockIngresanteOverride!;
-              }
-            }
-            if (assignedLeftovers < validation.leftover) {
+          final int stockBD = variant.matchPresentacion.datos?.stockActual ?? 0;
+          final int totalBase = variant.calculateTotalUnitsBase(stockActualBD: stockBD);
+          final int factor = variant.effectiveFactorVenta;
+          final String unidad = variant.effectiveUnidadVenta;
+
+          if (factor > 1) {
+            final int completas = totalBase ~/ factor;
+            final int sobrante = totalBase % factor;
+
+            if (completas == 0 && totalBase > 0 && !variant.allowDeficitApproved) {
               errors.add({
                 'name': variant.nombreEspecifico.isEmpty ? 'Variante Principal' : variant.nombreEspecifico,
                 'group': group.matchProducto.datos?.nombre ?? group.nombrePadre,
-                'status': validation.status,
-                'diff': validation.leftover - assignedLeftovers,
-                'unit': 'Sueltas',
+                'groupUuid': group.uuidTemporal,
+                'status': 'deficit',
+                'diff': factor - totalBase,
+                'unit': 'unid. para 1 $unidad',
+              });
+            } else if (sobrante > 0 && completas >= 1 && !variant.allowLeftoverInReserve) {
+              errors.add({
+                'name': variant.nombreEspecifico.isEmpty ? 'Variante Principal' : variant.nombreEspecifico,
+                'group': group.matchProducto.datos?.nombre ?? group.nombrePadre,
+                'groupUuid': group.uuidTemporal,
+                'status': 'leftover',
+                'diff': sobrante,
+                'unit': 'unid. sueltas',
               });
             }
           }
@@ -250,7 +306,7 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
       context: context,
       builder: (ctx) {
         return InteractiveSheetWrapper(
-          title: "Problemas de Stock",
+          title: "Problemas de Stock (${errors.length})",
           icon: Icons.warning_rounded,
           iconColor: Colors.orange,
           maxHeightFactor: 0.75,
@@ -263,8 +319,11 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Entendido, ir a corregir", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _scrollToFirstStockConflict(provider);
+              },
+              child: const Text("Entendido, ir al primer error", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             ),
           ),
           child: ListView.separated(
@@ -273,43 +332,53 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (ctx, i) {
               final err = errors[i];
-              final isDeficit = err['status'] == StockValidationStatus.deficit;
+              final isDeficit = err['status'] == 'deficit';
               final color = isDeficit ? Colors.red : Colors.orange;
+              final groupUuid = err['groupUuid'] as String?;
               
-              return Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? color.withValues(alpha: 0.05) : color.withValues(alpha: 0.05),
-                  border: Border.all(color: isDark ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0.3)),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(isDeficit ? Icons.arrow_downward : Icons.arrow_upward, color: color, size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(err['name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87)),
-                          const SizedBox(height: 4),
-                          Text(err['group'], style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                        ],
+              return InkWell(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  if (groupUuid != null) {
+                    _scrollToConflictGroup(provider, groupUuid);
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? color.withValues(alpha: 0.08) : color.withValues(alpha: 0.05),
+                    border: Border.all(color: isDark ? color.withValues(alpha: 0.3) : color.withValues(alpha: 0.4)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(isDeficit ? Icons.arrow_downward : Icons.arrow_upward, color: color, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(err['name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87)),
+                            const SizedBox(height: 4),
+                            Text(err['group'], style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                          ],
+                        ),
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        "${isDeficit ? 'Faltan' : 'Sobran'}\n${err['diff']} ${err['unit']}",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 12),
-                      ),
-                    )
-                  ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          "${isDeficit ? 'Faltan' : 'Sobran'}\n${err['diff']} ${err['unit']}",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 12),
+                        ),
+                      )
+                    ],
+                  ),
                 ),
               );
             },
@@ -321,7 +390,7 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
 
   void _confirmSave(BuildContext context, ScannerProvider provider) {
     if (provider.hasUnresolvedStock) {
-      _showStockErrorModal(context, provider);
+      _scrollToFirstStockConflict(provider);
       return;
     }
 
@@ -601,12 +670,16 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
 
                         final groupIndex = i - 1;
                         final group = staging.productosAgrupados[groupIndex];
+                        final groupKey = _groupKeys.putIfAbsent(group.uuidTemporal, () => GlobalKey());
 
-                        return StagingProductGroupCard(
-                          key: ValueKey(group.uuidTemporal),
-                          groupIndex: groupIndex,
-                          provider: provider,
-                          isDark: isDark,
+                        return KeyedSubtree(
+                          key: groupKey,
+                          child: StagingProductGroupCard(
+                            key: ValueKey(group.uuidTemporal),
+                            groupIndex: groupIndex,
+                            provider: provider,
+                            isDark: isDark,
+                          ),
                         );
                       },
                     ),
@@ -662,7 +735,13 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
               child: ElevatedButton(
                 onPressed: provider.isLoading
                     ? null
-                    : () => _confirmSave(context, provider),
+                    : () {
+                        if (provider.hasUnresolvedStock) {
+                          _scrollToFirstStockConflict(provider);
+                        } else {
+                          _confirmSave(context, provider);
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isDark
                       ? (provider.hasUnresolvedStock ? Colors.orange[800] : Colors.green[700])
@@ -696,7 +775,9 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                         ],
                       )
                     : Text(
-                        provider.hasUnresolvedStock ? "VER ERRORES DE STOCK" : "GUARDAR E INGRESAR STOCK",
+                        provider.hasUnresolvedStock
+                            ? "VER ERRORES DE STOCK (${provider.unresolvedStockErrorsCount})"
+                            : "GUARDAR E INGRESAR STOCK",
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

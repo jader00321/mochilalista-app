@@ -40,6 +40,9 @@ class PdfConfig {
   bool showClientName;       
   String? customClientName;    // Nombre editable del cliente para el documento
   bool showInstitutionInfo; 
+  String? customInstitutionName; // Nombre editable del colegio/institución
+  String? customGradeLevel;      // Grado/nivel editable
+  String? customNotes;           // Notas editables
   
   bool showBusinessInfo; 
   bool includeOwnerPhone;
@@ -49,6 +52,7 @@ class PdfConfig {
   
   bool showInstallments; 
   bool showPaymentAccounts;    // Mostrar cuentas de pago Yape/Plin al pie
+  String? customPaymentInfo;   // Cuentas de cobro editables al vuelo
   bool showStatusStamp;        // Sello visual PAGADO / PENDIENTE
   String? footerNote;          // Nota al pie (ej: "Cotización válida por 7 días")
 
@@ -59,7 +63,7 @@ class PdfConfig {
     this.showProductUnit = true,
     this.showProductUnitPrice = true,
     this.showProductSubtotal = true,
-    this.showProductSavings = true,
+    this.showProductSavings = true, 
     
     this.showTransactionDetails = true, 
     this.documentTitle, 
@@ -70,6 +74,9 @@ class PdfConfig {
     this.showClientName = true,      
     this.customClientName,
     this.showInstitutionInfo = true, 
+    this.customInstitutionName,
+    this.customGradeLevel,
+    this.customNotes,
     this.showBusinessInfo = true,
     this.includeOwnerPhone = true,
     this.includeShopAddress = true,
@@ -77,6 +84,7 @@ class PdfConfig {
     this.includeLogo = true,
     this.showInstallments = true,
     this.showPaymentAccounts = false,
+    this.customPaymentInfo,
     this.showStatusStamp = false,
     this.footerNote,
   });
@@ -107,6 +115,9 @@ class PdfConfig {
       showClientName: json['showClientName'] ?? true,
       customClientName: json['customClientName'],
       showInstitutionInfo: json['showInstitutionInfo'] ?? true,
+      customInstitutionName: json['customInstitutionName'],
+      customGradeLevel: json['customGradeLevel'],
+      customNotes: json['customNotes'],
       showBusinessInfo: json['showBusinessInfo'] ?? true,
       includeOwnerPhone: json['includeOwnerPhone'] ?? true,
       includeShopAddress: json['includeShopAddress'] ?? true,
@@ -114,6 +125,7 @@ class PdfConfig {
       includeLogo: json['includeLogo'] ?? true,
       showInstallments: json['showInstallments'] ?? true,
       showPaymentAccounts: json['showPaymentAccounts'] ?? false,
+      customPaymentInfo: json['customPaymentInfo'],
       showStatusStamp: json['showStatusStamp'] ?? false,
       footerNote: json['footerNote'],
     );
@@ -136,6 +148,9 @@ class PdfConfig {
       'showClientName': showClientName,
       'customClientName': customClientName,
       'showInstitutionInfo': showInstitutionInfo,
+      'customInstitutionName': customInstitutionName,
+      'customGradeLevel': customGradeLevel,
+      'customNotes': customNotes,
       'showBusinessInfo': showBusinessInfo,
       'includeOwnerPhone': includeOwnerPhone,
       'includeShopAddress': includeShopAddress,
@@ -143,6 +158,7 @@ class PdfConfig {
       'includeLogo': includeLogo,
       'showInstallments': showInstallments,
       'showPaymentAccounts': showPaymentAccounts,
+      'customPaymentInfo': customPaymentInfo,
       'showStatusStamp': showStatusStamp,
       'footerNote': footerNote,
     };
@@ -164,6 +180,9 @@ class PdfConfig {
     bool? showClientName,
     String? customClientName,
     bool? showInstitutionInfo,
+    String? customInstitutionName,
+    String? customGradeLevel,
+    String? customNotes,
     bool? showBusinessInfo,
     bool? includeOwnerPhone,
     bool? includeShopAddress,
@@ -171,6 +190,7 @@ class PdfConfig {
     bool? includeLogo,
     bool? showInstallments,
     bool? showPaymentAccounts,
+    String? customPaymentInfo,
     bool? showStatusStamp,
     String? footerNote,
   }) {
@@ -190,6 +210,9 @@ class PdfConfig {
       showClientName: showClientName ?? this.showClientName,
       customClientName: customClientName ?? this.customClientName,
       showInstitutionInfo: showInstitutionInfo ?? this.showInstitutionInfo,
+      customInstitutionName: customInstitutionName ?? this.customInstitutionName,
+      customGradeLevel: customGradeLevel ?? this.customGradeLevel,
+      customNotes: customNotes ?? this.customNotes,
       showBusinessInfo: showBusinessInfo ?? this.showBusinessInfo,
       includeOwnerPhone: includeOwnerPhone ?? this.includeOwnerPhone,
       includeShopAddress: includeShopAddress ?? this.includeShopAddress,
@@ -197,6 +220,7 @@ class PdfConfig {
       includeLogo: includeLogo ?? this.includeLogo,
       showInstallments: showInstallments ?? this.showInstallments,
       showPaymentAccounts: showPaymentAccounts ?? this.showPaymentAccounts,
+      customPaymentInfo: customPaymentInfo ?? this.customPaymentInfo,
       showStatusStamp: showStatusStamp ?? this.showStatusStamp,
       footerNote: footerNote ?? this.footerNote,
     );

@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:app_movil/features/analytics/models/commercial_radar_model.dart';
 import 'package:app_movil/features/analytics/services/commercial_radar_service.dart';
 import 'package:app_movil/features/analytics/widgets/dashboard/glass_card.dart';
+import 'package:app_movil/features/analytics/screens/commercial_radar_screen.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class CommercialRadarCard extends StatefulWidget {
   final bool isDark;
@@ -20,7 +22,11 @@ class CommercialRadarCard extends StatefulWidget {
   State<CommercialRadarCard> createState() => _CommercialRadarCardState();
 }
 
-class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTickerProviderStateMixin {
+class _CommercialRadarCardState extends State<CommercialRadarCard>
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   late String _selectedRegion;
   String _selectedCategory = 'Todas';
   bool _isLoading = true;
@@ -38,7 +44,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
 
   static const String _prefRegionKey = 'commercial_radar_selected_region';
   static const List<String> _predefinedRegions = [
-    'Talara, Piura',
+    'Talara / Piura',
     'Piura / Región Norte',
     'Todo el Perú',
     'Lima',
@@ -56,6 +62,13 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
+
+    // Cargar caché previo si existe para evitar saltos
+    final cached = CommercialRadarService.getCachedNews(_selectedRegion);
+    if (cached != null && cached.isNotEmpty) {
+      _newsItems.addAll(cached);
+      _isLoading = false;
+    }
     _loadSavedRegion();
   }
 
@@ -83,7 +96,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
     _streamSubscription?.cancel();
     setState(() {
       _isLoading = true;
-      _newsItems.clear();
+      if (forceRefresh) _newsItems.clear();
     });
 
     _streamSubscription = CommercialRadarService.streamCuratedNews(
@@ -93,7 +106,12 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
       (item) {
         if (mounted) {
           setState(() {
-            _newsItems.add(item);
+            final idx = _newsItems.indexWhere((n) => n.id == item.id);
+            if (idx == -1) {
+              _newsItems.add(item);
+            } else {
+              _newsItems[idx] = item;
+            }
             _isLoading = false;
           });
         }
@@ -120,6 +138,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
   Future<void> _setRegion(String newRegion) async {
     setState(() {
       _selectedRegion = newRegion;
+      _newsItems.clear();
     });
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -129,96 +148,97 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
   }
 
   void _openRegionPicker() {
+    final sheetBg = widget.isDark ? const Color(0xFF1E293B) : Colors.white;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return SafeArea(
-          bottom: true,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: widget.isDark ? const Color(0xFF1E293B) : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
+        return InteractiveSheetWrapper(
+          backgroundColor: sheetBg,
+          maxHeightFactor: 0.85,
+          applyEffectiveBottomPadding: true,
+          showHandle: true,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: widget.isDark ? Colors.white24 : Colors.grey[300],
-                      borderRadius: BorderRadius.circular(10),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 22),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  "Enfoque Geográfico",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Sintoniza noticias, rutas, clima y mercado de tu localidad:",
-                  style: TextStyle(
-                    fontSize: 12, 
-                    color: widget.isDark ? Colors.grey[400] : Colors.grey[600]
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                    const SizedBox(width: 12),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ..._predefinedRegions.map((reg) {
-                          final isSelected = reg == _selectedRegion;
-                          return ListTile(
-                            dense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                            leading: Icon(
-                              reg == 'Todo el Perú' ? Icons.public : Icons.location_on,
-                              color: isSelected ? Colors.blueAccent : Colors.grey,
-                              size: 20,
-                            ),
-                            title: Text(
-                              reg,
-                              style: TextStyle(
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                color: isSelected 
-                                    ? Colors.blueAccent 
-                                    : (widget.isDark ? Colors.white : Colors.black87),
-                              ),
-                            ),
-                            trailing: isSelected 
-                                ? const Icon(Icons.check_circle, color: Colors.blueAccent, size: 20) 
-                                : null,
-                            onTap: () {
-                              Navigator.pop(ctx);
-                              _setRegion(reg);
-                            },
-                          );
-                        }),
-                        const Divider(),
-                        ListTile(
-                          dense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                          leading: const Icon(Icons.edit_location_alt, color: Colors.amberAccent, size: 20),
-                          title: const Text(
-                            "Otra / Personalizada...",
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
-                          ),
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            _promptCustomRegion();
-                          },
+                        Text(
+                          "Enfoque Geográfico", 
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          "Sintoniza noticias y mercado de tu localidad",
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                       ],
                     ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      ..._predefinedRegions.map((reg) {
+                        final isSelected = reg == _selectedRegion;
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(
+                            reg == 'Todo el Perú' ? Icons.public : Icons.location_city,
+                            color: isSelected ? Colors.blueAccent : Colors.grey,
+                          ),
+                          title: Text(
+                            reg,
+                            style: TextStyle(
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected 
+                                  ? Colors.blueAccent 
+                                  : (widget.isDark ? Colors.white : Colors.black87),
+                            ),
+                          ),
+                          trailing: isSelected 
+                              ? const Icon(Icons.check_circle, color: Colors.blueAccent, size: 20) 
+                              : null,
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _setRegion(reg);
+                          },
+                        );
+                      }),
+                      const Divider(),
+                      ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.edit_location_alt, color: Colors.amber),
+                        title: const Text(
+                          "Otra / Personalizada...",
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
+                        ),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _promptCustomRegion();
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -348,7 +368,9 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final filtered = _filteredItems;
+    final previewItems = filtered.take(2).toList();
 
     return GlassCard(
       isDark: widget.isDark,
@@ -519,7 +541,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
           ),
           const SizedBox(height: 16),
 
-          // News items or loading indicator
+          // News items or loading indicator (Máximo 2 noticias estables en Estadísticas)
           if (_isLoading && _newsItems.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 32.0),
@@ -558,12 +580,46 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
             )
           else
             Column(
-              children: filtered.asMap().entries.map((entry) {
-                final item = entry.value;
-                return _buildNewsCard(item);
-              }).toList(),
+              children: [
+                ...previewItems.map((item) => _buildNewsCard(item)),
+                const SizedBox(height: 6),
+                _buildOpenRadarButton(),
+              ],
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildOpenRadarButton() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4, bottom: 4),
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blueAccent.withValues(alpha: widget.isDark ? 0.15 : 0.08),
+          foregroundColor: Colors.blueAccent,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Colors.blueAccent, width: 1.2),
+          ),
+        ),
+        icon: const Icon(Icons.newspaper_rounded, size: 20),
+        label: const Text(
+          "📰 Explorar más noticias y alertas comerciales (Abrir Radar IA)",
+          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CommercialRadarScreen(initialRegion: _selectedRegion),
+            ),
+          );
+        },
       ),
     );
   }
@@ -592,7 +648,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Banner Clicable (Mandatory Technical Rule #2)
+          // Banner Clicable
           GestureDetector(
             onTap: () => _launchSourceUrl(item.sourceUrl),
             child: item.imageUrl != null && item.imageUrl!.startsWith('http')
@@ -613,7 +669,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Category + Source + Region badge row
+                // Category + Editorial Verificada + Fecha Relativa
                 Row(
                   children: [
                     Container(
@@ -639,12 +695,27 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Expanded(
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: (widget.isDark ? Colors.blue[400]! : Colors.blue[700]!).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                       child: Text(
                         item.sourceName,
                         style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: widget.isDark ? Colors.blue[300] : Colors.blue[800],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        item.formattedDateWithTimeAgo,
+                        style: TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w600,
                           color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
                         maxLines: 1,
@@ -660,11 +731,11 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
                 ),
                 const SizedBox(height: 10),
 
-                // Title Clicable (Mandatory Technical Rule #2)
+                // Titular Clicable sin emojis sucios
                 GestureDetector(
                   onTap: () => _launchSourceUrl(item.sourceUrl),
                   child: Text(
-                    item.title,
+                    item.cleanTitle,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -675,7 +746,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
                 ),
                 const SizedBox(height: 8),
 
-                // Commercial Summary
+                // Resumen
                 Text(
                   item.summary,
                   style: TextStyle(
@@ -686,32 +757,99 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
                 ),
                 const SizedBox(height: 12),
 
-                // Actionable Merchant Advice
+                // Bloque 1 de Análisis IA: Impacto en tu Negocio / Ruta
+                if (item.impactAnalysis.isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: widget.isDark ? Colors.orange.withValues(alpha: 0.1) : const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.local_shipping_outlined, color: Colors.orange, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Impacto en tu Negocio / Ruta:",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                item.impactAnalysis,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  height: 1.35,
+                                  color: widget.isDark ? Colors.orange[100] : const Color(0xFF9A3412),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Bloque 2 de Análisis IA: Medidas y Recomendaciones Clave
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: widget.isDark 
-                        ? Colors.amber.withValues(alpha: 0.08) 
-                        : const Color(0xFFFFFBEB),
+                        ? Colors.green.withValues(alpha: 0.1) 
+                        : const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Colors.amber.withValues(alpha: 0.4),
+                      color: Colors.green.withValues(alpha: 0.35),
                     ),
                   ),
-                  child: Text(
-                    item.actionableAdvice,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      height: 1.4,
-                      color: widget.isDark ? Colors.amber[200] : const Color(0xFF92400E),
-                    ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.lightbulb_outline, color: Colors.green, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Medidas y Recomendaciones Clave:",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.actionableAdvice,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                                height: 1.35,
+                                color: widget.isDark ? Colors.green[100] : const Color(0xFF065F46),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
 
-                // Leer fuente oficial button (Mandatory Technical Rule #2)
+                // Leer fuente oficial button
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -722,9 +860,9 @@ class _CommercialRadarCardState extends State<CommercialRadarCard> with SingleTi
                         foregroundColor: Colors.blueAccent,
                       ),
                       icon: const Icon(Icons.arrow_outward, size: 14),
-                      label: const Text(
-                        "Leer fuente oficial ↗",
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      label: Text(
+                        "Leer en ${item.sourceName} ↗",
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                       onPressed: () => _launchSourceUrl(item.sourceUrl),
                     ),

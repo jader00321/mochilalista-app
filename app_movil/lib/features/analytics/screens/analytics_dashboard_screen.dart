@@ -40,18 +40,24 @@ class AnalyticsDashboardScreen extends StatefulWidget {
 
 class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> with TickerProviderStateMixin {
   bool _obscureAmounts = false;
-  bool _isFabCompact = false;
+  final ValueNotifier<bool> _isFabCompactNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<String> _activeGroupNotifier = ValueNotifier<String>('resumen');
+  bool _isJumpingProgrammatically = false;
   late ScrollController _scrollController;
+  late ScrollController _chipBarScrollController;
   late AnimationController _pulseController;
+  final GlobalKey _stickyHeaderKey = GlobalKey();
   
   List<DashboardSectionConfig> _sections = DashboardSectionConfig.getDefaultSections();
   final Map<String, GlobalKey> _sectionKeys = {};
+  final Map<String, GlobalKey> _chipKeys = {};
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
+    _chipBarScrollController = ScrollController();
 
     _pulseController = AnimationController(
       vsync: this,
@@ -71,6 +77,9 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
     for (var s in _sections) {
       _sectionKeys[s.id] = GlobalKey();
     }
+    for (var g in ['resumen', 'graficos', 'inventario', 'radar']) {
+      _chipKeys[g] = GlobalKey();
+    }
   }
 
   Future<void> _loadCustomSections(int businessId) async {
@@ -81,6 +90,9 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
         for (var s in _sections) {
           _sectionKeys.putIfAbsent(s.id, () => GlobalKey());
         }
+        for (var g in ['resumen', 'graficos', 'inventario', 'radar']) {
+          _chipKeys.putIfAbsent(g, () => GlobalKey());
+        }
       });
     }
   }
@@ -88,16 +100,94 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
   void _onScroll() {
     if (!_scrollController.hasClients) return;
     final isDown = _scrollController.position.userScrollDirection == ScrollDirection.reverse;
-    if (isDown != _isFabCompact) {
-      setState(() => _isFabCompact = isDown);
+    if (isDown != _isFabCompactNotifier.value) {
+      _isFabCompactNotifier.value = isDown;
     }
+
+    // ScrollSpy de la Ola Vibrante: se suspende durante saltos programáticos
+    if (_isJumpingProgrammatically) return;
+
+    final headerBox = _stickyHeaderKey.currentContext?.findRenderObject() as RenderBox?;
+    final headerBottomDy = headerBox != null && headerBox.hasSize
+        ? headerBox.localToGlobal(Offset(0, headerBox.size.height)).dy
+        : 165.0;
+
+    final visibleList = _sections.where((s) => s.isVisible).toList();
+    for (var sec in visibleList) {
+      final key = _sectionKeys[sec.id];
+      final ctx = key?.currentContext;
+      if (ctx != null) {
+        final renderBox = ctx.findRenderObject() as RenderBox?;
+        if (renderBox != null && renderBox.hasSize) {
+          final position = renderBox.localToGlobal(Offset.zero);
+          // Umbral visual relativo a la cabecera fija
+          if (position.dy <= (headerBottomDy + 40) && (position.dy + renderBox.size.height) > (headerBottomDy + 40)) {
+            if (_activeGroupNotifier.value != sec.categoryGroup) {
+              _activeGroupNotifier.value = sec.categoryGroup;
+              _centerChipInBar(sec.categoryGroup);
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  List<String> get _activeCategoryGroups {
+    final groups = <String>[];
+    for (final s in _sections) {
+      if (s.isVisible && !groups.contains(s.categoryGroup)) {
+        groups.add(s.categoryGroup);
+      }
+    }
+    return groups;
+  }
+
+  String _getGroupLabel(String group) {
+    switch (group) {
+      case 'resumen':
+        return "📊 Resumen";
+      case 'graficos':
+        return "📈 Gráficos";
+      case 'inventario':
+        return "📦 Inventario";
+      case 'radar':
+        return "📰 Radar Comercial";
+      default:
+        return "📋 $group";
+    }
+  }
+
+  /// Centrado horizontal exclusivo del chip activo (SIN Scrollable.ensureVisible)
+  void _centerChipInBar(String group) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_chipBarScrollController.hasClients) return;
+      final chipKey = _chipKeys[group];
+      final chipBox = chipKey?.currentContext?.findRenderObject() as RenderBox?;
+      if (chipBox != null && chipBox.hasSize && mounted) {
+        final chipGlobal = chipBox.localToGlobal(Offset.zero);
+        final screenWidth = MediaQuery.of(context).size.width;
+        final currentScroll = _chipBarScrollController.offset;
+        final chipScreenCenter = chipGlobal.dx + (chipBox.size.width / 2);
+        final delta = chipScreenCenter - (screenWidth / 2);
+        final targetOffset = (currentScroll + delta).clamp(0.0, _chipBarScrollController.position.maxScrollExtent);
+        _chipBarScrollController.animateTo(
+          targetOffset,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _chipBarScrollController.dispose();
     _pulseController.dispose();
+    _isFabCompactNotifier.dispose();
+    _activeGroupNotifier.dispose();
     super.dispose();
   }
 
@@ -159,7 +249,34 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
     }
   }
 
-  /// Salto dinámico sincronizado y tolerante a fallos (Mandatory Technical Rule #1)
+  void _showDashboardGuide(BuildContext context) {
+    InfoTooltipButton.showInfoModal(
+      context: context,
+      title: "Inteligencia de Negocio & Radar",
+      description:
+          "Panel de analítica ejecutiva, financiera y comercial. Integra predicción con IA, inventario estancado y radar de noticias del mercado en tiempo real.",
+      tips: const [
+        InfoTip(
+          icon: Icons.dashboard_customize,
+          text: "Presiona el ícono de personalización (⚙️ / deslizador) para reordenar u ocultar tarjetas con arrastre táctil.",
+        ),
+        InfoTip(
+          icon: Icons.radar,
+          text: "El Radar Comercial sintoniza noticias de carreteras, clima, leyes de SUNAT y campañas en Perú y tu región.",
+        ),
+        InfoTip(
+          icon: Icons.visibility_outlined,
+          text: "Oculta saldos con el ícono del ojo para operar seguro frente a clientes en el mostrador.",
+        ),
+        InfoTip(
+          icon: Icons.file_download_outlined,
+          text: "Exporta tu informe completo en PDF formal o Excel CSV con la moneda oficial.",
+        ),
+      ],
+    );
+  }
+
+  /// Salto milimétrico sincronizado y con transición limpia de la Ola Vibrante
   void _jumpToGroup(String group) {
     DashboardSectionConfig? targetSection;
     for (var sec in _sections) {
@@ -174,38 +291,70 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
       return;
     }
 
+    _isJumpingProgrammatically = true;
+    _activeGroupNotifier.value = group;
+    _centerChipInBar(group);
+
     final key = _sectionKeys[targetSection.id];
-    if (key != null && key.currentContext != null) {
-      Scrollable.ensureVisible(
-        key.currentContext!,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOutCubic,
-        alignment: 0.08,
-      );
-    } else {
-      // Fallback seguro: aproximar scroll según posición relativa
-      final visibleList = _sections.where((s) => s.isVisible).toList();
-      final index = visibleList.indexWhere((s) => s.id == targetSection!.id);
-      if (index != -1 && _scrollController.hasClients) {
-        final double maxExtent = _scrollController.position.maxScrollExtent;
-        final double estimatedOffset = (index / visibleList.length) * maxExtent;
+    final ctx = key?.currentContext;
+    if (ctx != null) {
+      final targetBox = ctx.findRenderObject() as RenderBox?;
+      final headerBox = _stickyHeaderKey.currentContext?.findRenderObject() as RenderBox?;
+      if (targetBox != null && targetBox.hasSize && headerBox != null && headerBox.hasSize) {
+        final headerBottomDy = headerBox.localToGlobal(Offset(0, headerBox.size.height)).dy;
+        final targetTopDy = targetBox.localToGlobal(Offset.zero).dy;
+        // Descontar la cabecera fija pinned real + 12px exactos de respiro visual
+        final delta = (targetTopDy - headerBottomDy) - 12.0;
+        final currentOffset = _scrollController.offset;
+        final targetOffset = (currentOffset + delta).clamp(0.0, _scrollController.position.maxScrollExtent);
+
         _scrollController.animateTo(
-          estimatedOffset.clamp(0.0, maxExtent),
+          targetOffset,
           duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOutCubic,
+          curve: Curves.easeInOutCubic,
         ).then((_) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (key != null && key.currentContext != null) {
-              Scrollable.ensureVisible(
-                key.currentContext!,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOutCubic,
-                alignment: 0.08,
-              );
-            }
+          Future.delayed(const Duration(milliseconds: 60), () {
+            if (mounted) _isJumpingProgrammatically = false;
           });
         });
+        return;
       }
+    }
+
+    // Fallback seguro si el widget aún no está en el viewport
+    final visibleList = _sections.where((s) => s.isVisible).toList();
+    final index = visibleList.indexWhere((s) => s.id == targetSection!.id);
+    if (index != -1 && _scrollController.hasClients) {
+      final double maxExtent = _scrollController.position.maxScrollExtent;
+      final double estimatedOffset = (index / visibleList.length) * maxExtent;
+      _scrollController.animateTo(
+        estimatedOffset.clamp(0.0, maxExtent),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOutCubic,
+      ).then((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final postCtx = key?.currentContext;
+          final fineTargetBox = postCtx?.findRenderObject() as RenderBox?;
+          final fineHeaderBox = _stickyHeaderKey.currentContext?.findRenderObject() as RenderBox?;
+          if (fineTargetBox != null && fineTargetBox.hasSize && fineHeaderBox != null && fineHeaderBox.hasSize) {
+            final hBottom = fineHeaderBox.localToGlobal(Offset(0, fineHeaderBox.size.height)).dy;
+            final tTop = fineTargetBox.localToGlobal(Offset.zero).dy;
+            final fineDelta = (tTop - hBottom) - 12.0;
+            final fineTarget = (_scrollController.offset + fineDelta).clamp(0.0, _scrollController.position.maxScrollExtent);
+            _scrollController.animateTo(
+              fineTarget,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+            ).then((_) {
+              if (mounted) _isJumpingProgrammatically = false;
+            });
+            return;
+          }
+          if (mounted) _isJumpingProgrammatically = false;
+        });
+      });
+    } else {
+      _isJumpingProgrammatically = false;
     }
   }
 
@@ -218,48 +367,30 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
       appBar: AppBar(
-        titleSpacing: 0,
-        leadingWidth: 38,
-        title: const Text(
-          "Inteligencia de Negocio",
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+        titleSpacing: 4,
+        leadingWidth: 40,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Inteligencia de Negocio",
+            style: TextStyle(
+              fontSize: 18.5,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.4,
+            ),
+          ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          const InfoTooltipButton(
-            padding: EdgeInsets.zero,
-            constraints: BoxConstraints(minWidth: 32, minHeight: 36),
-            iconSize: 20,
-            title: "Inteligencia de Negocio & Radar",
-            description:
-                "Panel de analítica ejecutiva, financiera y comercial. Integra predicción con IA, inventario estancado y radar de noticias del mercado en tiempo real.",
-            tips: [
-              InfoTip(
-                icon: Icons.dashboard_customize,
-                text: "Presiona el ícono de personalización (⚙️ / deslizador) para reordenar u ocultar tarjetas con arrastre táctil.",
-              ),
-              InfoTip(
-                icon: Icons.radar,
-                text: "El Radar Comercial sintoniza noticias de carreteras, clima, leyes de SUNAT y campañas en Perú y tu región.",
-              ),
-              InfoTip(
-                icon: Icons.visibility_outlined,
-                text: "Oculta saldos con el ícono del ojo para operar seguro frente a clientes en el mostrador.",
-              ),
-              InfoTip(
-                icon: Icons.file_download_outlined,
-                text: "Exporta tu informe completo en PDF formal o Excel CSV con la moneda oficial.",
-              ),
-            ],
-          ),
           if (prov.currentStep == AnalyticsStep.done) ...[
-            // Mandatory Technical Rule #4: Botón de personalización claro en AppBar
+            // 1. Personalizar Dashboard
             IconButton(
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               icon: const Icon(Icons.tune, size: 21),
-              tooltip: "Personalizar y Reordenar Dashboard",
+              tooltip: "Personalizar Dashboard",
               onPressed: () {
                 DashboardCustomizerModal.show(
                   context: context,
@@ -272,38 +403,96 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
                       for (var s in _sections) {
                         _sectionKeys.putIfAbsent(s.id, () => GlobalKey());
                       }
+                      for (var g in ['resumen', 'graficos', 'inventario', 'radar']) {
+                        _chipKeys.putIfAbsent(g, () => GlobalKey());
+                      }
                     });
                   },
                 );
               },
             ),
+            // 2. Ojo de Privacidad
             IconButton(
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
-              icon: const Icon(Icons.refresh, size: 21),
-              tooltip: "Regenerar reporte",
-              onPressed: () => prov.runStaggeredAnalysis(),
-            ),
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               icon: Icon(_obscureAmounts ? Icons.visibility_off : Icons.visibility, size: 21),
-              onPressed: () => setState(() => _obscureAmounts = !_obscureAmounts),
               tooltip: _obscureAmounts ? "Mostrar Saldos" : "Ocultar Saldos",
+              onPressed: () => setState(() => _obscureAmounts = !_obscureAmounts),
             ),
+            // 3. Menú contextual ⋮ (Guía, Actualizar, Exportar)
             PopupMenuButton<String>(
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
-              icon: const Icon(Icons.download, size: 21),
-              tooltip: "Exportar reporte",
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              icon: const Icon(Icons.more_vert, size: 22),
+              tooltip: "Más opciones",
               onSelected: (value) {
-                if (value == 'pdf') _exportPdf(context, prov, auth);
-                if (value == 'csv') _exportCsv(context, prov, auth);
+                switch (value) {
+                  case 'refresh':
+                    prov.runStaggeredAnalysis();
+                    break;
+                  case 'guide':
+                    _showDashboardGuide(context);
+                    break;
+                  case 'pdf':
+                    _exportPdf(context, prov, auth);
+                    break;
+                  case 'csv':
+                    _exportCsv(context, prov, auth);
+                    break;
+                }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(value: 'pdf', child: Text("Exportar a PDF")),
-                const PopupMenuItem(value: 'csv', child: Text("Exportar a Excel (CSV)")),
+                const PopupMenuItem(
+                  value: 'refresh',
+                  child: Row(
+                    children: [
+                      Icon(Icons.refresh, size: 20),
+                      SizedBox(width: 10),
+                      Text("Actualizar datos", style: TextStyle(fontSize: 13.5)),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'guide',
+                  child: Row(
+                    children: [
+                      Icon(Icons.help_outline, size: 20, color: Colors.blueAccent),
+                      SizedBox(width: 10),
+                      Text("Guía del Panel", style: TextStyle(fontSize: 13.5)),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'pdf',
+                  child: Row(
+                    children: [
+                      Icon(Icons.picture_as_pdf_outlined, size: 20, color: Colors.redAccent),
+                      SizedBox(width: 10),
+                      Text("Exportar Informe (PDF)", style: TextStyle(fontSize: 13.5)),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'csv',
+                  child: Row(
+                    children: [
+                      Icon(Icons.table_chart_outlined, size: 20, color: Colors.green),
+                      SizedBox(width: 10),
+                      Text("Exportar Datos (CSV)", style: TextStyle(fontSize: 13.5)),
+                    ],
+                  ),
+                ),
               ],
+            ),
+            const SizedBox(width: 4),
+          ] else ...[
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              icon: const Icon(Icons.help_outline, size: 21),
+              tooltip: "Guía del Panel",
+              onPressed: () => _showDashboardGuide(context),
             ),
             const SizedBox(width: 4),
           ],
@@ -311,30 +500,35 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
       ),
       body: _buildBody(prov, isDark, auth),
       floatingActionButton: prov.currentStep == AnalyticsStep.done
-          ? AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              child: _isFabCompact
-                  ? FloatingActionButton(
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      tooltip: "Alertas de Reabastecimiento",
-                      onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartRestockScreen()));
-                      },
-                      child: const Icon(Icons.add_alert),
-                    )
-                  : FloatingActionButton.extended(
-                      onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartRestockScreen()));
-                      },
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      icon: const Icon(Icons.add_alert),
-                      label: const Text(
-                        'Alertas de Reabastecimiento',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
+          ? ValueListenableBuilder<bool>(
+              valueListenable: _isFabCompactNotifier,
+              builder: (context, isCompact, _) {
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  child: isCompact
+                      ? FloatingActionButton(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          tooltip: "Alertas de Reabastecimiento",
+                          onPressed: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartRestockScreen()));
+                          },
+                          child: const Icon(Icons.add_alert),
+                        )
+                      : FloatingActionButton.extended(
+                          onPressed: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartRestockScreen()));
+                          },
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          icon: const Icon(Icons.add_alert),
+                          label: const Text(
+                            'Alertas de Reabastecimiento',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                );
+              },
             )
           : null,
     );
@@ -617,104 +811,89 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
     final data = prov.data!;
     final bgColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9);
 
-    return CustomScrollView(
-      controller: _scrollController,
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        // Cabecera Fija Pinned con Filtro de Tiempo y Salto Rápido
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: SliverStickyHeaderDelegate(
-            minHeight: 98,
-            maxHeight: 98,
-            child: Container(
-              color: bgColor,
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Row 1: Chips de periodos con ShaderMask para desvanecimiento elegante
-                  SizedBox(
-                    height: 38,
-                    child: ShaderMask(
-                      shaderCallback: (Rect bounds) {
-                        return const LinearGradient(
-                          colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
-                          stops: [0.0, 0.04, 0.96, 1.0],
-                        ).createShader(bounds);
-                      },
-                      blendMode: BlendMode.dstIn,
-                      child: _buildPeriodChipsRow(prov, isDark, isPreSelect: false),
+    return RefreshIndicator(
+      onRefresh: () => prov.runStaggeredAnalysis(),
+      color: Colors.blueAccent,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      child: CustomScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        cacheExtent: 4500,
+        slivers: [
+          // Cabecera Fija Pinned con Filtro de Tiempo y Tubito Translúcido de Salto Rápido
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: SliverStickyHeaderDelegate(
+              minHeight: 98,
+              maxHeight: 98,
+              child: Container(
+                key: _stickyHeaderKey,
+                color: bgColor,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Row 1: Chips de periodos con ShaderMask para desvanecimiento elegante
+                    SizedBox(
+                      height: 38,
+                      child: ShaderMask(
+                        shaderCallback: (Rect bounds) {
+                          return const LinearGradient(
+                            colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
+                            stops: [0.0, 0.04, 0.96, 1.0],
+                          ).createShader(bounds);
+                        },
+                        blendMode: BlendMode.dstIn,
+                        child: _buildPeriodChipsRow(prov, isDark, isPreSelect: false),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
+                    const SizedBox(height: 6),
 
-                  // Row 2: Chips de Salto Rápido dinámicos
-                  SizedBox(
-                    height: 34,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      physics: const BouncingScrollPhysics(),
-                      children: [
-                        _buildQuickJumpChip("📊 Resumen", () => _jumpToGroup('resumen'), isDark),
-                        const SizedBox(width: 8),
-                        _buildQuickJumpChip("📈 Gráficos", () => _jumpToGroup('graficos'), isDark),
-                        const SizedBox(width: 8),
-                        _buildQuickJumpChip("📦 Inventario", () => _jumpToGroup('inventario'), isDark),
-                        const SizedBox(width: 8),
-                        _buildQuickJumpChip("📰 Radar Comercial", () => _jumpToGroup('radar'), isDark),
-                      ],
+                    // Row 2: Tubito continuo translúcido con Burbuja Fluida en Agua
+                    SizedBox(
+                      height: 36,
+                      child: ValueListenableBuilder<String>(
+                        valueListenable: _activeGroupNotifier,
+                        builder: (context, activeGroup, _) {
+                          return _FluidChipTabBar(
+                            scrollController: _chipBarScrollController,
+                            activeGroup: activeGroup,
+                            groups: _activeCategoryGroups,
+                            chipKeys: _chipKeys,
+                            getLabel: _getGroupLabel,
+                            onSelectGroup: _jumpToGroup,
+                            isDark: isDark,
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
 
-        // Cuerpo Reordenable Dinámico
-        SliverPadding(
-          padding: const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 140),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final visibleSections = _sections.where((s) => s.isVisible).toList();
-                if (index >= visibleSections.length) return null;
+          // Cuerpo Reordenable Dinámico
+          SliverPadding(
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 140),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final visibleSections = _sections.where((s) => s.isVisible).toList();
+                  if (index >= visibleSections.length) return null;
 
-                final section = visibleSections[index];
-                return Padding(
-                  key: _sectionKeys[section.id],
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: _buildSectionWidget(section.id, data, isDark, prov),
-                );
-              },
-              childCount: _sections.where((s) => s.isVisible).length,
+                  final section = visibleSections[index];
+                  return Padding(
+                    key: _sectionKeys[section.id],
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: _buildSectionWidget(section.id, data, isDark, prov),
+                  );
+                },
+                childCount: _sections.where((s) => s.isVisible).length,
+              ),
             ),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickJumpChip(String label, VoidCallback onTap, bool isDark) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white70 : Colors.black87,
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -856,6 +1035,151 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
               ),
             ),
             const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Barra de pestañas translúcida continua con Burbuja de Agua Fluida / Ola Luminosa
+class _FluidChipTabBar extends StatefulWidget {
+  final ScrollController scrollController;
+  final String activeGroup;
+  final List<String> groups;
+  final Map<String, GlobalKey> chipKeys;
+  final String Function(String) getLabel;
+  final void Function(String) onSelectGroup;
+  final bool isDark;
+
+  const _FluidChipTabBar({
+    required this.scrollController,
+    required this.activeGroup,
+    required this.groups,
+    required this.chipKeys,
+    required this.getLabel,
+    required this.onSelectGroup,
+    required this.isDark,
+  });
+
+  @override
+  State<_FluidChipTabBar> createState() => _FluidChipTabBarState();
+}
+
+class _FluidChipTabBarState extends State<_FluidChipTabBar> {
+  final GlobalKey _trackKey = GlobalKey();
+  double _bubbleLeft = 0;
+  double _bubbleWidth = 0;
+  bool _hasMeasured = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateBubblePosition());
+  }
+
+  @override
+  void didUpdateWidget(covariant _FluidChipTabBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.activeGroup != widget.activeGroup ||
+        oldWidget.groups.length != widget.groups.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _updateBubblePosition());
+    }
+  }
+
+  void _updateBubblePosition() {
+    if (!mounted) return;
+    final trackBox = _trackKey.currentContext?.findRenderObject() as RenderBox?;
+    final chipKey = widget.chipKeys[widget.activeGroup];
+    final chipBox = chipKey?.currentContext?.findRenderObject() as RenderBox?;
+
+    if (trackBox != null && chipBox != null && trackBox.hasSize && chipBox.hasSize) {
+      final chipPosition = chipBox.localToGlobal(Offset.zero, ancestor: trackBox);
+      setState(() {
+        _bubbleLeft = chipPosition.dx;
+        _bubbleWidth = chipBox.size.width;
+        _hasMeasured = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 36,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: widget.isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: widget.isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.06),
+        ),
+      ),
+      child: SingleChildScrollView(
+        controller: widget.scrollController,
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+        child: Stack(
+          key: _trackKey,
+          children: [
+            // 1. Burbuja de Agua Fluida / Ola Luminosa Deslizante
+            if (_hasMeasured && _bubbleWidth > 0)
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                left: _bubbleLeft,
+                top: 0,
+                bottom: 0,
+                width: _bubbleWidth,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF0284C7), Color(0xFF2563EB)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0284C7).withValues(alpha: 0.45),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+
+            // 2. Fila de Chips con Etiquetas
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: widget.groups.map((group) {
+                final isSelected = widget.activeGroup == group;
+                final label = widget.getLabel(group);
+                final key = widget.chipKeys.putIfAbsent(group, () => GlobalKey());
+
+                return GestureDetector(
+                  key: key,
+                  onTap: () => widget.onSelectGroup(group),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    alignment: Alignment.center,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        color: isSelected
+                            ? Colors.white
+                            : (widget.isDark ? Colors.white70 : Colors.black87),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           ],
         ),
       ),

@@ -13,6 +13,7 @@ class ReceiptManager {
   // Genera el archivo configurado para Auditoría Rápida o Compartir con un clic
   static Future<File> _generateFile(SmartQuotationModel quotation, UserModel? user, {Map<String, dynamic>? saleData}) async {
     final bool isSale = saleData != null;
+    final bool isLoan = isSale && saleData['origen_venta'] == 'prestamo_personal';
 
     // CONFIGURACIÓN: "TICKET LIMPIO" PARA DESCARGAS DE 1 CLIC
     final config = PdfConfig(
@@ -29,7 +30,9 @@ class ReceiptManager {
       // Cliente y Título
       showClientName: true,
       showInstitutionInfo: false, // No notas ni colegio en versión rápida
-      documentTitle: isSale ? "COMPROBANTE" : "COTIZACIÓN", 
+      documentTitle: isLoan 
+          ? "COMPROBANTE DE PRÉSTAMO" 
+          : (isSale ? "COMPROBANTE DE PAGO" : "COTIZACIÓN"), 
       
       // Ocultamos tabla financiera interna, solo mostramos Total
       showTransactionDetails: isSale,

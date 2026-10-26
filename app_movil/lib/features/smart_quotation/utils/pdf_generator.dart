@@ -7,6 +7,8 @@ import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.
 import 'package:app_movil/core/models/user_model.dart'; 
 import 'package:app_movil/features/smart_quotation/models/pdf_config_model.dart'; 
 import 'package:app_movil/features/smart_quotation/utils/pdf_image_helper.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:printing/printing.dart';
 
 /// 🖨️ MOTOR GENERADOR DE DOCUMENTOS PDF (MULTI-SITUACIÓN Y DUAL-FORMAT A4/TICKET 80mm)
 /// Soporta Cotizaciones, Proformas, Boletas/Notas de Venta, Ventas a Crédito y Préstamos.
@@ -164,6 +166,59 @@ class PdfGenerator {
     return isInternalDraftCode(clean) ? "" : clean;
   }
 
+  /// Elimina emojis y símbolos no soportados por fuentes PDF estándar (Helvetica / Latin-1)
+  static pw.Font? _cachedRobotoRegular;
+  static pw.Font? _cachedRobotoBold;
+
+  /// Normaliza caracteres descompuestos (NFD como E + \u0301) a su forma compuesta (NFC como É),
+  /// eliminando acentos flotantes huérfanos que provocan glifos corruptos en visores PDF.
+  static String normalizeSpanishText(String text) {
+    if (text.isEmpty) return text;
+    return text
+        .replaceAll('E\u0301', 'É')
+        .replaceAll('e\u0301', 'é')
+        .replaceAll('A\u0301', 'Á')
+        .replaceAll('a\u0301', 'á')
+        .replaceAll('I\u0301', 'Í')
+        .replaceAll('i\u0301', 'í')
+        .replaceAll('O\u0301', 'Ó')
+        .replaceAll('o\u0301', 'ó')
+        .replaceAll('U\u0301', 'Ú')
+        .replaceAll('u\u0301', 'ú')
+        .replaceAll('N\u0303', 'Ñ')
+        .replaceAll('n\u0303', 'ñ')
+        .replaceAll('\u0301', '')
+        .replaceAll('\u0300', '')
+        .replaceAll('\u0303', '');
+  }
+
+  /// Elimina emojis y símbolos no soportados por fuentes PDF estándar (Helvetica / Latin-1)
+  /// conservando letras, números, signos de puntuación y todas las tildes/eñes del español Latin-1.
+  static String stripUnsupportedEmojis(String text) {
+    if (text.isEmpty) return text;
+    final normalized = normalizeSpanishText(text);
+    final emojiRegex = RegExp(
+      r'[\u{1F300}-\u{1FAFF}'
+      r'\u{1F000}-\u{1F2FF}'
+      r'\u{2600}-\u{27BF}'
+      r'\u{2300}-\u{23FF}'
+      r'\u{2B50}-\u{2B55}'
+      r'\u{FE00}-\u{FE0F}'
+      r'\u{200D}'
+      r']+',
+      unicode: true,
+    );
+    String cleaned = normalized.replaceAll(emojiRegex, '');
+    cleaned = cleaned.replaceAll(RegExp(r'[ \t]{2,}'), ' ');
+    return cleaned.trim();
+  }
+
+  static String? _stripUnsupportedEmojis(String? text) {
+    if (text == null) return null;
+    final res = stripUnsupportedEmojis(text);
+    return res.isEmpty ? null : res;
+  }
+
   /// Genera el documento PDF completo según la configuración y los datos proporcionados
   static Future<Uint8List> generatePdf({
     required SmartQuotationModel quotation,
@@ -171,7 +226,29 @@ class PdfGenerator {
     required PdfConfig config,
     Map<String, dynamic>? saleData, 
   }) async {
-    final pdf = pw.Document();
+    // Carga de tipografía Unicode completa para español (con caché estático y timeout offline instantáneo)
+    pw.ThemeData? docTheme;
+    if (_cachedRobotoRegular != null && _cachedRobotoBold != null) {
+      docTheme = pw.ThemeData.withFont(
+        base: _cachedRobotoRegular!,
+        bold: _cachedRobotoBold!,
+      );
+    } else {
+      try {
+        final baseFont = await PdfGoogleFonts.robotoRegular().timeout(const Duration(milliseconds: 300));
+        final boldFont = await PdfGoogleFonts.robotoBold().timeout(const Duration(milliseconds: 300));
+        _cachedRobotoRegular = baseFont;
+        _cachedRobotoBold = boldFont;
+        docTheme = pw.ThemeData.withFont(
+          base: baseFont,
+          bold: boldFont,
+        );
+      } catch (_) {
+        // Fallback transparente a fuentes integradas si no hay acceso de red (modo avión) o en tests offline
+      }
+    }
+
+    final pdf = pw.Document(theme: docTheme);
     final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
     final colors = _getThemeColors(config.theme);
@@ -219,11 +296,15 @@ class PdfGenerator {
               children: [
                 _buildHeader(quotation, ownerInfo, config, logoImage, dateFormat, colors, saleData, isTicket: true),
                 pw.SizedBox(height: 10),
-                if (!isLoan)
+                if (!isLoan) ...[
                   _buildDynamicTable(quotation.items, config, currency, productImages, colors, isTicket: true),
-                if (isLoan)
+                  pw.SizedBox(height: 10),
+                ],
+                if (isLoan) ...[
                   _buildLoanSection(saleData, config, currency, colors, isTicket: true),
-                pw.SizedBox(height: 10),
+                  if (config.showInstallments && saleData['cuotas'] != null && (saleData['cuotas'] as List).isNotEmpty)
+                    pw.SizedBox(height: 10),
+                ],
                 _buildTotalsSection(quotation, config, currency, colors, saleData, isTicket: true),
                 pw.SizedBox(height: 12),
                 _buildFooter(config, ownerInfo, isTicket: true),
@@ -254,11 +335,15 @@ class PdfGenerator {
                 ),
               _buildHeader(quotation, ownerInfo, config, logoImage, dateFormat, colors, saleData, isTicket: false),
               pw.SizedBox(height: isCompact ? 10 : 18),
-              if (!isLoan)
+              if (!isLoan) ...[
                 _buildDynamicTable(quotation.items, config, currency, productImages, colors, isTicket: false),
-              if (isLoan)
+                pw.SizedBox(height: isCompact ? 8 : 14),
+              ],
+              if (isLoan) ...[
                 _buildLoanSection(saleData, config, currency, colors, isTicket: false),
-              pw.SizedBox(height: isCompact ? 8 : 14),
+                if (config.showInstallments && saleData['cuotas'] != null && (saleData['cuotas'] as List).isNotEmpty)
+                  pw.SizedBox(height: isCompact ? 8 : 14),
+              ],
               _buildTotalsSection(quotation, config, currency, colors, saleData, isTicket: false),
               pw.Spacer(),
               _buildFooter(config, ownerInfo, isTicket: false),
@@ -311,6 +396,22 @@ class PdfGenerator {
         ? saleData['notas'] 
         : (q.notas != null && q.notas!.isNotEmpty ? q.notas : null);
 
+    final String? effectiveNote = _stripUnsupportedEmojis(
+      (config.customNotes != null && config.customNotes!.trim().isNotEmpty)
+          ? config.customNotes!.trim()
+          : note,
+    );
+    final String? effectiveInst = _stripUnsupportedEmojis(
+      (config.customInstitutionName != null && config.customInstitutionName!.trim().isNotEmpty)
+          ? config.customInstitutionName!.trim()
+          : q.institutionName,
+    );
+    final String? effectiveGrade = _stripUnsupportedEmojis(
+      (config.customGradeLevel != null && config.customGradeLevel!.trim().isNotEmpty)
+          ? config.customGradeLevel!.trim()
+          : q.gradeLevel,
+    );
+
     // Bloque de datos del cliente
     final clientWidget = pw.Column(
       crossAxisAlignment: isTicket ? pw.CrossAxisAlignment.start : pw.CrossAxisAlignment.end,
@@ -321,19 +422,19 @@ class PdfGenerator {
             pw.Text("Tel: $clientPhone", style: pw.TextStyle(fontSize: isTicket ? 8 : 9, color: PdfColors.grey700)),
         ],
         if (config.showInstitutionInfo) ...[
-          if (note != null)
+          if (effectiveNote != null && effectiveNote.isNotEmpty)
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 2),
-              child: pw.Text("Nota: $note", style: pw.TextStyle(fontSize: isTicket ? 8 : 9, color: PdfColors.grey800, fontStyle: pw.FontStyle.italic)),
+              child: pw.Text("Nota: $effectiveNote", style: pw.TextStyle(fontSize: isTicket ? 8 : 9, color: PdfColors.grey800, fontStyle: pw.FontStyle.italic)),
             ),
           if (!isQuickSale && !isLoan) ...[
-            if (q.institutionName != null && q.institutionName!.isNotEmpty)
-              pw.Text(q.institutionName!, style: pw.TextStyle(fontSize: isTicket ? 8 : 9)),
-            if (q.gradeLevel != null && q.gradeLevel!.isNotEmpty)
-              pw.Text(q.gradeLevel!, style: pw.TextStyle(fontSize: isTicket ? 8 : 9)),
-          ]
-        ]
-      ]
+            if (effectiveInst != null && effectiveInst.isNotEmpty)
+              pw.Text(effectiveInst, style: pw.TextStyle(fontSize: isTicket ? 8 : 9)),
+            if (effectiveGrade != null && effectiveGrade.isNotEmpty)
+              pw.Text(effectiveGrade, style: pw.TextStyle(fontSize: isTicket ? 8 : 9)),
+          ],
+        ],
+      ],
     );
 
     // Formato Ticket 80mm
@@ -661,11 +762,23 @@ class PdfGenerator {
     Map<String, PdfColor> colors, {required bool isTicket}
   ) {
     if (saleData == null) return pw.Container();
-    final double capital = (saleData['monto_total'] ?? 0.0).toDouble();
-    final double interes = (saleData['monto_interes'] ?? 0.0).toDouble();
-    final double total = capital + interes;
+    final double interesRate = (saleData['porcentaje_interes'] ?? 0.0).toDouble();
+    final double totalWithInterest = (saleData['monto_total'] ?? 0.0).toDouble();
+    final double abonoInicial = (saleData['abono_inicial'] ?? 0.0).toDouble();
+    final double debtWithInterest = totalWithInterest - abonoInicial;
+    final double debtBase = (interesRate > 0 && debtWithInterest > 0)
+        ? debtWithInterest / (1 + (interesRate / 100))
+        : debtWithInterest;
+    final double interestAmount = debtWithInterest - debtBase;
+    final double capitalNeto = abonoInicial + debtBase;
+
     final double abonado = (saleData['monto_pagado'] ?? 0.0).toDouble();
-    final double saldo = total - abonado > 0 ? total - abonado : 0.0;
+    final double saldo = totalWithInterest - abonado > 0 ? totalWithInterest - abonado : 0.0;
+
+    final String rateLabel = interesRate > 0 ? '${interesRate.toStringAsFixed(1)}%' : '0%';
+    final String interestDisplay = interestAmount > 0.01 
+        ? "+ ${AppCurrency.format(interestAmount)}" 
+        : AppCurrency.format(0.0);
 
     return pw.Container(
       padding: const pw.EdgeInsets.all(10),
@@ -678,12 +791,13 @@ class PdfGenerator {
         children: [
           pw.Text("RESUMEN DE PRÉSTAMO", style: pw.TextStyle(fontSize: isTicket ? 9 : 11, fontWeight: pw.FontWeight.bold, color: colors['primary'])),
           pw.Divider(color: PdfColors.grey400, thickness: 0.5),
-          _buildPaymentRow("Capital Prestado:", currency.format(capital), isTicket: isTicket),
-          if (interes > 0)
-            _buildPaymentRow("Interés Acordado:", "+ ${currency.format(interes)}", isTicket: isTicket),
-          _buildPaymentRow("Total a Devolver:", currency.format(total), isBold: true, isTicket: isTicket),
-          _buildPaymentRow("Monto Abonado:", currency.format(abonado), isTicket: isTicket),
-          _buildPaymentRow("Saldo Pendiente:", currency.format(saldo), isBold: true, valueColor: saldo > 0 ? colors['debt'] : colors['savings'], isTicket: isTicket),
+          _buildPaymentRow("Capital Prestado:", AppCurrency.format(capitalNeto), isTicket: isTicket),
+          _buildPaymentRow("Interés Aplicado ($rateLabel):", interestDisplay, isTicket: isTicket),
+          _buildPaymentRow("Total a Devolver:", AppCurrency.format(totalWithInterest), isBold: true, isTicket: isTicket),
+          if (abonoInicial > 0.01)
+            _buildPaymentRow("Abono Inicial:", AppCurrency.format(abonoInicial), isTicket: isTicket),
+          _buildPaymentRow("Monto Abonado:", AppCurrency.format(abonado), isTicket: isTicket),
+          _buildPaymentRow("Saldo Pendiente:", AppCurrency.format(saldo), isBold: true, valueColor: saldo > 0 ? colors['debt'] : colors['savings'], isTicket: isTicket),
         ],
       ),
     );
@@ -698,6 +812,50 @@ class PdfGenerator {
     if (!config.showTotalGlobal && !config.showTransactionDetails) return pw.Container();
 
     final bool isSale = saleData != null;
+    final bool isLoan = isSale && saleData['origen_venta'] == 'prestamo_personal';
+
+    // Cronograma de cuotas si existen
+    final List<dynamic>? cuotasRaw = isSale ? saleData['cuotas'] : null;
+    pw.Widget? cuotasWidget;
+    if (config.showInstallments && cuotasRaw != null && cuotasRaw.isNotEmpty) {
+      cuotasWidget = pw.Container(
+        margin: pw.EdgeInsets.only(top: isLoan ? 0 : 10),
+        padding: const pw.EdgeInsets.all(8),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey300),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text("PLAN DE CUOTAS (${cuotasRaw.length} cuotas)", style: pw.TextStyle(fontSize: isTicket ? 8 : 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
+            pw.Divider(color: PdfColors.grey300, thickness: 0.5),
+            ...cuotasRaw.map((c) {
+              final bool pagado = c['estado'] == 'pagado';
+              final String date = DateFormat('dd/MM/yyyy').format(DateTime.parse(c['fecha_vencimiento']));
+              return pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 2),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text("Cuota ${c['numero_cuota']}: ${AppCurrency.format(c['monto'])}", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 9)),
+                    pw.Text("Vence: $date", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 9, color: PdfColors.grey700)),
+                    pw.Text(pagado ? "PAGADO" : "PENDIENTE", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 9, fontWeight: pw.FontWeight.bold, color: pagado ? PdfColors.green700 : PdfColors.orange700)),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      );
+    }
+
+    // 🔥 REGLA DE ORO MASTER PLAN: Si es un préstamo personal, el resumen contable ya fue
+    // impreso por _buildLoanSection. NO renderizar la caja duplicada de totales globales.
+    if (isLoan) {
+      return cuotasWidget ?? pw.Container();
+    }
+
     final double finalTotal = isSale ? (saleData['monto_total'] ?? 0.0).toDouble() : q.totalAmount;
     final double finalSavings = isSale ? (saleData['descuento_aplicado'] ?? 0.0).toDouble() : q.totalSavings;
     final double paidAmount = isSale ? (saleData['monto_pagado'] ?? 0.0).toDouble() : 0.0;
@@ -721,7 +879,7 @@ class PdfGenerator {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 pw.Text("Ahorro / Descuento:", style: pw.TextStyle(fontSize: isTicket ? 8 : 10)),
-                pw.Text("- ${currency.format(finalSavings)}", style: pw.TextStyle(fontSize: isTicket ? 8.5 : 10.5, fontWeight: pw.FontWeight.bold, color: colors['savings'])),
+                pw.Text("- ${AppCurrency.format(finalSavings)}", style: pw.TextStyle(fontSize: isTicket ? 8.5 : 10.5, fontWeight: pw.FontWeight.bold, color: colors['savings'])),
               ],
             ),
             pw.SizedBox(height: 4),
@@ -732,7 +890,7 @@ class PdfGenerator {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 pw.Text("IMPORTE TOTAL:", style: pw.TextStyle(fontSize: isTicket ? 10 : 12, fontWeight: pw.FontWeight.bold)),
-                pw.Text(currency.format(finalTotal), style: pw.TextStyle(fontSize: isTicket ? 13 : 16, fontWeight: pw.FontWeight.bold, color: colors['primary'])),
+                pw.Text(AppCurrency.format(finalTotal), style: pw.TextStyle(fontSize: isTicket ? 13 : 16, fontWeight: pw.FontWeight.bold, color: colors['primary'])),
               ],
             ),
             if (isSale && debt > 0.01) ...[
@@ -742,14 +900,14 @@ class PdfGenerator {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text("Monto Abonado:", style: pw.TextStyle(fontSize: isTicket ? 8 : 10)),
-                  pw.Text(currency.format(paidAmount), style: pw.TextStyle(fontSize: isTicket ? 8.5 : 10.5)),
+                  pw.Text(AppCurrency.format(paidAmount), style: pw.TextStyle(fontSize: isTicket ? 8.5 : 10.5)),
                 ],
               ),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text("SALDO PENDIENTE:", style: pw.TextStyle(fontSize: isTicket ? 9 : 11, fontWeight: pw.FontWeight.bold, color: colors['debt'])),
-                  pw.Text(currency.format(debt), style: pw.TextStyle(fontSize: isTicket ? 11 : 13, fontWeight: pw.FontWeight.bold, color: colors['debt'])),
+                  pw.Text(AppCurrency.format(debt), style: pw.TextStyle(fontSize: isTicket ? 11 : 13, fontWeight: pw.FontWeight.bold, color: colors['debt'])),
                 ],
               ),
             ]
@@ -807,40 +965,7 @@ class PdfGenerator {
             ],
           );
 
-    // Cronograma de cuotas si existen
-    final List<dynamic>? cuotasRaw = isSale ? saleData['cuotas'] : null;
-    if (config.showInstallments && cuotasRaw != null && cuotasRaw.isNotEmpty) {
-      final cuotasWidget = pw.Container(
-        margin: const pw.EdgeInsets.only(top: 10),
-        padding: const pw.EdgeInsets.all(8),
-        decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: PdfColors.grey300),
-          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-        ),
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text("PLAN DE CUOTAS (${cuotasRaw.length} cuotas)", style: pw.TextStyle(fontSize: isTicket ? 8 : 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
-            pw.Divider(color: PdfColors.grey300, thickness: 0.5),
-            ...cuotasRaw.map((c) {
-              final bool pagado = c['estado'] == 'pagado';
-              final String date = DateFormat('dd/MM/yyyy').format(DateTime.parse(c['fecha_vencimiento']));
-              return pw.Padding(
-                padding: const pw.EdgeInsets.only(bottom: 2),
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text("Cuota ${c['numero_cuota']}: ${currency.format(c['monto'])}", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 9)),
-                    pw.Text("Vence: $date", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 9, color: PdfColors.grey700)),
-                    pw.Text(pagado ? "PAGADO" : "PENDIENTE", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 9, fontWeight: pw.FontWeight.bold, color: pagado ? PdfColors.green700 : PdfColors.orange700)),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      );
-
+    if (cuotasWidget != null) {
       return pw.Column(
         children: [
           mainRow,
@@ -867,8 +992,14 @@ class PdfGenerator {
 
   /// Construye el pie de página (cuentas bancarias Yape/Plin, notas de validez y agradecimiento)
   static pw.Widget _buildFooter(PdfConfig config, UserModel? user, {required bool isTicket}) {
-    final bool hasPaymentAccounts = config.showPaymentAccounts && (user?.business?.paymentInfo?.isNotEmpty ?? false);
-    final bool hasFooterNote = config.footerNote != null && config.footerNote!.trim().isNotEmpty;
+    final String? effectivePayment = _stripUnsupportedEmojis(
+      (config.customPaymentInfo != null && config.customPaymentInfo!.trim().isNotEmpty)
+          ? config.customPaymentInfo!.trim()
+          : user?.business?.paymentInfo,
+    );
+    final String? effectiveFooterNote = _stripUnsupportedEmojis(config.footerNote);
+    final bool hasPaymentAccounts = config.showPaymentAccounts && (effectivePayment?.isNotEmpty ?? false);
+    final bool hasFooterNote = effectiveFooterNote != null && effectiveFooterNote.trim().isNotEmpty;
 
     return pw.Column(
       children: [
@@ -885,13 +1016,13 @@ class PdfGenerator {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                if (hasPaymentAccounts) ...[
+                if (hasPaymentAccounts && effectivePayment != null) ...[
                   pw.Text("Cuentas de Pago / Transferencias:", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
-                  pw.Text(user!.business!.paymentInfo!, style: pw.TextStyle(fontSize: isTicket ? 7 : 8, color: PdfColors.grey700)),
+                  pw.Text(effectivePayment, style: pw.TextStyle(fontSize: isTicket ? 7 : 8, color: PdfColors.grey700)),
                   if (hasFooterNote) pw.SizedBox(height: 3),
                 ],
                 if (hasFooterNote)
-                  pw.Text("Condiciones: ${config.footerNote!}", style: pw.TextStyle(fontSize: isTicket ? 7 : 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey800)),
+                  pw.Text("Condiciones: $effectiveFooterNote", style: pw.TextStyle(fontSize: isTicket ? 7 : 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey800)),
               ],
             ),
           ),

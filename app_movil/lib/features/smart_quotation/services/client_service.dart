@@ -611,6 +611,7 @@ class ClientService {
         'estado_entrega': 'entregado', // No hay entrega física
         'monto_total': finalDebt,
         'monto_pagado': 0.0,
+        'abono_inicial': 0.0,
         'nota_prestamo': motivo,
         'porcentaje_interes': interestRate ?? 0.0,
         'fecha_venta': DateTime.now().toIso8601String(),

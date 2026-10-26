@@ -42,12 +42,14 @@ class DashboardCustomizerModal extends StatefulWidget {
 
 class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
   late List<DashboardSectionConfig> _sections;
-  String _selectedPreset = 'Completo';
+  late String _selectedPreset;
+  bool _showHelpBanner = true;
 
   @override
   void initState() {
     super.initState();
     _sections = widget.initialSections.map((s) => s.copyWith()).toList();
+    _selectedPreset = DashboardSectionConfig.detectPreset(_sections);
   }
 
   void _onReorder(int oldIndex, int newIndex) {
@@ -55,7 +57,7 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
       if (newIndex > oldIndex) newIndex -= 1;
       final item = _sections.removeAt(oldIndex);
       _sections.insert(newIndex, item);
-      _selectedPreset = 'Personalizado';
+      _selectedPreset = DashboardSectionConfig.detectPreset(_sections);
     });
   }
 
@@ -73,6 +75,13 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
     });
   }
 
+  void _enableAllSections() {
+    setState(() {
+      _selectedPreset = 'Completo';
+      _sections = _sections.map((s) => s.copyWith(isVisible: true)).toList();
+    });
+  }
+
   Future<void> _saveAndClose() async {
     await DashboardSectionConfig.saveSections(widget.negocioId, _sections);
     widget.onSaved(_sections);
@@ -86,27 +95,15 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
     final borderColor = widget.isDark ? Colors.white12 : Colors.grey[200]!;
 
     return InteractiveSheetWrapper(
+      backgroundColor: bgColor,
+      maxHeightFactor: 0.90,
       applyEffectiveBottomPadding: true,
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.88,
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
+      showHandle: true,
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.84,
         child: Column(
           children: [
-            // Drag handle
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 44,
-              height: 5,
-              decoration: BoxDecoration(
-                color: widget.isDark ? Colors.white24 : Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            
-            // Header
+            // Header (1 sola manija nativa provista por InteractiveSheetWrapper)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
@@ -139,8 +136,17 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
                     ),
                   ),
                   IconButton(
+                    icon: Icon(
+                      _showHelpBanner ? Icons.info : Icons.info_outline,
+                      size: 20,
+                      color: _showHelpBanner ? Colors.blueAccent : (widget.isDark ? Colors.white60 : Colors.black54),
+                    ),
+                    tooltip: _showHelpBanner ? "Ocultar ayuda" : "Mostrar ayuda",
+                    onPressed: () => setState(() => _showHelpBanner = !_showHelpBanner),
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.restart_alt, size: 20),
-                    tooltip: "Restablecer orden predeterminado",
+                    tooltip: "Restablecer a valores de fábrica",
                     onPressed: _resetToDefault,
                   ),
                   IconButton(
@@ -153,7 +159,7 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
             
             const Divider(height: 1),
 
-            // Presets Bar
+            // Presets Bar (1 sola línea horizontal deslizable fluida)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: SingleChildScrollView(
@@ -168,37 +174,72 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
                     _buildPresetChip("📦 Operativo / Stock", 'Operativo / Stock'),
                     const SizedBox(width: 8),
                     _buildPresetChip("📰 Comercial & Radar", 'Comercial & Radar'),
+                    if (_selectedPreset == 'Personalizado') ...[
+                      const SizedBox(width: 8),
+                      _buildPresetChip("🎨 Personalizado", 'Personalizado'),
+                    ],
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: _enableAllSections,
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      ),
+                      icon: const Icon(Icons.check_circle_outline, size: 14),
+                      label: const Text("Activar Todo", style: TextStyle(fontSize: 11.5)),
+                    ),
                   ],
                 ),
               ),
             ),
 
-            // Helper instruction banner
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: widget.isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50],
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, size: 16, color: Colors.blueAccent),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "Mantén presionada una tarjeta para arrastrarla. Tu configuración se guarda automáticamente por negocio.",
-                      style: TextStyle(
-                        fontSize: 11, 
-                        color: widget.isDark ? Colors.blue[200] : Colors.blue[900],
+            // Helper instruction banner (Colapsable fluidamente con AnimatedSize)
+            AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOutCubic,
+              child: _showHelpBanner
+                  ? Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: widget.isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50],
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: widget.isDark ? Colors.blue.withValues(alpha: 0.25) : Colors.blue[200]!,
+                        ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline, size: 16, color: Colors.blueAccent),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Mantén presionada una tarjeta para arrastrarla. Tu configuración se guarda automáticamente por negocio.",
+                              style: TextStyle(
+                                fontSize: 11, 
+                                color: widget.isDark ? Colors.blue[200] : Colors.blue[900],
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => setState(() => _showHelpBanner = false),
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 6),
+                              child: Icon(
+                                Icons.close, 
+                                size: 16, 
+                                color: widget.isDark ? Colors.blue[300] : Colors.blue[700],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
 
-            // Reorderable list
+            // Reorderable list con tarjetas sin textos recortados (Mandatory Technical Rule #3)
             Expanded(
               child: ReorderableListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -217,10 +258,10 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
                         color: section.isVisible ? borderColor : borderColor.withValues(alpha: 0.5),
                       ),
                     ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      leading: Row(
-                        mainAxisSize: MainAxisSize.min,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Icon(
                             Icons.drag_indicator, 
@@ -240,56 +281,67 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
                               size: 18,
                             ),
                           ),
-                        ],
-                      ),
-                      title: Text(
-                        section.title,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: section.isVisible 
-                              ? (widget.isDark ? Colors.white : Colors.black87)
-                              : Colors.grey,
-                        ),
-                      ),
-                      subtitle: Text(
-                        section.subtitle,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: section.isPermanent
-                          ? Tooltip(
-                              message: "Esta tarjeta es obligatoria para el cálculo central",
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.blueAccent.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Text(
-                                  "Fijo",
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  section.title,
                                   style: TextStyle(
-                                    fontSize: 11, 
-                                    fontWeight: FontWeight.bold, 
-                                    color: Colors.blueAccent,
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: section.isVisible 
+                                        ? (widget.isDark ? Colors.white : Colors.black87)
+                                        : Colors.grey,
                                   ),
                                 ),
-                              ),
-                            )
-                          : Switch.adaptive(
-                              value: section.isVisible,
-                              activeTrackColor: Colors.blueAccent,
-                              onChanged: (val) {
-                                setState(() {
-                                  section.isVisible = val;
-                                  _selectedPreset = 'Personalizado';
-                                });
-                              },
+                                const SizedBox(height: 3),
+                                Text(
+                                  section.subtitle,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    height: 1.25,
+                                    color: widget.isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  ),
+                                  softWrap: true,
+                                ),
+                              ],
                             ),
+                          ),
+                          const SizedBox(width: 8),
+                          section.isPermanent
+                              ? Tooltip(
+                                  message: "Esta tarjeta es obligatoria para el cálculo central",
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blueAccent.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      "Fijo",
+                                      style: TextStyle(
+                                        fontSize: 11, 
+                                        fontWeight: FontWeight.bold, 
+                                        color: Colors.blueAccent,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Switch.adaptive(
+                                  value: section.isVisible,
+                                  activeTrackColor: Colors.blueAccent,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      section.isVisible = val;
+                                      _selectedPreset = DashboardSectionConfig.detectPreset(_sections);
+                                    });
+                                  },
+                                ),
+                        ],
+                      ),
                     ),
                   );
                 },

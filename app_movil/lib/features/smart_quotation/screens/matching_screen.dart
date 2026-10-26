@@ -21,7 +21,10 @@ import 'package:app_movil/features/smart_quotation/widgets/matching/matching_sma
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_client_header.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_quote_institution_header.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/manual/client_search_modal.dart';
+import 'package:app_movil/core/widgets/morphing_accordion.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 import 'package:app_movil/features/smart_quotation/screens/workbench_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';   
@@ -55,9 +58,45 @@ class _MatchingScreenState extends State<MatchingScreen> {
   final _clientAddressCtrl = TextEditingController();
   final _clientEmailCtrl = TextEditingController();
   final _clientNotesCtrl = TextEditingController();
+
+  final _quoteTitleCtrl = TextEditingController();
+  final _quoteNotesCtrl = TextEditingController();
   
   bool _updateClientData = true; 
+  bool _isQuoteDataExpanded = false;
   bool _isClientPanelExpanded = false;
+  bool _isAutoTitleMode = true;
+  bool _isGeneratingTitle = false;
+
+  void _syncAutoTitle({bool force = false}) {
+    if (_isGeneratingTitle) return;
+    if (!_isAutoTitleMode && !force) return;
+
+    final provider = Provider.of<MatchingProvider>(context, listen: false);
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    _isGeneratingTitle = true;
+
+    final newTitle = QuotationNamingEngine.generateTitle(
+      selectedClient: provider.selectedClient,
+      typedClientName: _clientNameCtrl.text,
+      schoolName: _schoolCtrl.text,
+      gradeLevel: _gradeCtrl.text,
+      quotationType: 'ai_scan',
+      isClientRole: auth.isCommunityClient,
+      clientUserName: auth.user?.fullName,
+    );
+
+    if (mounted && _quoteTitleCtrl.text != newTitle) {
+      _quoteTitleCtrl.text = newTitle;
+      _isAutoTitleMode = true;
+    }
+    _isGeneratingTitle = false;
+  }
+
+  void _restoreAutoTitle() {
+    setState(() => _isAutoTitleMode = true);
+    _syncAutoTitle(force: true);
+  }
 
   @override
   void initState() {
@@ -108,10 +147,39 @@ class _MatchingScreenState extends State<MatchingScreen> {
     _gradeCtrl = TextEditingController(text: initGrade);
     _clientNameCtrl = TextEditingController(text: initClient);
 
+    final initialTitle = QuotationNamingEngine.generateTitle(
+      selectedClient: provider.selectedClient,
+      typedClientName: initClient,
+      schoolName: initSchool,
+      gradeLevel: initGrade,
+      quotationType: 'ai_scan',
+      isClientRole: isClient,
+      clientUserName: auth.user?.fullName,
+    );
+    _quoteTitleCtrl.text = initialTitle;
+
+    _clientNameCtrl.addListener(() {
+      _updateHeader();
+      if (_isAutoTitleMode) _syncAutoTitle();
+    });
+    _schoolCtrl.addListener(() {
+      _updateHeader();
+      if (_isAutoTitleMode) _syncAutoTitle();
+    });
+    _gradeCtrl.addListener(() {
+      _updateHeader();
+      if (_isAutoTitleMode) _syncAutoTitle();
+    });
+    _quoteTitleCtrl.addListener(() {
+      if (!_isGeneratingTitle && _isAutoTitleMode) {
+        setState(() => _isAutoTitleMode = false);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _quoteTitleCtrl.dispose(); _quoteNotesCtrl.dispose();
     _schoolCtrl.dispose(); _gradeCtrl.dispose();
     _clientNameCtrl.dispose(); _clientPhoneCtrl.dispose(); _clientDniCtrl.dispose();
     _clientAddressCtrl.dispose(); _clientEmailCtrl.dispose(); _clientNotesCtrl.dispose();
@@ -135,6 +203,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
       _clientNotesCtrl.text = client.notes ?? "";
     });
     Provider.of<MatchingProvider>(context, listen: false).setClient(client);
+    _syncAutoTitle(force: true);
   }
 
   void _clearClient() {
@@ -148,6 +217,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
       _clientNotesCtrl.clear();
     });
     Provider.of<MatchingProvider>(context, listen: false).setClient(null);
+    _syncAutoTitle(force: true);
   }
 
   void _showClientSearch(bool isDark) async {
@@ -244,7 +314,6 @@ class _MatchingScreenState extends State<MatchingScreen> {
 
     if (confirm != true) return;
 
-    // 🔥 CORRECCIÓN 3: Se quitó widget.token de esta función
     int? newId = await provider.saveQuotation(
       isClient ? 'PENDING_APPROVAL' : 'PENDING', 
       manualClientName: _clientNameCtrl.text,
@@ -257,7 +326,9 @@ class _MatchingScreenState extends State<MatchingScreen> {
       institutionName: _schoolCtrl.text, 
       gradeLevel: _gradeCtrl.text, 
       type: 'ai_scan', 
-      isClientRole: isClient 
+      isClientRole: isClient,
+      quoteTitle: _quoteTitleCtrl.text.trim(),
+      quoteNotes: _quoteNotesCtrl.text.trim(),
     );
 
     if (newId != null && mounted) {
@@ -286,7 +357,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
 
   void _resetToInitial(bool isDark) {
     showDialog(
-      context: context,
+      context: context, 
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -313,7 +384,9 @@ class _MatchingScreenState extends State<MatchingScreen> {
                 _clientAddressCtrl.clear();
                 _clientEmailCtrl.clear();
                 _clientNotesCtrl.clear();
+                _isAutoTitleMode = true;
               });
+              _syncAutoTitle(force: true);
             }, 
             child: const Text("Sí, reiniciar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))
           )
@@ -647,7 +720,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
                                                 children: [
                                                   Icon(Icons.local_offer, color: Colors.green[600], size: 14),
                                                   const SizedBox(width: 6),
-                                                  Text("Ahorro Múltiple de S/ ${totalSavings.toStringAsFixed(2)}", style: TextStyle(color: isDark ? Colors.green[400] : Colors.green[700], fontWeight: FontWeight.bold, fontSize: 12)),
+                                                  Text("Ahorro Múltiple de ${AppCurrency.format(totalSavings)}", style: TextStyle(color: isDark ? Colors.green[400] : Colors.green[700], fontWeight: FontWeight.bold, fontSize: 12)),
                                                 ],
                                               ),
                                             ),
@@ -747,50 +820,156 @@ class _MatchingScreenState extends State<MatchingScreen> {
   }
 
   Widget _buildEditableHeader(MatchingProvider provider, bool isDark, TextTheme theme, bool isGuest, bool isClient) {
+    final titleText = _quoteTitleCtrl.text.trim();
+    final clientDisplayName = provider.selectedClient?.fullName ?? _clientNameCtrl.text.trim();
+    final schoolText = _schoolCtrl.text.trim();
+
     return Container(
-      color: isDark ? const Color(0xFF23232F) : Colors.white,
+      color: isDark ? const Color(0xFF14141C) : Colors.grey[50],
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Column(
         children: [
-          Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              initiallyExpanded: _isClientPanelExpanded,
-              iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
-              collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey,
-              title: Text(isClient ? "Mis Datos y Colegio" : "Datos del Cliente y Colegio", style: theme.titleMedium?.copyWith(color: isDark ? Colors.white : Colors.black87)),
-              subtitle: Text("Toca para desplegar y editar", style: theme.bodyMedium?.copyWith(color: isDark ? Colors.grey[500] : Colors.grey)),
-              onExpansionChanged: (val) => setState(() => _isClientPanelExpanded = val),
-              children: [
-                ManualQuoteInstitutionHeader(
+          // 🪗 ACORDEÓN 1: Identificación de Cotización
+          MorphingAccordion(
+            title: "Identificación de Cotización",
+            icon: Icons.description_outlined,
+            iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
+            initialExpanded: _isQuoteDataExpanded,
+            onExpansionChanged: (val) => setState(() => _isQuoteDataExpanded = val),
+            summaryBadge: titleText.isNotEmpty
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.blue[900]!.withValues(alpha: 0.3) : Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      titleText.length > 20 ? '${titleText.substring(0, 18)}...' : titleText,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.blue[200] : Colors.blue[800],
+                      ),
+                    ),
+                  )
+                : null,
+            content: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _quoteTitleCtrl,
+                    style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
+                    decoration: InputDecoration(
+                      labelText: "Nombre / Título de la Cotización",
+                      labelStyle: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                      floatingLabelBehavior: FloatingLabelBehavior.auto,
+                      prefixIcon: Icon(Icons.description, color: isDark ? Colors.blue[300] : Colors.blue),
+                      suffixIcon: !_isAutoTitleMode
+                          ? IconButton(
+                              icon: const Icon(Icons.restore_outlined),
+                              color: isDark ? Colors.amber[300] : Colors.orange[800],
+                              tooltip: "Restaurar nombre automático",
+                              onPressed: _restoreAutoTitle,
+                            )
+                          : Tooltip(
+                              message: "Nombre dinámico sincronizado",
+                              child: Icon(Icons.auto_awesome, size: 18, color: isDark ? Colors.blue[300] : Colors.blue[600]),
+                            ),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF14141C) : Colors.blue.withValues(alpha: 0.05),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.blue[300]! : Colors.blue[700]!, width: 1.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _quoteNotesCtrl,
+                    style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+                    maxLines: 2,
+                    minLines: 1,
+                    decoration: InputDecoration(
+                      labelText: "Notas de Cotización (Opcional)",
+                      labelStyle: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                      floatingLabelBehavior: FloatingLabelBehavior.auto,
+                      prefixIcon: Icon(Icons.sticky_note_2_outlined, color: isDark ? Colors.grey[400] : Colors.grey),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.blue[300]! : Colors.blue[700]!, width: 1.5)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // 🪗 ACORDEÓN 2: Cliente y Colegio
+          MorphingAccordion(
+            title: isClient ? "Mis Datos y Colegio" : "Datos del Cliente y Colegio",
+            icon: Icons.school_outlined,
+            iconColor: isDark ? Colors.amber[300] : Colors.orange[800],
+            initialExpanded: _isClientPanelExpanded,
+            onExpansionChanged: (val) => setState(() => _isClientPanelExpanded = val),
+            summaryBadge: (clientDisplayName.isNotEmpty || schoolText.isNotEmpty)
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.orange[900]!.withValues(alpha: 0.3) : Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      clientDisplayName.isNotEmpty
+                          ? (clientDisplayName.length > 15 ? '${clientDisplayName.substring(0, 13)}...' : clientDisplayName)
+                          : (schoolText.length > 15 ? '${schoolText.substring(0, 13)}...' : schoolText),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.orange[200] : Colors.orange[900],
+                      ),
+                    ),
+                  )
+                : null,
+            content: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                children: [
+                  ManualQuoteInstitutionHeader(
                     schoolCtrl: _schoolCtrl,
                     gradeCtrl: _gradeCtrl,
                     isDark: isDark,
                   ),
-                const SizedBox(height: 10),
-                ManualQuoteClientHeader(
-                  selectedClient: provider.selectedClient,
-                  nameCtrl: _clientNameCtrl,
-                  phoneCtrl: _clientPhoneCtrl,
-                  dniCtrl: _clientDniCtrl,
-                  addressCtrl: _clientAddressCtrl,
-                  emailCtrl: _clientEmailCtrl,
-                  notesCtrl: _clientNotesCtrl,
-                  isNewClientMode: _updateClientData,
-                  isDark: isDark,
-                  isGuest: isGuest, 
-                  onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; }); _updateHeader(); },
-                  onSearchClientTap: isClient ? () {
-                    CustomSnackBar.show(context, message: "Tu cuenta ya está vinculada automáticamente.", isError: false);
-                  } : () => _showClientSearch(isDark),
-                  onClearClient: isClient ? () {
-                    CustomSnackBar.show(context, message: "No puedes desvincular tu propia cuenta.", isError: true);
-                  } : _clearClient,
-                ),
-                const SizedBox(height: 10),
-              ],
+                  const SizedBox(height: 10),
+                  ManualQuoteClientHeader(
+                    selectedClient: provider.selectedClient,
+                    nameCtrl: _clientNameCtrl,
+                    phoneCtrl: _clientPhoneCtrl,
+                    dniCtrl: _clientDniCtrl,
+                    addressCtrl: _clientAddressCtrl,
+                    emailCtrl: _clientEmailCtrl,
+                    notesCtrl: _clientNotesCtrl,
+                    isNewClientMode: _updateClientData,
+                    isDark: isDark,
+                    isGuest: isGuest, 
+                    onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; }); _updateHeader(); },
+                    onSearchClientTap: isClient ? () {
+                      CustomSnackBar.show(context, message: "Tu cuenta ya está vinculada automáticamente.", isError: false);
+                    } : () => _showClientSearch(isDark),
+                    onClearClient: isClient ? () {
+                      CustomSnackBar.show(context, message: "No puedes desvincular tu propia cuenta.", isError: true);
+                    } : _clearClient,
+                  ),
+                ],
+              ),
             ),
           ),
-          Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
         ],
       ),
     );

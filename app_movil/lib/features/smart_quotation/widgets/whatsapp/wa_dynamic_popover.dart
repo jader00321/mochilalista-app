@@ -126,7 +126,7 @@ class WaDynamicPopover extends StatelessWidget {
             if (exampleSnippet != null && exampleSnippet!.isNotEmpty) ...[
               const SizedBox(height: 14),
               Text(
-                "EJEMPLO EN WHATSAPP:",
+                "VISTA PREVIA CON TUS DATOS REALES:",
                 style: TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,

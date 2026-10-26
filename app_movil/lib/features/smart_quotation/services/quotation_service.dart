@@ -3,6 +3,7 @@ import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
 
 class QuotationService {
   final dbHelper = LocalDatabase.instance;
@@ -17,9 +18,10 @@ class QuotationService {
       final iRows = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [quotationId]);
       
       Map<String, dynamic> cloneData = Map.from(qRows.first);
+      final int? origSeq = qRows.first['numero_secuencial'] as int?;
+      final String rawOriginalName = (cloneData['client_name'] as String?) ?? "Cotización";
       cloneData.remove('id'); 
       cloneData['status'] = 'DRAFT';
-      cloneData['client_name'] = "${cloneData['client_name']} (Copia)";
       cloneData['is_template'] = 0;
       cloneData['clone_source_id'] = quotationId;
       cloneData['creado_por_usuario_id'] = usuarioId; 
@@ -30,7 +32,13 @@ class QuotationService {
       int newId = 0;
       await db.transaction((txn) async {
         final nextSeqResult = await txn.rawQuery('SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM smart_quotations WHERE negocio_id = ?', [cloneData['negocio_id']]);
-        cloneData['numero_secuencial'] = (nextSeqResult.first['next_val'] as int?) ?? 1;
+        final nextSeq = (nextSeqResult.first['next_val'] as int?) ?? 1;
+        cloneData['numero_secuencial'] = nextSeq;
+        cloneData['client_name'] = QuotationNamingEngine.cleanCloneTitle(
+          rawOriginalName,
+          newSequentialNumber: nextSeq,
+          originalSequentialNumber: origSeq,
+        );
 
         newId = await txn.insert('smart_quotations', cloneData);
         for (var item in iRows) {

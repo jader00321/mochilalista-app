@@ -239,7 +239,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         builder: (_) => AuditTrailScreen(
           presentationId: _selectedPresentation.id!,
           productId: _currentProduct.id,
-          productName: _currentProduct.nombre,
+          productName: (_selectedPresentation.nombreEspecifico != null &&
+                  _selectedPresentation.nombreEspecifico!.trim().isNotEmpty &&
+                  _selectedPresentation.nombreEspecifico!.trim() != 'Unidad')
+              ? '${_currentProduct.nombre} • ${_selectedPresentation.nombreEspecifico!.trim()}'
+              : _currentProduct.nombre,
         ),
       ),
     );

@@ -10,6 +10,7 @@ import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart'; 
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
 import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
 
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
@@ -93,7 +94,13 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
   final _gradeCtrl = TextEditingController();
   
   bool _isGeneratingName = false;
+  bool _isAutoTitleMode = true;
   bool _isAppOrder = false;
+
+  void _restoreAutoTitle() {
+    setState(() => _isAutoTitleMode = true);
+    _generateDynamicName(force: true);
+  }
 
   @override
   void initState() {
@@ -120,25 +127,47 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
         
         if (_quoteTitleCtrl.text.isEmpty && _currentQuotationId == null) {
             final String name = (auth.user?.fullName != null && auth.user!.fullName.isNotEmpty) ? auth.user!.fullName : "Cliente";
-            _quoteTitleCtrl.text = "$name - Pedido Manual #${DateFormat('dd-HHmm').format(DateTime.now())}";
+            _quoteTitleCtrl.text = QuotationNamingEngine.generateTitle(
+              isClientRole: true,
+              clientUserName: name,
+              quotationType: 'manual',
+            );
         }
       }
     });
     
     _clientNameCtrl.addListener(() {
       _markChanged();
-      if (_currentQuotationId == null || _quoteTitleCtrl.text.startsWith("Cotización") || _quoteTitleCtrl.text.contains("- Pedido")) {
-         _generateDynamicName();
+      if (_isAutoTitleMode) {
+        _generateDynamicName();
       }
       if (_selectedClient == null && _clientNameCtrl.text.isNotEmpty) {
-         if (!_updateClientData) setState(() => _updateClientData = true);
+        if (!_updateClientData) setState(() => _updateClientData = true);
       }
     });
 
-    _quoteTitleCtrl.addListener(_markChanged);
+    _quoteTitleCtrl.addListener(() {
+      _markChanged();
+      if (!_isGeneratingName && _isAutoTitleMode) {
+        setState(() => _isAutoTitleMode = false);
+      }
+    });
+
     _quoteNotesCtrl.addListener(_markChanged);
-    _schoolCtrl.addListener(_markChanged);
-    _gradeCtrl.addListener(_markChanged);
+
+    _schoolCtrl.addListener(() {
+      _markChanged();
+      if (_isAutoTitleMode) {
+        _generateDynamicName();
+      }
+    });
+
+    _gradeCtrl.addListener(() {
+      _markChanged();
+      if (_isAutoTitleMode) {
+        _generateDynamicName();
+      }
+    });
     
     _initData();
   }
@@ -226,33 +255,29 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
     );
   }
   
-  void _generateDynamicName() async {
+  void _generateDynamicName({bool force = false}) async {
     if (_isGeneratingName) return;
-    
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    
-    bool shouldGenerate = _quoteTitleCtrl.text.isEmpty || 
-                          _quoteTitleCtrl.text.startsWith("Cotización") ||
-                          _quoteTitleCtrl.text.contains("- Pedido") ||
-                          _quoteTitleCtrl.text == "Cliente General";
+    if (!_isAutoTitleMode && !force) return;
 
-    if (shouldGenerate) {
-        _isGeneratingName = true;
-        final prov = Provider.of<SmartQuotationProvider>(context, listen: false);
-        
-        final newName = await prov.generateDynamicQuoteName(
-            _selectedClient, 
-            _clientNameCtrl.text, 
-            isClientRole: auth.isCommunityClient,
-            clientUserName: auth.user?.fullName,
-            type: 'manual' 
-        );
-        
-        if (mounted && _quoteTitleCtrl.text != newName) {
-           _quoteTitleCtrl.text = newName;
-        }
-        _isGeneratingName = false;
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    _isGeneratingName = true;
+    final prov = Provider.of<SmartQuotationProvider>(context, listen: false);
+
+    final newName = await prov.generateDynamicQuoteName(
+      _selectedClient,
+      _clientNameCtrl.text,
+      schoolName: _schoolCtrl.text,
+      gradeLevel: _gradeCtrl.text,
+      isClientRole: auth.isCommunityClient,
+      clientUserName: auth.user?.fullName,
+      type: 'manual',
+    );
+
+    if (mounted && _quoteTitleCtrl.text != newName) {
+      _quoteTitleCtrl.text = newName;
+      _isAutoTitleMode = true;
     }
+    _isGeneratingName = false;
   }
 
   @override
@@ -459,6 +484,8 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                                 selectedClient: _selectedClient, clientNameCtrl: _clientNameCtrl, clientPhoneCtrl: _clientPhoneCtrl, clientDniCtrl: _clientDniCtrl,
                                 clientAddressCtrl: _clientAddressCtrl, clientEmailCtrl: _clientEmailCtrl, clientNotesCtrl: _clientNotesCtrl,
                                 isNewClientMode: _updateClientData, onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; _hasUnsavedChanges = true; }); },
+                                isAutoTitleMode: _isAutoTitleMode,
+                                onRestoreAutoTitle: _restoreAutoTitle,
                                 
                                 onSearchClientTap: (isGuest || _isAppOrder) ? () {
                                    if (_isAppOrder) {
@@ -496,6 +523,8 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                               selectedClient: _selectedClient, clientNameCtrl: _clientNameCtrl, clientPhoneCtrl: _clientPhoneCtrl, clientDniCtrl: _clientDniCtrl,
                               clientAddressCtrl: _clientAddressCtrl, clientEmailCtrl: _clientEmailCtrl, clientNotesCtrl: _clientNotesCtrl,
                               isNewClientMode: _updateClientData, onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; _hasUnsavedChanges = true; }); },
+                              isAutoTitleMode: _isAutoTitleMode,
+                              onRestoreAutoTitle: _restoreAutoTitle,
                               
                               onSearchClientTap: (isGuest || _isAppOrder) ? () {
                                  if (_isAppOrder) {
@@ -510,6 +539,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                               } : _clearClient,
                             ),
                             if (!isClient) _buildOffersPanel(isDark),
+                            if (_items.isNotEmpty) _buildProductsSectionHeader(isDark),
                           ],
                         ),
                         padding: const EdgeInsets.only(bottom: 120), 
@@ -575,7 +605,7 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
           isClient: isClient
         ),
         
-        floatingActionButton: _items.isNotEmpty 
+        floatingActionButton: (_items.isNotEmpty && !_isQuoteDataExpanded && !_isClientPanelExpanded) 
           ? Padding(
               padding: const EdgeInsets.only(bottom: 85), 
               child: FloatingActionButton(
@@ -586,6 +616,61 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
               ),
             )
           : null,
+      ),
+    );
+  }
+
+  Widget _buildProductsSectionHeader(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory_2_outlined, size: 18, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+              const SizedBox(width: 8),
+              Text(
+                "Productos en Cotización (${_items.length})",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.2,
+                  color: isDark ? Colors.grey[300] : Colors.grey[800],
+                ),
+              ),
+            ],
+          ),
+          InkWell(
+            onTap: () => _showCatalogModal(isDark),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.shade300,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_circle_outline, size: 15, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                  const SizedBox(width: 5),
+                  Text(
+                    "Añadir Ítem",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.orange[300] : Colors.orange[900],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

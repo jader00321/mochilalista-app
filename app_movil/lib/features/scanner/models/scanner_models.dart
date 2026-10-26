@@ -215,7 +215,7 @@ class StagingVariant {
   bool updateCosto = true;
   bool updatePrecio = true;
   bool updateNombre = true;
-  bool updateUnidadVenta = true;
+  bool updateUnidadVenta = false;
   bool updateMarca = true;
   bool updateCodigoBarra = true;
   bool updateUmpCompra = true;
@@ -242,9 +242,60 @@ class StagingVariant {
   String? discountMode; // 'keep', 'remove', 'edit'
   double? discountManualValue;
 
-  String stockOperation = 'sumar'; // 'sumar' o 'reemplazar'
+  String _stockOperation = 'sumar'; // 'sumar' o 'reemplazar'
+  String get stockOperation => _stockOperation;
+  set stockOperation(String val) {
+    if (_stockOperation != val) {
+      _stockOperation = val;
+      resetStockAuthorizationFlags();
+    }
+  }
+
+  void resetStockAuthorizationFlags() {
+    allowLeftoverInReserve = false;
+    allowDeficitApproved = false;
+  }
+
   int? stockIngresanteOverride;
   String? sourceVariantUuid; // UUID de la variante padre que originó este sobrante
+  bool allowLeftoverInReserve = false;
+  bool allowDeficitApproved = false;
+
+  int get stockIngresanteBase =>
+      stockIngresanteOverride ?? (cantidadUmpComprada * unidadesPorLote).toInt();
+
+  int calculateTotalUnitsBase({required int stockActualBD}) {
+    final baseIngreso = stockIngresanteBase;
+    final bool isExisting = matchPresentacion.estado.contains("MATCH");
+    if (isExisting && stockOperation == 'sumar') {
+      return stockActualBD + baseIngreso;
+    }
+    return baseIngreso;
+  }
+
+  String get effectiveUnidadVenta {
+    final bool isNuevo = !matchPresentacion.estado.contains("MATCH");
+    if (isNuevo || updateUnidadVenta) {
+      return unidadVenta.trim().isNotEmpty ? unidadVenta.trim() : 'Unidad';
+    }
+    final dbUnidad = matchPresentacion.datos?.unidadVenta;
+    if (dbUnidad != null && dbUnidad.trim().isNotEmpty) {
+      return dbUnidad.trim();
+    }
+    return unidadVenta.trim().isNotEmpty ? unidadVenta.trim() : 'Unidad';
+  }
+
+  int get effectiveFactorVenta {
+    final bool isNuevo = !matchPresentacion.estado.contains("MATCH");
+    if (isNuevo || updateUnidadVenta) {
+      return unidadesPorVenta >= 1 ? unidadesPorVenta : 1;
+    }
+    final dbFactor = matchPresentacion.datos?.unidadesPorVenta;
+    if (dbFactor != null && dbFactor >= 1) {
+      return dbFactor;
+    }
+    return unidadesPorVenta >= 1 ? unidadesPorVenta : 1;
+  }
 
 
   // Backup de valores originales de factura
@@ -302,6 +353,7 @@ class StagingVariant {
   bool? _snapshotUpdateCodigoBarra;
   
   int? _snapshotStockOverride;
+  String? _snapshotStockOperation;
   String? _snapshotDiscountMode;
   double? _snapshotDiscountManual;
 
@@ -310,6 +362,8 @@ class StagingVariant {
   double? _snapshotCantidadUmpComprada;
   double? _snapshotTotalPagoLote;
   int? _snapshotUnidadesPorLote;
+  bool? _snapshotAllowLeftoverInReserve;
+  bool? _snapshotAllowDeficitApproved;
 
   StagingVariant({
     String? uuidTemporal,
@@ -329,9 +383,7 @@ class StagingVariant {
     this.isConfirmed = true,
   }) : uuidTemporal = uuidTemporal ?? generateFrontendUuid(),
        _matchPresentacion = matchPresentacion {
-    if (matchPresentacion.datos != null && unidadesPorVenta == matchPresentacion.datos!.unidadesPorVenta) {
-      updateUnidadVenta = false;
-    }
+    updateUnidadVenta = !matchPresentacion.estado.contains("MATCH");
     _originalCostoSugerido = costoUnitarioSugerido;
     _originalMargen = factorGananciaVentaSugerido;
     _originalPrecioVenta = precioVentaSugerido;
@@ -367,7 +419,10 @@ class StagingVariant {
           json['confirmado'] == 1 ||
           json['confirmado'] == true ||
           json['confirmado'] == null,
-    )..sourceVariantUuid = json['sourceVariantUuid'];
+    )
+      ..sourceVariantUuid = json['sourceVariantUuid']
+      ..allowLeftoverInReserve = json['allow_leftover_in_reserve'] == true || json['allow_leftover_in_reserve'] == 1
+      ..allowDeficitApproved = json['allow_deficit_approved'] == true || json['allow_deficit_approved'] == 1;
   }
 
   void takeSnapshot() {
@@ -387,6 +442,7 @@ class StagingVariant {
     _snapshotUpdateDatosCompra = updateDatosCompra;
     
     _snapshotStockOverride = stockIngresanteOverride;
+    _snapshotStockOperation = _stockOperation;
     _snapshotDiscountMode = discountMode;
     _snapshotDiscountManual = discountManualValue;
 
@@ -395,6 +451,8 @@ class StagingVariant {
     _snapshotCantidadUmpComprada = cantidadUmpComprada;
     _snapshotTotalPagoLote = totalPagoLote;
     _snapshotUnidadesPorLote = unidadesPorLote;
+    _snapshotAllowLeftoverInReserve = allowLeftoverInReserve;
+    _snapshotAllowDeficitApproved = allowDeficitApproved;
   }
 
   void restoreFromSnapshot() {
@@ -417,6 +475,9 @@ class StagingVariant {
       }
       
       stockIngresanteOverride = _snapshotStockOverride;
+      if (_snapshotStockOperation != null) {
+        _stockOperation = _snapshotStockOperation!;
+      }
       discountMode = _snapshotDiscountMode;
       discountManualValue = _snapshotDiscountManual;
 
@@ -425,6 +486,12 @@ class StagingVariant {
       cantidadUmpComprada = _snapshotCantidadUmpComprada!;
       totalPagoLote = _snapshotTotalPagoLote!;
       unidadesPorLote = _snapshotUnidadesPorLote!;
+      if (_snapshotAllowLeftoverInReserve != null) {
+        allowLeftoverInReserve = _snapshotAllowLeftoverInReserve!;
+      }
+      if (_snapshotAllowDeficitApproved != null) {
+        allowDeficitApproved = _snapshotAllowDeficitApproved!;
+      }
     }
   }
 
@@ -438,11 +505,14 @@ class StagingVariant {
           unidadesPorVenta != _snapshotUnidadesPorVenta ||
           codigoBarra != _snapshotCodigoBarra ||
           editedMarca != _snapshotEditedMarca ||
+          _stockOperation != _snapshotStockOperation ||
           umpCompra != _snapshotUmpCompra ||
           precioUmpProveedor != _snapshotPrecioUmpProveedor ||
           cantidadUmpComprada != _snapshotCantidadUmpComprada ||
           totalPagoLote != _snapshotTotalPagoLote ||
           unidadesPorLote != _snapshotUnidadesPorLote ||
+          allowLeftoverInReserve != _snapshotAllowLeftoverInReserve ||
+          allowDeficitApproved != _snapshotAllowDeficitApproved ||
           updateNombre != _snapshotUpdateNombre ||
           updateUnidadVenta != _snapshotUpdateUnidadVenta ||
           updateMarca != _snapshotUpdateMarca ||
@@ -471,6 +541,8 @@ class StagingVariant {
     stockIngresanteOverride = null;
     discountMode = null;
     discountManualValue = null;
+    allowLeftoverInReserve = false;
+    allowDeficitApproved = false;
     _snapshotCosto = null; // Clear snapshot when reverting to absolute original
   }
 
@@ -485,7 +557,9 @@ class StagingVariant {
       cantidadUmpComprada != _originalCantidadUmpComprada ||
       precioUmpProveedor != _originalPrecioUmpProveedor ||
       totalPagoLote != _originalTotalPagoLote ||
-      unidadesPorLote != _originalUnidadesPorLote;
+      unidadesPorLote != _originalUnidadesPorLote ||
+      allowLeftoverInReserve ||
+      allowDeficitApproved;
 }
 
 class StagingProductGroup {
@@ -500,6 +574,7 @@ class StagingProductGroup {
 
   int? categoriaSugeridaId;
   List<StagingVariant> variantes;
+  bool isMatchVerified;
 
   StagingProductGroup({
     String? uuidTemporal,
@@ -511,6 +586,7 @@ class StagingProductGroup {
     required this.matchMarca,
     this.categoriaSugeridaId,
     required this.variantes,
+    this.isMatchVerified = false,
   }) : uuidTemporal = uuidTemporal ?? generateFrontendUuid();
 
   factory StagingProductGroup.fromJson(Map<String, dynamic> json) {

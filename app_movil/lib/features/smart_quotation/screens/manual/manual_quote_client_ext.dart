@@ -2,7 +2,7 @@ part of '../manual_quotation_screen.dart';
 
 extension _ManualQuoteClientExt on _ManualQuotationScreenState {
 
-  void _selectClient(ClientModel client) async {
+  void _selectClient(ClientModel client) {
     updateState(() {
       _selectedClient = client;
       _updateClientData = true; 
@@ -15,10 +15,7 @@ extension _ManualQuoteClientExt on _ManualQuotationScreenState {
       _hasUnsavedChanges = true;
     });
 
-    final prov = Provider.of<SmartQuotationProvider>(context, listen: false);
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final newName = await prov.generateDynamicQuoteName(client, client.fullName, isClientRole: auth.isCommunityClient, clientUserName: auth.user?.fullName, type: 'manual');
-    if (mounted) _quoteTitleCtrl.text = newName;
+    _generateDynamicName(force: true);
   }
 
   void _clearClient() {
@@ -28,7 +25,7 @@ extension _ManualQuoteClientExt on _ManualQuotationScreenState {
       _clientAddressCtrl.clear(); _clientEmailCtrl.clear(); _clientNotesCtrl.clear();
       _hasUnsavedChanges = true;
     });
-    _generateDynamicName();
+    _generateDynamicName(force: true);
   }
 
   void _showClientSearch() {

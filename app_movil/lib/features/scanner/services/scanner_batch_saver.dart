@@ -1,6 +1,7 @@
 import 'package:app_movil/core/utils/app_logger.dart';
 import 'package:app_movil/features/scanner/models/scanner_models.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 /// Servicio dedicado al guardado masivo (batch save) de los datos
 /// del staging de facturas en la base de datos SQLite local.
@@ -128,9 +129,7 @@ class ScannerBatchSaver {
 
           // 4. Procesar cada variante/presentación
           for (var v in variantesActivas) {
-            int cantidadSumar =
-                v.stockIngresanteOverride ??
-                (v.cantidadUmpComprada * v.unidadesPorLote).toInt();
+            int cantidadSumar = v.stockIngresanteBase;
 
             if (v.matchPresentacion.estado.contains("MATCH") &&
                 v.matchPresentacion.estado != "NUEVO_EN_PADRE") {
@@ -166,8 +165,8 @@ class ScannerBatchSaver {
               // FASE 5 FIX: Unidad de venta se guarda con su propio flag
               // (antes dependía de updateCosto || updatePrecio)
               if (v.updateUnidadVenta) {
-                updateData['unidad_venta'] = v.unidadVenta;
-                updateData['unidades_por_venta'] = v.unidadesPorVenta;
+                updateData['unidad_venta'] = v.effectiveUnidadVenta;
+                updateData['unidades_por_venta'] = v.effectiveFactorVenta;
               }
 
               if (v.updateCosto) {
@@ -228,6 +227,56 @@ class ScannerBatchSaver {
                 whereArgs: [idPres],
               );
 
+              // Auditar cambios en descuentos si la factura modificó el precio/oferta
+              if (updateData.containsKey('precio_oferta')) {
+                double oldVenta = (oldP.first['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
+                double? oldOferta = (oldP.first['precio_oferta'] as num?)?.toDouble();
+                String? oldTipo = oldP.first['tipo_descuento']?.toString();
+                double oldVal = (oldP.first['valor_descuento'] as num?)?.toDouble() ?? 0.0;
+                bool hadOffer = oldOferta != null && oldOferta > 0 && oldOferta < oldVenta;
+
+                double newVenta = (updateData['precio_venta_final'] as num?)?.toDouble() ?? oldVenta;
+                double? newOferta = (updateData['precio_oferta'] as num?)?.toDouble();
+                String? newTipo = updateData['tipo_descuento']?.toString() ?? oldTipo;
+                double newVal = (updateData['valor_descuento'] as num?)?.toDouble() ?? oldVal;
+                bool hasOffer = newOferta != null && newOferta > 0 && newOferta < newVenta;
+
+                String pTag = (v.nombreEspecifico.trim().isNotEmpty && v.nombreEspecifico.trim() != 'Unidad')
+                    ? ' (${v.nombreEspecifico.trim()})'
+                    : '';
+
+                if (hadOffer && !hasOffer) {
+                  String valAnt = (oldTipo == 'porcentaje')
+                      ? '${oldVal.toStringAsFixed(oldVal.truncateToDouble() == oldVal ? 0 : 1)}% OFF$pTag (${AppCurrency.format(oldOferta)})'
+                      : '-${AppCurrency.format(oldVal)} OFF$pTag (${AppCurrency.format(oldOferta)})';
+                  await txn.insert('product_history', {
+                    'entidad_tipo': 'PRESENTACION',
+                    'entidad_id': idPres,
+                    'campo_modificado': 'descuento',
+                    'valor_anterior': valAnt,
+                    'valor_nuevo': 'Oferta finalizada$pTag por actualización de factura',
+                    'fecha_cambio': DateTime.now().toIso8601String(),
+                  });
+                } else if (hasOffer) {
+                  String valAnt = hadOffer 
+                      ? ((oldTipo == 'porcentaje')
+                          ? '${oldVal.toStringAsFixed(oldVal.truncateToDouble() == oldVal ? 0 : 1)}% OFF$pTag (${AppCurrency.format(oldOferta)})'
+                          : '-${AppCurrency.format(oldVal)} OFF$pTag (${AppCurrency.format(oldOferta)})')
+                      : 'Sin descuento';
+                  String valNuevo = (newTipo == 'porcentaje')
+                      ? 'Oferta actualizada$pTag: ${newVal.toStringAsFixed(newVal.truncateToDouble() == newVal ? 0 : 1)}% OFF → Precio Oferta: ${AppCurrency.format(newOferta)}'
+                      : 'Oferta actualizada$pTag: -${AppCurrency.format(newVal)} OFF → Precio Oferta: ${AppCurrency.format(newOferta)}';
+                  await txn.insert('product_history', {
+                    'entidad_tipo': 'PRESENTACION',
+                    'entidad_id': idPres,
+                    'campo_modificado': 'descuento',
+                    'valor_anterior': valAnt,
+                    'valor_nuevo': valNuevo,
+                    'fecha_cambio': DateTime.now().toIso8601String(),
+                  });
+                }
+              }
+
               if (stockDiff != 0) {
                 await txn.insert('stock_ledger', {
                   'presentation_id': idPres,
@@ -266,8 +315,8 @@ class ScannerBatchSaver {
                 'cantidad_ump_comprada': v.cantidadUmpComprada,
                 'total_pago_lote': v.totalPagoLote,
                 'unidades_por_lote': v.unidadesPorLote,
-                'unidad_venta': v.unidadVenta,
-                'unidades_por_venta': v.unidadesPorVenta,
+                'unidad_venta': v.effectiveUnidadVenta,
+                'unidades_por_venta': v.effectiveFactorVenta,
                 'factor_ganancia_venta': v.factorGananciaVentaSugerido,
                 'costo_unitario_calculado': v.costoUnitarioSugerido,
                 'precio_venta_final': v.precioVentaSugerido,

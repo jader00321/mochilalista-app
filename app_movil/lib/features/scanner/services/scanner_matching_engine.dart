@@ -4,6 +4,7 @@ import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/features/scanner/services/scanner_cost_engine.dart';
 import 'package:app_movil/features/scanner/services/spanish_lemmatizer.dart';
 import 'package:app_movil/core/services/unit_catalog_service.dart';
+import 'package:app_movil/features/scanner/services/commercial_invoice_normalizer.dart';
 
 /// Servicio dedicado a la lógica de matching (coincidencia) entre
 /// los items extraídos por la IA y los productos existentes en SQLite.
@@ -217,8 +218,22 @@ class ScannerMatchingEngine {
               }
             }
 
-            score += maxVariantScore;
-            score += maxUnitScore;
+            // EVALUACIÓN MULTI-CAMPO COMPUESTA (Fase 1: Cobertura total Factura vs [Padre + Variante + Marca + SKU])
+            final composite = CommercialInvoiceNormalizer.evaluateCompositeMatch(
+              facturaDescripcion: item.descripcion,
+              productoNombre: candidate['nombre'] as String,
+              marcaNombre: candidate['marca_nombre'] as String?,
+              variantes: normalizedSiblings,
+              facturaMarca: item.marcaDetectada,
+            );
+
+            if (composite.score > score) {
+              score = composite.score;
+            }
+            if (composite.bestSibling != null && (currentBestSibling == null || composite.bestSiblingScore > currentBestSiblingScore)) {
+              currentBestSibling = composite.bestSibling;
+              currentBestSiblingScore = composite.bestSiblingScore;
+            }
 
             if (score > highestScore) {
               highestScore = score;
@@ -407,24 +422,22 @@ class ScannerMatchingEngine {
     double globalSim = SpanishLemmatizer.calculateSimilarity(lemA, lemB);
     if (globalSim >= 0.8) return (globalSim * 100).toInt();
 
-    // Conteo de tokens coincidentes lematizados y difusos
-    var tokensA = a.split(' ').where((t) => t.length > 1).toList();
-    var tokensB = b.split(' ').where((t) => t.length > 1).toList();
+    String normA = CommercialInvoiceNormalizer.normalizeCommercialString(a);
+    String normB = CommercialInvoiceNormalizer.normalizeCommercialString(b);
+    if (normA == normB) return 100;
+    if (normA.contains(normB) || normB.contains(normA)) return 90;
+
+    // Conteo de tokens coincidentes con prefix stemming y normalización
+    var tokensA = CommercialInvoiceNormalizer.extractTokens(a);
+    var tokensB = CommercialInvoiceNormalizer.extractTokens(b);
     double score = 0;
     int matchingTokenCount = 0;
 
     for (var ta in tokensA) {
-      String lta = SpanishLemmatizer.lemmatize(ta);
       double bestTokenSim = 0;
       for (var tb in tokensB) {
-        String ltb = SpanishLemmatizer.lemmatize(tb);
-        if (lta == ltb) {
-          bestTokenSim = 1.0;
-          break;
-        } else {
-          double sim = SpanishLemmatizer.calculateSimilarity(lta, ltb);
-          if (sim > bestTokenSim) bestTokenSim = sim;
-        }
+        double m = CommercialInvoiceNormalizer.matchTokens(ta, tb);
+        if (m > bestTokenSim) bestTokenSim = m;
       }
       // Solo sumamos puntos por tokens similares >= 75%
       if (bestTokenSim >= 0.75) {

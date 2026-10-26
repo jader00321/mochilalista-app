@@ -34,6 +34,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
   bool _showFilters = true;
   bool _showScrollToTop = false;
   DateTime _lastToggleTime = DateTime.fromMillisecondsSinceEpoch(0);
+  double _accumulatedDelta = 0.0;
 
   @override
   void initState() {
@@ -41,7 +42,17 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
     _tabController = TabController(length: 3, vsync: this);
     
     _tabController.addListener(() {
-      // TabBarView maneja la animación de cambio de tab
+      if (!mounted) return;
+      if (!_tabController.indexIsChanging) {
+        _lastToggleTime = DateTime.now();
+        _accumulatedDelta = 0.0;
+        if (!_showKpis || !_showFilters) {
+          setState(() {
+            _showKpis = true;
+            _showFilters = true;
+          });
+        }
+      }
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -64,6 +75,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
       activeController.animateTo(0, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
     }
     _lastToggleTime = DateTime.now();
+    _accumulatedDelta = 0.0;
     setState(() {
       _showKpis = true;
       _showFilters = true;
@@ -81,38 +93,56 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
     final now = DateTime.now();
     final elapsedSinceToggle = now.difference(_lastToggleTime).inMilliseconds;
 
-    // Regla del Tope Superior: Si estamos en el tope (pixels <= 15), forzar siempre expansión
-    if (currentOffset <= 15) {
+    // 1. Regla del Tope Real: Si estamos en el tope absoluto (currentOffset <= 5), forzar siempre expansión
+    if (currentOffset <= 5) {
       if (!_showKpis || !_showFilters) {
         _lastToggleTime = now;
+        _accumulatedDelta = 0.0;
         setState(() {
           _showKpis = true;
           _showFilters = true;
         });
       }
-    } else if (elapsedSinceToggle > 300) {
-      // Guarda de histéresis temporal (~300ms) para evitar rebotes
+    } else if (elapsedSinceToggle > 350) {
+      // Cooldown de 350ms para ignorar desplazamientos automáticos de AnimatedSize
       if (notification is ScrollUpdateNotification) {
         final delta = notification.scrollDelta ?? 0.0;
-        if (delta > 8 && currentOffset > 60) {
-          // Scroll hacia abajo: ocultar suavemente solo si hay suficiente recorrido
-          if ((_showKpis || _showFilters) && maxScroll > 80) {
+
+        // Reiniciar acumulador si el usuario cambia de dirección
+        if ((delta > 0 && _accumulatedDelta < 0) || (delta < 0 && _accumulatedDelta > 0)) {
+          _accumulatedDelta = 0.0;
+        }
+        _accumulatedDelta += delta;
+
+        // Caso A: Scroll hacia abajo (ocultar)
+        if (_accumulatedDelta > 15 && currentOffset > 60) {
+          // Guarda dinámica: solo colapsar si hay suficiente recorrido para no rebotar
+          if ((_showKpis || _showFilters) && maxScroll > 220) {
             _lastToggleTime = now;
+            _accumulatedDelta = 0.0;
             setState(() {
               _showKpis = false;
               _showFilters = false;
             });
           }
-        } else if (delta < -8) {
-          // Scroll hacia arriba: reaparecen los filtros de inmediato
+        } 
+        // Caso B: Scroll hacia arriba (reaparecer)
+        // Cero aperturas por rebote: Requiere arrastre activo del usuario (dragDetails != null)
+        // y no encontrarse en zona de rebote inferior
+        else if (_accumulatedDelta < -24 && 
+                 notification.dragDetails != null && 
+                 currentOffset < maxScroll - 25 && 
+                 !notification.metrics.outOfRange) {
           if (!_showFilters) {
             _lastToggleTime = now;
+            _accumulatedDelta = 0.0;
             setState(() {
               _showFilters = true;
             });
           }
           if (currentOffset < 45 && !_showKpis) {
             _lastToggleTime = now;
+            _accumulatedDelta = 0.0;
             setState(() {
               _showKpis = true;
             });

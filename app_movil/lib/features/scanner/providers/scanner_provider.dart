@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:math';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:app_movil/core/utils/app_logger.dart';
 import 'package:app_movil/features/scanner/models/scanner_models.dart';
@@ -49,6 +51,22 @@ class ScannerProvider with ChangeNotifier {
   final _batchSaver = ScannerBatchSaver();
   final _dbHelper = LocalDatabase.instance;
 
+  String? _highlightedGroupUuid;
+  String? get highlightedGroupUuid => _highlightedGroupUuid;
+
+  void highlightGroup(String? uuid) {
+    _highlightedGroupUuid = uuid;
+    notifyListeners();
+    if (uuid != null) {
+      Timer(const Duration(milliseconds: 2500), () {
+        if (_highlightedGroupUuid == uuid) {
+          _highlightedGroupUuid = null;
+          notifyListeners();
+        }
+      });
+    }
+  }
+
   // ==========================================
   // GETTERS
   // ==========================================
@@ -58,6 +76,12 @@ class ScannerProvider with ChangeNotifier {
   StagingResponse? get stagingData => _currentState.stagingData;
   File? get currentImage => _currentState.currentImage;
   bool get hasSavedProgress => _currentState.hasSavedProgress;
+
+  @visibleForTesting
+  void setStagingDataForTesting(StagingResponse staging) {
+    _currentState.stagingData = staging;
+    notifyListeners();
+  }
 
   int get countNew {
     if (_currentState.stagingData == null) return 0;
@@ -94,46 +118,48 @@ class ScannerProvider with ChangeNotifier {
     return count;
   }
 
-  bool get hasUnresolvedStock {
-    if (_currentState.stagingData == null) return false;
+  bool get hasUnresolvedStock => unresolvedStockErrorsCount > 0;
+
+  int get unresolvedStockErrorsCount {
+    if (_currentState.stagingData == null) return 0;
+    int count = 0;
     for (var group in _currentState.stagingData!.productosAgrupados) {
       for (var v in group.variantes) {
         if (!v.isConfirmed) continue;
 
-        int totalUnidadesBase = v.stockIngresanteOverride ?? (v.cantidadUmpComprada * v.unidadesPorLote).toInt();
-        double costoBaseIndiv = 0.0;
-        if (v.cantidadUmpComprada > 0 && v.unidadesPorLote > 0) {
-          costoBaseIndiv =
-              v.totalPagoLote / (v.cantidadUmpComprada * v.unidadesPorLote);
-        }
+        int stockBD = v.matchPresentacion.datos?.stockActual ?? 0;
+        int totalUnitsBase = v.calculateTotalUnitsBase(stockActualBD: stockBD);
+        int factor = v.effectiveFactorVenta;
 
-        var validation = UnitCatalogService.validateStockForUnit(
-          totalUnitsBase: totalUnidadesBase,
-          presentationFactor: v.unidadesPorVenta,
-          baseUnitCost: costoBaseIndiv,
-          unitName: v.unidadVenta,
-        );
+        if (factor > 1 && totalUnitsBase > 0) {
+          int completas = totalUnitsBase ~/ factor;
+          int sobrante = totalUnitsBase % factor;
 
-        if (validation.status == StockValidationStatus.deficit) {
-          return true;
-        }
-
-        if (validation.status == StockValidationStatus.hasLeftover) {
-          int assignedLeftovers = 0;
-          for (var other in group.variantes) {
-            if (other != v &&
-                other.cantidadUmpComprada == 0 &&
-                other.stockIngresanteOverride != null) {
-              assignedLeftovers += other.stockIngresanteOverride!;
+          if (completas == 0) {
+            // DÉFICIT REAL: no alcanza para 1 paquete
+            if (!v.allowDeficitApproved) {
+              count++;
             }
-          }
-          if (assignedLeftovers < validation.leftover) {
-            return true;
+          } else if (sobrante > 0) {
+            // SOBRANTE: unidades sueltas que exceden los paquetes completos
+            if (!v.allowLeftoverInReserve) {
+              int assignedLeftovers = 0;
+              for (var other in group.variantes) {
+                if (other != v &&
+                    other.cantidadUmpComprada == 0 &&
+                    other.stockIngresanteOverride != null) {
+                  assignedLeftovers += other.stockIngresanteOverride!;
+                }
+              }
+              if (assignedLeftovers < sobrante) {
+                count++;
+              }
+            }
           }
         }
       }
     }
-    return false;
+    return count;
   }
 
   // ==========================================
@@ -682,46 +708,153 @@ class ScannerProvider with ChangeNotifier {
 
     if (sourceVariant == null || parentGroup == null) return;
 
+    int stockBD = sourceVariant.matchPresentacion.datos?.stockActual ?? 0;
+    int factor = sourceVariant.effectiveFactorVenta;
+    int totalBase = sourceVariant.calculateTotalUnitsBase(stockActualBD: stockBD);
+    int presentacionesCompletas = factor > 0 ? (totalBase ~/ factor) : 0;
+
+    // Precisión Técnica 3: En modo 'sumar', nuevoIngresoPrincipal = max(0, (presentaciones * factor) - stockActualBD)
+    int nuevoIngresoPrincipal;
+    if (sourceVariant.matchPresentacion.estado.contains("MATCH") && sourceVariant.stockOperation == 'sumar') {
+      nuevoIngresoPrincipal = max(0, (presentacionesCompletas * factor) - stockBD);
+    } else {
+      nuevoIngresoPrincipal = presentacionesCompletas * factor;
+    }
+
+    sourceVariant.stockIngresanteOverride = nuevoIngresoPrincipal;
+
     double costoBase = 0.0;
     if (sourceVariant.cantidadUmpComprada > 0 && sourceVariant.unidadesPorLote > 0) {
       costoBase = sourceVariant.totalPagoLote / (sourceVariant.cantidadUmpComprada * sourceVariant.unidadesPorLote);
+    } else if (sourceVariant.costoUnitarioSugerido > 0) {
+      costoBase = sourceVariant.costoUnitarioSugerido / sourceVariant.effectiveFactorVenta;
     }
 
-    String nombreHeredado = sourceVariant.nombreEspecifico.trim();
-    String newName = nombreHeredado.isNotEmpty ? "$nombreHeredado - Suelta" : "Suelta";
+    // Verificar si en el parentGroup ya existe una variante con factor 1 (Unidad)
+    StagingVariant? existingUnitVariant;
+    for (var v in parentGroup.variantes) {
+      if (v != sourceVariant && v.effectiveFactorVenta == 1) {
+        existingUnitVariant = v;
+        break;
+      }
+    }
 
-    StagingVariant leftoverVariant = StagingVariant(
-      nombreEspecifico: newName,
-      umpCompra: "Unidad",
-      cantidadUmpComprada: 0, // No suma al costo total de la factura
-      precioUmpProveedor: 0,
-      totalPagoLote: 0,
-      unidadesPorLote: 1, // Ya que es unitario
-      unidadVenta: "Unidad",
-      unidadesPorVenta: 1,
-      costoUnitarioSugerido: costoBase,
-      factorGananciaVentaSugerido: 1.35,
-      precioVentaSugerido: costoBase * 1.35,
-      matchPresentacion: MatchResult(
-        estado: "NUEVO_EN_PADRE",
-        confianza: 0,
-        datos: MatchData(
-          id: -1,
-          nombre: newName,
-          availablePresentations: sourceVariant.matchPresentacion.datos?.availablePresentations,
-        )
-      ),
-    );
-    leftoverVariant.stockIngresanteOverride = leftoverAmount;
-    leftoverVariant.sourceVariantUuid = sourceVariantUuid; // Relacionar el sobrante con su variante padre
+    if (existingUnitVariant != null) {
+      // Sumar al ingreso de la variante unitaria existente
+      int prevOverride = existingUnitVariant.stockIngresanteOverride ??
+          (existingUnitVariant.cantidadUmpComprada * existingUnitVariant.unidadesPorLote).toInt();
+      existingUnitVariant.stockIngresanteOverride = prevOverride + leftoverAmount;
+    } else {
+      // Crear nueva variante 'Unidad (x1)'
+      String nombreHeredado = sourceVariant.nombreEspecifico.trim();
+      String newName = (nombreHeredado.isNotEmpty && nombreHeredado != "General")
+          ? "$nombreHeredado - Unidad"
+          : "Unidad (x1)";
 
-    // Restar el sobrante de la variante principal
-    int totalUnitsBase = sourceVariant.stockIngresanteOverride ?? (sourceVariant.cantidadUmpComprada * sourceVariant.unidadesPorLote).toInt();
-    sourceVariant.stockIngresanteOverride = totalUnitsBase - leftoverAmount;
+      double margen = sourceVariant.factorGananciaVentaSugerido > 0
+          ? sourceVariant.factorGananciaVentaSugerido
+          : 1.35;
 
-    int parentIndex = parentGroup.variantes.indexOf(sourceVariant);
-    parentGroup.variantes.insert(parentIndex + 1, leftoverVariant);
+      StagingVariant leftoverVariant = StagingVariant(
+        nombreEspecifico: newName,
+        umpCompra: "Unidad",
+        cantidadUmpComprada: 0, // No suma costo directo en cabecera
+        precioUmpProveedor: 0,
+        totalPagoLote: 0,
+        unidadesPorLote: 1,
+        unidadVenta: "Unidad",
+        unidadesPorVenta: 1,
+        costoUnitarioSugerido: costoBase,
+        factorGananciaVentaSugerido: margen,
+        precioVentaSugerido: costoBase * margen,
+        matchPresentacion: MatchResult(
+          estado: "NUEVO_EN_PADRE",
+          confianza: 0,
+          datos: MatchData(
+            id: -1,
+            nombre: newName,
+            availablePresentations: sourceVariant.matchPresentacion.datos?.availablePresentations,
+          ),
+        ),
+      );
+      leftoverVariant.stockIngresanteOverride = leftoverAmount;
+      leftoverVariant.sourceVariantUuid = sourceVariantUuid;
+
+      int parentIndex = parentGroup.variantes.indexOf(sourceVariant);
+      parentGroup.variantes.insert(parentIndex + 1, leftoverVariant);
+    }
+
     notifyListeners();
+  }
+
+  /// Autoriza conservar el sobrante en la reserva base de la variante
+  void authorizeLeftoverInReserve(String variantUuid) {
+    if (_currentState.stagingData == null) return;
+    for (var group in _currentState.stagingData!.productosAgrupados) {
+      for (var v in group.variantes) {
+        if (v.uuidTemporal == variantUuid) {
+          v.allowLeftoverInReserve = true;
+          notifyListeners();
+          return;
+        }
+      }
+    }
+  }
+
+  /// Autoriza registrar la presentación en 0 disponibles (acumulación)
+  void authorizeDeficitRegistration(String variantUuid) {
+    if (_currentState.stagingData == null) return;
+    for (var group in _currentState.stagingData!.productosAgrupados) {
+      for (var v in group.variantes) {
+        if (v.uuidTemporal == variantUuid) {
+          v.allowDeficitApproved = true;
+          notifyListeners();
+          return;
+        }
+      }
+    }
+  }
+
+  /// Adapta la unidad de venta y factor de una variante en 1 toque
+  void adaptVariantUnit(String variantUuid, [String unitName = "Unidad", int factor = 1]) {
+    if (_currentState.stagingData == null) return;
+    for (var group in _currentState.stagingData!.productosAgrupados) {
+      for (var v in group.variantes) {
+        if (v.uuidTemporal == variantUuid) {
+          v.unidadVenta = unitName;
+          v.unidadesPorVenta = factor;
+          v.updateUnidadVenta = true;
+          double costoBase = (v.cantidadUmpComprada > 0 && v.unidadesPorLote > 0)
+              ? v.totalPagoLote / (v.cantidadUmpComprada * v.unidadesPorLote)
+              : v.costoUnitarioSugerido / v.effectiveFactorVenta;
+          v.costoUnitarioSugerido = costoBase * factor;
+          v.precioVentaSugerido = v.costoUnitarioSugerido * v.factorGananciaVentaSugerido;
+          notifyListeners();
+          return;
+        }
+      }
+    }
+  }
+
+  /// Completa el ingreso de factura para alcanzar al menos 1 presentación
+  void completeBatchToFullPackage(String variantUuid, [int? unitsNeeded]) {
+    if (_currentState.stagingData == null) return;
+    for (var group in _currentState.stagingData!.productosAgrupados) {
+      for (var v in group.variantes) {
+        if (v.uuidTemporal == variantUuid) {
+          int stockBD = v.matchPresentacion.datos?.stockActual ?? 0;
+          int factor = v.effectiveFactorVenta;
+          int totalBase = v.calculateTotalUnitsBase(stockActualBD: stockBD);
+          int needed = unitsNeeded ?? (factor > totalBase ? factor - totalBase : 0);
+          if (needed > 0) {
+            int currentIngreso = v.stockIngresanteBase;
+            v.stockIngresanteOverride = currentIngreso + needed;
+            notifyListeners();
+          }
+          return;
+        }
+      }
+    }
   }
 
   void removeLeftoverVariantForSource(String sourceVariantUuid) {

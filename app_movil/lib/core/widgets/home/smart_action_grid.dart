@@ -24,6 +24,7 @@ import 'package:app_movil/features/scanner/screens/invoice_staging_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/sales_history_screen.dart';
 import 'package:app_movil/features/analytics/screens/analytics_dashboard_screen.dart';
+import 'package:app_movil/features/analytics/screens/commercial_radar_screen.dart';
 import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
 import 'package:app_movil/core/screens/db_inspector_screen.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
@@ -204,6 +205,7 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
       'clients',
       'activity',
       'analytics',
+      'commercial_radar',
     ];
     if (kDebugMode) {
       ids.add('db_inspector');
@@ -377,6 +379,15 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
         colorBuilder: (isDark) => isDark ? Colors.amber[500]! : Colors.amber[700]!,
         badgeBuilder: (ctx, isDark) => null,
         onTapBuilder: (ctx, isDark) => () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => const AnalyticsDashboardScreen())),
+      ),
+      'commercial_radar': _ActionCardDef(
+        id: 'commercial_radar',
+        title: "Radar IA",
+        subtitle: "Noticias y Alertas",
+        icon: Icons.radar,
+        colorBuilder: (isDark) => isDark ? Colors.cyan[300]! : Colors.cyan[700]!,
+        badgeBuilder: (ctx, isDark) => null,
+        onTapBuilder: (ctx, isDark) => () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => const CommercialRadarScreen())),
       ),
       'db_inspector': _ActionCardDef(
         id: 'db_inspector',

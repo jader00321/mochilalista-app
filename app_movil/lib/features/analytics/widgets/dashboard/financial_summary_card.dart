@@ -51,95 +51,99 @@ class _FinancialSummaryCardState extends State<FinancialSummaryCard> with Single
       transitionAnimationController: _modalAnimationController,
       builder: (ctx) {
         final double costoMercancia = widget.data.totalSales - widget.data.netProfit;
+        final sheetBg = widget.isDark ? const Color(0xFF1E293B) : Colors.white;
+
         return InteractiveSheetWrapper(
+          backgroundColor: sheetBg,
+          maxHeightFactor: 0.90,
           applyEffectiveBottomPadding: true,
-          child: DraggableScrollableSheet(
-            initialChildSize: 0.85,
-            minChildSize: 0.5,
-            maxChildSize: 0.95,
-            expand: false,
-            builder: (_, controller) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: widget.isDark ? const Color(0xFF1E293B) : Colors.white,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          showHandle: true,
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.84,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blueAccent.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.analytics, color: Colors.blueAccent, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        "Análisis Financiero Detallado", 
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.only(top: 12, bottom: 20),
-                      width: 40,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: widget.isDark ? Colors.white24 : Colors.grey[300],
-                        borderRadius: BorderRadius.circular(10),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      Text(
+                        widget.data.financialHealth?.balanceDescription ?? "Estos datos se calculan a partir de todas las ventas registradas. El margen representa el porcentaje de ganancia neta sobre los ingresos totales.",
+                        style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[700], height: 1.5),
                       ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 24),
-                      child: Row(
-                        children: [
-                          Icon(Icons.analytics, color: Colors.blueAccent),
-                          SizedBox(width: 12),
-                          Text("Análisis Financiero Detallado", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Expanded(
-                      child: ListView(
-                        controller: controller,
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        physics: const BouncingScrollPhysics(),
-                        children: [
-                          Text(
-                            widget.data.financialHealth?.balanceDescription ?? "Estos datos se calculan a partir de todas las ventas registradas. El margen representa el porcentaje de ganancia neta sobre los ingresos totales.",
-                            style: TextStyle(color: widget.isDark ? Colors.grey[400] : Colors.grey[700], height: 1.5),
-                          ),
-                          const SizedBox(height: 32),
-                        
-                        // Chart
-                        SizedBox(
-                          height: 220,
-                          child: BarChart(
-                            BarChartData(
-                              alignment: BarChartAlignment.spaceAround,
-                              maxY: widget.data.totalSales > 0 ? widget.data.totalSales * 1.2 : 100,
-                              barTouchData: BarTouchData(
-                                touchTooltipData: BarTouchTooltipData(
-                                  getTooltipColor: (group) => Colors.black.withValues(alpha: 0.8),
-                                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                                    return BarTooltipItem(
-                                      _format(rod.toY),
-                                      const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      const SizedBox(height: 28),
+                    
+                      // Chart
+                      SizedBox(
+                        height: 220,
+                        child: BarChart(
+                          BarChartData(
+                            alignment: BarChartAlignment.spaceAround,
+                            maxY: widget.data.totalSales > 0 ? widget.data.totalSales * 1.2 : 100,
+                            barTouchData: BarTouchData(
+                              touchTooltipData: BarTouchTooltipData(
+                                getTooltipColor: (group) => Colors.black.withValues(alpha: 0.8),
+                                getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                  return BarTooltipItem(
+                                    _format(rod.toY),
+                                    const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  );
+                                },
+                              ),
+                            ),
+                            titlesData: FlTitlesData(
+                              show: true,
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 34,
+                                  getTitlesWidget: (double value, TitleMeta meta) {
+                                    final style = TextStyle(
+                                      fontSize: 12, 
+                                      fontWeight: FontWeight.bold, 
+                                      color: widget.isDark ? Colors.grey[300] : Colors.grey[800],
+                                    );
+                                    String text;
+                                    switch (value.toInt()) {
+                                      case 0: text = 'Ingresos'; break;
+                                      case 1: text = 'Costos'; break;
+                                      case 2: text = 'Ganancia'; break;
+                                      default: text = ''; break;
+                                    }
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 8.0), 
+                                      child: Text(text, style: style),
                                     );
                                   },
                                 ),
                               ),
-                              titlesData: FlTitlesData(
-                                show: true,
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    getTitlesWidget: (double value, TitleMeta meta) {
-                                      final style = TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.grey[300] : Colors.grey[800]);
-                                      String text;
-                                      switch (value.toInt()) {
-                                        case 0: text = 'Ingresos'; break;
-                                        case 1: text = 'Costos'; break;
-                                        case 2: text = 'Ganancia'; break;
-                                        default: text = ''; break;
-                                      }
-                                      return Padding(padding: const EdgeInsets.only(top: 8.0), child: Text(text, style: style));
-                                    },
-                                  ),
-                                ),
-                                leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              ),
-                              gridData: const FlGridData(show: false),
-                              borderData: FlBorderData(show: false),
+                              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            ),
+                            gridData: const FlGridData(show: false),
+                            borderData: FlBorderData(show: false),
                               barGroups: [
                                 BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: widget.data.totalSales, gradient: LinearGradient(colors: [Colors.blue[400]!, Colors.blue[700]!], begin: Alignment.bottomCenter, end: Alignment.topCenter), width: 24, borderRadius: const BorderRadius.vertical(top: Radius.circular(8)))]),
                                 BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: costoMercancia, gradient: LinearGradient(colors: [Colors.red[300]!, Colors.red[600]!], begin: Alignment.bottomCenter, end: Alignment.topCenter), width: 24, borderRadius: const BorderRadius.vertical(top: Radius.circular(8)))]),
@@ -237,13 +241,11 @@ class _FinancialSummaryCardState extends State<FinancialSummaryCard> with Single
                   ),
                 ],
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       );
-    },
-  );
-}
+    }
 
   Widget _buildTableRow(String label, String value, {bool isHeader = false, bool isBold = false, Color? color}) {
     return Padding(

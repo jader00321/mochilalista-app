@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
+import 'package:app_movil/features/catalog/screens/catalog/widgets/catalog_sort_modal.dart';
 import 'package:app_movil/core/widgets/category_chip.dart';
 
 class CatalogHeader extends StatefulWidget {
   final VoidCallback onFilterTap;
+  final VoidCallback? onSortTap;
+  final bool showCategories;
 
-  const CatalogHeader({super.key, required this.onFilterTap});
+  const CatalogHeader({
+    super.key,
+    required this.onFilterTap,
+    this.onSortTap,
+    this.showCategories = true,
+  });
 
   @override
   State<CatalogHeader> createState() => _CatalogHeaderState();
@@ -75,7 +83,7 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                 ),
                 
                 if (provider.hasActiveFilters) ...[
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   InkWell(
                     onTap: () {
                       _controller.clear();
@@ -83,25 +91,26 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                     },
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
-                      height: 48, width: 48,
+                      height: 48, width: 44,
                       decoration: BoxDecoration(
                         color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: isDark ? Colors.red.withValues(alpha: 0.4) : Colors.red.withValues(alpha: 0.3))
                       ),
-                      child: Icon(Icons.delete_outline, color: isDark ? Colors.red[300] : Colors.red, size: 26),
+                      child: Icon(Icons.delete_outline, color: isDark ? Colors.red[300] : Colors.red, size: 24),
                     ),
                   ),
                 ],
 
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 
+                // Botón Filtros
                 InkWell(
                   onTap: widget.onFilterTap,
                   borderRadius: BorderRadius.circular(14),
                   child: Container(
                     height: 48,
-                    width: 48,
+                    width: 44,
                     decoration: BoxDecoration(
                       color: isDark ? Colors.blue[800] : theme.primaryColor,
                       borderRadius: BorderRadius.circular(14),
@@ -123,14 +132,14 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        const Icon(Icons.tune, color: Colors.white, size: 26),
+                        const Icon(Icons.tune, color: Colors.white, size: 24),
                         if (provider.hasActiveFilters)
                           Positioned(
-                            right: 7,
-                            top: 7,
+                            right: 6,
+                            top: 6,
                             child: Container(
-                              width: 9,
-                              height: 9,
+                              width: 8,
+                              height: 8,
                               decoration: BoxDecoration(
                                 color: Colors.tealAccent,
                                 shape: BoxShape.circle,
@@ -145,38 +154,97 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                     ),
                   ),
                 ),
+
+                const SizedBox(width: 8),
+
+                // Botón Selector de Ordenamiento
+                InkWell(
+                  onTap: widget.onSortTap ?? () => CatalogSortModal.show(context, provider),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF23232F) : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isDark ? Colors.white12 : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          provider.sortOption.icon,
+                          size: 18,
+                          color: isDark ? Colors.blue[300] : Colors.blue[800],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          provider.sortOption.shortLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.blue[300] : Colors.blue[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
 
-          // 2. LISTA DE CATEGORÍAS 
-          SizedBox(
-            height: 45,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                CategoryChip(
-                  label: "Todas", 
-                  isSelected: provider.selectedCategoryId == null, 
-                  onTap: () => provider.selectCategory(null)
-                ),
-                if (provider.hasOrphanCategories)
-                  CategoryChip(
-                    label: "Sin Categoría", 
-                    isSelected: provider.selectedCategoryId == 0, 
-                    onTap: () => provider.selectCategory(0)
-                  ),
-                ...provider.categories.map((c) => CategoryChip(
-                  label: c.nombre, 
-                  isSelected: provider.selectedCategoryId == c.id, 
-                  onTap: () => provider.selectCategory(c.id)
-                ))
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
+          // 2. LISTA DE CATEGORÍAS (Opcional si se delega a sección retráctil)
+          if (widget.showCategories)
+            CatalogCategoriesBar(provider: provider, isDark: isDark),
         ],
+      ),
+    );
+  }
+}
+
+class CatalogCategoriesBar extends StatelessWidget {
+  final CatalogProvider provider;
+  final bool isDark;
+
+  const CatalogCategoriesBar({
+    super.key,
+    required this.provider,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: isDark ? const Color(0xFF14141C) : Colors.white,
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SizedBox(
+        height: 45,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: [
+            CategoryChip(
+              label: "Todas", 
+              isSelected: provider.selectedCategoryId == null, 
+              onTap: () => provider.selectCategory(null)
+            ),
+            if (provider.hasOrphanCategories)
+              CategoryChip(
+                label: "Sin Categoría", 
+                isSelected: provider.selectedCategoryId == 0, 
+                onTap: () => provider.selectCategory(0)
+              ),
+            ...provider.categories.map((c) => CategoryChip(
+              label: c.nombre, 
+              isSelected: provider.selectedCategoryId == c.id, 
+              onTap: () => provider.selectCategory(c.id)
+            ))
+          ],
+        ),
       ),
     );
   }

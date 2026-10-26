@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class MatchingItemRow extends StatefulWidget {
   final MatchPair pair;
@@ -72,7 +72,6 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final product = widget.pair.selectedProduct;
     final textColor = isDark ? Colors.white : Colors.black87;
 
@@ -135,7 +134,7 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                 transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
                 child: product == null
                   ? _buildUnlinkedState(isDark)
-                  : _buildLinkedState(isDark, borderColor, textColor, currency, noStock, exceedsStock, product),
+                  : _buildLinkedState(isDark, borderColor, textColor, noStock, exceedsStock, product),
               ),
             ),
           ],
@@ -165,7 +164,7 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
     );
   }
 
-  Widget _buildLinkedState(bool isDark, Color borderColor, Color textColor, NumberFormat currency, bool noStock, bool exceedsStock, MatchedProduct product) {
+  Widget _buildLinkedState(bool isDark, Color borderColor, Color textColor, bool noStock, bool exceedsStock, MatchedProduct product) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeInOut,
@@ -373,7 +372,7 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (widget.pair.hasDiscount && _isExpanded)
-                        Text(currency.format(widget.pair.originalUnitPrice), style: TextStyle(fontSize: 11, decoration: TextDecoration.lineThrough, color: isDark ? Colors.grey[500] : Colors.grey, fontWeight: FontWeight.bold)),
+                        Text(AppCurrency.format(widget.pair.originalUnitPrice), style: TextStyle(fontSize: 11, decoration: TextDecoration.lineThrough, color: isDark ? Colors.grey[500] : Colors.grey, fontWeight: FontWeight.bold)),
                       
                       Row(
                         children: [
@@ -382,7 +381,7 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                _isExpanded ? "${currency.format(widget.pair.effectiveUnitPrice)} c/u" : currency.format(widget.pair.subtotal), 
+                                _isExpanded ? "${AppCurrency.format(widget.pair.effectiveUnitPrice)} c/u" : AppCurrency.format(widget.pair.subtotal), 
                                 style: TextStyle(fontSize: _isExpanded ? 14 : 16, fontWeight: FontWeight.bold, color: widget.pair.hasDiscount ? (isDark ? Colors.green[400] : Colors.green[700]) : textColor)
                               ),
                             ),
@@ -406,7 +405,7 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                                 ),
                               ),
                               child: Text(
-                                "-${currency.format((widget.pair.originalUnitPrice - widget.pair.effectiveUnitPrice) * widget.pair.selectedQuantity)}",
+                                "-${AppCurrency.format((widget.pair.originalUnitPrice - widget.pair.effectiveUnitPrice) * widget.pair.selectedQuantity)}",
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
@@ -464,7 +463,7 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                           const SizedBox(height: 4),
                           FittedBox(
                             fit: BoxFit.scaleDown,
-                            child: Text(currency.format(widget.pair.subtotal), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
+                            child: Text(AppCurrency.format(widget.pair.subtotal), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
                           )
                         ]
                       ],

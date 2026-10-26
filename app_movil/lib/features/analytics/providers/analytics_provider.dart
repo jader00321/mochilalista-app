@@ -177,6 +177,13 @@ class AnalyticsProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  @visibleForTesting
+  void setDataForTesting(AnalyticsData testData) {
+    _data = testData;
+    _currentStep = AnalyticsStep.done;
+    notifyListeners();
+  }
+
   Future<void> runStaggeredAnalysis() async {
     if (_negocioId == null) return;
     
@@ -530,7 +537,7 @@ class AnalyticsProvider with ChangeNotifier {
         FROM presentaciones_producto pp
         JOIN productos p ON pp.producto_id = p.id
         LEFT JOIN marcas m ON p.marca_id = m.id
-        WHERE p.negocio_id = ? AND pp.stock_actual <= IFNULL(pp.stock_alerta, 5)
+        WHERE p.negocio_id = ? AND pp.activo = 1 AND pp.stock_actual <= IFNULL(pp.stock_alerta, 5)
         ORDER BY pp.stock_actual ASC
         LIMIT 10
       ''', [_negocioId]);

@@ -10,6 +10,18 @@ class PredictiveData {
   final String explanationText;
   final String actionText;
 
+  // Enriquecimiento para Didáctica y Explicabilidad
+  final int totalSnapshots;
+  final double dailyAverageSales;
+  final double trendSlopeM;
+  final double interceptB;
+  final double previous15Sales;
+  final double current15Sales;
+  final String confidenceLevel; // 'Bajo', 'Medio', 'Alto'
+  final double conservativeEstimate;
+  final double expectedEstimate;
+  final double optimisticEstimate;
+
   PredictiveData({
     required this.historicalPoints,
     required this.predictedNext30DaysSales,
@@ -17,6 +29,16 @@ class PredictiveData {
     required this.currentInventoryValue,
     required this.explanationText,
     required this.actionText,
+    this.totalSnapshots = 0,
+    this.dailyAverageSales = 0.0,
+    this.trendSlopeM = 0.0,
+    this.interceptB = 0.0,
+    this.previous15Sales = 0.0,
+    this.current15Sales = 0.0,
+    this.confidenceLevel = 'Bajo',
+    this.conservativeEstimate = 0.0,
+    this.expectedEstimate = 0.0,
+    this.optimisticEstimate = 0.0,
   });
 }
 
@@ -124,6 +146,8 @@ class PredictiveService {
           m = (n * sumXY - sumX * sumY) / denom;
           b = (sumY - m * sumX) / n;
         }
+      } else if (n == 1) {
+        b = smoothedSales.first;
       }
       
       double next30DaysPrediction = 0.0;
@@ -132,6 +156,13 @@ class PredictiveService {
         if (p < 0) p = 0;
         next30DaysPrediction += p;
       }
+
+      // Escenarios de dispersión y métricas didácticas
+      double avgDailySales = n > 0 ? (dailySales.fold(0.0, (acc, v) => acc + v) / n) : 0.0;
+      String confidenceLevel = n >= 30 ? 'Alto' : (n >= 7 ? 'Medio' : 'Bajo');
+      double expectedEstimate = next30DaysPrediction;
+      double conservativeEstimate = next30DaysPrediction * 0.80; // Margen de seguridad 20%
+      double optimisticEstimate = next30DaysPrediction * 1.20; // 20% de expansión
       
       // 3. Explainability (XAI)
       String explanationText = "";
@@ -140,14 +171,14 @@ class PredictiveService {
       String magnitude = velocity.abs().toStringAsFixed(1);
       
       if (velocity > 10) {
-        explanationText = "📈 Buenas noticias: tu ritmo de ventas $direction un $magnitude% en la última quincena.\nBasándonos en esta tendencia, proyectamos que el próximo mes podrías superar tu marca actual.\nClave: No pierdas impulso. Asegura stock de tus productos estrella.";
-        actionText = "💡 Revisa tu Motor de Abastecimiento para que tus productos estrella no se agoten.";
+        explanationText = "Buenas noticias: tu ritmo de ventas $direction un $magnitude% en la última quincena.\nBasándonos en esta tendencia, proyectamos que el próximo mes podrías superar tu marca actual.\nClave: No pierdas impulso. Asegura stock de tus productos estrella.";
+        actionText = "Revisa tu Motor de Abastecimiento para que tus productos estrella no se agoten.";
       } else if (velocity < -10) {
-        explanationText = "📉 Tu ritmo de ventas $direction un $magnitude% en la última quincena.\nEl motor ha ajustado la proyección de forma conservadora.\nClave: Es el momento ideal para lanzar una promoción flash y reactivar las ventas.";
-        actionText = "💡 Lanza una oferta desde Promociones o arma un pack con productos de baja rotación.";
+        explanationText = "Tu ritmo de ventas $direction un $magnitude% en la última quincena.\nEl motor ha ajustado la proyección de forma conservadora.\nClave: Es el momento ideal para lanzar una promoción flash y reactivar las ventas.";
+        actionText = "Lanza una oferta desde Promociones o arma un pack con productos de baja rotación.";
       } else {
-        explanationText = "📊 Tu ritmo de ventas es estable. El motor usa tus últimos 60 días de historial para proyectar el próximo mes.\nClave: Estabilidad es buena, pero revisa si hay productos estancados que puedas liquidar.";
-        actionText = "💡 Revisa el inventario muerto en tu dashboard y libera capital estancado.";
+        explanationText = "Tu ritmo de ventas es estable. El motor usa tus últimos $n días de historial para proyectar el próximo mes.\nClave: Estabilidad es buena, pero revisa si hay productos estancados que puedas liquidar.";
+        actionText = "Revisa el inventario muerto en tu dashboard y libera capital estancado.";
       }
 
       return PredictiveData(
@@ -157,6 +188,16 @@ class PredictiveService {
         currentInventoryValue: currentInvValue,
         explanationText: explanationText,
         actionText: actionText,
+        totalSnapshots: n,
+        dailyAverageSales: avgDailySales,
+        trendSlopeM: m,
+        interceptB: b,
+        previous15Sales: prev15Total,
+        current15Sales: last15Total,
+        confidenceLevel: confidenceLevel,
+        conservativeEstimate: conservativeEstimate,
+        expectedEstimate: expectedEstimate,
+        optimisticEstimate: optimisticEstimate,
       );
       
     } catch (e) {

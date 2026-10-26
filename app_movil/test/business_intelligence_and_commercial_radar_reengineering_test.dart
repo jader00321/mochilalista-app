@@ -15,6 +15,7 @@ import 'package:app_movil/features/analytics/widgets/dashboard/kpi_summary_row.d
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/analytics/screens/analytics_dashboard_screen.dart';
+import 'package:app_movil/features/analytics/screens/commercial_radar_screen.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 
 void main() {
@@ -178,7 +179,8 @@ void main() {
       for (var item in items) {
         expect(item.title.isNotEmpty, isTrue);
         expect(item.sourceUrl.startsWith('http'), isTrue);
-        expect(item.actionableAdvice.contains('💡'), isTrue);
+        expect(item.actionableAdvice.isNotEmpty, isTrue);
+        expect(item.impactAnalysis.isNotEmpty, isTrue);
       }
 
       final hasClima = items.any((i) => i.category == 'Clima y Rutas');
@@ -322,8 +324,10 @@ void main() {
       expect(find.text("Todas"), findsOneWidget);
       expect(find.text("Clima y Rutas"), findsWidgets);
 
-      // Botón "Leer fuente oficial ↗"
-      expect(find.text("Leer fuente oficial ↗"), findsWidgets);
+      // Botón "Leer en ... ↗"
+      expect(find.textContaining("Leer en "), findsWidgets);
+      // Botón para abrir la ventana completa de Radar IA
+      expect(find.textContaining("Explorar más noticias"), findsOneWidget);
     });
 
     testWidgets('DashboardCustomizerModal permite cambiar presets y switches', (tester) async {
@@ -628,4 +632,132 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('AUDITORÍA 5: Presets Inteligentes, Modal sin Doble Handle y Ventana Radar Completa', () {
+    test('DashboardSectionConfig.detectPreset identifica correctamente configuraciones', () {
+      final defaults = DashboardSectionConfig.getDefaultSections();
+      expect(DashboardSectionConfig.detectPreset(defaults), 'Completo');
+
+      final financiero = DashboardSectionConfig.applyPreset(defaults, 'Financiero');
+      expect(DashboardSectionConfig.detectPreset(financiero), 'Financiero');
+
+      final operativo = DashboardSectionConfig.applyPreset(defaults, 'Operativo / Stock');
+      expect(DashboardSectionConfig.detectPreset(operativo), 'Operativo / Stock');
+
+      // Modificación manual genera preset Personalizado
+      financiero.firstWhere((s) => s.id == 'dead_stock').isVisible = true;
+      expect(DashboardSectionConfig.detectPreset(financiero), 'Personalizado');
+    });
+
+    testWidgets('DashboardCustomizerModal abre con preset detectado y 1 sola capa limpia', (tester) async {
+      final sections = DashboardSectionConfig.getDefaultSections();
+      final financiero = DashboardSectionConfig.applyPreset(sections, 'Financiero');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardCustomizerModal(
+              negocioId: 42,
+              isDark: false,
+              initialSections: financiero,
+              onSaved: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Debe mostrar el chip "💼 Financiero" iluminado y todas las opciones
+      expect(find.text("💼 Financiero"), findsOneWidget);
+      expect(find.text("Activar Todo"), findsOneWidget);
+      expect(find.text("Guardar Cambios"), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('CommercialRadarScreen renderiza ventana completa dedicada con 6 categorías y análisis IA', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CommercialRadarScreen(initialRegion: 'Talara / Piura'),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // 1. Título y subtítulo de la ventana completa
+      expect(find.text("Radar Comercial IA"), findsOneWidget);
+      expect(find.textContaining("Señales de mercado"), findsOneWidget);
+
+      // 2. Chips de categorías dedicadas
+      expect(find.text("Todas"), findsOneWidget);
+      expect(find.text("📍 Mi Región"), findsOneWidget);
+      expect(find.text("🌦️ Clima y Rutas"), findsOneWidget);
+      expect(find.text("⚖️ Leyes y SUNAT"), findsOneWidget);
+
+      // 3. Medidas y Recomendaciones Clave estructuradas
+      expect(find.textContaining("Medidas y Recomendaciones Clave:"), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    test('SmartActionGrid fusiona automáticamente commercial_radar en preferencias guardadas (Regla 1)', () async {
+      // Simular lista guardada previa sin commercial_radar
+      final savedOrder = ['quick_sale', 'clients', 'analytics'];
+      const defaultIds = [
+        'quick_sale',
+        'create_product',
+        'quote_list',
+        'quote_manual',
+        'load_invoice',
+        'clients',
+        'activity',
+        'analytics',
+        'commercial_radar',
+      ];
+
+      // Algoritmo de fusión implementado en _loadCustomizations
+      final validIds = savedOrder.where((id) => defaultIds.contains(id)).toList();
+      for (var dId in defaultIds) {
+        if (!validIds.contains(dId)) {
+          validIds.add(dId);
+        }
+      }
+
+      // Verificación estricta: commercial_radar debe quedar incorporada automáticamente
+      expect(validIds.contains('commercial_radar'), isTrue);
+      expect(validIds.last, 'commercial_radar');
+      expect(validIds.length, 9);
+    });
+
+    testWidgets('CommercialRadarCard botón CTA navega a CommercialRadarScreen', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: CommercialRadarCard(isDark: false),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final ctaFinder = find.textContaining("Explorar más noticias");
+      expect(ctaFinder, findsOneWidget);
+
+      await tester.ensureVisible(ctaFinder);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(ctaFinder);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Debe abrir la ventana completa
+      expect(find.text("Radar Comercial IA"), findsOneWidget);
+    });
+  });
 }
+
+

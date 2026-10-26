@@ -161,30 +161,53 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
     final group =
         widget.provider.stagingData!.productosAgrupados[widget.groupIndex];
     bool isParentMatch = group.matchProducto.estado.contains("MATCH");
+    final bool isHighlighted = widget.provider.highlightedGroupUuid == group.uuidTemporal;
 
-    final borderColor = isParentMatch
-        ? (widget.isDark ? Colors.green[700]! : Colors.green.shade300)
-        : (widget.isDark ? Colors.blue[700]! : Colors.blue.shade300);
-    final headerColor = isParentMatch
-        ? (widget.isDark
-              ? Colors.green.withValues(alpha: 0.15)
-              : Colors.green[50])
-        : (widget.isDark
-              ? Colors.blue.withValues(alpha: 0.15)
-              : Colors.blue[50]);
+    final borderColor = isHighlighted
+        ? Colors.amber[600]!
+        : (isParentMatch
+            ? (widget.isDark ? Colors.green[700]! : Colors.green.shade300)
+            : (widget.isDark ? Colors.blue[700]! : Colors.blue.shade300));
+    final headerColor = isHighlighted
+        ? (widget.isDark ? Colors.amber.withValues(alpha: 0.25) : Colors.amber.shade100)
+        : (isParentMatch
+            ? (widget.isDark
+                  ? Colors.green.withValues(alpha: 0.15)
+                  : Colors.green[50])
+            : (widget.isDark
+                  ? Colors.blue.withValues(alpha: 0.15)
+                  : Colors.blue[50]));
     final textColor = widget.isDark ? Colors.white : Colors.black87;
 
-    return Card(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      elevation: widget.isDark ? 0 : 2,
-      color: widget.isDark ? const Color(0xFF23232F) : Colors.white,
-      shadowColor: widget.isDark ? Colors.transparent : Colors.black26,
-      shape: RoundedRectangleBorder(
+      decoration: BoxDecoration(
+        color: widget.isDark ? const Color(0xFF23232F) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: borderColor, width: 1.5),
+        border: Border.all(
+          color: borderColor,
+          width: isHighlighted ? 3.0 : 1.5,
+        ),
+        boxShadow: [
+          if (isHighlighted)
+            BoxShadow(
+              color: Colors.amber.withValues(alpha: widget.isDark ? 0.5 : 0.6),
+              blurRadius: 16,
+              spreadRadius: 2,
+            )
+          else if (!widget.isDark)
+            const BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
+        ],
       ),
-      child: Column(
-        children: [
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: Column(
+          children: [
           // HEADER DEL PRODUCTO PADRE
           Container(
             padding: const EdgeInsets.all(14),
@@ -383,8 +406,8 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
             color: widget.isDark ? Colors.white10 : Colors.grey.shade200,
           ),
 
-          // FASE 4: Banner de advertencia de confianza del matching
-          if (isParentMatch && group.matchProducto.confianza < 75 && group.matchProducto.confianza > 0)
+          // FASE 4 / FASE 1: Banner de advertencia de confianza del matching
+          if (isParentMatch && !group.isMatchVerified && group.matchProducto.confianza < 75 && group.matchProducto.confianza > 0)
             _buildMatchConfidenceWarning(group, widget.isDark),
 
           // LISTA DE VARIANTES (HIJOS)
@@ -441,7 +464,8 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildReadOnlyParentDetails(StagingProductGroup group, bool isDark) {
@@ -580,13 +604,21 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
     );
   }
 
-  /// FASE 4: Banner visual de advertencia de confianza del matching
+  /// FASE 1: Banner visual de advertencia de confianza del matching limpio y accionable
   Widget _buildMatchConfidenceWarning(StagingProductGroup group, bool isDark) {
     final confianza = group.matchProducto.confianza;
     final isLow = confianza < 50;
     final color = isLow ? Colors.red : Colors.orange;
     final nombreFactura = group.nombreOriginalFactura ?? group.nombrePadre;
-    final nombreInventario = group.matchProducto.datos?.nombre ?? '???';
+
+    String nombreInventario = group.matchProducto.datos?.nombre ?? '???';
+    if (group.variantes.isNotEmpty &&
+        group.variantes.first.matchPresentacion.estado.contains("MATCH")) {
+      final vNom = group.variantes.first.matchPresentacion.datos?.nombre;
+      if (vNom != null && vNom.isNotEmpty && vNom != "General") {
+        nombreInventario += " • Var: $vNom";
+      }
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -612,8 +644,8 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
               Expanded(
                 child: Text(
                   isLow
-                      ? "⚠️ Similitud baja ($confianza%) — Verificar"
-                      : "⚠️ Similitud parcial ($confianza%) — Verificar",
+                      ? "Similitud baja ($confianza%) — Verificar"
+                      : "Similitud parcial ($confianza%) — Verificar",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
@@ -635,22 +667,74 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            height: 32,
-            child: OutlinedButton.icon(
-              onPressed: () => widget.provider.unlinkProductGroup(group.uuidTemporal),
-              icon: Icon(Icons.link_off, size: 14, color: isDark ? color[300] : color[800]),
-              label: Text(
-                "No es el mismo — Desvincular",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? color[300] : color[800]),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              // Botón Confirmar: Sí es el mismo
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    group.isMatchVerified = true;
+                  });
+                  widget.provider.notifyUIUpdate();
+                },
+                icon: const Icon(Icons.check, size: 14),
+                label: const Text(
+                  "✓ Sí es el mismo",
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark ? Colors.green[800] : Colors.green[700],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                  minimumSize: const Size(0, 32),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
               ),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: isDark ? color.withValues(alpha: 0.5) : color.shade400),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+
+              // Botón Buscar otro en inventario
+              OutlinedButton.icon(
+                onPressed: () => _showProductSearchModal(context, group.uuidTemporal),
+                icon: Icon(Icons.search, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                label: Text(
+                  "Buscar otro",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.blue[300] : Colors.blue[800],
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                  minimumSize: const Size(0, 32),
+                  side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.shade400),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
               ),
-            ),
+
+              // Botón Desvincular
+              OutlinedButton.icon(
+                onPressed: () => widget.provider.unlinkProductGroup(group.uuidTemporal),
+                icon: Icon(Icons.link_off, size: 14, color: isDark ? color[300] : color[800]),
+                label: Text(
+                  "Desvincular",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? color[300] : color[800],
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                  minimumSize: const Size(0, 32),
+                  side: BorderSide(color: isDark ? color.withValues(alpha: 0.5) : color.shade400),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
           ),
         ],
       ),

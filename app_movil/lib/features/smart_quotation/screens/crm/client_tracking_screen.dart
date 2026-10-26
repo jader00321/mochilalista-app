@@ -22,6 +22,9 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _showScrollToTop = false;
+  bool _showFilterSection = true;
+  DateTime _lastToggleTime = DateTime.fromMillisecondsSinceEpoch(0);
+  double _accumulatedDelta = 0.0;
 
   @override
   void initState() {
@@ -31,14 +34,6 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
       provider.resetFiltersAndSearch();
       _searchCtrl.clear();
       _onRefresh();
-    });
-
-    _scrollController.addListener(() {
-      if (_scrollController.offset > 120 && !_showScrollToTop) {
-        setState(() => _showScrollToTop = true);
-      } else if (_scrollController.offset <= 120 && _showScrollToTop) {
-        setState(() => _showScrollToTop = false);
-      }
     });
   }
 
@@ -54,11 +49,77 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
   }
 
   void _scrollToTop() {
-    _scrollController.animateTo(
-      0, 
-      duration: const Duration(milliseconds: 500), 
-      curve: Curves.easeInOutCubic
-    );
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0, 
+        duration: const Duration(milliseconds: 350), 
+        curve: Curves.easeOutCubic,
+      );
+    }
+    _lastToggleTime = DateTime.now();
+    _accumulatedDelta = 0.0;
+    setState(() {
+      _showFilterSection = true;
+      _showScrollToTop = false;
+    });
+  }
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    // 🛡️ Filtro estricto de eje vertical
+    if (notification.metrics.axis != Axis.vertical) return false;
+
+    final currentOffset = notification.metrics.pixels;
+    final maxScroll = notification.metrics.maxScrollExtent;
+    final now = DateTime.now();
+    final elapsedSinceToggle = now.difference(_lastToggleTime).inMilliseconds;
+
+    // 1. Regla del Tope Real: Si estamos en el tope absoluto (currentOffset <= 5), forzar siempre expansión
+    if (currentOffset <= 5) {
+      if (!_showFilterSection) {
+        _lastToggleTime = now;
+        _accumulatedDelta = 0.0;
+        setState(() => _showFilterSection = true);
+      }
+    } else if (elapsedSinceToggle > 350) {
+      // Cooldown de 350ms para evitar fluctuaciones durante AnimatedSize
+      if (notification is ScrollUpdateNotification) {
+        final delta = notification.scrollDelta ?? 0.0;
+
+        // Reiniciar acumulador si el usuario cambia de dirección
+        if ((delta > 0 && _accumulatedDelta < 0) || (delta < 0 && _accumulatedDelta > 0)) {
+          _accumulatedDelta = 0.0;
+        }
+        _accumulatedDelta += delta;
+
+        // Caso A: Scroll hacia abajo (ocultar filtros)
+        // Guarda dinámica: solo colapsar si la lista tiene recorrido (maxScroll > 120)
+        if (_accumulatedDelta > 15 && currentOffset > 50) {
+          if (_showFilterSection && maxScroll > 120) {
+            _lastToggleTime = now;
+            _accumulatedDelta = 0.0;
+            setState(() => _showFilterSection = false);
+          }
+        } 
+        // Caso B: Scroll hacia arriba (reaparecer)
+        // Requiere arrastre activo del usuario (dragDetails != null) y estar fuera de la zona de rebote inferior
+        else if (_accumulatedDelta < -24 && 
+                 notification.dragDetails != null && 
+                 currentOffset < maxScroll - 25 && 
+                 !notification.metrics.outOfRange) {
+          if (!_showFilterSection) {
+            _lastToggleTime = now;
+            _accumulatedDelta = 0.0;
+            setState(() => _showFilterSection = true);
+          }
+        }
+      }
+    }
+
+    final shouldShowTop = currentOffset > 150;
+    if (shouldShowTop != _showScrollToTop) {
+      setState(() => _showScrollToTop = shouldShowTop);
+    }
+    return false;
   }
 
   void _showExplorationModal(BuildContext context, bool isDark) {
@@ -287,207 +348,204 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
+      appBar: AppBar(
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Directorio de Clientes",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          ),
+        ),
+        backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          const InfoTooltipButton(
+            title: "Directorio de Clientes (CRM)",
+            description:
+                "Control integral de clientes, cuentas por cobrar, deudas pendientes y comunicación por WhatsApp.",
+            tips: [
+              InfoTip(
+                icon: Icons.person_add_rounded,
+                text:
+                    "Registra clientes con nombre, teléfono y documento para asignarles cotizaciones o ventas a crédito.",
+              ),
+              InfoTip(
+                icon: Icons.filter_alt_outlined,
+                text:
+                    "Filtra por 'Con Deuda', 'Al Día' o busca rápidamente por nombre o número.",
+              ),
+              InfoTip(
+                icon: Icons.notifications_active_outlined,
+                text:
+                    "Usa 'Recordatorio Masivo' para enviar mensajes de cobro por WhatsApp con tus métodos de pago.",
+              ),
+              InfoTip(
+                icon: Icons.history_rounded,
+                text:
+                    "Toca un cliente para ver su estado de cuenta, historial de compras y pagos registrados.",
+              ),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_add, size: 28), 
+            tooltip: "Nuevo Cliente", 
+            onPressed: _openCreateClientEditor,
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: Stack(
         children: [
-          RefreshIndicator(
-            onRefresh: _onRefresh,
-            color: Colors.blue[800],
-            child: GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
-          behavior: HitTestBehavior.translucent,
-          child: SafeArea(
-            child: CustomScrollView(
-            controller: _scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverAppBar(
-                title: const FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    "Directorio de Clientes",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: Column(
+              children: [
+                // 1. Modo Exploración (Si aplica)
+                if (!Provider.of<AuthProvider>(context).hasActiveContext)
+                  Container(
+                    width: double.infinity,
+                    color: Colors.orange.withValues(alpha: 0.15),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.orange[700]),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            "Modo Exploración. Para agregar clientes a tu Directorio, debes registrar tu negocio.",
+                            style: TextStyle(color: isDark ? Colors.orange[200] : Colors.orange[900], fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                elevation: 0,
-                pinned: false,
-                floating: true,
-                snap: true,
-                stretch: true,
-                actions: [
-                  const InfoTooltipButton(
-                    title: "Directorio de Clientes (CRM)",
-                    description:
-                        "Control integral de clientes, cuentas por cobrar, deudas pendientes y comunicación por WhatsApp.",
-                    tips: [
-                      InfoTip(
-                        icon: Icons.person_add_rounded,
-                        text:
-                            "Registra clientes con nombre, teléfono y documento para asignarles cotizaciones o ventas a crédito.",
-                      ),
-                      InfoTip(
-                        icon: Icons.filter_alt_outlined,
-                        text:
-                            "Filtra por 'Con Deuda', 'Al Día' o busca rápidamente por nombre o número.",
-                      ),
-                      InfoTip(
-                        icon: Icons.notifications_active_outlined,
-                        text:
-                            "Usa 'Recordatorio Masivo' para enviar mensajes de cobro por WhatsApp con tus métodos de pago.",
-                      ),
-                      InfoTip(
-                        icon: Icons.history_rounded,
-                        text:
-                            "Toca un cliente para ver su estado de cuenta, historial de compras y pagos registrados.",
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.person_add, size: 28), 
-                    tooltip: "Nuevo Cliente", 
-                    onPressed: _openCreateClientEditor
-                  ),
-                  const SizedBox(width: 8)
-                ],
-              ),
-              
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+
+                // 2. Buscador Fijo Superior (Siempre visible y accesible)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   child: Container(
                     height: 48,
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF23232F) : Colors.white, 
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [if(!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]
+                      boxShadow: [
+                        if (!isDark) 
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                      ],
+                      border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
                     ),
                     child: TextField(
                       controller: _searchCtrl,
-                      style: TextStyle(color: textColor, fontSize: 18),
+                      style: TextStyle(color: textColor, fontSize: 16),
                       onChanged: (val) => provider.setSearchQuery(val),
                       decoration: InputDecoration(
                         hintText: "Buscar por nombre, teléfono o DNI...",
-                        hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400], fontSize: 16),
-                        prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey, size: 26),
+                        hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400], fontSize: 15),
+                        prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey, size: 24),
                         suffixIcon: _searchCtrl.text.isNotEmpty 
-                            ? IconButton(icon: Icon(Icons.clear, size: 24, color: textColor), onPressed: () { _searchCtrl.clear(); provider.setSearchQuery(""); }) 
+                            ? IconButton(
+                                icon: Icon(Icons.clear, size: 22, color: textColor), 
+                                onPressed: () { 
+                                  _searchCtrl.clear(); 
+                                  provider.setSearchQuery(""); 
+                                },
+                              ) 
                             : null,
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
                   ),
                 ),
-              ),
-            
-            if (!Provider.of<AuthProvider>(context).hasActiveContext)
-              SliverToBoxAdapter(
-                child: Container(
-                  width: double.infinity,
-                  color: Colors.orange.withValues(alpha: 0.15),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.orange),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          "Modo Exploración. Para agregar clientes a tu Directorio, debes registrar tu negocio.",
-                          style: TextStyle(fontSize: 13),
-                        )
-                      )
-                    ]
-                  )
-                )
-              ),
 
-            SliverAppBar(
-              automaticallyImplyLeading: false,
-              toolbarHeight: 0,
-              pinned: false,
-              floating: true,
-              snap: true,
-              elevation: 0,
-              backgroundColor: bgColor,
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(98.0), // Ajustado a la altura real del contenido (Filtros + Ordenar)
-                child: Container(
-                  color: bgColor,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4, bottom: 4),
-                        child: ClientFilterBar(),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: surfaceColor,
-                          border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "${clients.length} ${clients.length == 1 ? 'cliente' : 'clientes'}", 
-                              style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 15)
-                            ),
-                            GestureDetector(
-                              onTap: () => _showSortOptions(context, provider, isDark, surfaceColor, textColor),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.sort, size: 22, color: isDark ? Colors.blue[300] : Colors.blue), 
-                                  const SizedBox(width: 8), 
-                                  Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 16))
-                                ]
+                // 3. Sección Colapsable: Chips de Filtro + Contador y Orden
+                ClipRect(
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOutCubic,
+                    child: _showFilterSection
+                        ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const ClientFilterBar(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: surfaceColor,
+                                  border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      "${clients.length} ${clients.length == 1 ? 'cliente' : 'clientes'}", 
+                                      style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () => _showSortOptions(context, provider, isDark, surfaceColor, textColor),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.sort, size: 22, color: isDark ? Colors.blue[300] : Colors.blue), 
+                                          const SizedBox(width: 8), 
+                                          Text("Ordenar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontWeight: FontWeight.bold, fontSize: 16)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            )
-                          ],
-                        ),
-                      ),
-                    ],
+                            ],
+                          )
+                        : const SizedBox(width: double.infinity, height: 0),
                   ),
                 ),
-              ),
-            ),
 
-            if (provider.isLoading && clients.isEmpty)
-              const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
-            else if (clients.isEmpty)
-              SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center, 
-                    children: [
-                      Icon(Icons.people_outline, size: 90, color: isDark ? Colors.white10 : Colors.grey[300]), 
-                      const SizedBox(height: 20), 
-                      Text("No se encontraron clientes", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 18, fontWeight: FontWeight.bold))
-                    ]
-                  )
-                )
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.only(top: 16, bottom: 140),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) => ClientCard(
-                      client: clients[i], 
-                      onRefresh: _onRefresh
+                // 4. Lista de Clientes con Scroll Anti-Rebote y Margen Seguro Inferior
+                Expanded(
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _onScrollNotification,
+                    child: RefreshIndicator(
+                      onRefresh: _onRefresh,
+                      color: Colors.blue[800],
+                      child: provider.isLoading && clients.isEmpty
+                          ? const Center(child: CircularProgressIndicator())
+                          : clients.isEmpty
+                              ? ListView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  children: [
+                                    SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                                    Icon(Icons.people_outline, size: 90, color: isDark ? Colors.white10 : Colors.grey[300]), 
+                                    const SizedBox(height: 20), 
+                                    Center(
+                                      child: Text(
+                                        "No se encontraron clientes", 
+                                        style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 18, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : ListView.builder(
+                                  controller: _scrollController,
+                                  physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                                  padding: const EdgeInsets.only(top: 8, bottom: 120),
+                                  itemCount: clients.length,
+                                  itemBuilder: (ctx, i) => ClientCard(
+                                    client: clients[i], 
+                                    onRefresh: _onRefresh,
+                                  ),
+                                ),
                     ),
-                    childCount: clients.length,
                   ),
                 ),
-              ),
-          ],
+              ],
             ),
           ),
-        ),
+          const DeepNavReturnPill(isBottom: true),
+        ],
       ),
-      const DeepNavReturnPill(isBottom: true),
-    ],
-  ),
       
       floatingActionButton: _showScrollToTop 
         ? FloatingActionButton(

@@ -252,4 +252,49 @@ class DashboardSectionConfig {
       return s.copyWith(isVisible: activeIds.contains(s.id));
     }).toList();
   }
+
+  /// Evalúa el estado de las secciones y determina el preset correspondiente
+  static String detectPreset(List<DashboardSectionConfig> sections) {
+    final visibleIds = sections.where((s) => s.isVisible).map((s) => s.id).toSet();
+    final allIds = sections.map((s) => s.id).toSet();
+
+    if (visibleIds.length == allIds.length) {
+      return 'Completo';
+    }
+
+    const Set<String> financieroIds = {
+      'financial_summary',
+      'kpi_grid',
+      'sales_evolution',
+      'payment_methods',
+      'extra_metrics',
+    };
+    if (visibleIds.length == financieroIds.length && visibleIds.containsAll(financieroIds)) {
+      return 'Financiero';
+    }
+
+    const Set<String> operativoIds = {
+      'financial_summary',
+      'kpi_grid',
+      'dead_stock',
+      'top_products',
+      'top_categories',
+    };
+    if (visibleIds.length == operativoIds.length && visibleIds.containsAll(operativoIds)) {
+      return 'Operativo / Stock';
+    }
+
+    const Set<String> comercialIds = {
+      'financial_summary',
+      'commercial_radar',
+      'top_clients',
+      'sales_by_day',
+      'sales_by_origin',
+    };
+    if (visibleIds.length == comercialIds.length && visibleIds.containsAll(comercialIds)) {
+      return 'Comercial & Radar';
+    }
+
+    return 'Personalizado';
+  }
 }

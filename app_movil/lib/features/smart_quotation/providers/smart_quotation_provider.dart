@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart'; 
@@ -11,6 +10,7 @@ import 'package:app_movil/features/smart_quotation/services/ai_extraction_servic
 import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
 
 class SmartQuotationState {
   File? currentImage;
@@ -278,31 +278,34 @@ class SmartQuotationProvider with ChangeNotifier {
     }
   }
 
-  Future<String> generateDynamicQuoteName(ClientModel? selectedClient, String tempName, {bool isClientRole = false, String? clientUserName, required String type}) async {
-      final timeStr = DateFormat('dd-HHmm').format(DateTime.now()); 
-      final String typeLabel = type == 'ai_scan' ? "IA" : "Manual";
+  Future<String> generateDynamicQuoteName(
+    ClientModel? selectedClient,
+    String tempName, {
+    bool isClientRole = false,
+    String? clientUserName,
+    required String type,
+    String? schoolName,
+    String? gradeLevel,
+    int? sequentialNumber,
+  }) async {
+    int? count;
+    if (selectedClient != null) {
+      try {
+        final list = await _clientService.getPendingQuotations(selectedClient.id);
+        count = list.length + 1;
+      } catch (_) {}
+    }
 
-      if (isClientRole) {
-          final String name = (clientUserName != null && clientUserName.isNotEmpty) ? clientUserName : "Cliente";
-          return "$name - Pedido $typeLabel #$timeStr"; 
-      }
-
-      if (selectedClient == null && tempName.isEmpty) return "Cotización $typeLabel #$timeStr";
-
-      if (selectedClient != null) {
-         try {
-            final list = await _clientService.getPendingQuotations(selectedClient.id);
-            int count = list.length + 1;
-            if (count > 1) {
-                return "${selectedClient.fullName} #$timeStr ($count) - $typeLabel";
-            } else {
-                return "${selectedClient.fullName} #$timeStr - $typeLabel";
-            }
-         } catch(e) {
-            return "${selectedClient.fullName} - Cotización $typeLabel #$timeStr";
-         }
-      }
-
-      return "$tempName #$timeStr";
+    return QuotationNamingEngine.generateTitle(
+      selectedClient: selectedClient,
+      typedClientName: tempName,
+      schoolName: schoolName,
+      gradeLevel: gradeLevel,
+      quotationType: type,
+      sequentialNumber: sequentialNumber,
+      clientListIndex: count,
+      isClientRole: isClientRole,
+      clientUserName: clientUserName,
+    );
   }
 }

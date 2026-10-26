@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/smart_quotation/models/whatsapp_config_model.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/services/whatsapp_preferences_service.dart';
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_custom_texts_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_dynamic_popover.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class WaConfigSection extends StatelessWidget {
   final WhatsAppConfig config;
   final bool isSale;
   final String contextKey;
   final VoidCallback onChanged;
+  final SmartQuotationModel? quotation;
+  final Map<String, dynamic>? saleData;
+  final String? businessName;
+  final String? businessPhone;
+  final String? paymentAccountsText;
 
   const WaConfigSection({
     super.key,
@@ -17,6 +25,11 @@ class WaConfigSection extends StatelessWidget {
     required this.isSale,
     this.contextKey = 'quote',
     required this.onChanged,
+    this.quotation,
+    this.saleData,
+    this.businessName,
+    this.businessPhone,
+    this.paymentAccountsText,
   });
 
   @override
@@ -24,6 +37,94 @@ class WaConfigSection extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
+
+    final bool isLoan = contextKey == 'loan' || (isSale && saleData?['origen_venta'] == 'prestamo_personal');
+    final double totalAmount = isSale
+        ? (saleData?['monto_total'] != null ? (saleData!['monto_total'] as num).toDouble() : (quotation?.totalAmount ?? 0.0))
+        : (quotation?.totalAmount ?? 0.0);
+
+    // 1. Snippet real para Precios y Subtotales
+    String realSubtotalsSnippet;
+    if (isLoan) {
+      final double interesRate = (saleData?['porcentaje_interes'] != null ? (saleData!['porcentaje_interes'] as num).toDouble() : 0.0);
+      final double abonoInicial = (saleData?['abono_inicial'] != null ? (saleData!['abono_inicial'] as num).toDouble() : 0.0);
+      final double debtWithInterest = totalAmount - abonoInicial;
+      final double debtBase = (interesRate > 0 && debtWithInterest > 0)
+          ? debtWithInterest / (1 + (interesRate / 100))
+          : debtWithInterest;
+      final double interestAmount = debtWithInterest - debtBase;
+      final double capitalNeto = abonoInicial + debtBase;
+      realSubtotalsSnippet = "• Capital: ${AppCurrency.format(capitalNeto)}\n• Interés: + ${AppCurrency.format(interestAmount)}";
+    } else if (quotation != null && quotation!.items.isNotEmpty) {
+      final sampleItems = quotation!.items.take(2).map((it) {
+        final double itemSub = it.unitPriceApplied * it.quantity;
+        return "• ${it.quantity}x ${it.displayName}: ${AppCurrency.format(itemSub)}";
+      }).join("\n");
+      realSubtotalsSnippet = sampleItems;
+    } else {
+      realSubtotalsSnippet = "• 2x Cuaderno A4: S/ 12.00\n• 1x Caja Colores: S/ 18.50";
+    }
+
+    // 2. Snippet real para Sección de Ahorro y Detalle Descuento
+    double totalSavings = 0.0;
+    String? realDiscountDetailSnippet;
+    if (quotation != null) {
+      for (final it in quotation!.items) {
+        if (it.originalUnitPrice > it.unitPriceApplied) {
+          totalSavings += (it.originalUnitPrice - it.unitPriceApplied) * it.quantity;
+          realDiscountDetailSnippet ??= "${it.displayName}: ~${AppCurrency.format(it.originalUnitPrice)}~ *${AppCurrency.format(it.unitPriceApplied)}*";
+        }
+      }
+    }
+    final String realSavingsSnippet = totalSavings > 0
+        ? "🎉 *¡Ahorro Total: ${AppCurrency.format(totalSavings)}!*"
+        : "🎉 *¡Ahorro Total: S/ 18.00!* (Promoción activa)";
+    realDiscountDetailSnippet ??= "Mochila Escolar: ~S/ 65.00~ *S/ 48.00*";
+
+    // 3. Snippet real para Monto Total
+    final String realTotalSnippet = isLoan
+        ? "🏦 *TOTAL A DEVOLVER: ${AppCurrency.format(totalAmount)}*"
+        : "💰 *TOTAL A PAGAR: ${AppCurrency.format(totalAmount)}*";
+
+    // 4. Snippet real para Info Negocio
+    final String bName = (businessName != null && businessName!.trim().isNotEmpty) ? businessName!.trim() : "Librería y Papelería";
+    final String bPhone = (businessPhone != null && businessPhone!.trim().isNotEmpty) ? businessPhone!.trim() : "987654321";
+    final String realBizSnippet = "🏪 *$bName*\n📞 Contacto: $bPhone";
+
+    // 5. Snippet real para Medios de Pago
+    String realPaymentSnippet;
+    if (paymentAccountsText != null && paymentAccountsText!.trim().isNotEmpty) {
+      final lines = paymentAccountsText!.trim().split('\n').take(2).join('\n');
+      realPaymentSnippet = "💳 *MEDIOS DE PAGO*\n$lines";
+    } else {
+      realPaymentSnippet = "💳 *MEDIOS DE PAGO*\n📱 Yape / Plin: 987654321\n🏦 BCP: 191-2345678-0-12";
+    }
+
+    // 6. Snippet real para Saldo Pendiente (Venta o Préstamo)
+    String realDebtSnippet = "💵 Abonado: S/ 50.00\n⚠️ *Saldo Pendiente: S/ 30.00*";
+    if (isSale && saleData != null) {
+      final double paid = (saleData!['monto_pagado'] != null ? (saleData!['monto_pagado'] as num).toDouble() : 0.0);
+      final double debt = (totalAmount - paid).clamp(0.0, double.infinity);
+      realDebtSnippet = "💵 Abonado: ${AppCurrency.format(paid)}\n⚠️ *Saldo Pendiente: ${AppCurrency.format(debt)}*";
+    }
+
+    // 7. Snippet real para Cuotas (Venta o Préstamo)
+    String realInstallmentSnippet = "📅 Cuota 1 de 2: S/ 15.00 (Vence: 28/10)";
+    if (isSale && saleData != null && saleData!['cuotas'] != null && (saleData!['cuotas'] as List).isNotEmpty) {
+      final firstCuota = (saleData!['cuotas'] as List).first;
+      final date = DateFormat('dd/MM/yyyy').format(DateTime.parse(firstCuota['fecha_vencimiento']));
+      realInstallmentSnippet = "📅 Cuota ${firstCuota['numero_cuota']}: ${AppCurrency.format(firstCuota['monto'])} (Vence: $date)";
+    }
+
+    // 8. Snippet real para Estado Entrega (Venta)
+    final String deliveryStatus = isSale && saleData != null ? (saleData!['estado_entrega'] ?? 'coordinado') : 'coordinado';
+    final String realDeliverySnippet = "📦 *Entrega:* Despacho ${deliveryStatus.toString().toUpperCase()}";
+
+    // 9. Snippet real para Validez Oferta (Cotización)
+    final String realValiditySnippet = "⏳ *Validez:* Precios válidos por 7 días calendario.";
+
+    // 10. Snippet real para Datos Entrega (Cotización)
+    final String realQuoteDeliverySnippet = "🚚 *Entrega:* Coordinación directa para despacho o recojo en tienda.";
 
     final List<Widget> optionCards = [
       _buildOptionCard(
@@ -38,7 +139,7 @@ class WaConfigSection extends StatelessWidget {
           onChanged();
         },
         popoverDescription: "Incluye el precio unitario y el subtotal calculado de cada ítem en la lista del mensaje.",
-        exampleSnippet: "• 2x Cuaderno A4: S/ 12.00",
+        exampleSnippet: realSubtotalsSnippet,
       ),
       _buildOptionCard(
         context: context,
@@ -52,7 +153,7 @@ class WaConfigSection extends StatelessWidget {
           onChanged();
         },
         popoverDescription: "Destaca el monto total ahorrado por el cliente gracias a promociones o precios rebajados.",
-        exampleSnippet: "🎉 *¡Ahorro Total: S/ 18.00!*",
+        exampleSnippet: realSavingsSnippet,
       ),
       if (config.showSavingsSection)
         _buildOptionCard(
@@ -67,7 +168,7 @@ class WaConfigSection extends StatelessWidget {
             onChanged();
           },
           popoverDescription: "Imprime el precio original tachado junto al precio actual para evidenciar la rebaja.",
-          exampleSnippet: "Mochila: ~S/ 65.00~ *S/ 48.00*",
+          exampleSnippet: realDiscountDetailSnippet,
         ),
       _buildOptionCard(
         context: context,
@@ -81,7 +182,7 @@ class WaConfigSection extends StatelessWidget {
           onChanged();
         },
         popoverDescription: "Muestra la línea principal con el monto total final a pagar en soles.",
-        exampleSnippet: "💰 *TOTAL A PAGAR: S/ 120.00*",
+        exampleSnippet: realTotalSnippet,
       ),
       _buildOptionCard(
         context: context,
@@ -95,7 +196,7 @@ class WaConfigSection extends StatelessWidget {
           onChanged();
         },
         popoverDescription: "Agrega en la cabecera o pie los datos formales de tu tienda o empresa.",
-        exampleSnippet: "🏪 *Librería San José*\n📞 Tel: 987654321",
+        exampleSnippet: realBizSnippet,
       ),
       _buildOptionCard(
         context: context,
@@ -109,7 +210,7 @@ class WaConfigSection extends StatelessWidget {
           onChanged();
         },
         popoverDescription: "Inserta tus números de billeteras digitales y cuentas para agilizar la transferencia.",
-        exampleSnippet: "📱 Yape / Plin: 987654321\n🏦 BCP: 191-2345678-0-12",
+        exampleSnippet: realPaymentSnippet,
       ),
       if (isSale) ...[
         _buildOptionCard(
@@ -124,7 +225,7 @@ class WaConfigSection extends StatelessWidget {
             onChanged();
           },
           popoverDescription: "Indica el monto ya abonado por el cliente y el saldo exacto pendiente de pago.",
-          exampleSnippet: "💵 Abonado: S/ 50.00\n⚠️ *Saldo Pendiente: S/ 30.00*",
+          exampleSnippet: realDebtSnippet,
         ),
         _buildOptionCard(
           context: context,
@@ -138,7 +239,7 @@ class WaConfigSection extends StatelessWidget {
             onChanged();
           },
           popoverDescription: "Detalla el cronograma de cuotas pactadas y sus fechas de vencimiento.",
-          exampleSnippet: "📅 Cuota 1 de 2: S/ 15.00 (Vence: 28/10)",
+          exampleSnippet: realInstallmentSnippet,
         ),
         _buildOptionCard(
           context: context,
@@ -152,7 +253,7 @@ class WaConfigSection extends StatelessWidget {
             onChanged();
           },
           popoverDescription: "Informa al cliente sobre la modalidad de entrega acordada para su pedido.",
-          exampleSnippet: "📦 Entrega: Despacho a domicilio coordinado",
+          exampleSnippet: realDeliverySnippet,
         ),
       ] else ...[
         _buildOptionCard(
@@ -167,7 +268,7 @@ class WaConfigSection extends StatelessWidget {
             onChanged();
           },
           popoverDescription: "Establece el tiempo límite de vigencia de los precios cotizados.",
-          exampleSnippet: "⏳ *Cotización válida por 7 días hábiles.*",
+          exampleSnippet: realValiditySnippet,
         ),
         _buildOptionCard(
           context: context,
@@ -181,7 +282,7 @@ class WaConfigSection extends StatelessWidget {
             onChanged();
           },
           popoverDescription: "Aclara si el flete está incluido o si el retiro es en tienda física.",
-          exampleSnippet: "🚚 Envíos a todo el país previa coordinación.",
+          exampleSnippet: realQuoteDeliverySnippet,
         ),
       ],
     ];
@@ -266,18 +367,23 @@ class WaConfigSection extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  config.customIntro != null || config.customClosing != null
-                      ? "✨ Frase personalizada activa"
-                      : "Plantilla original activa",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: config.customIntro != null || config.customClosing != null
-                        ? Colors.orange
-                        : (isDark ? Colors.grey[500] : Colors.grey[600]),
+                Expanded(
+                  child: Text(
+                    config.customIntro != null || config.customClosing != null
+                        ? "✨ Frase personalizada activa"
+                        : "Plantilla original activa",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: config.customIntro != null || config.customClosing != null
+                          ? Colors.orange
+                          : (isDark ? Colors.grey[500] : Colors.grey[600]),
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 InkWell(
                   onTap: () async {
                     await WhatsAppPreferencesService.saveDefaultConfig(config, contextKey: contextKey);
@@ -363,61 +469,67 @@ class WaConfigSection extends StatelessWidget {
               width: isActive ? 1.5 : 1,
             ),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isActive ? activeColor : (isDark ? Colors.grey[400] : Colors.grey[600]),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      softWrap: true,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-                        color: isActive
-                            ? (isDark ? Colors.white : Colors.black87)
-                            : (isDark ? Colors.grey[300] : Colors.grey[800]),
+              // Fila superior: Icono + Spacer + Botón ⓘ + Check ✓/+
+              Row(
+                children: [
+                  Icon(
+                    icon,
+                    size: 19,
+                    color: isActive ? activeColor : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: openPopover,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.04),
+                        shape: BoxShape.circle,
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      softWrap: true,
-                      style: TextStyle(
-                        fontSize: 10,
+                      child: Icon(
+                        Icons.info_outline,
+                        size: 13,
                         color: isDark ? Colors.grey[400] : Colors.grey[600],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 4),
-              // Botón discreto de ayuda ⓘ
-              GestureDetector(
-                onTap: openPopover,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  child: Icon(
-                    Icons.info_outline,
-                    size: 14,
-                    color: isDark ? Colors.grey[500] : Colors.grey[400],
                   ),
+                  const SizedBox(width: 4),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: isActive
+                        ? Icon(Icons.check_circle_rounded, key: const ValueKey('checked'), size: 15, color: activeColor)
+                        : Icon(Icons.add_circle_outline_rounded, key: const ValueKey('unchecked'), size: 15, color: isDark ? Colors.grey[600] : Colors.grey[400]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // Fila inferior: Título y Subtítulo al 100% del ancho de la tarjeta
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
+                  color: isActive
+                      ? (isDark ? Colors.white : Colors.black87)
+                      : (isDark ? Colors.grey[300] : Colors.grey[800]),
                 ),
               ),
-              const SizedBox(width: 2),
-              if (isActive)
-                Icon(Icons.check, size: 14, color: activeColor)
-              else
-                Icon(Icons.add, size: 14, color: isDark ? Colors.grey[600] : Colors.grey[400]),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
             ],
           ),
         ),

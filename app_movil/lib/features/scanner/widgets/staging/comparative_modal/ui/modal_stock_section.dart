@@ -52,31 +52,37 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
   Widget _buildStockManagementRow() {
     int stockBD = (widget.dbData['stock_actual'] ?? 0) as int;
     
-    int factor = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
+    int factor = _activeFactorVenta;
+    String unidadActiva = _activeUnidadVenta;
     double cantComprada = double.tryParse(_cantidadUmpCtrl.text) ?? widget.variant.cantidadUmpComprada;
     int unidLote = int.tryParse(_unidLoteCtrl.text) ?? widget.variant.unidadesPorLote;
     
-    // FASE 1 FIX: stockCalculado en UNIDADES BASE (sin dividir por factor)
+    // stockCalculado en UNIDADES BASE
     int stockCalculado = (cantComprada * unidLote).toInt();
     int stockIngresante = int.tryParse(_stockIngresanteCtrl.text) ?? widget.variant.stockIngresanteOverride ?? stockCalculado;
 
     int stockSumado = stockBD + stockIngresante;
     int stockReemplazo = stockIngresante;
     
-    int stockFinalResultante = widget.variant.stockOperation == 'sumar' ? stockSumado : stockReemplazo;
+    bool isSumar = widget.variant.stockOperation == 'sumar';
+    int stockFinalResultante = isSumar ? stockSumado : stockReemplazo;
 
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(color: widget.isDark ? Colors.green.withValues(alpha: 0.05) : Colors.green.withValues(alpha: 0.02), borderRadius: BorderRadius.circular(12), border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade100)),
+        decoration: BoxDecoration(
+          color: widget.isDark ? Colors.green.withValues(alpha: 0.05) : Colors.green.withValues(alpha: 0.02), 
+          borderRadius: BorderRadius.circular(12), 
+          border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade100),
+        ),
         child: ExpansionTile(
           initiallyExpanded: true,
           onExpansionChanged: (expanded) {
             if (expanded) _autoScrollTo(_keyStock);
           },
           tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-          title: Text("Gestión de Stock", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700], letterSpacing: 0.5)),
+          title: Text("📦 Gestión de Stock", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700], letterSpacing: 0.5)),
           leading: Icon(Icons.inventory, color: widget.isDark ? Colors.green[300] : Colors.green[700]),
           children: [
             Padding(
@@ -86,72 +92,120 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade200)),
+                    decoration: BoxDecoration(
+                      color: widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[50], 
+                      borderRadius: BorderRadius.circular(8), 
+                      border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade200),
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        Column(
-                          children: [
-                            Text("Inventario Base", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
-                            const SizedBox(height: 4),
-                            Text("$stockBD", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
-                            if (factor > 1) ...[
-                              const SizedBox(height: 2),
-                              Text("${stockBD ~/ factor} ${widget.variant.unidadVenta}(s)", style: TextStyle(fontSize: 9, color: widget.isDark ? Colors.green[400] : Colors.green[700])),
-                            ],
-                          ],
-                        ),
-                        Text("+", style: TextStyle(fontSize: 18, color: widget.isDark ? Colors.grey[600] : Colors.grey[400])),
-                        Column(
-                          children: [
-                            Text("Nuevo Ingreso", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
-                            const SizedBox(height: 4),
-                            SizedBox(
-                              width: 60, 
-                              height: 28,
-                              child: TextField(
-                                controller: _stockIngresanteCtrl,
-                                keyboardType: TextInputType.number,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700]),
-                                decoration: InputDecoration(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
-                                  isDense: true,
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: widget.isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.shade200)),
-                                  filled: true,
-                                  fillColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
+                        // Columna Izquierda: En Inventario Actual
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Text("En Inventario Actual", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 4),
+                              Text("$stockBD unid. base", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.shade200),
                                 ),
-                                onChanged: (_) => _onStockBaseManualEdit(),
-                              )
-                            ),
-                            if (factor > 1) ...[
-                              const SizedBox(height: 2),
-                              Text("${stockIngresante ~/ factor} ${widget.variant.unidadVenta}(s)", style: TextStyle(fontSize: 9, color: widget.isDark ? Colors.green[400] : Colors.green[700])),
+                                child: Text(
+                                  factor > 1 
+                                      ? "= ${_ComparativeUpdateModalState._formatUnitLabel(stockBD ~/ factor, unidadActiva)} (x$factor)" 
+                                      : "= ${_ComparativeUpdateModalState._formatUnitLabel(stockBD, unidadActiva)}",
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700]),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
                             ],
-                          ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text("+", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.grey[500] : Colors.grey[400])),
+                        ),
+                        // Columna Derecha: Nuevo Ingreso Factura
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Text("Nuevo Ingreso Factura", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 58, 
+                                    height: 28,
+                                    child: TextField(
+                                      controller: _stockIngresanteCtrl,
+                                      keyboardType: TextInputType.number,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700]),
+                                      decoration: InputDecoration(
+                                        contentPadding: EdgeInsets.zero,
+                                        isDense: true,
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: widget.isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300)),
+                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Colors.green, width: 1.5)),
+                                        filled: true,
+                                        fillColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
+                                      ),
+                                      onChanged: (_) => _onStockBaseManualEdit(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text("unid. base", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.shade200),
+                                ),
+                                child: Text(
+                                  factor > 1 
+                                      ? "= +${_ComparativeUpdateModalState._formatUnitLabel(stockIngresante ~/ factor, unidadActiva)} (x$factor)" 
+                                      : "= +${_ComparativeUpdateModalState._formatUnitLabel(stockIngresante, unidadActiva)}",
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700]),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => updateState(() => widget.variant.stockOperation = 'sumar'),
+                          onTap: () => updateState(() {
+                            widget.variant.stockOperation = 'sumar';
+                            widget.variant.resetStockAuthorizationFlags();
+                          }),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                             decoration: BoxDecoration(
-                              color: widget.variant.stockOperation == 'sumar' ? (widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.shade50) : (widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[50]),
+                              color: isSumar ? (widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.shade50) : (widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[50]),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: widget.variant.stockOperation == 'sumar' ? Colors.green : (widget.isDark ? Colors.white10 : Colors.grey.shade300), width: widget.variant.stockOperation == 'sumar' ? 2 : 1),
+                              border: Border.all(color: isSumar ? Colors.green : (widget.isDark ? Colors.white10 : Colors.grey.shade300), width: isSumar ? 2 : 1),
                             ),
                             child: Column(
                               children: [
-                                Icon(Icons.add_circle_outline, size: 20, color: widget.variant.stockOperation == 'sumar' ? Colors.green : Colors.grey),
+                                Icon(Icons.add_circle_outline, size: 20, color: isSumar ? Colors.green : Colors.grey),
                                 const SizedBox(height: 4),
-                                Text("Sumar al Existente", style: TextStyle(fontSize: 11, fontWeight: widget.variant.stockOperation == 'sumar' ? FontWeight.bold : FontWeight.normal, color: widget.variant.stockOperation == 'sumar' ? Colors.green : Colors.grey), textAlign: TextAlign.center),
+                                Text("Sumar al Existente", style: TextStyle(fontSize: 11, fontWeight: isSumar ? FontWeight.bold : FontWeight.normal, color: isSumar ? Colors.green : Colors.grey), textAlign: TextAlign.center),
                               ],
                             ),
                           ),
@@ -160,20 +214,23 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                       const SizedBox(width: 12),
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => updateState(() => widget.variant.stockOperation = 'reemplazar'),
+                          onTap: () => updateState(() {
+                            widget.variant.stockOperation = 'reemplazar';
+                            widget.variant.resetStockAuthorizationFlags();
+                          }),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                             decoration: BoxDecoration(
-                              color: widget.variant.stockOperation == 'reemplazar' ? (widget.isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50) : (widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[50]),
+                              color: !isSumar ? (widget.isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50) : (widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[50]),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: widget.variant.stockOperation == 'reemplazar' ? Colors.blue : (widget.isDark ? Colors.white10 : Colors.grey.shade300), width: widget.variant.stockOperation == 'reemplazar' ? 2 : 1),
+                              border: Border.all(color: !isSumar ? Colors.blue : (widget.isDark ? Colors.white10 : Colors.grey.shade300), width: !isSumar ? 2 : 1),
                             ),
                             child: Column(
                               children: [
-                                Icon(Icons.change_circle_outlined, size: 20, color: widget.variant.stockOperation == 'reemplazar' ? Colors.blue : Colors.grey),
+                                Icon(Icons.change_circle_outlined, size: 20, color: !isSumar ? Colors.blue : Colors.grey),
                                 const SizedBox(height: 4),
-                                Text("Reemplazar Inventario", style: TextStyle(fontSize: 11, fontWeight: widget.variant.stockOperation == 'reemplazar' ? FontWeight.bold : FontWeight.normal, color: widget.variant.stockOperation == 'reemplazar' ? Colors.blue : Colors.grey), textAlign: TextAlign.center),
+                                Text("Reemplazar Inventario", style: TextStyle(fontSize: 11, fontWeight: !isSumar ? FontWeight.bold : FontWeight.normal, color: !isSumar ? Colors.blue : Colors.grey), textAlign: TextAlign.center),
                               ],
                             ),
                           ),
@@ -181,19 +238,60 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
+                  // Recuadro Verde: Stock Total Resultante para la Venta
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: widget.isDark ? Colors.green.shade900.withValues(alpha: 0.3) : Colors.green.shade100, borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: widget.isDark ? Colors.green.shade900.withValues(alpha: 0.3) : Colors.green.shade100, 
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300),
+                    ),
                     child: Column(
                       children: [
-                        Text("Stock Total Resultante", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.green[200] : Colors.green[800])),
+                        Text(
+                          "Stock Total Resultante para la Venta", 
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: widget.isDark ? Colors.green[200] : Colors.green[800]),
+                        ),
                         const SizedBox(height: 4),
-                        Text(factor > 1 ? "${stockFinalResultante ~/ factor} ${widget.variant.unidadVenta}(s)" : "$stockFinalResultante", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.greenAccent : Colors.green[900])),
+                        // Número grande en la unidad activa
                         if (factor > 1) ...[
+                          Builder(builder: (_) {
+                            int paquetes = stockFinalResultante ~/ factor;
+                            int sobrante = stockFinalResultante % factor;
+                            String mainText = _ComparativeUpdateModalState._formatUnitLabel(paquetes, unidadActiva);
+                            if (sobrante > 0) {
+                              mainText += " + $sobrante unid. suelta${sobrante == 1 ? '' : 's'}";
+                            }
+                            return Text(
+                              mainText, 
+                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.greenAccent : Colors.green[900]),
+                              textAlign: TextAlign.center,
+                            );
+                          }),
+                          const SizedBox(height: 4),
+                          Text(
+                            isSumar 
+                                ? "Total físico en almacén: $stockFinalResultante unidades base ($stockBD actuales + $stockIngresante ingreso) ÷ Factor $factor"
+                                : "Total físico en almacén: $stockFinalResultante unidades base (Reemplazo directo) ÷ Factor $factor",
+                            style: TextStyle(fontSize: 10.5, color: widget.isDark ? Colors.green[300] : Colors.green[800]),
+                            textAlign: TextAlign.center,
+                          ),
+                        ] else ...[
+                          Text(
+                            _ComparativeUpdateModalState._formatUnitLabel(stockFinalResultante, unidadActiva), 
+                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.greenAccent : Colors.green[900]),
+                            textAlign: TextAlign.center,
+                          ),
                           const SizedBox(height: 2),
-                          Text("($stockFinalResultante unidades base)", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.green[300] : Colors.green[700])),
+                          Text(
+                            isSumar 
+                                ? "Total físico en almacén: $stockBD actuales + $stockIngresante nuevo ingreso"
+                                : "Total físico en almacén: $stockFinalResultante unidades (Reemplazo directo)",
+                            style: TextStyle(fontSize: 10.5, color: widget.isDark ? Colors.green[300] : Colors.green[800]),
+                            textAlign: TextAlign.center,
+                          ),
                         ],
                       ],
                     ),
@@ -208,26 +306,60 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
   }
 
   Widget _buildLeftoverWarning() {
-    int factor = int.tryParse(_uVentaFactorCtrl.text) ?? widget.variant.unidadesPorVenta;
-    double cantComprada = double.tryParse(_cantidadUmpCtrl.text) ?? widget.variant.cantidadUmpComprada;
-    int unidLote = int.tryParse(_unidLoteCtrl.text) ?? widget.variant.unidadesPorLote;
-    
-    int totalUnidadesBase = int.tryParse(_stockIngresanteCtrl.text) ?? (cantComprada * unidLote).toInt();
-    
-    var validation = UnitCatalogService.validateStockForUnit(
-      totalUnitsBase: totalUnidadesBase,
-      presentationFactor: factor,
-      baseUnitCost: 0.0, 
-      unitName: _uVentaCtrl.text,
-    );
-    
-    if (validation.status == StockValidationStatus.exact) return const SizedBox.shrink();
+    int stockBD = (widget.dbData['stock_actual'] ?? 0) as int;
+    int factor = _activeFactorVenta;
+    String unidadActiva = _activeUnidadVenta;
+    int totalBase = _calculatedTotalUnitsBase;
+    int nuevoIngreso = int.tryParse(_stockIngresanteCtrl.text) ?? widget.variant.stockIngresanteBase;
 
-    if (validation.status == StockValidationStatus.deficit) {
+    if (factor <= 1 || totalBase <= 0) return const SizedBox.shrink();
+
+    int completas = totalBase ~/ factor;
+    int sobrante = totalBase % factor;
+
+    // Caso 1: El stock cuadra exactamente
+    if (completas >= 1 && sobrante == 0) return const SizedBox.shrink();
+
+    // Caso 2: DÉFICIT REAL (completas == 0, totalBase < factor)
+    if (completas == 0 && totalBase > 0) {
+      int deficit = factor - totalBase;
+
+      if (widget.variant.allowDeficitApproved) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: widget.isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: widget.isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: widget.isDark ? Colors.blue[300] : Colors.blue[700], size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "✅ Autorizado: Registro en 0 $unidadActiva ($totalBase unid. base acumuladas para futuras compras).",
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.blue[200] : Colors.blue[900]),
+                ),
+              ),
+              TextButton(
+                onPressed: () => updateState(() => widget.variant.allowDeficitApproved = false),
+                child: const Text("Modificar", style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+        );
+      }
+
       return Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: widget.isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: widget.isDark ? Colors.red.withValues(alpha: 0.3) : Colors.red.shade200)),
+        decoration: BoxDecoration(
+          color: widget.isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: widget.isDark ? Colors.red.withValues(alpha: 0.3) : Colors.red.shade200),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -236,23 +368,104 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                 Icon(Icons.error_outline, color: widget.isDark ? Colors.red[300] : Colors.red[700], size: 20),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text("Déficit detectado", style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.red[300] : Colors.red[700])),
+                  child: Text(
+                    "🚨 Stock Insuficiente: No alcanza para 1 $unidadActiva",
+                    style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.red[300] : Colors.red[700], fontSize: 13),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              "El lote de compra ($totalUnidadesBase unid.) no alcanza para formar 1 paquete de ${_uVentaCtrl.text} (x$factor).\nFaltan ${validation.deficit} unidades.",
-              style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[800]),
+              "El stock total ($totalBase unid. base) no alcanza para formar 1 paquete de $unidadActiva (x$factor). Faltan $deficit unidades.",
+              style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], height: 1.3),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                // Opción 1: Adaptar a Unidad (x1)
+                ElevatedButton.icon(
+                  onPressed: () {
+                    _uVentaCtrl.text = "Unidad";
+                    _uVentaFactorCtrl.text = "1";
+                    widget.variant.updateUnidadVenta = true;
+                    widget.variant.resetStockAuthorizationFlags();
+                    _onUnidadVentaChanged();
+                  },
+                  icon: const Icon(Icons.flash_on, size: 14),
+                  label: const Text("⚡ Adaptar a Unidad (x1)", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[800],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                    minimumSize: const Size(0, 32),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                // Opción 2: Completar lote a 1 paquete
+                OutlinedButton.icon(
+                  onPressed: () => _completarLoteEnModal(),
+                  icon: const Icon(Icons.edit, size: 14),
+                  label: Text("✏️ Completar lote ($factor unid.)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                    minimumSize: const Size(0, 32),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                // Opción 3: Autorizar registro en 0
+                OutlinedButton.icon(
+                  onPressed: () => updateState(() => widget.variant.allowDeficitApproved = true),
+                  icon: const Icon(Icons.lock_open, size: 14),
+                  label: const Text("🔓 Autorizar registro en 0", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                    minimumSize: const Size(0, 32),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
+            ),
+            _buildExactDivisorsChips(
+              totalBase: totalBase,
+              currentFactor: factor,
+              accentColor: widget.isDark ? Colors.blue[300]! : Colors.blue[700]!,
             ),
           ],
         ),
       );
     }
 
-    // Es sobrante
-    int sobrante = _leftoverSuelto;
-    if (sobrante <= 0) return const SizedBox.shrink(); // Ya resuelto
+    // Caso 3: SOBRANTE (completas >= 1 y sobrante > 0)
+    if (widget.variant.allowLeftoverInReserve) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: widget.isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.bookmark_added_outlined, color: widget.isDark ? Colors.green[300] : Colors.green[700], size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "✅ Reserva base autorizada: $completas ${_ComparativeUpdateModalState._formatUnitLabel(completas, unidadActiva)} vendible + $sobrante unid. en reserva base.",
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[200] : Colors.green[900]),
+              ),
+            ),
+            TextButton(
+              onPressed: () => updateState(() => widget.variant.allowLeftoverInReserve = false),
+              child: const Text("Modificar", style: TextStyle(fontSize: 11)),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -260,7 +473,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
       decoration: BoxDecoration(
         color: widget.isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.shade50,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: widget.isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200)
+        border: Border.all(color: widget.isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,33 +484,133 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  "Sobrante detectado",
-                  style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[300] : Colors.orange[700]),
+                  "⚠️ Atención: Sobran $sobrante unidades base sueltas",
+                  style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[300] : Colors.orange[700], fontSize: 13),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            "Quedan $sobrante unidades sueltas del lote comprado que no completan una ${_uVentaCtrl.text}.",
-            style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[800]),
+            "Con las $totalBase unidades base totales ($stockBD actuales + $nuevoIngreso ingreso) se completa $completas ${_ComparativeUpdateModalState._formatUnitLabel(completas, unidadActiva)}, pero quedan $sobrante unidades sueltas que no alcanzan para otra $unidadActiva.",
+            style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], height: 1.3),
           ),
           const SizedBox(height: 12),
+
+          // Botón 1 Recomendado: Enviar a variante Unidad (x1)
           SizedBox(
             width: double.infinity,
-            height: 36,
+            height: 38,
             child: ElevatedButton.icon(
               onPressed: () => _crearVarianteSobrante(),
               icon: const Icon(Icons.add_circle_outline, size: 16, color: Colors.white),
-              label: const Text("Preparar variante unitaria con sobrante", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+              label: Text(
+                "➕ Enviar las $sobrante unid. a variante 'Unidad (x1)'",
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange[600],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                backgroundColor: Colors.orange[700],
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
-          )
+          ),
+
+          _buildExactDivisorsChips(
+            totalBase: totalBase,
+            currentFactor: factor,
+            accentColor: widget.isDark ? Colors.orange[300]! : Colors.orange[700]!,
+          ),
+
+          const SizedBox(height: 10),
+
+          // Botón 3: Conservar en reserva base
+          SizedBox(
+            width: double.infinity,
+            height: 34,
+            child: OutlinedButton.icon(
+              onPressed: () => updateState(() => widget.variant.allowLeftoverInReserve = true),
+              icon: Icon(Icons.inventory_2_outlined, size: 15, color: widget.isDark ? Colors.orange[300] : Colors.orange[800]),
+              label: Text(
+                "📥 Conservar las $totalBase unid. en esta variante ($completas ${_ComparativeUpdateModalState._formatUnitLabel(completas, unidadActiva)} + $sobrante en reserva)",
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[300] : Colors.orange[800]),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: widget.isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildExactDivisorsChips({
+    required int totalBase,
+    required int currentFactor,
+    required Color accentColor,
+  }) {
+    List<int> divisores = _calculateExactDivisors(totalBase, currentFactor);
+    if (divisores.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.sync_alt, size: 14, color: accentColor),
+            const SizedBox(width: 4),
+            Text(
+              "🔄 Divisores Exactos sugeridos (1 solo toque):",
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: widget.isDark ? Colors.grey[300] : Colors.grey[800],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: divisores.map((d) {
+            String unitName = UnitCatalogService.resolveFromFactor(d) ?? "Pack (x$d)";
+            int pkgs = totalBase ~/ d;
+            String pkgsLabel = _ComparativeUpdateModalState._formatUnitLabel(pkgs, unitName);
+            String chipLabel = "$unitName (x$d) → $pkgsLabel";
+
+            return ActionChip(
+              avatar: CircleAvatar(
+                radius: 9,
+                backgroundColor: accentColor.withValues(alpha: 0.2),
+                child: Text(
+                  "$d",
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: accentColor),
+                ),
+              ),
+              label: Text(
+                chipLabel,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                _uVentaCtrl.text = unitName;
+                _uVentaFactorCtrl.text = d.toString();
+                widget.variant.updateUnidadVenta = true;
+                widget.variant.resetStockAuthorizationFlags();
+                _onUnidadVentaChanged();
+              },
+              backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
+              side: BorderSide(
+                color: accentColor.withValues(alpha: widget.isDark ? 0.5 : 0.4),
+                width: 1.2,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

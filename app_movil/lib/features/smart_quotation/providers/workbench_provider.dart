@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/quotation_service.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
 import 'package:app_movil/core/database/local_db.dart';
 
 enum WorkbenchSort { time, alpha }
@@ -508,11 +509,23 @@ class WorkbenchProvider with ChangeNotifier {
   Future<bool> renameQuotation(int id, String newName, {int? clientId}) async {
     try {
       final db = await dbHelper.database;
-      final qCheck = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      final qCheck = await db.query('smart_quotations', where: 'id = ?', whereArgs: [id]);
       if (qCheck.isNotEmpty && qCheck.first['status'] == 'SOLD') {
         throw Exception("No se puede renombrar una cotización que ya fue vendida.");
       }
-      Map<String, dynamic> updateData = {"client_name": newName};
+
+      String finalName = newName.trim();
+      if (finalName.isEmpty && qCheck.isNotEmpty) {
+        final row = qCheck.first;
+        finalName = QuotationNamingEngine.generateTitle(
+          typedClientName: row['client_name'] as String?,
+          schoolName: row['institution_name'] as String?,
+          gradeLevel: row['grade_level'] as String?,
+          quotationType: (row['type'] as String?) ?? 'manual',
+        );
+      }
+
+      Map<String, dynamic> updateData = {"client_name": finalName};
       if (clientId != null) {
         updateData["client_id"] = clientId;
       }

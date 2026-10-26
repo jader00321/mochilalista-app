@@ -33,6 +33,82 @@ class CartItem {
   }
 }
 
+enum CatalogSortOption {
+  recentFirst,
+  oldestFirst,
+  nameAsc,
+  nameDesc,
+  priceAsc,
+  priceDesc,
+}
+
+extension CatalogSortOptionExt on CatalogSortOption {
+  String get label {
+    switch (this) {
+      case CatalogSortOption.recentFirst:
+        return "Más recientes primero";
+      case CatalogSortOption.oldestFirst:
+        return "Más antiguos primero";
+      case CatalogSortOption.nameAsc:
+        return "Nombre (A - Z)";
+      case CatalogSortOption.nameDesc:
+        return "Nombre (Z - A)";
+      case CatalogSortOption.priceAsc:
+        return "Precio: Menor a Mayor";
+      case CatalogSortOption.priceDesc:
+        return "Precio: Mayor a Menor";
+    }
+  }
+
+  String get shortLabel {
+    switch (this) {
+      case CatalogSortOption.recentFirst:
+        return "Recientes";
+      case CatalogSortOption.oldestFirst:
+        return "Antiguos";
+      case CatalogSortOption.nameAsc:
+        return "A - Z";
+      case CatalogSortOption.nameDesc:
+        return "Z - A";
+      case CatalogSortOption.priceAsc:
+        return "Precio ↑";
+      case CatalogSortOption.priceDesc:
+        return "Precio ↓";
+    }
+  }
+
+  String get emoji {
+    switch (this) {
+      case CatalogSortOption.recentFirst:
+        return "🕒";
+      case CatalogSortOption.oldestFirst:
+        return "🕰️";
+      case CatalogSortOption.nameAsc:
+      case CatalogSortOption.nameDesc:
+        return "🔤";
+      case CatalogSortOption.priceAsc:
+      case CatalogSortOption.priceDesc:
+        return "💰";
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case CatalogSortOption.recentFirst:
+        return Icons.access_time_filled_rounded;
+      case CatalogSortOption.oldestFirst:
+        return Icons.history_rounded;
+      case CatalogSortOption.nameAsc:
+      case CatalogSortOption.nameDesc:
+        return Icons.sort_by_alpha_rounded;
+      case CatalogSortOption.priceAsc:
+        return Icons.arrow_upward_rounded;
+      case CatalogSortOption.priceDesc:
+        return Icons.arrow_downward_rounded;
+    }
+  }
+}
+
 class CatalogProvider with ChangeNotifier {
   int? _negocioId;
   int? _userId;
@@ -54,6 +130,13 @@ class CatalogProvider with ChangeNotifier {
   int? _selectedCategoryId;
   Map<String, dynamic> _advancedFilters = {};
   bool _isSortAscending = true;
+  CatalogSortOption _sortOption = CatalogSortOption.nameAsc;
+
+  CatalogSortOption get sortOption => _sortOption;
+  bool get isSortAscending =>
+      _sortOption == CatalogSortOption.nameAsc ||
+      _sortOption == CatalogSortOption.oldestFirst ||
+      _sortOption == CatalogSortOption.priceAsc;
 
   final List<CartItem> _shoppingCart = [];
   final List<CartItem> _utilityList = [];
@@ -78,7 +161,6 @@ class CatalogProvider with ChangeNotifier {
   bool get hasOrphanBrands => _orphanBrandsCount > 0;
   int get orphanCategoriesCount => _orphanCategoriesCount;
   int get orphanBrandsCount => _orphanBrandsCount;
-  bool get isSortAscending => _isSortAscending;
   String get searchQuery => _searchQuery;
   String get errorMessage => _errorMessage;
   Map<String, dynamic> get advancedFilters => _advancedFilters;
@@ -241,6 +323,33 @@ class CatalogProvider with ChangeNotifier {
         }
       }
 
+      switch (_sortOption) {
+        case CatalogSortOption.recentFirst:
+          params['sortBy'] = 'recent';
+          params['sortDir'] = 'DESC';
+          break;
+        case CatalogSortOption.oldestFirst:
+          params['sortBy'] = 'oldest';
+          params['sortDir'] = 'ASC';
+          break;
+        case CatalogSortOption.nameAsc:
+          params['sortBy'] = 'name';
+          params['sortDir'] = 'ASC';
+          break;
+        case CatalogSortOption.nameDesc:
+          params['sortBy'] = 'name';
+          params['sortDir'] = 'DESC';
+          break;
+        case CatalogSortOption.priceAsc:
+          params['sortBy'] = 'price';
+          params['sortDir'] = 'ASC';
+          break;
+        case CatalogSortOption.priceDesc:
+          params['sortBy'] = 'price';
+          params['sortDir'] = 'DESC';
+          break;
+      }
+
       if (_page == 0) {
         final totals = await _productService.countInventory(params);
         _realTotalProductsCount = totals['products'] ?? 0;
@@ -272,12 +381,36 @@ class CatalogProvider with ChangeNotifier {
 
         _displayItems.addAll(hydratedNewItems);
 
-        // Re-ordenamiento local para ignorar símbolos y mayúsculas
+        // Re-ordenamiento local coherente con la opción seleccionada
         _displayItems.sort((a, b) {
-          int cmp = _normalizeForSort(
-            a.product.nombre,
-          ).compareTo(_normalizeForSort(b.product.nombre));
-          return _isSortAscending ? cmp : -cmp;
+          switch (_sortOption) {
+            case CatalogSortOption.recentFirst:
+              final bId = b.presentation.id ?? 0;
+              final aId = a.presentation.id ?? 0;
+              return bId.compareTo(aId);
+            case CatalogSortOption.oldestFirst:
+              final aId = a.presentation.id ?? 0;
+              final bId = b.presentation.id ?? 0;
+              return aId.compareTo(bId);
+            case CatalogSortOption.nameAsc:
+              return _normalizeForSort(a.product.nombre)
+                  .compareTo(_normalizeForSort(b.product.nombre));
+            case CatalogSortOption.nameDesc:
+              return _normalizeForSort(b.product.nombre)
+                  .compareTo(_normalizeForSort(a.product.nombre));
+            case CatalogSortOption.priceAsc:
+              final cmp = a.effectivePrice.compareTo(b.effectivePrice);
+              return cmp != 0
+                  ? cmp
+                  : _normalizeForSort(a.product.nombre)
+                      .compareTo(_normalizeForSort(b.product.nombre));
+            case CatalogSortOption.priceDesc:
+              final cmp = b.effectivePrice.compareTo(a.effectivePrice);
+              return cmp != 0
+                  ? cmp
+                  : _normalizeForSort(a.product.nombre)
+                      .compareTo(_normalizeForSort(b.product.nombre));
+          }
         });
 
         _page++;
@@ -384,9 +517,29 @@ class CatalogProvider with ChangeNotifier {
     _resetAndReload();
   }
 
-  void toggleSortOrder() {
-    _isSortAscending = !_isSortAscending;
+  void setSortOption(CatalogSortOption option) {
+    if (_sortOption == option) return;
+    _sortOption = option;
+    _isSortAscending = (option == CatalogSortOption.nameAsc ||
+        option == CatalogSortOption.oldestFirst ||
+        option == CatalogSortOption.priceAsc);
     _resetAndReload();
+  }
+
+  void toggleSortOrder() {
+    if (_sortOption == CatalogSortOption.nameAsc) {
+      setSortOption(CatalogSortOption.nameDesc);
+    } else if (_sortOption == CatalogSortOption.nameDesc) {
+      setSortOption(CatalogSortOption.nameAsc);
+    } else if (_sortOption == CatalogSortOption.recentFirst) {
+      setSortOption(CatalogSortOption.oldestFirst);
+    } else if (_sortOption == CatalogSortOption.oldestFirst) {
+      setSortOption(CatalogSortOption.recentFirst);
+    } else if (_sortOption == CatalogSortOption.priceAsc) {
+      setSortOption(CatalogSortOption.priceDesc);
+    } else {
+      setSortOption(CatalogSortOption.priceAsc);
+    }
   }
 
   void _resetAndReload() {
