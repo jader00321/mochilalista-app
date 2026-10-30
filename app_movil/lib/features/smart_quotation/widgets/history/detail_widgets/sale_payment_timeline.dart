@@ -37,6 +37,7 @@ class SalePaymentTimeline extends StatelessWidget {
 
       showModalBottomSheet(
         context: context,
+        useSafeArea: true,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (ctx) => PaymentEntryModal(

@@ -14,6 +14,7 @@ import 'package:app_movil/features/promotions/screens/offers_tab.dart';
 import 'package:app_movil/features/scanner/screens/invoice_history_screen.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
+import 'package:app_movil/features/auth/screens/onboarding/onboarding_screen.dart';
 
 class PlaceholderTab extends StatelessWidget {
   final String title;
@@ -283,6 +284,25 @@ class _InventoryScreenState extends State<InventoryScreen>
                             fontSize: 13,
                           ),
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange[700],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text("Registrar", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),

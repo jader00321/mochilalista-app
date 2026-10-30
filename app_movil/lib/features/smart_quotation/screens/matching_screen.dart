@@ -449,7 +449,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        useSafeArea: false,
+        useSafeArea: true,
         builder: (ctx) => ProductQuoteDetailModal(
           wrapper: wrapper,
           brandName: brandName,
@@ -499,7 +499,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      useSafeArea: false,
+      useSafeArea: true,
       builder: (ctx) => MatchingProductSearchModal(
         initialQuery: pair.sourceItem.fullName,
         isDark: isDark,

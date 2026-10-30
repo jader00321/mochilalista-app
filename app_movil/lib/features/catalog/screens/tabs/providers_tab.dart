@@ -531,6 +531,7 @@ class _ProvidersTabState extends State<ProvidersTab> {
                               onTap: () {
                                 showModalBottomSheet(
                                   context: context,
+                                  useSafeArea: true,
                                   isScrollControlled: true,
                                   backgroundColor: Colors.transparent,
                                   builder: (_) => MasterDetailModal(

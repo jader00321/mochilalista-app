@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:app_movil/core/database/local_db.dart';
 
@@ -17,10 +18,14 @@ class PredictiveData {
   final double interceptB;
   final double previous15Sales;
   final double current15Sales;
-  final String confidenceLevel; // 'Bajo', 'Medio', 'Alto'
+  final String confidenceLevel; // 'Bajo', 'Medio', 'Alto', 'Baja', 'Media', 'Alta', 'Inicial'
   final double conservativeEstimate;
   final double expectedEstimate;
   final double optimisticEstimate;
+
+  // Robustez de Diagnóstico y Finanzas
+  final bool isInitialPhase;
+  final double historicalProfitMargin;
 
   PredictiveData({
     required this.historicalPoints,
@@ -35,11 +40,23 @@ class PredictiveData {
     this.interceptB = 0.0,
     this.previous15Sales = 0.0,
     this.current15Sales = 0.0,
-    this.confidenceLevel = 'Bajo',
+    this.confidenceLevel = 'Inicial',
     this.conservativeEstimate = 0.0,
     this.expectedEstimate = 0.0,
     this.optimisticEstimate = 0.0,
+    this.isInitialPhase = false,
+    this.historicalProfitMargin = 0.30,
   });
+
+  String get confidenceDisplayName {
+    if (confidenceLevel == 'Inicial') return 'Inicial';
+    if (confidenceLevel == 'Medio' || confidenceLevel == 'Media') return 'Media';
+    if (confidenceLevel == 'Alto' || confidenceLevel == 'Alta') return 'Alta';
+    if (confidenceLevel == 'Bajo' || confidenceLevel == 'Baja') {
+      return totalSnapshots < 7 ? 'Inicial' : 'Baja';
+    }
+    return confidenceLevel;
+  }
 }
 
 class PredictiveService {
@@ -58,7 +75,10 @@ class PredictiveService {
       List<double> dailySales = [];
       
       double prevCumulativeSales = 0.0;
+      double prevCumulativeProfit = 0.0;
       double currentInvValue = 0.0;
+      double totalAccumSales = 0.0;
+      double totalAccumProfit = 0.0;
       
       for (int i = 0; i < sorted.length; i++) {
         var s = sorted[i];
@@ -68,6 +88,8 @@ class PredictiveService {
         double cumulativeSales = (metrics['totalSales'] as num?)?.toDouble() ?? 0.0;
         double netProfit = (metrics['netProfit'] as num?)?.toDouble() ?? 0.0;
         double invValue = (metrics['inventoryValue'] as num?)?.toDouble() ?? 0.0;
+        double reportedMargin = (metrics['margin'] as num?)?.toDouble() ?? 0.30;
+        if (reportedMargin <= 0.0 || reportedMargin >= 1.0) reportedMargin = 0.30;
         
         currentInvValue = invValue;
 
@@ -80,15 +102,36 @@ class PredictiveService {
           if (dailySale < 0) dailySale = 0.0; // Failsafe
         }
         
+        // Calcular beneficio diario estrictamente acotado (dailyProfit <= dailySale)
+        double computedDailyProfit = 0.0;
+        if (i == 0) {
+          computedDailyProfit = 0.0;
+        } else {
+          double deltaProfit = netProfit - prevCumulativeProfit;
+          if (deltaProfit > 0) {
+            computedDailyProfit = deltaProfit;
+          } else {
+            computedDailyProfit = dailySale * reportedMargin;
+          }
+        }
+        
+        // 🛡️ REGLA MATEMÁTICA ESTRICTA: El beneficio diario jamás puede superar a las ventas del día
+        double dailyProfit = math.max(0.0, math.min(dailySale, computedDailyProfit));
+
         dailySales.add(dailySale);
+        totalAccumSales += dailySale;
+        totalAccumProfit += dailyProfit;
+        
         prevCumulativeSales = cumulativeSales;
+        prevCumulativeProfit = netProfit;
         
         points.add({
           'date': dateStr,
-          'patrimony': invValue + netProfit, // Valor Real (Deprecated, use specific)
+          'patrimony': invValue + netProfit,
           'inventoryValue': invValue,
-          'netProfit': netProfit,
-          'dailySales': dailySale,
+          'netProfit': netProfit, // Beneficio acumulado del periodo
+          'dailyProfit': dailyProfit, // Beneficio exclusivo de la jornada (<= dailySales)
+          'dailySales': dailySale, // Ventas de la jornada
         });
       }
 
@@ -105,26 +148,29 @@ class PredictiveService {
         smoothedSales.add(sum / count);
       }
 
-      // 1. Calculate Velocity (Last 15 days vs Previous 15 days) based on smoothed data
+      // 1. Calculate Velocity (Last 15 days vs Previous 15 days)
+      // Usamos las ventas reales de los snapshots para total paridad entre tarjeta y modal
       double last15Total = 0.0;
       double prev15Total = 0.0;
-      int len = smoothedSales.length;
+      int len = dailySales.length;
       
       for (int i = len - 1; i >= 0 && i >= len - 15; i--) {
-        last15Total += smoothedSales[i];
+        last15Total += dailySales[i];
       }
       for (int i = len - 16; i >= 0 && i >= len - 30; i--) {
-        prev15Total += smoothedSales[i];
+        prev15Total += dailySales[i];
       }
       
+      bool isInitialPhase = false;
       double velocity = 0.0;
-      if (prev15Total > 0) {
+      if (len < 14 || prev15Total <= 0.0) {
+        isInitialPhase = true;
+        velocity = 0.0;
+      } else {
         velocity = ((last15Total - prev15Total) / prev15Total) * 100;
-      } else if (last15Total > 0) {
-        velocity = 100.0;
       }
 
-      // 2. Simple Linear Regression for the next 30 days based on SMOOTHED daily sales
+      // 2. Modelo Predictivo Híbrido Amortiguado (Damped Holt-Winters Trend)
       int n = smoothedSales.length;
       double sumX = 0;
       double sumY = 0;
@@ -149,32 +195,56 @@ class PredictiveService {
       } else if (n == 1) {
         b = smoothedSales.first;
       }
+
+      // Ritmo diario promedio histórico
+      double avgDailySales = n > 0 ? (dailySales.fold(0.0, (acc, v) => acc + v) / n) : 0.0;
+
+      // Factor de madurez muestral (W_n in [0.15, 1.0])
+      double maturityWeight = (n / 30.0).clamp(0.15, 1.0);
       
+      // Acotar la pendiente diaria al 5% del ritmo promedio diario
+      double maxAllowedDailySlope = avgDailySales > 0 ? avgDailySales * 0.05 : 1.5;
+      double effectiveSlope = m.clamp(-maxAllowedDailySlope, maxAllowedDailySlope) * maturityWeight;
+
+      // Amortiguación geométrica a 30 días
+      const double phi = 0.90;
       double next30DaysPrediction = 0.0;
-      for (int i = n; i < n + 30; i++) {
-        double p = (m * i) + b;
-        if (p < 0) p = 0;
-        next30DaysPrediction += p;
+      double currentSlopeDamping = 1.0;
+      double currentDailyLevel = avgDailySales > 0 ? avgDailySales : (b > 0 ? b : 0.0);
+
+      for (int day = 1; day <= 30; day++) {
+        currentSlopeDamping *= phi;
+        currentDailyLevel += effectiveSlope * currentSlopeDamping;
+        if (currentDailyLevel < 0.0) currentDailyLevel = 0.0;
+        next30DaysPrediction += currentDailyLevel;
       }
 
-      // Escenarios de dispersión y métricas didácticas
-      double avgDailySales = n > 0 ? (dailySales.fold(0.0, (acc, v) => acc + v) / n) : 0.0;
-      String confidenceLevel = n >= 30 ? 'Alto' : (n >= 7 ? 'Medio' : 'Bajo');
+      // Escenarios de dispersión
+      String confidenceLevel = n >= 30 ? 'Alta' : (n >= 7 ? 'Media' : 'Inicial');
       double expectedEstimate = next30DaysPrediction;
       double conservativeEstimate = next30DaysPrediction * 0.80; // Margen de seguridad 20%
       double optimisticEstimate = next30DaysPrediction * 1.20; // 20% de expansión
       
-      // 3. Explainability (XAI)
+      // Margen de ganancia promedio histórico calculado
+      double historicalProfitMargin = totalAccumSales > 0 ? (totalAccumProfit / totalAccumSales) : 0.30;
+      if (historicalProfitMargin <= 0.05 || historicalProfitMargin > 0.95) {
+        historicalProfitMargin = 0.30;
+      }
+
+      // 3. Explainability (XAI) con redacción multicanal y sin emojis duplicados
       String explanationText = "";
       String actionText = "";
-      String direction = velocity > 0 ? "creció" : "disminuyó";
-      String magnitude = velocity.abs().toStringAsFixed(1);
       
-      if (velocity > 10) {
-        explanationText = "Buenas noticias: tu ritmo de ventas $direction un $magnitude% en la última quincena.\nBasándonos en esta tendencia, proyectamos que el próximo mes podrías superar tu marca actual.\nClave: No pierdas impulso. Asegura stock de tus productos estrella.";
+      if (isInitialPhase) {
+        explanationText = "Tu negocio está en etapa de registro inicial con $n días de historial.\nEl motor predictivo proyecta un ritmo mensual prudente de ${avgDailySales.toStringAsFixed(2)} soles por día.\nA medida que registres más transacciones en Caja Rápida, Cotizaciones o Catálogo, la precisión aumentará.";
+        actionText = "Continúa registrando tus ventas diarias para consolidar la tendencia de crecimiento.";
+      } else if (velocity > 10) {
+        String magnitude = velocity.toStringAsFixed(1);
+        explanationText = "Buenas noticias: tu ritmo de ventas creció un $magnitude% en la última quincena.\nBasándonos en esta tendencia, proyectamos un cierre de mes positivo.\nClave: No pierdas impulso. Asegura stock de tus productos estrella.";
         actionText = "Revisa tu Motor de Abastecimiento para que tus productos estrella no se agoten.";
       } else if (velocity < -10) {
-        explanationText = "Tu ritmo de ventas $direction un $magnitude% en la última quincena.\nEl motor ha ajustado la proyección de forma conservadora.\nClave: Es el momento ideal para lanzar una promoción flash y reactivar las ventas.";
+        String magnitude = velocity.abs().toStringAsFixed(1);
+        explanationText = "Tu ritmo de ventas disminuyó un $magnitude% en la última quincena.\nEl motor ha ajustado la proyección de forma conservadora.\nClave: Es el momento ideal para lanzar una promoción flash y reactivar las ventas.";
         actionText = "Lanza una oferta desde Promociones o arma un pack con productos de baja rotación.";
       } else {
         explanationText = "Tu ritmo de ventas es estable. El motor usa tus últimos $n días de historial para proyectar el próximo mes.\nClave: Estabilidad es buena, pero revisa si hay productos estancados que puedas liquidar.";
@@ -190,7 +260,7 @@ class PredictiveService {
         actionText: actionText,
         totalSnapshots: n,
         dailyAverageSales: avgDailySales,
-        trendSlopeM: m,
+        trendSlopeM: effectiveSlope,
         interceptB: b,
         previous15Sales: prev15Total,
         current15Sales: last15Total,
@@ -198,11 +268,12 @@ class PredictiveService {
         conservativeEstimate: conservativeEstimate,
         expectedEstimate: expectedEstimate,
         optimisticEstimate: optimisticEstimate,
+        isInitialPhase: isInitialPhase,
+        historicalProfitMargin: historicalProfitMargin,
       );
       
     } catch (e) {
       debugPrint("Error in generatePrediction: $e");
-      // Devolver data por defecto en caso de error  
       return null;
     }
   }

@@ -21,6 +21,7 @@ import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/profile/widgets/notifications/notification_filter_bar.dart';
 import 'package:app_movil/features/profile/widgets/notifications/notification_item_card.dart';
 import 'package:app_movil/features/profile/widgets/notifications/notification_empty_state.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -207,6 +208,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) => _buildStockKardexModal(ctx, notif, targetProduct, historial, isDark),
@@ -215,15 +217,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
 
   Widget _buildStockKardexModal(BuildContext ctx, NotificationModel notif, Product product, List<Map<String,dynamic>> historial, bool isDark) {
      int stockTotal = product.presentaciones.fold(0, (sum, p) => sum + p.stockActual);
+     final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
      
-     return Container(
-        height: MediaQuery.of(ctx).size.height * 0.85,
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF23232F) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: Column(
+     return SafeArea(
+       top: false,
+       bottom: true,
+       child: Container(
+          height: MediaQuery.of(ctx).size.height * 0.85,
+          padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom + 8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF23232F) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: Column(
            crossAxisAlignment: CrossAxisAlignment.start,
            children: [
              Center(child: Container(width: 50, height: 6, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
@@ -248,6 +254,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
              const SizedBox(height: 12),
              Expanded(
                 child: historial.isEmpty ? Center(child: Text("No hay movimientos recientes", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[700]))) : ListView.builder(
+                   padding: const EdgeInsets.only(bottom: kModalScrollBottomClearance),
+                   physics: const BouncingScrollPhysics(),
                    itemCount: historial.length,
                    itemBuilder: (c, i) {
                       final item = historial[i];
@@ -279,7 +287,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                 )
              )
            ],
-        )
+        ),
+       ),
      );
   }
 
@@ -539,75 +548,84 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF23232F) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: Container(width: 50, height: 6, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
-              const SizedBox(height: 24),
-              Row(
+      builder: (ctx) {
+        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+        return SafeArea(
+          top: false,
+          bottom: true,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom + 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF23232F) : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            ),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, shape: BoxShape.circle),
-                    child: Icon(Icons.notifications_active_rounded, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 28),
+                  Center(child: Container(width: 50, height: 6, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
+                  const SizedBox(height: 24),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, shape: BoxShape.circle),
+                        child: Icon(Icons.notifications_active_rounded, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(notif.title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5)), 
+                            const SizedBox(height: 4),
+                            Text("Recibido el ${DateFormat('dd/MM/yyyy a las HH:mm').format(notif.createdAt)}", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600], fontWeight: FontWeight.w500)), 
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(notif.title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5)), 
-                        const SizedBox(height: 4),
-                        Text("Recibido el ${DateFormat('dd/MM/yyyy a las HH:mm').format(notif.createdAt)}", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600], fontWeight: FontWeight.w500)), 
-                      ],
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF14141C) : Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200)
+                    ),
+                    child: Text(
+                      notif.message, 
+                      style: TextStyle(fontSize: 16, height: 1.6, color: isDark ? Colors.grey[300] : Colors.grey[800]),
                     ),
                   ),
+                  const SizedBox(height: 30),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 55,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200], 
+                        foregroundColor: isDark ? Colors.white : Colors.black87,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0
+                      ),
+                      child: const Text("CERRAR DETALLE", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+                    ),
+                  )
                 ],
               ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(20),
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF14141C) : Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200)
-                ),
-                child: Text(
-                  notif.message, 
-                  style: TextStyle(fontSize: 16, height: 1.6, color: isDark ? Colors.grey[300] : Colors.grey[800]),
-                ),
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200], 
-                    foregroundColor: isDark ? Colors.white : Colors.black87,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0
-                  ),
-                  child: const Text("CERRAR DETALLE", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
-                ),
-              )
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -636,19 +654,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF23232F) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      builder: (ctx) {
+        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+        return SafeArea(
+          top: false,
+          bottom: true,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom + 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF23232F) : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            ),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               Center(child: Container(width: 50, height: 6, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
               const SizedBox(height: 24),
               Row(
@@ -765,13 +790,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                   onPressed: () => Navigator.pop(ctx),
                   child: Text("Cerrar", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.bold)),
                 ),
-              )
+              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
       ),
     );
-  }
+  },
+);
+}
 
 
 }

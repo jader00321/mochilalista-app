@@ -18,6 +18,8 @@ import 'package:app_movil/features/catalog/widgets/variants/variant_reorder_moda
 import 'package:app_movil/features/catalog/widgets/variants/variant_section_header.dart';
 import 'package:app_movil/core/widgets/product_optional_info.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/features/catalog/widgets/form/product_stock_strategy_selector.dart';
+import 'package:app_movil/core/widgets/presentation_card/presentation_math_engine.dart';
 
 class ProductEditScreen extends StatefulWidget {
   final Product productToEdit;
@@ -35,6 +37,11 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   final TextEditingController _descCtrl = TextEditingController();
   final TextEditingController _imgUrlCtrl = TextEditingController();
   final TextEditingController _parentBarcodeCtrl = TextEditingController();
+
+  late String _modoStock;
+  late final TextEditingController _sharedStockCtrl;
+  late final TextEditingController _sharedIngresoCtrl;
+  late final TextEditingController _baseCostCtrl;
 
   int? _selectedCategoryId;
   String? _selectedCategoryName;
@@ -55,10 +62,28 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   @override
   void initState() {
     super.initState();
+    _modoStock = widget.productToEdit.modoStock;
+    _sharedStockCtrl = TextEditingController(text: widget.productToEdit.stockCompartido.toString());
+    _sharedIngresoCtrl = TextEditingController(text: "0");
+    _sharedIngresoCtrl.addListener(() {
+      final ingreso = int.tryParse(_sharedIngresoCtrl.text) ?? 0;
+      final originalStock = widget.productToEdit.stockCompartido;
+      _sharedStockCtrl.text = (originalStock + ingreso).toString();
+      _onFormChangedWithDebounce();
+    });
+    _baseCostCtrl = TextEditingController(
+      text: widget.productToEdit.costoBase > 0
+          ? widget.productToEdit.costoBase.toStringAsFixed(2)
+          : '0.00',
+    );
+    _baseCostCtrl.addListener(_onBaseCostChanged);
+
     _nameCtrl.addListener(_onFormChangedWithDebounce);
     _descCtrl.addListener(_onFormChangedWithDebounce);
     _imgUrlCtrl.addListener(_onFormChangedWithDebounce);
     _parentBarcodeCtrl.addListener(_onFormChangedWithDebounce);
+    _sharedStockCtrl.addListener(_onFormChangedWithDebounce);
+    _baseCostCtrl.addListener(_onFormChangedWithDebounce);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final invProv = Provider.of<InventoryProvider>(context, listen: false);
@@ -126,6 +151,10 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     _descCtrl.removeListener(_onFormChangedWithDebounce);
     _imgUrlCtrl.removeListener(_onFormChangedWithDebounce);
     _parentBarcodeCtrl.removeListener(_onFormChangedWithDebounce);
+    _sharedStockCtrl.removeListener(_onFormChangedWithDebounce);
+    _baseCostCtrl.removeListener(_onFormChangedWithDebounce);
+    _baseCostCtrl.removeListener(_onBaseCostChanged);
+    _sharedIngresoCtrl.dispose();
     for (var map in _presentationControllers) {
       _detachPresentationListeners(map);
       ProductControllerFactory.disposeControllerMap(map);
@@ -134,7 +163,80 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     _descCtrl.dispose();
     _imgUrlCtrl.dispose();
     _parentBarcodeCtrl.dispose();
+    _sharedStockCtrl.dispose();
+    _baseCostCtrl.dispose();
     super.dispose();
+  }
+
+  void _onBaseCostChanged() {
+    final baseCost = double.tryParse(_baseCostCtrl.text) ?? 0.0;
+    for (var c in _presentationControllers) {
+      c['costoBaseUnitario'] = baseCost;
+      final bool isShared = _modoStock == 'COMPARTIDO' ||
+          (_modoStock == 'MIXTO' && c['usaStockCompartido'] == true);
+      if (isShared) {
+        final factor = int.tryParse((c['unidadesVenta'] as TextEditingController).text) ?? 1;
+        final safeFactor = factor <= 0 ? 1 : factor;
+        final newCost = baseCost * safeFactor;
+        (c['costoPres'] as TextEditingController).text = newCost.toStringAsFixed(2);
+        final margen = double.tryParse((c['margen'] as TextEditingController).text) ?? 1.35;
+        (c['precioVenta'] as TextEditingController).text = (newCost * margen).toStringAsFixed(2);
+      }
+    }
+    _onFormChangedWithDebounce();
+  }
+
+  void _onStrategyChanged(String newStrategy) {
+    if (_modoStock == newStrategy) return;
+    HapticFeedback.selectionClick();
+    _recordUndoSnapshot();
+    final baseCost = double.tryParse(_baseCostCtrl.text) ?? 0.0;
+    PresentationMathEngine.applyGlobalStrategyChange(
+      controllers: _presentationControllers,
+      newStrategy: newStrategy,
+      baseCost: baseCost,
+      isEditMode: true,
+    );
+    setState(() {
+      _modoStock = newStrategy;
+      _onFormChangedWithDebounce();
+    });
+  }
+
+  void _createUnitVariantAutomatically() {
+    HapticFeedback.mediumImpact();
+    _recordUndoSnapshot();
+    final baseCost = double.tryParse(_baseCostCtrl.text) ?? 0.0;
+    final margen = 1.35;
+    final pVenta = baseCost * margen;
+    final String newId = UniqueKey().toString();
+    final newMap = ProductControllerFactory.createNewControllerMap(
+      id: newId,
+      isEditMode: true,
+      specificName: "Unidad",
+      unidadVenta: "Unidad",
+      unidadesVenta: "1",
+      costoPres: baseCost.toStringAsFixed(2),
+      margen: margen.toStringAsFixed(2),
+      precioVenta: pVenta.toStringAsFixed(2),
+      stockInicial: "0",
+      stockFinal: _sharedStockCtrl.text,
+      usaStockCompartido: true,
+    );
+    newMap['costoBaseUnitario'] = baseCost;
+    _attachPresentationListeners(newMap);
+    _presentationKeys[newId] = GlobalKey();
+    setState(() {
+      _presentationControllers.add(newMap);
+      _onFormChangedWithDebounce();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("✨ Variante 'Unidad (x1)' agregada al pool compartido"),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void _captureInitialSnapshot() {
@@ -603,6 +705,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       selectedCategoryName: _selectedCategoryName,
       controllers: _presentationControllers,
       idsToDelete: _idsToDelete,
+      modoStock: _modoStock,
+      stockCompartido: int.tryParse(_sharedStockCtrl.text.trim()) ?? 0,
+      costoBase: double.tryParse(_baseCostCtrl.text.trim()) ?? 0.0,
     );
     if (success && mounted) {
       _initialSnapshot = null;
@@ -754,7 +859,20 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   imgCtrl: _imgUrlCtrl,
                   barcodeCtrl: _parentBarcodeCtrl,
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 16),
+                ProductStockStrategySelector(
+                  selectedStrategy: _modoStock,
+                  onStrategyChanged: _onStrategyChanged,
+                  sharedStockController: _sharedStockCtrl,
+                  baseCostController: _baseCostCtrl,
+                  controllers: _presentationControllers,
+                  isDark: isDark,
+                  isEditMode: true,
+                  originalBaseStock: widget.productToEdit.stockCompartido,
+                  sharedIngresoController: _sharedIngresoCtrl,
+                  onAutoCreateUnitVariant: _createUnitVariantAutomatically,
+                ),
+                const SizedBox(height: 20),
                 VariantSectionHeader(
                   isDark: isDark,
                   allExpanded: _allExpanded,
@@ -795,6 +913,9 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   isDark: isDark,
                   providerListForDropdown: provider.providers,
                   deferredProviderNames: _deferredProviderNames,
+                  modoStock: _modoStock,
+                  sharedStockCtrl: _sharedStockCtrl,
+                  baseCostCtrl: _baseCostCtrl,
                   deletePresentation: (idx, dark) => _deletePresentation(idx, dark),
                   handleCreateLeftover: _handleCreateLeftover,
                   invalidateLeftover: _invalidateLeftover,

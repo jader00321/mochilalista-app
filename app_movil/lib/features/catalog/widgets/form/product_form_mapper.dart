@@ -9,6 +9,8 @@ class ProductFormMapper {
     String? defaultDesc,
     String? defaultImg,
     String? defaultBarcode,
+    String modoStock = 'INDEPENDIENTE',
+    int stockCompartido = 0,
   }) {
     final List<ProductPresentation> presentacionesFinales = [];
     final pDesc = defaultDesc?.trim() ?? "";
@@ -44,6 +46,15 @@ class ProductFormMapper {
           ) ??
           0;
       int stockBaseGuardar = stockVisual * factorVenta;
+
+      bool isShared = false;
+      if (modoStock == 'COMPARTIDO') {
+        isShared = true;
+      } else if (modoStock == 'MIXTO') {
+        isShared = c['usaStockCompartido'] == true;
+      }
+
+      int finalStockBase = isShared ? stockCompartido : stockBaseGuardar;
 
       String umpC = (c['umpCompra'] as TextEditingController).text.trim();
       int loteC = int.tryParse(
@@ -100,6 +111,17 @@ class ProductFormMapper {
       final int? rawProvId = c['providerId'] as int?;
       final bool isProvDeferred = rawProvId != null && rawProvId < 0;
 
+      int? cupoFinal;
+      if (isShared) {
+        final maxFisico = factorVenta > 0 ? (stockCompartido ~/ factorVenta) : stockCompartido;
+        if (c['cupoMaximoVariante'] != null) {
+          final cVal = (c['cupoMaximoVariante'] as num).toInt();
+          cupoFinal = cVal <= maxFisico ? cVal : maxFisico;
+        } else if (stockVisual > 0 && stockVisual < maxFisico) {
+          cupoFinal = stockVisual;
+        }
+      }
+
       presentacionesFinales.add(
         ProductPresentation(
           id: c['db_id'] as int?,
@@ -109,7 +131,9 @@ class ProductFormMapper {
           costoUnitarioCalculado: costoPresFinal,
           factorGananciaVenta: margen,
           precioVentaFinal: pVenta,
-          stockActual: stockBaseGuardar,
+          stockActual: finalStockBase,
+          usaStockCompartido: isShared,
+          cupoMaximoVariante: isShared ? cupoFinal : null,
           umpCompra: umpC.isEmpty ? null : umpC,
           cantidadUmpComprada: cantC > 0 ? cantC : null,
           totalPagoLote: totalP > 0 ? totalP : null,

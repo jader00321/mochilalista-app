@@ -101,7 +101,7 @@ void main() {
       expect(find.text("30 Días"), findsOneWidget);
       expect(find.text("6 Meses"), findsOneWidget);
       expect(find.text("Todo", skipOffstage: false), findsOneWidget);
-      expect(find.text("Personalizado 📅", skipOffstage: false), findsOneWidget);
+      expect(find.text("Personalizado", skipOffstage: false), findsOneWidget);
 
       // Periodo por defecto es 6 Meses
       expect(analyticsProv.selectedPeriod, equals(AnalyticsPeriod.sixMonths));

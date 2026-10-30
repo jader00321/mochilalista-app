@@ -4,6 +4,7 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/services/auto_categorization_service.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class AutoCategorizationModal extends StatefulWidget {
   final bool isDark;
@@ -13,6 +14,7 @@ class AutoCategorizationModal extends StatefulWidget {
   static Future<void> show(BuildContext context, {required bool isDark}) {
     return showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => AutoCategorizationModal(isDark: isDark),
@@ -228,7 +230,8 @@ class _AutoCategorizationModalState extends State<AutoCategorizationModal> {
                           // List
                           Expanded(
                             child: ListView.separated(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, kModalScrollBottomClearance),
+                              physics: const BouncingScrollPhysics(),
                               itemCount: _suggestions.length,
                               separatorBuilder: (_, __) => const SizedBox(height: 8),
                               itemBuilder: (ctx, i) {
@@ -328,33 +331,38 @@ class _AutoCategorizationModalState extends State<AutoCategorizationModal> {
 
           // Bottom action button
           if (_suggestions.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: (_isSaving || selectedCount == 0) ? null : _apply,
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.check, size: 20),
-                  label: Text(
-                    _isSaving
-                        ? "Aplicando..."
-                        : "Aplicar a $selectedCount producto(s)",
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            Builder(
+              builder: (ctx) {
+                final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(20, 10, 20, effectiveBottom + 4),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: (_isSaving || selectedCount == 0) ? null : _apply,
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.check, size: 20),
+                      label: Text(
+                        _isSaving
+                            ? "Aplicando..."
+                            : "Aplicar a $selectedCount producto(s)",
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: widget.isDark ? Colors.blue[400] : Colors.blue[800],
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: widget.isDark ? Colors.blue[400] : Colors.blue[800],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-              ),
+                );
+              },
             ),
         ],
       ),

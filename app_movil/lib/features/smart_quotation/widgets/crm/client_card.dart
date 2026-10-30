@@ -60,6 +60,7 @@ class ClientCard extends StatelessWidget {
   void _openPaymentModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => PaymentEntryModal(client: client),

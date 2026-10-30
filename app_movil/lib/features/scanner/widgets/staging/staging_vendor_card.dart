@@ -21,6 +21,7 @@ class StagingVendorCard extends StatelessWidget {
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _LocalProviderSearch(
@@ -377,6 +378,8 @@ class _LocalProviderSearchState extends State<_LocalProviderSearch> {
           const SizedBox(height: 16),
           Expanded(
             child: ListView.separated(
+              padding: const EdgeInsets.only(bottom: kModalScrollBottomClearance),
+              physics: const BouncingScrollPhysics(),
               itemCount: filtered.length + 1,
               separatorBuilder: (_, __) => Divider(
                 height: 1,

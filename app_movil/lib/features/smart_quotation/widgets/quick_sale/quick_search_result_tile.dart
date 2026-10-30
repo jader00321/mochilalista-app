@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 
 class QuickSearchResultTile extends StatelessWidget {
@@ -19,12 +20,16 @@ class QuickSearchResultTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
+    QuickSaleProvider? quickProv;
+    try {
+      quickProv = Provider.of<QuickSaleProvider>(context);
+    } catch (_) {}
     final String brandName = invProv.getBrandName(item.product.marcaId);
     
-    int factor = item.presentation.unidadesPorVenta;
-    if (factor <= 0) factor = 1;
-    final int stock = item.presentation.stockActual ~/ factor;
-    final bool isOut = stock <= 0;
+    final int remainingStock = quickProv != null 
+        ? quickProv.getRemainingVendibleStock(item) 
+        : item.displayStock;
+    final bool isOut = remainingStock <= 0;
     final bool isPublic = item.presentation.estado == 'publico';
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -53,7 +58,12 @@ class QuickSearchResultTile extends StatelessWidget {
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text("No puedes vender un producto sin stock", style: TextStyle(fontWeight: FontWeight.bold)), 
+                content: Text(
+                  item.hasSharedStock
+                      ? "Has alcanzado la capacidad máxima del Pool Compartido en tu carrito."
+                      : "No puedes vender un producto sin stock disponible.",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ), 
                 backgroundColor: Colors.red[800],
                 behavior: SnackBarBehavior.floating,
               )
@@ -175,7 +185,32 @@ class QuickSearchResultTile extends StatelessWidget {
                   else
                     FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text("$stock ${item.presentation.unidadVenta ?? 'Unidad'} en stock", style: TextStyle(color: stock <= 5 ? (isDark ? Colors.orange[300] : Colors.orange) : (isDark ? Colors.green[400] : Colors.green[700]), fontWeight: FontWeight.bold, fontSize: 13)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            "$remainingStock ${item.presentation.unidadVenta ?? 'Unidad'} disp.",
+                            style: TextStyle(
+                              color: remainingStock <= 5
+                                  ? (isDark ? Colors.orange[300] : Colors.orange)
+                                  : (isDark ? Colors.green[400] : Colors.green[700]),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          if (item.hasSharedStock) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              "🔗 Pool: ${quickProv != null ? quickProv.getRemainingPoolStock(item.product.id, item.product.stockCompartido > 0 ? item.product.stockCompartido : item.presentation.stockActual) : (item.product.stockCompartido > 0 ? item.product.stockCompartido : item.presentation.stockActual)} u. base",
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.teal[300] : Colors.teal[700],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                 ],
               )

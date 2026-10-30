@@ -59,6 +59,8 @@ class ProductControllerFactory {
     int? stockBaseOriginal,
     double? costoBaseOriginal,
     double? precioOfertaExacto,
+    bool usaStockCompartido = false,
+    int? cupoMaximoVariante,
   }) {
     final map = <String, dynamic>{
       'id': id,
@@ -70,6 +72,8 @@ class ProductControllerFactory {
       'isDefault': isDefault,
       'estado': estado,
       'providerId': providerId,
+      'usaStockCompartido': usaStockCompartido,
+      'cupoMaximoVariante': cupoMaximoVariante,
 
       'specific': TextEditingController(text: specificName),
       'unidadVenta': TextEditingController(text: unidadVenta),
@@ -150,6 +154,8 @@ class ProductControllerFactory {
       stockBaseOriginal: source['stockBaseOriginal'],
       costoBaseOriginal: source['costoBaseOriginal'],
       precioOfertaExacto: source['precioOfertaExacto'] as double?,
+      usaStockCompartido: source['usaStockCompartido'] == true,
+      cupoMaximoVariante: source['cupoMaximoVariante'] as int?,
     );
     map['activeRoundingTarget'] = source['activeRoundingTarget'] as double?;
     map['preRoundedPrice'] = source['preRoundedPrice'] as String?;

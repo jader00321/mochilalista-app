@@ -31,6 +31,7 @@ class QuickActionsBottomSheet extends StatelessWidget {
   }) {
     return showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -176,7 +177,7 @@ class QuickActionsBottomSheet extends StatelessWidget {
             _buildListTile(
               icon: Icons.delete_outline, 
               color: isDark ? Colors.red[400]! : Colors.red, 
-              title: "Eliminar Definitivamente", 
+              title: "Eliminar cotización / borrador", 
               subtitle: null,
               isDark: isDark, 
               onTap: () {

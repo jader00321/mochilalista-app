@@ -6,6 +6,7 @@ import 'package:app_movil/core/providers/theme_provider.dart';
 import 'package:app_movil/features/profile/providers/team_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/profile/models/team_management_models.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class TeamMembersTab extends StatelessWidget {
   const TeamMembersTab({super.key});
@@ -99,73 +100,81 @@ class TeamMembersTab extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
-          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+          final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+            context,
+            minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+          );
           return Container(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+            padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF14141C) : Colors.white,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("El Radar (Añadir Directo)", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                const SizedBox(height: 10),
-                Text("Ingresa el 'Radar ID' del usuario para añadirlo sin enviar código.", style: TextStyle(color: Colors.grey[500])),
-                const SizedBox(height: 20),
-                
-                TextField(
-                  controller: codeCtrl,
-                  textCapitalization: TextCapitalization.characters,
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18, letterSpacing: 2),
-                  decoration: InputDecoration(
-                    labelText: "ID de Radar (Ej: ML-9A2KF8)",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    prefixIcon: const Icon(Icons.radar),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("El Radar (Añadir Directo)", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 10),
+                  Text("Ingresa el 'Radar ID' del usuario para añadirlo sin enviar código.", style: TextStyle(color: Colors.grey[500])),
+                  const SizedBox(height: 20),
+                  
+                  TextField(
+                    controller: codeCtrl,
+                    textCapitalization: TextCapitalization.characters,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18, letterSpacing: 2),
+                    decoration: InputDecoration(
+                      labelText: "ID de Radar (Ej: ML-9A2KF8)",
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.radar),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                
-                DropdownButtonFormField<String>(
-                  initialValue: selectedRole,
-                  decoration: InputDecoration(
-                    labelText: "Rol a otorgar",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  const SizedBox(height: 20),
+                  
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedRole,
+                    decoration: InputDecoration(
+                      labelText: "Rol a otorgar",
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: "trabajador", child: Text("Trabajador / Cajero")),
+                      DropdownMenuItem(value: "cliente_comunidad", child: Text("Cliente de Comunidad")),
+                    ],
+                    onChanged: (v) => setState(() => selectedRole = v!),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: "trabajador", child: Text("Trabajador / Cajero")),
-                    DropdownMenuItem(value: "cliente_comunidad", child: Text("Cliente de Comunidad")),
-                  ],
-                  onChanged: (v) => setState(() => selectedRole = v!),
-                ),
-                const SizedBox(height: 30),
-                
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: teamProv.isLoading ? null : () async {
-                      if (codeCtrl.text.trim().isEmpty) return;
-                      final ok = await teamProv.addUserDirectly(auth.activeBusinessId!, codeCtrl.text.trim(), selectedRole);
-                      if (ok && ctx.mounted) {
-                        Navigator.pop(ctx);
-                        CustomSnackBar.show(context, message: "Usuario añadido con éxito.", isError: false);
-                      } else if (ctx.mounted) {
-                        CustomSnackBar.show(context, message: teamProv.errorMessage, isError: true);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                    child: teamProv.isLoading 
-                        ? const CircularProgressIndicator(color: Colors.white) 
-                        : const Text("Añadir al Equipo", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 30),
+                  
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: teamProv.isLoading ? null : () async {
+                        if (codeCtrl.text.trim().isEmpty) return;
+                        final ok = await teamProv.addUserDirectly(auth.activeBusinessId!, codeCtrl.text.trim(), selectedRole);
+                        if (ok && ctx.mounted) {
+                          Navigator.pop(ctx);
+                          CustomSnackBar.show(context, message: "Usuario añadido con éxito.", isError: false);
+                        } else if (ctx.mounted) {
+                          CustomSnackBar.show(context, message: teamProv.errorMessage, isError: true);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      child: teamProv.isLoading 
+                          ? const CircularProgressIndicator(color: Colors.white) 
+                          : const Text("Añadir al Equipo", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
                   ),
-                )
-              ],
+                  const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
+                ],
+              ),
             ),
           );
         }
@@ -190,13 +199,18 @@ class TeamMembersTab extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
+          final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+            context,
+            minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+          );
           return Container(
             height: MediaQuery.of(context).size.height * 0.85,
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF14141C) : Colors.white,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -216,6 +230,7 @@ class TeamMembersTab extends StatelessWidget {
 
                 Expanded(
                   child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     child: Column(
                       children: [
                         // Controles Maestros
@@ -223,8 +238,26 @@ class TeamMembersTab extends StatelessWidget {
                           initialValue: currentStatus,
                           decoration: InputDecoration(labelText: "Estado de Acceso", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                           items: const [
-                            DropdownMenuItem(value: "activo", child: Text("🟢 Activo (Permitido)")),
-                            DropdownMenuItem(value: "suspendido", child: Text("🔴 Suspendido (Expulsado)")),
+                            DropdownMenuItem(
+                              value: "activo",
+                              child: Row(
+                                children: [
+                                  Icon(Icons.circle, color: Colors.green, size: 12),
+                                  SizedBox(width: 8),
+                                  Text("Activo (Permitido)"),
+                                ],
+                              ),
+                            ),
+                            DropdownMenuItem(
+                              value: "suspendido",
+                              child: Row(
+                                children: [
+                                  Icon(Icons.circle, color: Colors.red, size: 12),
+                                  SizedBox(width: 8),
+                                  Text("Suspendido (Expulsado)"),
+                                ],
+                              ),
+                            ),
                           ],
                           onChanged: (v) => setState(() => currentStatus = v!),
                         ),
@@ -254,7 +287,8 @@ class TeamMembersTab extends StatelessWidget {
                               _buildPermSwitch("Administrar Clientes", "can_manage_clients", currentPerms, setState),
                               _buildPermSwitch("Anular Ventas", "can_void_sales", currentPerms, setState),
                             ],
-                          )
+                          ),
+                        const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
                       ],
                     ),
                   ),

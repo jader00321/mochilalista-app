@@ -82,7 +82,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
             if (expanded) _autoScrollTo(_keyStock);
           },
           tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-          title: Text("📦 Gestión de Stock", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700], letterSpacing: 0.5)),
+          title: Text("Gestión de Stock", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700], letterSpacing: 0.5)),
           leading: Icon(Icons.inventory, color: widget.isDark ? Colors.green[300] : Colors.green[700]),
           children: [
             Padding(
@@ -321,36 +321,9 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
     if (completas >= 1 && sobrante == 0) return const SizedBox.shrink();
 
     // Caso 2: DÉFICIT REAL (completas == 0, totalBase < factor)
+    // REGLA 1: Sin bypass. El usuario DEBE solucionarlo obligatoriamente dentro del modal.
     if (completas == 0 && totalBase > 0) {
       int deficit = factor - totalBase;
-
-      if (widget.variant.allowDeficitApproved) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: widget.isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: widget.isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.shade200),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.check_circle_outline, color: widget.isDark ? Colors.blue[300] : Colors.blue[700], size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  "✅ Autorizado: Registro en 0 $unidadActiva ($totalBase unid. base acumuladas para futuras compras).",
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.blue[200] : Colors.blue[900]),
-                ),
-              ),
-              TextButton(
-                onPressed: () => updateState(() => widget.variant.allowDeficitApproved = false),
-                child: const Text("Modificar", style: TextStyle(fontSize: 11)),
-              ),
-            ],
-          ),
-        );
-      }
 
       return Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -369,7 +342,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    "🚨 Stock Insuficiente: No alcanza para 1 $unidadActiva",
+                    "Stock Insuficiente: No alcanza para 1 $unidadActiva",
                     style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.red[300] : Colors.red[700], fontSize: 13),
                   ),
                 ),
@@ -395,7 +368,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                     _onUnidadVentaChanged();
                   },
                   icon: const Icon(Icons.flash_on, size: 14),
-                  label: const Text("⚡ Adaptar a Unidad (x1)", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  label: const Text("Adaptar a Unidad (x1)", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue[800],
                     foregroundColor: Colors.white,
@@ -408,18 +381,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                 OutlinedButton.icon(
                   onPressed: () => _completarLoteEnModal(),
                   icon: const Icon(Icons.edit, size: 14),
-                  label: Text("✏️ Completar lote ($factor unid.)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                    minimumSize: const Size(0, 32),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-                // Opción 3: Autorizar registro en 0
-                OutlinedButton.icon(
-                  onPressed: () => updateState(() => widget.variant.allowDeficitApproved = true),
-                  icon: const Icon(Icons.lock_open, size: 14),
-                  label: const Text("🔓 Autorizar registro en 0", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  label: Text("Completar lote ($factor unid.)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
                     minimumSize: const Size(0, 32),
@@ -450,12 +412,12 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
         ),
         child: Row(
           children: [
-            Icon(Icons.bookmark_added_outlined, color: widget.isDark ? Colors.green[300] : Colors.green[700], size: 20),
+            Icon(Icons.inventory_2_outlined, color: widget.isDark ? Colors.teal[300] : Colors.teal[700], size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                "✅ Reserva base autorizada: $completas ${_ComparativeUpdateModalState._formatUnitLabel(completas, unidadActiva)} vendible + $sobrante unid. en reserva base.",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[200] : Colors.green[900]),
+                ComparativeUpdateModal.formatAccumulationBadgeText(completas, unidadActiva, sobrante),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.teal[200] : Colors.teal[900]),
               ),
             ),
             TextButton(
@@ -484,7 +446,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  "⚠️ Atención: Sobran $sobrante unidades base sueltas",
+                  "Atención: Sobran $sobrante unidades base sueltas",
                   style: TextStyle(fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[300] : Colors.orange[700], fontSize: 13),
                 ),
               ),
@@ -492,12 +454,12 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
           ),
           const SizedBox(height: 8),
           Text(
-            "Con las $totalBase unidades base totales ($stockBD actuales + $nuevoIngreso ingreso) se completa $completas ${_ComparativeUpdateModalState._formatUnitLabel(completas, unidadActiva)}, pero quedan $sobrante unidades sueltas que no alcanzan para otra $unidadActiva.",
+            "Con las $totalBase unidades base totales ($stockBD actuales + $nuevoIngreso ingreso) se completa ${_ComparativeUpdateModalState._formatUnitLabel(completas, unidadActiva)}, pero quedan $sobrante unidades sueltas que no alcanzan para otra $unidadActiva.",
             style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], height: 1.3),
           ),
           const SizedBox(height: 12),
 
-          // Botón 1 Recomendado: Enviar a variante Unidad (x1)
+          // Botón 1: Enviar a variante Unidad (x1) (Guarda + Crea + Cierra modal + AutoScroll)
           SizedBox(
             width: double.infinity,
             height: 38,
@@ -505,11 +467,38 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
               onPressed: () => _crearVarianteSobrante(),
               icon: const Icon(Icons.add_circle_outline, size: 16, color: Colors.white),
               label: Text(
-                "➕ Enviar las $sobrante unid. a variante 'Unidad (x1)'",
+                "Enviar las $sobrante unid. a variante 'Unidad (x1)'",
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange[700],
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Botón 2: Activar Stock Compartido (Pool único)
+          SizedBox(
+            width: double.infinity,
+            height: 36,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                _saveModalDataToVariant();
+                widget.provider.activateSharedStockForGroup(widget.group.uuidTemporal, widget.variant.uuidTemporal);
+                _wasConfirmed = true;
+                widget.onConfirm();
+                Navigator.of(context).pop();
+              },
+              icon: const Icon(Icons.all_inclusive_rounded, size: 16),
+              label: const Text(
+                "Activar Stock Compartido (Pool único)",
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: widget.isDark ? Colors.tealAccent : Colors.teal.shade800,
+                side: BorderSide(color: widget.isDark ? Colors.tealAccent : Colors.teal.shade400),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
@@ -521,9 +510,9 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
             accentColor: widget.isDark ? Colors.orange[300]! : Colors.orange[700]!,
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
-          // Botón 3: Conservar en reserva base
+          // Botón 3: Acumular para próxima compra
           SizedBox(
             width: double.infinity,
             height: 34,
@@ -531,7 +520,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
               onPressed: () => updateState(() => widget.variant.allowLeftoverInReserve = true),
               icon: Icon(Icons.inventory_2_outlined, size: 15, color: widget.isDark ? Colors.orange[300] : Colors.orange[800]),
               label: Text(
-                "📥 Conservar las $totalBase unid. en esta variante ($completas ${_ComparativeUpdateModalState._formatUnitLabel(completas, unidadActiva)} + $sobrante en reserva)",
+                "Acumular las $sobrante unid. para tu próxima compra",
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[300] : Colors.orange[800]),
               ),
               style: OutlinedButton.styleFrom(
@@ -562,7 +551,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
             Icon(Icons.sync_alt, size: 14, color: accentColor),
             const SizedBox(width: 4),
             Text(
-              "🔄 Divisores Exactos sugeridos (1 solo toque):",
+              "Divisores Exactos sugeridos (1 solo toque):",
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -576,10 +565,13 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
           spacing: 6,
           runSpacing: 6,
           children: divisores.map((d) {
-            String unitName = UnitCatalogService.resolveFromFactor(d) ?? "Pack (x$d)";
+            String? catalogUnit = UnitCatalogService.resolveFromFactor(d);
+            String baseUnit = catalogUnit ?? "Pack";
             int pkgs = totalBase ~/ d;
-            String pkgsLabel = _ComparativeUpdateModalState._formatUnitLabel(pkgs, unitName);
-            String chipLabel = "$unitName (x$d) → $pkgsLabel";
+            String pkgsLabel = _ComparativeUpdateModalState._formatUnitLabel(pkgs, baseUnit);
+            String chipLabel = catalogUnit != null 
+                ? "$catalogUnit (x$d) → $pkgsLabel" 
+                : "Pack (x$d) → $pkgsLabel";
 
             return ActionChip(
               avatar: CircleAvatar(
@@ -595,7 +587,7 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
               ),
               onPressed: () {
-                _uVentaCtrl.text = unitName;
+                _uVentaCtrl.text = catalogUnit ?? "Pack (x$d)";
                 _uVentaFactorCtrl.text = d.toString();
                 widget.variant.updateUnidadVenta = true;
                 widget.variant.resetStockAuthorizationFlags();

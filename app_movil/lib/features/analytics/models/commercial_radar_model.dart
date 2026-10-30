@@ -27,45 +27,79 @@ class CommercialNewsItem {
     required this.region,
   });
 
-  /// Titular sanitizado sin emojis invasivos ni caracteres basura de RSS
-  String get cleanTitle {
+  /// Sanitiza cualquier texto removiendo emojis Unicode
+  static String sanitizeNoEmoji(String text) {
     final emojiRegex = RegExp(
       r'[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E0}-\u{1F1FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}]',
       unicode: true,
     );
-    String t = title
+    String t = text
         .replaceAll(emojiRegex, '')
-        .replaceAll(RegExp(r'[🔴🔵👇🚨⚠️💥📢🔥📌⚡️🌧🌩⛈🌦⛅☀️🌊]'), '')
+        .replaceAll(RegExp(r'[🔴🔵👇🚨⚠️💥📢🔥📌⚡️🌧🌩⛈🌦⛅☀️🌊🏷️📦💰📋🔗🔖]'), '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
     if (t.startsWith(':') || t.startsWith('-')) {
       t = t.substring(1).trim();
     }
+    return t;
+  }
+
+  /// Titular sanitizado sin emojis invasivos ni caracteres basura de RSS
+  String get cleanTitle {
+    final t = sanitizeNoEmoji(title);
     return t.isEmpty ? title : t;
   }
 
-  /// Antigüedad relativa en lenguaje natural en español
+  /// Resumen limpio sin emojis
+  String get cleanSummary {
+    final s = sanitizeNoEmoji(summary);
+    return s.isEmpty ? summary : s;
+  }
+
+  /// Impacto limpio sin emojis
+  String get cleanImpact {
+    final imp = sanitizeNoEmoji(impactAnalysis);
+    return imp.isEmpty ? impactAnalysis : imp;
+  }
+
+  /// Recomendación limpia sin emojis
+  String get cleanAdvice {
+    final adv = sanitizeNoEmoji(actionableAdvice);
+    return adv.isEmpty ? actionableAdvice : adv;
+  }
+
+  /// Antigüedad relativa compacta para evitar saltos o desbordamientos en pantallas móviles
   String get timeAgoFormatted {
     final diff = DateTime.now().difference(publishedAt);
     if (diff.isNegative || diff.inMinutes < 5) {
-      return 'Hace unos instantes';
+      return 'Ahora';
     } else if (diff.inMinutes < 60) {
-      return 'Hace ${diff.inMinutes} min';
+      return 'Hace ${diff.inMinutes}m';
     } else if (diff.inHours < 24) {
-      return 'Hace ${diff.inHours} ${diff.inHours == 1 ? 'hora' : 'horas'}';
+      return 'Hace ${diff.inHours}h';
     } else if (diff.inDays < 2) {
       return 'Ayer';
     } else if (diff.inDays < 7) {
-      return 'Hace ${diff.inDays} días';
+      return 'Hace ${diff.inDays}d';
     } else {
       return DateFormat('dd MMM', 'es').format(publishedAt);
     }
   }
 
-  /// Fecha formateada completa con antigüedad (ej: "24 oct. 2026 • Hace 3 horas")
+  /// Fecha formateada completa con antigüedad compacta (ej: "26 oct. 2026 • Hace 3h")
   String get formattedDateWithTimeAgo {
     try {
       final dateStr = DateFormat('dd MMM yyyy', 'es').format(publishedAt);
+      return '$dateStr • $timeAgoFormatted';
+    } catch (_) {
+      return timeAgoFormatted;
+    }
+  }
+
+  /// Fecha relativa compacta para tarjetas móviles sin desbordes (ej: "26 oct • Hace 3h")
+  String get compactTimeAgo {
+    try {
+      final dateStr = DateFormat('dd MMM', 'es').format(publishedAt).replaceAll('.', '');
       return '$dateStr • $timeAgoFormatted';
     } catch (_) {
       return timeAgoFormatted;

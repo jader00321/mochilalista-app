@@ -8,6 +8,11 @@ class LocalDatabase {
 
   LocalDatabase._init();
 
+  @visibleForTesting
+  static void setCustomDatabase(Database? db) {
+    _database = db;
+  }
+
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('mochilalista.db');
@@ -20,7 +25,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 24, // Upgrade to v24 to support explicit presentation ordering (orden INTEGER DEFAULT 0)
+      version: 26, // Upgrade to v26: Soporte para cupo máximo por variante compartida (cupo_maximo_variante)
       onCreate: _createDB,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -124,6 +129,51 @@ class LocalDatabase {
         debugPrint("Error asegurando columna orden en presentaciones_producto: $e");
       }
     }
+
+    // Migración V24 -> V25: Soporte para Stock Compartido e Independiente por Variantes
+    if (oldVersion < 25) {
+      try {
+        final pCols = await db.rawQuery("PRAGMA table_info(productos)");
+        if (!pCols.any((col) => col['name'] == 'modo_stock')) {
+          await db.execute("ALTER TABLE productos ADD COLUMN modo_stock TEXT DEFAULT 'INDEPENDIENTE'");
+          debugPrint("✅ Columna modo_stock agregada a productos");
+        }
+        if (!pCols.any((col) => col['name'] == 'stock_compartido')) {
+          await db.execute("ALTER TABLE productos ADD COLUMN stock_compartido INTEGER DEFAULT 0");
+          debugPrint("✅ Columna stock_compartido agregada a productos");
+        }
+        if (!pCols.any((col) => col['name'] == 'costo_base')) {
+          await db.execute("ALTER TABLE productos ADD COLUMN costo_base REAL DEFAULT 0.0");
+          debugPrint("✅ Columna costo_base agregada a productos");
+        }
+
+        final prCols = await db.rawQuery("PRAGMA table_info(presentaciones_producto)");
+        if (!prCols.any((col) => col['name'] == 'usa_stock_compartido')) {
+          await db.execute("ALTER TABLE presentaciones_producto ADD COLUMN usa_stock_compartido INTEGER DEFAULT 0");
+          debugPrint("✅ Columna usa_stock_compartido agregada a presentaciones_producto");
+        }
+
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_presentaciones_compartido ON presentaciones_producto(producto_id, usa_stock_compartido, activo)'
+        );
+        debugPrint("✅ Índice idx_presentaciones_compartido creado con éxito");
+      } catch (e) {
+        debugPrint("Error en migración V25: $e");
+      }
+    }
+
+    // Migración V25 -> V26: Soporte para cupo máximo por variante compartida (cupo_maximo_variante)
+    if (oldVersion < 26) {
+      try {
+        final prCols = await db.rawQuery("PRAGMA table_info(presentaciones_producto)");
+        if (!prCols.any((col) => col['name'] == 'cupo_maximo_variante')) {
+          await db.execute("ALTER TABLE presentaciones_producto ADD COLUMN cupo_maximo_variante INTEGER DEFAULT NULL");
+          debugPrint("✅ Columna cupo_maximo_variante agregada a presentaciones_producto");
+        }
+      } catch (e) {
+        debugPrint("Error en migración V26: $e");
+      }
+    }
   }
 
   /// 🛡️ Saneamiento automático idempotente: Garantiza que cada producto registrado en la base de datos
@@ -158,6 +208,26 @@ class LocalDatabase {
       debugPrint("Advertencia en sanitizePresentacionesDefault: $e");
     }
   }
+
+  /// 🛡️ Verificación defensiva: garantiza que una columna exista en una tabla específica antes de realizar inserciones.
+  static Future<void> ensureColumnExists(
+    DatabaseExecutor db,
+    String tableName,
+    String columnName,
+    String columnTypeDef,
+  ) async {
+    try {
+      final cols = await db.rawQuery('PRAGMA table_info($tableName)');
+      final exists = cols.any((c) => c['name'] == columnName);
+      if (!exists) {
+        await db.execute('ALTER TABLE $tableName ADD COLUMN $columnName $columnTypeDef');
+        debugPrint('🛡️ Columna $columnName agregada defensivamente a $tableName');
+      }
+    } catch (e) {
+      debugPrint('Advertencia verificando columna $columnName en $tableName: $e');
+    }
+  }
+
 
   // ==========================================
   // 🔥 HERRAMIENTAS DE INSPECCIÓN (DEBUG)
@@ -286,13 +356,13 @@ class LocalDatabase {
       '''CREATE TABLE proveedores (id $idType, negocio_id $intType, nombre_empresa $textType, contacto_nombre $textNullable, telefono $textNullable, email $textNullable, ruc $textNullable, fecha_creacion $textNullable, activo $boolType, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE)''',
     );
     await db.execute(
-      '''CREATE TABLE productos (id $idType, negocio_id $intType, categoria_id $intNullable, marca_id $intNullable, codigo_barras $textNullable, nombre $textType, descripcion $textNullable, imagen_url $textNullable, estado $textNullable DEFAULT 'privado', fecha_actualizacion $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id), FOREIGN KEY (categoria_id) REFERENCES categorias (id), FOREIGN KEY (marca_id) REFERENCES marcas (id))''',
+      '''CREATE TABLE productos (id $idType, negocio_id $intType, categoria_id $intNullable, marca_id $intNullable, codigo_barras $textNullable, nombre $textType, descripcion $textNullable, imagen_url $textNullable, estado $textNullable DEFAULT 'privado', fecha_actualizacion $textNullable, modo_stock $textNullable DEFAULT 'INDEPENDIENTE', stock_compartido $intNullable DEFAULT 0, costo_base $realNullable DEFAULT 0.0, FOREIGN KEY (negocio_id) REFERENCES negocios (id), FOREIGN KEY (categoria_id) REFERENCES categorias (id), FOREIGN KEY (marca_id) REFERENCES marcas (id))''',
     );
     await db.execute(
       '''CREATE TABLE facturas_carga (id $idType, numero_secuencial $intNullable, negocio_id $intType, imagen_url $textType, estado $textNullable DEFAULT 'procesando', fecha_carga $textNullable, proveedor_id $intNullable, monto_total_factura $realNullable, fecha_emision $textNullable, cantidad_items_extraidos $intNullable, datos_crudos_ia_json $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (proveedor_id) REFERENCES proveedores (id) ON DELETE SET NULL)''',
     );
     await db.execute(
-      '''CREATE TABLE presentaciones_producto (id $idType, producto_id $intType, proveedor_id $intNullable, nombre_especifico $textNullable, descripcion $textNullable, imagen_url $textNullable, codigo_barras $textNullable, ump_compra $textNullable, precio_ump_proveedor $realNullable, cantidad_ump_comprada $realNullable, total_pago_lote $realNullable, unidades_por_lote $intType DEFAULT 1, factura_carga_id $intNullable, unidad_venta $textNullable DEFAULT 'Unidad', unidades_por_venta $intType DEFAULT 1, costo_unitario_calculado $realNullable, factor_ganancia_venta $realNullable, precio_venta_final $realType DEFAULT 0.00, precio_oferta $realNullable, tipo_descuento $textNullable, valor_descuento $realNullable, stock_actual $intNullable DEFAULT 0, estado $textNullable DEFAULT 'publico', stock_alerta $intNullable DEFAULT 5, es_default $boolTypeFalse, orden $intType DEFAULT 0, activo $boolType, FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE CASCADE, FOREIGN KEY (proveedor_id) REFERENCES proveedores (id), FOREIGN KEY (factura_carga_id) REFERENCES facturas_carga (id) ON DELETE SET NULL)''',
+      '''CREATE TABLE presentaciones_producto (id $idType, producto_id $intType, proveedor_id $intNullable, nombre_especifico $textNullable, descripcion $textNullable, imagen_url $textNullable, codigo_barras $textNullable, ump_compra $textNullable, precio_ump_proveedor $realNullable, cantidad_ump_comprada $realNullable, total_pago_lote $realNullable, unidades_por_lote $intType DEFAULT 1, factura_carga_id $intNullable, unidad_venta $textNullable DEFAULT 'Unidad', unidades_por_venta $intType DEFAULT 1, costo_unitario_calculado $realNullable, factor_ganancia_venta $realNullable, precio_venta_final $realType DEFAULT 0.00, precio_oferta $realNullable, tipo_descuento $textNullable, valor_descuento $realNullable, stock_actual $intNullable DEFAULT 0, estado $textNullable DEFAULT 'publico', stock_alerta $intNullable DEFAULT 5, es_default $boolTypeFalse, orden $intType DEFAULT 0, usa_stock_compartido $boolTypeFalse, cupo_maximo_variante $intNullable, activo $boolType, FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE CASCADE, FOREIGN KEY (proveedor_id) REFERENCES proveedores (id), FOREIGN KEY (factura_carga_id) REFERENCES facturas_carga (id) ON DELETE SET NULL)''',
     );
 
     // 3. CRM y Cotizaciones
@@ -351,6 +421,7 @@ class LocalDatabase {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_productos_negocio ON productos(negocio_id, categoria_id, marca_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_presentaciones_producto ON presentaciones_producto(producto_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_presentaciones_estado ON presentaciones_producto(estado, activo)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_presentaciones_compartido ON presentaciones_producto(producto_id, usa_stock_compartido, activo)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_negocio ON ventas(negocio_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_clientes_negocio ON clientes(negocio_id)');

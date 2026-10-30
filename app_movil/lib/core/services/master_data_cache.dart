@@ -2,6 +2,7 @@ import 'package:app_movil/features/catalog/models/category_model.dart';
 import 'package:app_movil/features/catalog/models/brand_model.dart';
 import 'package:app_movil/features/catalog/models/provider_model.dart';
 import 'package:app_movil/core/services/master_data_service.dart';
+import 'package:app_movil/core/services/demo_data_service.dart';
 
 class MasterDataCache {
   static final MasterDataCache _instance = MasterDataCache._internal();
@@ -32,7 +33,12 @@ class MasterDataCache {
   }
 
   Future<void> load(bool forceRefresh, {bool showAll = true}) async {
-    if (_lastNegocioId == null) return;
+    if (_lastNegocioId == null) {
+      _categories = List<Category>.from(DemoDataService.demoCategories);
+      _brands = List<Brand>.from(DemoDataService.demoBrands);
+      _providers = [];
+      return;
+    }
     if (isLoaded && !forceRefresh) return;
     
     // 🔥 FORZAR a true para que la caché siempre tenga todo (incluyendo inactivos).

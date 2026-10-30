@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 /// Carrusel horizontal interactivo para selección de variantes en la pantalla de detalle.
 /// Incluye escalado reactivo (AnimatedScale), insignia de estrella en la variante principal,
@@ -37,7 +38,7 @@ class ProductDetailVariantSelector extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 110,
+          height: 126,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: presentations.length,
@@ -61,7 +62,7 @@ class ProductDetailVariantSelector extends StatelessWidget {
                       ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
-                        vertical: 10,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
                         color: isSelected
@@ -112,10 +113,10 @@ class ProductDetailVariantSelector extends StatelessWidget {
                                             ? Colors.teal[200]
                                             : Colors.teal[800])
                                         : textColor,
-                                    fontSize: 14,
+                                    fontSize: 13.5,
                                     height: 1.1,
                                   ),
-                                  maxLines: 2,
+                                  maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -124,7 +125,7 @@ class ProductDetailVariantSelector extends StatelessWidget {
                                   padding: const EdgeInsets.only(left: 4),
                                   child: Icon(
                                     Icons.star,
-                                    size: 16,
+                                    size: 14,
                                     color: isDark
                                         ? Colors.amber[300]
                                         : Colors.amber,
@@ -132,11 +133,11 @@ class ProductDetailVariantSelector extends StatelessWidget {
                                 ),
                             ],
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 3),
                           Text(
                             "${p.unidadVenta ?? 'Unidad'} (x${p.unidadesPorVenta})",
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 10.5,
                               color: isDark
                                   ? Colors.grey[400]
                                   : Colors.grey[600],
@@ -144,13 +145,49 @@ class ProductDetailVariantSelector extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 3),
                           Text(
-                            "S/ ${p.precioVentaFinal.toStringAsFixed(2)}",
+                            AppCurrency.format(p.precioVentaFinal),
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 14.5,
                               fontWeight: FontWeight.w900,
                               color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: p.usaStockCompartido
+                                  ? (isDark ? const Color(0xFF1E3A8A).withValues(alpha: 0.35) : const Color(0xFFDBEAFE))
+                                  : (isDark ? Colors.white10 : Colors.grey.shade100),
+                              borderRadius: BorderRadius.circular(5),
+                              border: p.usaStockCompartido
+                                  ? Border.all(color: isDark ? Colors.blue.shade700 : const Color(0xFF93C5FD), width: 0.6)
+                                  : null,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (p.usaStockCompartido) ...[
+                                  Icon(Icons.hub_rounded, size: 9, color: isDark ? Colors.blue[300] : const Color(0xFF1E40AF)),
+                                  const SizedBox(width: 2.5),
+                                ],
+                                Text(
+                                  p.usaStockCompartido
+                                      ? "Pool: ${p.unidadesVendiblesDisponibles} disp."
+                                      : "${p.unidadesVendiblesDisponibles} disp.",
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: p.usaStockCompartido
+                                        ? (isDark ? Colors.blue[200] : const Color(0xFF1E40AF))
+                                        : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
                           ),
                         ],

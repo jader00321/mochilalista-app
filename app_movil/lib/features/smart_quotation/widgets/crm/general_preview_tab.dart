@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class GeneralPreviewTab extends StatelessWidget {
   final List<SaleModel> debts;
@@ -72,7 +73,7 @@ class GeneralPreviewTab extends StatelessWidget {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24 + kModalScrollBottomClearance),
       children: [
         Text("El sistema aplicará tu pago en este orden:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey)),
         const SizedBox(height: 16),

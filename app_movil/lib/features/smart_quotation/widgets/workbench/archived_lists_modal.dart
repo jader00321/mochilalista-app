@@ -9,6 +9,7 @@ class ArchivedListsModal {
   static void show(BuildContext context, WorkbenchProvider provider, bool isDark) {
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -132,7 +133,7 @@ class _ArchivedListsModalContentState extends State<_ArchivedListsModalContent> 
                     )
                   else
                     SliverPadding(
-                      padding: const EdgeInsets.only(bottom: 24),
+                      padding: const EdgeInsets.only(bottom: 24 + InteractiveSheetWrapper.kModalScrollBottomClearance),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
@@ -150,6 +151,7 @@ class _ArchivedListsModalContentState extends State<_ArchivedListsModalContent> 
                                 onLongPress: () {
                                   showModalBottomSheet(
                                     context: context,
+                                    useSafeArea: true,
                                     isScrollControlled: true,
                                     backgroundColor: Colors.transparent,
                                     elevation: 0,

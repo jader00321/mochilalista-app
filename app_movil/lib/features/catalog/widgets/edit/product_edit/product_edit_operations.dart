@@ -99,7 +99,9 @@ class ProductEditOperations {
         margen: pres.factorGananciaVenta?.toStringAsFixed(2) ?? "1.35",
         precioVenta: pres.precioVentaFinal.toStringAsFixed(2),
         stockInicial: (pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1)).toString(),
-        stockFinal: (pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1)).toString(),
+        stockFinal: (pres.usaStockCompartido && pres.cupoMaximoVariante != null && pres.cupoMaximoVariante! > 0)
+            ? pres.cupoMaximoVariante.toString()
+            : (pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1)).toString(),
         barcode: pres.codigoBarras ?? "",
         providerId: safeProvId,
         estado: pres.estado,
@@ -150,6 +152,8 @@ class ProductEditOperations {
             ? 'fijo'
             : 'porcentaje',
         precioOfertaExacto: pres.precioOferta,
+        usaStockCompartido: pres.usaStockCompartido,
+        cupoMaximoVariante: pres.cupoMaximoVariante,
       );
 
       presentationControllers.add(map);
@@ -509,6 +513,9 @@ class ProductEditOperations {
     required String? selectedCategoryName,
     required List<Map<String, dynamic>> controllers,
     required List<int> idsToDelete,
+    String modoStock = 'INDEPENDIENTE',
+    int stockCompartido = 0,
+    double costoBase = 0.0,
   }) async {
     if (!formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -540,6 +547,8 @@ class ProductEditOperations {
       defaultDesc: descCtrl.text,
       defaultImg: imgUrlCtrl.text,
       defaultBarcode: parentBarcodeCtrl.text,
+      modoStock: modoStock,
+      stockCompartido: stockCompartido,
     );
 
     final provider = Provider.of<InventoryProvider>(context, listen: false);
@@ -559,6 +568,9 @@ class ProductEditOperations {
       codigoBarras: parentBarcodeCtrl.text.trim().isEmpty ? null : parentBarcodeCtrl.text.trim(),
       presentaciones: presentacionesFinales,
       idsToDelete: idsToDelete,
+      modoStock: modoStock,
+      stockCompartido: stockCompartido,
+      costoBase: costoBase,
     );
 
     if (success && context.mounted) {

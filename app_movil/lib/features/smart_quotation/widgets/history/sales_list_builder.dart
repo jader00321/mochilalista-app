@@ -132,6 +132,7 @@ class _SalesListBuilderState extends State<SalesListBuilder> {
                       onTap: () {
                         showModalBottomSheet(
                           context: context,
+                          useSafeArea: true,
                           backgroundColor: Colors.transparent,
                           isScrollControlled: true,
                           builder: (_) => SaleActionBottomSheet(sale: sale),

@@ -5,6 +5,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/services/local_notification_service.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ChangePasswordModal extends StatefulWidget {
   const ChangePasswordModal({super.key});
@@ -142,7 +143,10 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark; 
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+      context,
+      minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+    );
     
     final textStyle = TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, letterSpacing: 5);
 
@@ -151,17 +155,19 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
     }
 
     return Container(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF23232F) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Text(_hasPinActive ? "Seguridad de Cuenta" : "Crear PIN de Seguridad", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
             const SizedBox(height: 10),
             Text(
@@ -356,9 +362,11 @@ class _ChangePasswordModalState extends State<ChangePasswordModal> {
                   ),
                 ),
               ],
-            )
+            ),
+            const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
           ],
         ),
+      ),
       ),
     );
   }

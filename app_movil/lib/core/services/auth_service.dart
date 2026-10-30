@@ -49,15 +49,24 @@ class AuthService {
     String? logoPath,
     required String moneda,
     String? informacionPago,
+    String? ruc,
+    String? email,
   }) async {
     final db = await dbHelper.database;
     int userId = 0;
 
     try {
+      // 🛡️ Verificación defensiva de columnas antes de la inserción
+      await LocalDatabase.ensureColumnExists(db, 'usuarios', 'email', 'TEXT');
+      await LocalDatabase.ensureColumnExists(db, 'negocios', 'ruc', 'TEXT');
+
+      final sanitizedEmail = (email != null && email.trim().isNotEmpty) ? email.trim() : null;
+      final sanitizedRuc = (ruc != null && ruc.trim().isNotEmpty) ? ruc.trim() : null;
+
       await db.transaction((txn) async {
         userId = await txn.insert('usuarios', {
           'nombre_completo': nombreDueno,
-          'email': null, 
+          'email': sanitizedEmail, 
           'password_hash': null, 
           'telefono': telefono,
           'activo': 1,
@@ -71,6 +80,7 @@ class AuthService {
 
         await txn.insert('negocios', {
           'nombre_comercial': nombreNegocio,
+          'ruc': sanitizedRuc,
           'direccion': direccion,
           'logo_url': finalLogoPath,
           'moneda': moneda,

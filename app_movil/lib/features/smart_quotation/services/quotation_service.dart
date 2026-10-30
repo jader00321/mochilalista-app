@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class QuotationService {
   final dbHelper = LocalDatabase.instance;
@@ -72,10 +73,15 @@ class QuotationService {
       List<BundleChange> bundleChanges = [];
       List<UnitChange> unitChanges = [];
 
-      // 1. Acumular demanda total en unidades base por presentación para detectar colisiones y desabastecimiento
+      // 1. Acumular demanda total en unidades base para detectar colisiones y desabastecimiento
       Map<int, int> totalDemandPerPres = {};
       Map<int, int> factorPerPres = {};
       Map<int, int> currentStockPerPres = {};
+      Map<int, int?> cupoPerPres = {};
+      Map<int, bool> usaSharedStockPerPres = {};
+      Map<int, int> productIdPerPres = {};
+      Map<int, int> totalDemandPerSharedProduct = {};
+      Map<int, int> sharedStockPerProduct = {};
 
       for (var item in iRows) {
         if (item['bundle_id'] != null) {
@@ -86,39 +92,75 @@ class QuotationService {
             int pId = bItem['presentacion_id'] as int;
             int reqQty = (bItem['cantidad_requerida'] as int?) ?? 1;
             if (!factorPerPres.containsKey(pId)) {
-              final prRows = await db.query('presentaciones_producto', columns: ['stock_actual', 'unidades_por_venta'], where: 'id = ?', whereArgs: [pId]);
+              final prRows = await db.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'], where: 'id = ?', whereArgs: [pId]);
               if (prRows.isNotEmpty) {
                 int factor = (prRows.first['unidades_por_venta'] as int?) ?? 1;
                 if (factor <= 0) factor = 1;
                 factorPerPres[pId] = factor;
                 currentStockPerPres[pId] = (prRows.first['stock_actual'] as int?) ?? 0;
+                cupoPerPres[pId] = prRows.first['cupo_maximo_variante'] as int?;
+                int prodId = (prRows.first['producto_id'] as int?) ?? 0;
+                bool isShared = (prRows.first['usa_stock_compartido'] as int? ?? 0) == 1;
+                usaSharedStockPerPres[pId] = isShared;
+                productIdPerPres[pId] = prodId;
+                if (isShared && prodId > 0 && !sharedStockPerProduct.containsKey(prodId)) {
+                  final pRows = await db.query('productos', columns: ['stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
+                  sharedStockPerProduct[prodId] = pRows.isNotEmpty ? ((pRows.first['stock_compartido'] as int?) ?? currentStockPerPres[pId]!) : currentStockPerPres[pId]!;
+                }
               } else {
                 factorPerPres[pId] = 1;
                 currentStockPerPres[pId] = 0;
+                cupoPerPres[pId] = null;
+                usaSharedStockPerPres[pId] = false;
+                productIdPerPres[pId] = 0;
               }
             }
             int factor = factorPerPres[pId]!;
             int totalBaseUnits = reqQty * qty * factor;
-            totalDemandPerPres[pId] = (totalDemandPerPres[pId] ?? 0) + totalBaseUnits;
+            bool isShared = usaSharedStockPerPres[pId] ?? false;
+            int prodId = productIdPerPres[pId] ?? 0;
+            if (isShared && prodId > 0) {
+              totalDemandPerSharedProduct[prodId] = (totalDemandPerSharedProduct[prodId] ?? 0) + totalBaseUnits;
+            } else {
+              totalDemandPerPres[pId] = (totalDemandPerPres[pId] ?? 0) + totalBaseUnits;
+            }
           }
         } else if (item['presentation_id'] != null) {
           int pId = item['presentation_id'] as int;
           int qty = (item['quantity'] as int?) ?? 1;
           if (!factorPerPres.containsKey(pId)) {
-            final prRows = await db.query('presentaciones_producto', columns: ['stock_actual', 'unidades_por_venta'], where: 'id = ?', whereArgs: [pId]);
+            final prRows = await db.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'], where: 'id = ?', whereArgs: [pId]);
             if (prRows.isNotEmpty) {
               int factor = (prRows.first['unidades_por_venta'] as int?) ?? 1;
               if (factor <= 0) factor = 1;
               factorPerPres[pId] = factor;
               currentStockPerPres[pId] = (prRows.first['stock_actual'] as int?) ?? 0;
+              cupoPerPres[pId] = prRows.first['cupo_maximo_variante'] as int?;
+              int prodId = (prRows.first['producto_id'] as int?) ?? 0;
+              bool isShared = (prRows.first['usa_stock_compartido'] as int? ?? 0) == 1;
+              usaSharedStockPerPres[pId] = isShared;
+              productIdPerPres[pId] = prodId;
+              if (isShared && prodId > 0 && !sharedStockPerProduct.containsKey(prodId)) {
+                final pRows = await db.query('productos', columns: ['stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
+                sharedStockPerProduct[prodId] = pRows.isNotEmpty ? ((pRows.first['stock_compartido'] as int?) ?? currentStockPerPres[pId]!) : currentStockPerPres[pId]!;
+              }
             } else {
               factorPerPres[pId] = 1;
               currentStockPerPres[pId] = 0;
+              cupoPerPres[pId] = null;
+              usaSharedStockPerPres[pId] = false;
+              productIdPerPres[pId] = 0;
             }
           }
           int factor = factorPerPres[pId]!;
           int totalBaseUnits = qty * factor;
-          totalDemandPerPres[pId] = (totalDemandPerPres[pId] ?? 0) + totalBaseUnits;
+          bool isShared = usaSharedStockPerPres[pId] ?? false;
+          int prodId = productIdPerPres[pId] ?? 0;
+          if (isShared && prodId > 0) {
+            totalDemandPerSharedProduct[prodId] = (totalDemandPerSharedProduct[prodId] ?? 0) + totalBaseUnits;
+          } else {
+            totalDemandPerPres[pId] = (totalDemandPerPres[pId] ?? 0) + totalBaseUnits;
+          }
         }
       }
 
@@ -207,7 +249,7 @@ class QuotationService {
           double appliedPrice = (item['unit_price_applied'] as num).toDouble();
           bool isManual = item['is_manual_price'] == 1 || item['is_manual_price'] == true;
           if (!isManual && (appliedPrice - currentPrice).abs() > 0.01) {
-            detectedChanges.add("Precio: S/ ${appliedPrice.toStringAsFixed(2)} → S/ ${currentPrice.toStringAsFixed(2)}");
+            detectedChanges.add("Precio: ${AppCurrency.format(appliedPrice)} → ${AppCurrency.format(currentPrice)}");
           }
 
           String currentType = bundle['tipo_promocion'] as String? ?? "paquete";
@@ -361,21 +403,55 @@ class QuotationService {
 
         // --- Validación de stock Factor-Aware y Acumulada ---
         int factor = factorPerPres[pId] ?? 1;
-        int demandedBase = totalDemandPerPres[pId] ?? ((item['quantity'] as int) * factor);
+        bool isShared = usaSharedStockPerPres[pId] ?? false;
+        int prodId = productIdPerPres[pId] ?? 0;
+        int? cupo = cupoPerPres[pId];
+        int qty = item['quantity'] as int;
         
-        if (currentStock < demandedBase) {
+        int demandedBase;
+        int effectiveAvailableStock;
+        
+        if (isShared && prodId > 0) {
+          demandedBase = totalDemandPerSharedProduct[prodId] ?? (qty * factor);
+          effectiveAvailableStock = sharedStockPerProduct[prodId] ?? currentStock;
+        } else {
+          demandedBase = totalDemandPerPres[pId] ?? (qty * factor);
+          effectiveAvailableStock = currentStock;
+        }
+
+        int physicalAvailableUnits = (effectiveAvailableStock / factor).floor();
+        int vendibleAvailableUnits = (cupo != null && isShared)
+            ? physicalAvailableUnits.clamp(0, cupo)
+            : physicalAvailableUnits;
+        
+        if (effectiveAvailableStock < demandedBase) {
           hasIssues = true;
           canSell = false;
-          int availableUnits = (currentStock / factor).floor();
           int requestedUnits = (demandedBase / factor).ceil();
+          String warningMsg;
+          if (isShared) {
+            warningMsg = "Stock compartido insuficiente (demanda acumulada del pool: $demandedBase und. base, disponible: $effectiveAvailableStock und. base = $physicalAvailableUnits disp.).";
+          } else if (demandedBase > (qty * factor)) {
+            warningMsg = "Stock insuficiente por demanda acumulada en la lista (requiere $requestedUnits, disponible $physicalAvailableUnits).";
+          } else {
+            warningMsg = "Stock insuficiente (requiere $requestedUnits, disponible $physicalAvailableUnits).";
+          }
           warnings.add(StockWarning(
             itemId: item['id'] as int,
             productName: itemName ?? "Desconocido",
             requested: requestedUnits,
-            available: availableUnits,
-            message: demandedBase > ((item['quantity'] as int) * factor)
-                ? "Stock insuficiente por demanda acumulada en la lista (requiere $requestedUnits, disponible $availableUnits)."
-                : "Stock insuficiente (requiere $requestedUnits, disponible $availableUnits)."
+            available: vendibleAvailableUnits,
+            message: warningMsg,
+          ));
+        } else if (isShared && cupo != null && qty > cupo) {
+          hasIssues = true;
+          canSell = false;
+          warnings.add(StockWarning(
+            itemId: item['id'] as int,
+            productName: itemName ?? "Desconocido",
+            requested: qty,
+            available: vendibleAvailableUnits,
+            message: "La variante tiene un cupo asignado de $cupo disp. (requiere $qty).",
           ));
         }
 
@@ -410,6 +486,9 @@ class QuotationService {
     String? realClientName, String? realClientPhone, String? realClientDni, String? realClientAddress, String? realClientEmail, String? realClientNotes,
     required double totalAmount, required double totalSavings, required List<Map<String, dynamic>> items, String status = "DRAFT", String type = "manual",  
   }) async {
+    if (items.isEmpty) {
+      throw ArgumentError("No se puede guardar una cotización sin productos");
+    }
     try {
       final db = await dbHelper.database;
       int targetId = id ?? 0;
@@ -663,6 +742,7 @@ class QuotationService {
         throw Exception("Una cotización vendida no se puede eliminar; forma parte del historial de ventas.");
       }
       await db.transaction((txn) async {
+        await txn.update('ventas', {'cotizacion_id': null}, where: 'cotizacion_id = ?', whereArgs: [id]);
         await txn.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
         await txn.delete('smart_quotations', where: 'id = ?', whereArgs: [id]);
       });

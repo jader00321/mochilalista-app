@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
 import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/scanner/widgets/barcode_not_found_dialog.dart';
-import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/screens/product_detail_screen.dart';
 import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
-import 'package:app_movil/features/catalog/models/product_model.dart';
-import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class BarcodeScannerScreen extends StatefulWidget {
   final bool isFromQuickSale;
+  final bool isFromHomeGlobalSearch;
   final bool captureOnly;
 
   const BarcodeScannerScreen({
     super.key, 
     this.isFromQuickSale = false,
+    this.isFromHomeGlobalSearch = false,
     this.captureOnly = false,
   });
 
@@ -58,26 +60,19 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       provider.updateContext(auth.activeBusinessId, auth.user?.id, null);
     }
 
+    final businessId = auth.activeBusinessId;
+    if (businessId == null) {
+      if (mounted) setState(() => _isProcessing = false);
+      return;
+    }
+
     try {
-      final result = await provider.scanBarcode(code);
+      final resolution = await provider.resolveBarcodeForQuickSale(code, businessId);
 
       if (!mounted) return;
 
-      if (result != null && result['found'] == true) {
-        final invProv = Provider.of<InventoryProvider>(context, listen: false);
-        final productObj = await invProv.getFullProductWithFallback(
-          result['product']['id'],
-        );
-        if (productObj == null) {
-          setState(() => _isProcessing = false);
-          return;
-        }
-
-        final presentationId = result['presentation'] != null
-            ? result['presentation']['id']
-            : null;
-
-        if (!mounted) return;
+      if (resolution.isFound && resolution.item != null) {
+        final wrapper = resolution.item!;
 
         // ========================================================
         // FLUJO A: FUE LLAMADO DESDE CAJA RÁPIDA
@@ -87,56 +82,96 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             context,
             listen: false,
           );
-          final presObj = ProductPresentation.fromJson(result['presentation']);
 
-          if (presObj.stockActual <= 0) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  "Producto Agotado",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                backgroundColor: Colors.red,
-              ),
+          if (wrapper.isOutOfStock) {
+            CustomSnackBar.show(
+              context,
+              message: "El producto '${wrapper.displayNameDetail}' se encuentra agotado",
+              isError: true,
             );
             setState(() => _isProcessing = false);
             return;
           }
 
-          final wrapper = InventoryWrapper(
-            product: productObj,
-            presentation: presObj,
-          );
-          quickProv.addToCart(wrapper);
-
+          final err = quickProv.addToCart(wrapper);
+          HapticFeedback.mediumImpact();
           Navigator.pop(context);
+          if (err != null) {
+            CustomSnackBar.show(context, message: err, isError: true);
+          } else {
+            CustomSnackBar.show(
+              context,
+              message: "${wrapper.displayNameDetail} agregado",
+              isError: false,
+            );
+          }
           return;
         }
 
         // ========================================================
-        // FLUJO B: FLUJO NORMAL (INVENTARIO / BUSCADOR HOME)
+        // FLUJO B: FUE LLAMADO DESDE EL BUSCADOR GLOBAL DEL HOME
+        // ========================================================
+        if (widget.isFromHomeGlobalSearch) {
+          final quickProv = Provider.of<QuickSaleProvider>(
+            context,
+            listen: false,
+          );
+
+          if (wrapper.isOutOfStock) {
+            // Trasladar igualmente a Caja Rápida mostrando el SnackBar de agotado
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const QuickSaleScreen()),
+            );
+            CustomSnackBar.show(
+              context,
+              message: "El producto '${wrapper.displayNameDetail}' se encuentra agotado",
+              isError: true,
+            );
+            return;
+          }
+
+          // Con stock > 0, subirlo automáticamente al carrito de Caja Rápida
+          final err = quickProv.addToCart(wrapper);
+          HapticFeedback.mediumImpact();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const QuickSaleScreen()),
+          );
+          if (err != null) {
+            CustomSnackBar.show(context, message: err, isError: true);
+          } else {
+            CustomSnackBar.show(
+              context,
+              message: "${wrapper.displayNameDetail} agregado a Caja Rápida",
+              isError: false,
+            );
+          }
+          return;
+        }
+
+        // ========================================================
+        // FLUJO C: FLUJO NORMAL (INVENTARIO GENERAL)
         // ========================================================
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (_) => ProductDetailScreen(
-              product: productObj,
-              initialPresentationId: presentationId ?? 0,
-              heroTag: 'inv_${productObj.id}_${presentationId ?? 0}',
+              product: wrapper.product,
+              initialPresentationId: wrapper.presentation.id ?? 0,
+              heroTag: 'inv_${wrapper.product.id}_${wrapper.presentation.id ?? 0}',
             ),
           ),
         );
       } else {
-        // NO ENCONTRADO
+        // ========================================================
+        // FLUJO D: NO ENCONTRADO EN LA BD (SITUACIÓN 4)
+        // ========================================================
         if (widget.isFromQuickSale) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                "Código no encontrado en el sistema",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              backgroundColor: Colors.orange,
-            ),
+          CustomSnackBar.show(
+            context,
+            message: "Código no registrado en el inventario",
+            isError: true,
           );
           setState(() => _isProcessing = false);
         } else {
@@ -165,8 +200,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             },
           );
 
-          // Si el usuario cerró el diálogo por cualquier medio (arrastre, tap fuera, atrás)
-          // y no navegó a crear producto, reanudar siempre la cámara
+          // Si el usuario cerró el diálogo por cualquier medio y no navegó a crear producto, reanudar cámara
           if (!navigatedToCreate && mounted) {
             try {
               await _cameraController.start();

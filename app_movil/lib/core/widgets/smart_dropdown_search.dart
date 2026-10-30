@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class SmartDropdownSearch<T> extends StatelessWidget {
   final String label;
@@ -71,6 +72,7 @@ class SmartDropdownSearch<T> extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _SearchModal<T>(
         items: items,
@@ -122,62 +124,73 @@ class _SearchModalState<T> extends State<_SearchModal<T>> {
     
     final textColor = widget.isDark ? Colors.white : Colors.black87;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+      context,
+      minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+    );
+    final bottomPadding = bottomInset > 0 ? bottomInset + 12 : effectiveBottom + 8;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      height: (MediaQuery.of(context).size.height * 0.6) + bottomInset,
-      padding: EdgeInsets.fromLTRB(20, 20, 20, bottomInset + 20),
-      decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF23232F) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24))
-      ),
-      child: Column(
-        children: [
-          Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: widget.isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
-          const SizedBox(height: 20),
-          Text("Seleccionar ${widget.label}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: textColor)),
-          const SizedBox(height: 20),
-          TextField(
-            autofocus: true,
-            style: TextStyle(color: textColor, fontSize: 16),
-            decoration: InputDecoration(
-              hintText: "Buscar o escribir nuevo...",
-              hintStyle: TextStyle(color: widget.isDark ? Colors.grey[500] : Colors.grey),
-              prefixIcon: Icon(Icons.search, color: widget.isDark ? Colors.blue[300] : Colors.blue),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              filled: true, 
-              fillColor: widget.isDark ? const Color(0xFF14141C) : Colors.grey[100]
+    return SafeArea(
+      top: false,
+      bottom: true,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: (MediaQuery.of(context).size.height * 0.6) + bottomInset,
+        padding: EdgeInsets.fromLTRB(20, 20, 20, bottomPadding),
+        decoration: BoxDecoration(
+          color: widget.isDark ? const Color(0xFF23232F) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: widget.isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
+            const SizedBox(height: 20),
+            Text("Seleccionar ${widget.label}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: textColor)),
+            const SizedBox(height: 20),
+            TextField(
+              autofocus: true,
+              style: TextStyle(color: textColor, fontSize: 16),
+              decoration: InputDecoration(
+                hintText: "Buscar o escribir nuevo...",
+                hintStyle: TextStyle(color: widget.isDark ? Colors.grey[500] : Colors.grey),
+                prefixIcon: Icon(Icons.search, color: widget.isDark ? Colors.blue[300] : Colors.blue),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                filled: true, 
+                fillColor: widget.isDark ? const Color(0xFF14141C) : Colors.grey[100],
+              ),
+              onChanged: (val) => setState(() => _query = val),
             ),
-            onChanged: (val) => setState(() => _query = val),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.separated(
-              itemCount: filtered.length + 1,
-              separatorBuilder: (_, __) => Divider(height: 1, color: widget.isDark ? Colors.white10 : Colors.grey[200]),
-              itemBuilder: (ctx, i) {
-                if (i == filtered.length) {
-                  if (_query.isNotEmpty && !filtered.any((x) => widget.itemAsString(x).toLowerCase() == _query.toLowerCase())) {
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50], shape: BoxShape.circle), child: Icon(Icons.add_circle, color: widget.isDark ? Colors.blue[300] : Colors.blue)),
-                      title: Text("Crear nuevo: '$_query'", style: TextStyle(color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 16)),
-                      onTap: () => widget.onAddNew(_query),
-                    );
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.separated(
+                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                padding: const EdgeInsets.only(bottom: InteractiveSheetWrapper.kModalScrollBottomClearance),
+                itemCount: filtered.length + 1,
+                separatorBuilder: (_, __) => Divider(height: 1, color: widget.isDark ? Colors.white10 : Colors.grey[200]),
+                itemBuilder: (ctx, i) {
+                  if (i == filtered.length) {
+                    if (_query.isNotEmpty && !filtered.any((x) => widget.itemAsString(x).toLowerCase() == _query.toLowerCase())) {
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                        leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50], shape: BoxShape.circle), child: Icon(Icons.add_circle, color: widget.isDark ? Colors.blue[300] : Colors.blue)),
+                        title: Text("Crear nuevo: '$_query'", style: TextStyle(color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 16)),
+                        onTap: () => widget.onAddNew(_query),
+                      );
+                    }
+                    return const SizedBox.shrink();
                   }
-                  return const SizedBox.shrink();
-                }
-                
-                final item = filtered[i];
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                  title: Text(widget.itemAsString(item), style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                  onTap: () => widget.onSelected(item),
-                );
-              },
-            ),
-          )
-        ],
+                  
+                  final item = filtered[i];
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    title: Text(widget.itemAsString(item), style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                    onTap: () => widget.onSelected(item),
+                  );
+                },
+              ),
+            )
+          ],
+        ),
       ),
     );
   }

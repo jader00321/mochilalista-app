@@ -130,6 +130,12 @@ class MatchData {
   String unidadVenta;
   int unidadesPorVenta;
 
+  String modoStock;
+  int stockCompartido;
+  double costoBase;
+  bool usaStockCompartido;
+  int? cupoMaximoVariante;
+
   MatchData({
     required this.id,
     required this.nombre,
@@ -143,6 +149,11 @@ class MatchData {
     this.availablePresentations,
     this.marcaNombre,
     this.categoriaNombre,
+    this.modoStock = "INDEPENDIENTE",
+    this.stockCompartido = 0,
+    this.costoBase = 0.0,
+    this.usaStockCompartido = false,
+    this.cupoMaximoVariante,
   });
 
   factory MatchData.fromJson(Map<String, dynamic> json) {
@@ -163,6 +174,11 @@ class MatchData {
       availablePresentations: json['available_presentations'] != null
           ? List<Map<String, dynamic>>.from(json['available_presentations'])
           : [],
+      modoStock: json['modo_stock'] ?? "INDEPENDIENTE",
+      stockCompartido: json['stock_compartido'] ?? 0,
+      costoBase: (json['costo_base'] ?? 0.0).toDouble(),
+      usaStockCompartido: json['usa_stock_compartido'] == 1 || json['usa_stock_compartido'] == true,
+      cupoMaximoVariante: json['cupo_maximo_variante'],
     );
   }
 }
@@ -258,6 +274,10 @@ class StagingVariant {
 
   int? stockIngresanteOverride;
   String? sourceVariantUuid; // UUID de la variante padre que originó este sobrante
+  int? allocatedBaseUnits; // Unidades transferidas desde la madre
+  double? allocatedPurchaseCost; // Costo de compra transferido desde la madre
+  bool usaStockCompartido = false; // Flag para modo Compartido/Mixto
+  int? cupoMaximoVariante; // Cupo opcional para variantes compartidas
   bool allowLeftoverInReserve = false;
   bool allowDeficitApproved = false;
 
@@ -364,6 +384,8 @@ class StagingVariant {
   int? _snapshotUnidadesPorLote;
   bool? _snapshotAllowLeftoverInReserve;
   bool? _snapshotAllowDeficitApproved;
+  bool? _snapshotUsaStockCompartido;
+  int? _snapshotCupoMaximoVariante;
 
   StagingVariant({
     String? uuidTemporal,
@@ -421,6 +443,10 @@ class StagingVariant {
           json['confirmado'] == null,
     )
       ..sourceVariantUuid = json['sourceVariantUuid']
+      ..allocatedBaseUnits = json['allocated_base_units']
+      ..allocatedPurchaseCost = (json['allocated_purchase_cost'] as num?)?.toDouble()
+      ..usaStockCompartido = json['usa_stock_compartido'] == true || json['usa_stock_compartido'] == 1
+      ..cupoMaximoVariante = json['cupo_maximo_variante']
       ..allowLeftoverInReserve = json['allow_leftover_in_reserve'] == true || json['allow_leftover_in_reserve'] == 1
       ..allowDeficitApproved = json['allow_deficit_approved'] == true || json['allow_deficit_approved'] == 1;
   }
@@ -453,6 +479,8 @@ class StagingVariant {
     _snapshotUnidadesPorLote = unidadesPorLote;
     _snapshotAllowLeftoverInReserve = allowLeftoverInReserve;
     _snapshotAllowDeficitApproved = allowDeficitApproved;
+    _snapshotUsaStockCompartido = usaStockCompartido;
+    _snapshotCupoMaximoVariante = cupoMaximoVariante;
   }
 
   void restoreFromSnapshot() {
@@ -492,6 +520,11 @@ class StagingVariant {
       if (_snapshotAllowDeficitApproved != null) {
         allowDeficitApproved = _snapshotAllowDeficitApproved!;
       }
+      if (_snapshotUsaStockCompartido != null) {
+        usaStockCompartido = _snapshotUsaStockCompartido!;
+      }
+      _snapshotCupoMaximoVariante = _snapshotCupoMaximoVariante;
+      cupoMaximoVariante = _snapshotCupoMaximoVariante;
     }
   }
 
@@ -543,6 +576,10 @@ class StagingVariant {
     discountManualValue = null;
     allowLeftoverInReserve = false;
     allowDeficitApproved = false;
+    allocatedBaseUnits = null;
+    allocatedPurchaseCost = null;
+    usaStockCompartido = false;
+    cupoMaximoVariante = null;
     _snapshotCosto = null; // Clear snapshot when reverting to absolute original
   }
 
@@ -576,6 +613,10 @@ class StagingProductGroup {
   List<StagingVariant> variantes;
   bool isMatchVerified;
 
+  String modoStock;
+  int stockCompartido;
+  double costoBase;
+
   StagingProductGroup({
     String? uuidTemporal,
     required this.nombrePadre,
@@ -587,6 +628,9 @@ class StagingProductGroup {
     this.categoriaSugeridaId,
     required this.variantes,
     this.isMatchVerified = false,
+    this.modoStock = 'INDEPENDIENTE',
+    this.stockCompartido = 0,
+    this.costoBase = 0.0,
   }) : uuidTemporal = uuidTemporal ?? generateFrontendUuid();
 
   factory StagingProductGroup.fromJson(Map<String, dynamic> json) {
@@ -602,6 +646,9 @@ class StagingProductGroup {
       variantes: (json['variantes'] as List)
           .map((x) => StagingVariant.fromJson(x))
           .toList(),
+      modoStock: json['modo_stock'] ?? 'INDEPENDIENTE',
+      stockCompartido: json['stock_compartido'] ?? 0,
+      costoBase: (json['costo_base'] ?? 0.0).toDouble(),
     );
   }
 }

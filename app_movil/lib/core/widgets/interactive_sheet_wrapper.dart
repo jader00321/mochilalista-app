@@ -10,7 +10,14 @@ import 'package:flutter/services.dart';
 /// 3. Handle reactivo (se expande de 40px a 56px al arrastrar).
 /// 4. Micro-háptica táctil al alcanzar el umbral de descarte.
 /// 5. Blindaje universal contra barra de 3 botones de Android / Edge-to-Edge (BUG-07).
-/// =========================================================================
+/// 🛡️ Colchón defensivo mínimo cuando Android reporta inset 0.0 (Barra Fantasma).
+/// La barra física de 3 botones en Android mide entre 48dp y 56dp; 28dp garantiza que
+/// el botón de acción quede siempre visible y operable incluso si el SO reporta 0.0 de padding.
+const double kMinDefensiveBottomClearance = 28.0;
+
+/// 🛡️ Espacio de respiro extra al pie de listas y scrolls dentro de modales (36dp a 48dp).
+const double kModalScrollBottomClearance = 40.0;
+
 class InteractiveSheetWrapper extends StatefulWidget {
   final Widget child;
   final String? title;
@@ -24,12 +31,24 @@ class InteractiveSheetWrapper extends StatefulWidget {
   final BorderRadius? borderRadius;
   final bool showHandle;
   final bool enableDragToDismiss;
+  final bool enableHeaderDragToDismiss;
   final VoidCallback? onDismiss;
   final EdgeInsetsGeometry? contentPadding;
   final bool applyEffectiveBottomPadding;
   final double minBottomPadding;
   final ScrollController? scrollController;
   final bool maintainFixedHeightOnKeyboard;
+
+  final int titleMaxLines;
+  final bool showCloseButton;
+
+  /// 🛡️ Colchón defensivo mínimo cuando Android reporta inset 0.0 (Barra Fantasma).
+  /// La barra física de 3 botones en Android mide entre 48dp y 56dp; 28dp garantiza que
+  /// el botón de acción quede siempre visible y operable incluso si el SO reporta 0.0 de padding.
+  static const double kMinDefensiveBottomClearance = 28.0;
+
+  /// 🛡️ Espacio de respiro extra al pie de listas y scrolls dentro de modales (36dp a 48dp).
+  static const double kModalScrollBottomClearance = 40.0;
 
   const InteractiveSheetWrapper({
     super.key,
@@ -45,32 +64,54 @@ class InteractiveSheetWrapper extends StatefulWidget {
     this.borderRadius,
     this.showHandle = true,
     this.enableDragToDismiss = true,
+    this.enableHeaderDragToDismiss = false,
     this.onDismiss,
     this.contentPadding,
     this.applyEffectiveBottomPadding = true,
-    this.minBottomPadding = 16.0,
+    this.minBottomPadding = kMinDefensiveBottomClearance,
     this.scrollController,
     this.maintainFixedHeightOnKeyboard = false,
+    this.titleMaxLines = 2,
+    this.showCloseButton = false,
   });
 
-  /// 🛡️ CÁLCULO UNIVERSAL DE BLINDAJE INFERIOR (BUG-07)
-  /// Combina MediaQuery.paddingOf, viewPaddingOf y viewInsetsOf para garantizar
-  /// que ningún botón sea tapado por la barra de 3 botones de Android, la barra gestual
-  /// o el teclado virtual en cualquier teléfono físico.
+  /// 🛡️ CÁLCULO UNIVERSAL DE BLINDAJE INFERIOR (BUG-07 & GHOST BAR RESILIENCE)
+  /// Distingue con precisión los 3 estados del sistema:
+  /// - Estado A (Teclado): viewInsets.bottom > 0 -> ajuste limpio para teclado.
+  /// - Estado B (Barra Fantasma): viewPadding.bottom == 0 && padding.bottom == 0
+  ///   -> inyecta kMinDefensiveBottomClearance (28.0dp).
+  /// - Estado C (Consumido por SafeArea): viewPadding.bottom > 0 && padding.bottom == 0
+  ///   -> SafeArea o useSafeArea: true ya aplicó los 48dp del sistema; se devuelve únicamente
+  ///      un respiro ergonómico compacto (16.0dp) para evitar duplicación (48dp + 48dp = 96dp).
+  /// - Inset no consumido (padding.bottom > 0) -> math.max(minPadding, padding.bottom).
   static double getEffectiveBottomPadding(
     BuildContext context, {
-    double minPadding = 16.0,
+    double minPadding = kMinDefensiveBottomClearance,
     bool includeKeyboard = false,
+    double consumedSafeAreaPadding = 16.0,
   }) {
-    final systemBottom = math.max(
-      MediaQuery.paddingOf(context).bottom,
-      MediaQuery.viewPaddingOf(context).bottom,
-    );
-    final keyboardInset = includeKeyboard ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
+    final mediaQuery = MediaQuery.of(context);
+    final keyboardInset = includeKeyboard ? mediaQuery.viewInsets.bottom : 0.0;
     if (keyboardInset > 0) {
       return keyboardInset + 8.0;
     }
-    return math.max(minPadding, systemBottom);
+
+    final systemPadding = mediaQuery.padding.bottom;
+    final systemViewPadding = mediaQuery.viewPadding.bottom;
+
+    // Estado C: SafeArea (o useSafeArea: true) ya consumió el inset del sistema
+    if (systemPadding == 0.0 && systemViewPadding > 0) {
+      return consumedSafeAreaPadding;
+    }
+
+    // Estado B: Barra Fantasma (el SO reporta 0.0 en ambos)
+    if (systemPadding == 0.0 && systemViewPadding == 0.0) {
+      return minPadding > 0 ? minPadding : kMinDefensiveBottomClearance;
+    }
+
+    // Inset aún no consumido por ningún SafeArea ancestro
+    final effectiveMin = minPadding > 0 ? minPadding : kMinDefensiveBottomClearance;
+    return math.max(effectiveMin, systemPadding);
   }
 
   static Future<T?> show<T>({
@@ -78,12 +119,14 @@ class InteractiveSheetWrapper extends StatefulWidget {
     required Widget Function(BuildContext) builder,
     bool isDismissible = true,
     bool enableDrag = true,
+    bool useSafeArea = true,
     Color? barrierColor,
   }) {
     FocusManager.instance.primaryFocus?.unfocus();
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: useSafeArea,
       isDismissible: isDismissible,
       enableDrag: enableDrag,
       backgroundColor: Colors.transparent,
@@ -124,7 +167,8 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
   }
 
   void _handleDragStart(DragStartDetails details) {
-    if (!widget.enableDragToDismiss) return;
+    final canDrag = widget.enableDragToDismiss || (_isDraggingFromHandle && widget.enableHeaderDragToDismiss);
+    if (!canDrag) return;
     if (!_isDraggingFromHandle && _currentScrollPixels > 0.5) return;
     FocusManager.instance.primaryFocus?.unfocus();
     _animController.stop();
@@ -134,7 +178,8 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
-    if (!widget.enableDragToDismiss) return;
+    final canDrag = widget.enableDragToDismiss || (_isDraggingFromHandle && widget.enableHeaderDragToDismiss);
+    if (!canDrag) return;
     if (!_isDraggingFromHandle && _currentScrollPixels > 0.5) return;
     final newOffset = _dragOffset + details.delta.dy;
     if (newOffset >= 0) {
@@ -145,18 +190,26 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
   }
 
   void _handleDragEnd(DragEndDetails details, double totalHeight) {
+    final wasDraggingFromHandle = _isDraggingFromHandle;
     _isDraggingFromHandle = false;
     if (!_isDragging && _dragOffset == 0.0) return;
-    if (!widget.enableDragToDismiss) return;
+    final canDrag = widget.enableDragToDismiss || (wasDraggingFromHandle && widget.enableHeaderDragToDismiss);
+    if (!canDrag) return;
     setState(() {
       _isDragging = false;
     });
 
     final velocity = details.primaryVelocity ?? 0.0;
-    final threshold = math.min(85.0, totalHeight * 0.15);
+    // Si es arrastre exclusivo desde cabecera (enableDragToDismiss: false, enableHeaderDragToDismiss: true),
+    // requerir arrastre pronunciado: > 100.0 px o velocidad > 450 px/s
+    final isHeaderOnlyDrag = !widget.enableDragToDismiss && widget.enableHeaderDragToDismiss;
+    final threshold = isHeaderOnlyDrag
+        ? math.max(100.0, totalHeight * 0.20)
+        : math.min(85.0, totalHeight * 0.15);
+    final velocityThreshold = isHeaderOnlyDrag ? 450.0 : 380.0;
 
-    // Si la velocidad supera 380 px/s o el desplazamiento supera el umbral, cerrar modal
-    if (velocity > 380 || _dragOffset > threshold) {
+    // Si la velocidad supera velocityThreshold o el desplazamiento supera el umbral, cerrar modal
+    if (velocity > velocityThreshold || _dragOffset > threshold) {
       _triggerDismiss(totalHeight);
     } else {
       // Retorno con rebote elástico suave
@@ -279,20 +332,6 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
         : math.max(160.0, screenHeight - keyboardInset - topPadding - 16.0);
     final maxAllowedHeight = math.min(screenHeight * widget.maxHeightFactor, safeAvailableHeight);
 
-    // Cuando el teclado está abierto, la barra del sistema queda cubierta; usamos espaciado
-    // compacto (12dp) para que el modal y su botón de acción queden pegados sobre el teclado sin doble padding.
-    final effectiveBottom = widget.maintainFixedHeightOnKeyboard
-        ? 0.0
-        : (isKeyboardOpen
-            ? 12.0
-            : (widget.applyEffectiveBottomPadding
-                ? InteractiveSheetWrapper.getEffectiveBottomPadding(
-                    context,
-                    minPadding: widget.minBottomPadding,
-                    includeKeyboard: false,
-                  )
-                : 0.0));
-
     final sheetBgColor = widget.backgroundColor ??
         (isDark ? const Color(0xFF1E1E28) : Colors.white);
 
@@ -347,18 +386,35 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
                       ),
                     ],
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+                  child: SafeArea(
+                    top: false,
+                    bottom: true,
+                    maintainBottomViewPadding: true,
+                    child: Builder(
+                      builder: (innerContext) {
+                        return MediaQuery(
+                          data: mediaQuery.copyWith(
+                            padding: mediaQuery.padding.copyWith(bottom: 0.0),
+                            viewPadding: mediaQuery.viewPadding,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                       // ZONA SUPERIOR CON HANDLE REACTIVO (ARRASTRE PRIORITARIO 1:1)
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onVerticalDragStart: widget.enableDragToDismiss ? (d) {
-                          _isDraggingFromHandle = true;
-                          _handleDragStart(d);
-                        } : null,
-                        onVerticalDragUpdate: widget.enableDragToDismiss ? _handleDragUpdate : null,
-                        onVerticalDragEnd: widget.enableDragToDismiss ? (d) => _handleDragEnd(d, totalHeight) : null,
+                        onVerticalDragStart: (widget.enableDragToDismiss || widget.enableHeaderDragToDismiss)
+                            ? (d) {
+                                _isDraggingFromHandle = true;
+                                _handleDragStart(d);
+                              }
+                            : null,
+                        onVerticalDragUpdate: (widget.enableDragToDismiss || widget.enableHeaderDragToDismiss)
+                            ? _handleDragUpdate
+                            : null,
+                        onVerticalDragEnd: (widget.enableDragToDismiss || widget.enableHeaderDragToDismiss)
+                            ? (d) => _handleDragEnd(d, totalHeight)
+                            : null,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -416,11 +472,28 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
                                                 ? Colors.white
                                                 : Colors.black87,
                                           ),
-                                          maxLines: 1,
+                                          maxLines: widget.titleMaxLines,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                   ),
                                   if (widget.actions != null) ...widget.actions!,
+                                  if (widget.showCloseButton)
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      icon: Icon(
+                                        Icons.close,
+                                        size: 20,
+                                        color: isDark ? Colors.white70 : Colors.black54,
+                                      ),
+                                      onPressed: () {
+                                        if (widget.onDismiss != null) {
+                                          widget.onDismiss!();
+                                        }
+                                        Navigator.of(context).pop();
+                                      },
+                                    ),
                                 ],
                               ),
                             ),
@@ -443,32 +516,66 @@ class _InteractiveSheetWrapperState extends State<InteractiveSheetWrapper>
                         ),
                       ),
 
-                      // ACCIÓN INFERIOR FIJA BLINDADA CONTRA BARRA DEL SISTEMA (BUG-07)
+                      // ACCIÓN INFERIOR FIJA BLINDADA CONTRA BARRA DEL SISTEMA (BUG-07 & GHOST BAR)
                       if (widget.bottomAction != null)
-                        Container(
-                          padding: EdgeInsets.fromLTRB(20, isKeyboardOpen ? 8 : 12, 20, effectiveBottom),
-                          decoration: BoxDecoration(
-                            color: sheetBgColor,
-                            border: Border(
-                              top: BorderSide(
-                                color: isDark ? Colors.white10 : Colors.grey.shade200,
-                                width: 1,
+                        Builder(
+                          builder: (actionCtx) {
+                            final effectiveBottom = widget.maintainFixedHeightOnKeyboard
+                                ? 0.0
+                                : (isKeyboardOpen
+                                    ? 12.0
+                                    : InteractiveSheetWrapper.getEffectiveBottomPadding(
+                                        actionCtx,
+                                        minPadding: widget.minBottomPadding > 0
+                                            ? widget.minBottomPadding
+                                            : InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+                                        includeKeyboard: false,
+                                      ));
+                            return Container(
+                              padding: EdgeInsets.fromLTRB(20, isKeyboardOpen ? 8 : 12, 20, effectiveBottom),
+                              decoration: BoxDecoration(
+                                color: sheetBgColor,
+                                border: Border(
+                                  top: BorderSide(
+                                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                                    width: 1,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                          child: widget.bottomAction!,
+                              child: widget.bottomAction!,
+                            );
+                          },
                         )
                       else if (widget.applyEffectiveBottomPadding)
-                        SizedBox(height: effectiveBottom),
+                        Builder(
+                          builder: (childCtx) {
+                            final effectiveBottom = widget.maintainFixedHeightOnKeyboard
+                                ? 0.0
+                                : (isKeyboardOpen
+                                    ? 12.0
+                                    : InteractiveSheetWrapper.getEffectiveBottomPadding(
+                                        childCtx,
+                                        minPadding: widget.minBottomPadding > 0
+                                            ? widget.minBottomPadding
+                                            : InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+                                        includeKeyboard: false,
+                                      ));
+                            return SizedBox(height: effectiveBottom);
+                          },
+                        ),
                     ],
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
-        );
+        ),
+      ),
+    ),
+  ),
+);
       },
     ),
   );
-  }
+}
 }

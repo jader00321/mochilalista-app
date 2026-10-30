@@ -156,16 +156,16 @@ class NotificationItemCard extends StatelessWidget {
     if (type == null) return "Toca para ver detalles";
     switch (type.toLowerCase()) {
       case 'producto':
-        return "📦 Toca para ver análisis de stock";
+        return "Toca para ver análisis de stock";
       case 'cuota':
-        return "💰 Toca para ver detalles de la deuda";
+        return "Toca para ver detalles de la deuda";
       case 'venta':
       case 'cotizacion':
       case 'venta_admin':
       case 'venta_cliente':
-        return "🧾 Toca para ver la venta";
+        return "Toca para ver la venta";
       default:
-        return "🔍 Toca para más información";
+        return "Toca para más información";
     }
   }
 }

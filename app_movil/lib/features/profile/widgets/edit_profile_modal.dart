@@ -4,9 +4,12 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/theme_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class EditProfileModal extends StatefulWidget {
-  const EditProfileModal({super.key});
+  final String? initialFocusField;
+
+  const EditProfileModal({super.key, this.initialFocusField});
 
   @override
   State<EditProfileModal> createState() => _EditProfileModalState();
@@ -18,6 +21,10 @@ class _EditProfileModalState extends State<EditProfileModal> {
   late TextEditingController _phoneCtrl;
   late TextEditingController _emailCtrl; // 🔧 TAREA 3.1
 
+  final FocusNode _nameFocus = FocusNode();
+  final FocusNode _phoneFocus = FocusNode();
+  final FocusNode _emailFocus = FocusNode();
+
   @override
   void initState() {
     super.initState();
@@ -25,10 +32,24 @@ class _EditProfileModalState extends State<EditProfileModal> {
     _nameCtrl = TextEditingController(text: user?.fullName ?? "");
     _phoneCtrl = TextEditingController(text: user?.phone ?? "");
     _emailCtrl = TextEditingController(text: user?.email ?? ""); // 🔧 TAREA 3.1
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.initialFocusField == 'email') {
+        _emailFocus.requestFocus();
+      } else if (widget.initialFocusField == 'phone') {
+        _phoneFocus.requestFocus();
+      } else if (widget.initialFocusField == 'name') {
+        _nameFocus.requestFocus();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _nameFocus.dispose();
+    _phoneFocus.dispose();
+    _emailFocus.dispose();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
@@ -39,22 +60,34 @@ class _EditProfileModalState extends State<EditProfileModal> {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
     final textStyle = TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16);
 
     return Container(
-      padding: EdgeInsets.fromLTRB(24, 12, 24, bottomInset + 24),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       decoration: BoxDecoration(
         color: isDark ? Theme.of(context).colorScheme.surface : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      child: SafeArea(
+        top: false,
+        bottom: true,
+        maintainBottomViewPadding: true,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            child: Builder(
+              builder: (bCtx) {
+                final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+                  bCtx,
+                  minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+                );
+                return Padding(
+                  padding: EdgeInsets.only(bottom: effectiveBottom),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
             Center(
               child: Container(
                 width: 40,
@@ -68,6 +101,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
             
             TextFormField(
               controller: _nameCtrl,
+              focusNode: _nameFocus,
               style: textStyle, 
               decoration: _deco("Nombre Completo", Icons.person_outline, isDark),
               validator: (v) => v!.trim().isEmpty ? "Ingresa tu nombre" : null,
@@ -76,6 +110,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
             
             TextFormField(
               controller: _phoneCtrl,
+              focusNode: _phoneFocus,
               keyboardType: TextInputType.number,
               maxLength: 9,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -92,6 +127,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
             // 🔧 TAREA 3.1: Campo de Email
             TextFormField(
               controller: _emailCtrl,
+              focusNode: _emailFocus,
               keyboardType: TextInputType.emailAddress,
               style: textStyle,
               decoration: _deco("Correo Electrónico", Icons.email_outlined, isDark),
@@ -150,12 +186,18 @@ class _EditProfileModalState extends State<EditProfileModal> {
                   ),
                 ),
               ],
-            )
-          ],
+            ),
+            const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   InputDecoration _deco(String label, IconData icon, bool isDark) {
     return InputDecoration(

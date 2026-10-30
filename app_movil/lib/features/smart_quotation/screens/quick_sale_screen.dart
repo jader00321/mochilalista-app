@@ -254,11 +254,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final wasSaleSuccessful = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: const QuickCheckoutModal(),
-      ),
+      builder: (_) => const QuickCheckoutModal(),
     );
 
     if (mounted) {
@@ -650,29 +648,47 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                       itemBuilder: (ctx, i) {
                                         final wrapper = recents[i];
                                         final displayName = wrapper.displayNameDetail;
-                                        return InkWell(
-                                          borderRadius: BorderRadius.circular(10),
-                                          onTap: () => _addToCart(wrapper),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: isDark ? Colors.blue.withValues(alpha: 0.12) : Colors.blue.withValues(alpha: 0.08),
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.2)),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(Icons.add_circle_outline, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
-                                                const SizedBox(width: 6),
-                                                Text(
-                                                  displayName.length > 20 ? '${displayName.substring(0, 18)}...' : displayName,
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: isDark ? Colors.blue[200] : Colors.blue[800],
+                                        final remaining = quickProv.getRemainingVendibleStock(wrapper);
+                                        final isOut = remaining <= 0;
+                                        return Opacity(
+                                          opacity: isOut ? 0.6 : 1.0,
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(10),
+                                            onTap: isOut ? () {
+                                              CustomSnackBar.show(
+                                                context, 
+                                                message: wrapper.hasSharedStock
+                                                    ? "Pool Compartido agotado en carrito para este producto."
+                                                    : "Stock agotado para '${wrapper.displayNameDetail}'.",
+                                                isError: true,
+                                              );
+                                            } : () => _addToCart(wrapper),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: isOut 
+                                                    ? (isDark ? Colors.grey.withValues(alpha: 0.15) : Colors.grey[200])
+                                                    : (isDark ? Colors.blue.withValues(alpha: 0.12) : Colors.blue.withValues(alpha: 0.08)),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(color: isOut ? (isDark ? Colors.grey.withValues(alpha: 0.3) : Colors.grey.shade300) : (isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.2))),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    isOut ? Icons.block : Icons.add_circle_outline, 
+                                                    size: 14, 
+                                                    color: isOut ? (isDark ? Colors.grey[400] : Colors.grey[600]) : (isDark ? Colors.blue[300] : Colors.blue[700]),
                                                   ),
-                                                ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    displayName.length > 20 ? '${displayName.substring(0, 18)}...' : displayName,
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: isOut ? (isDark ? Colors.grey[400] : Colors.grey[600]) : (isDark ? Colors.blue[200] : Colors.blue[800]),
+                                                    ),
+                                                  ),
                                                 const SizedBox(width: 6),
                                                 if (wrapper.hasOffer) ...[
                                                   Text(
@@ -723,8 +739,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                               ],
                                             ),
                                           ),
-                                        );
-                                      },
+                                        ),
+                                      );
+                                    },
                                     ),
                                   ),
                                 ],

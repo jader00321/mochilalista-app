@@ -30,6 +30,9 @@ class ProductPresentationCard extends StatefulWidget {
   final VoidCallback? onInvalidateLeftover;
   final VoidCallback? onBeforeDiscreteMutation;
   final VoidCallback? onDiscreteMutationCompleted;
+  final String modoStock;
+  final TextEditingController? sharedStockCtrl;
+  final TextEditingController? baseCostCtrl;
 
   const ProductPresentationCard({
     super.key,
@@ -47,6 +50,9 @@ class ProductPresentationCard extends StatefulWidget {
     this.onInvalidateLeftover,
     this.onBeforeDiscreteMutation,
     this.onDiscreteMutationCompleted,
+    this.modoStock = 'INDEPENDIENTE',
+    this.sharedStockCtrl,
+    this.baseCostCtrl,
   });
 
   @override
@@ -382,6 +388,18 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
                     onStockChanged: _engine.recalcularHaciaAtrasDesdeVisual,
                     onAjusteBaseChanged: _engine.aplicarAjusteBaseManual,
                     onCreateLeftover: widget.onCreateLeftover,
+                    modoStock: widget.modoStock,
+                    usaStockCompartido: widget.controllerMap['usaStockCompartido'] == true,
+                    onToggleUsaStockCompartido: (val) {
+                      widget.onBeforeDiscreteMutation?.call();
+                      final double baseCost = double.tryParse(widget.baseCostCtrl?.text ?? "") ??
+                          ((widget.controllerMap['costoBaseUnitario'] as num?)?.toDouble() ?? 0.0);
+                      _engine.toggleSharedStockMode(isShared: val, baseCost: baseCost);
+                      widget.onDiscreteMutationCompleted?.call();
+                      widget.onStateChange(true);
+                    },
+                    sharedStockCtrl: widget.sharedStockCtrl,
+                    controllerMap: widget.controllerMap,
                   ),
                   const SizedBox(height: 16),
 

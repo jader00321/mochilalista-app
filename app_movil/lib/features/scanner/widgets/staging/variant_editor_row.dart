@@ -6,6 +6,7 @@ import 'package:app_movil/features/scanner/screens/barcode_scanner_screen.dart';
 import 'package:app_movil/features/scanner/services/scanner_cost_engine.dart';
 import 'package:app_movil/core/services/unit_catalog_service.dart';
 import 'package:app_movil/core/widgets/smart_unit_selector.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 // ============================================================================
 // 🔥 WIDGET CON ESTADO: LA CALCULADORA DE VARIANTES Y COMPARATIVA
@@ -31,6 +32,8 @@ class VariantEditorRow extends StatefulWidget {
 }
 
 class VariantEditorRowState extends State<VariantEditorRow> {
+  final GlobalKey _rowKey = GlobalKey();
+
   // Controladores de VENTA
   late TextEditingController _nombreCtrl;
   late TextEditingController _codigoBarraCtrl;
@@ -53,6 +56,8 @@ class VariantEditorRowState extends State<VariantEditorRow> {
   @override
   void initState() {
     super.initState();
+    widget.provider.registerVariantKey(widget.variant.uuidTemporal, _rowKey);
+
     _nombreCtrl = TextEditingController();
     _codigoBarraCtrl = TextEditingController();
     _unidadVentaCtrl = TextEditingController();
@@ -88,41 +93,84 @@ class VariantEditorRowState extends State<VariantEditorRow> {
     
     // Compra
     _umpCompraCtrl.text = widget.variant.umpCompra;
-    _cantCompraCtrl.text = _formatSmartDecimal(widget.variant.cantidadUmpComprada);
-    _totalPagoCtrl.text = widget.variant.totalPagoLote.toStringAsFixed(2);
+    if (widget.variant.allocatedBaseUnits != null) {
+      _cantCompraCtrl.text = widget.variant.allocatedBaseUnits.toString();
+    } else {
+      _cantCompraCtrl.text = _formatSmartDecimal(widget.variant.cantidadUmpComprada);
+    }
+    if (widget.variant.allocatedPurchaseCost != null) {
+      _totalPagoCtrl.text = widget.variant.allocatedPurchaseCost!.toStringAsFixed(2);
+    } else {
+      _totalPagoCtrl.text = widget.variant.totalPagoLote.toStringAsFixed(2);
+    }
     _unidadesLoteCtrl.text = widget.variant.unidadesPorLote.toString();
 
+    int totalUnidadesBase = widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
     double costoBase = 0.0;
-    if (widget.variant.cantidadUmpComprada > 0 && widget.variant.unidadesPorLote > 0) {
+    if (totalUnidadesBase > 0) {
+      costoBase = widget.variant.totalPagoLote / totalUnidadesBase;
+    } else if (widget.variant.cantidadUmpComprada > 0 && widget.variant.unidadesPorLote > 0) {
       costoBase = widget.variant.totalPagoLote / (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote);
     } else if (widget.variant.sourceVariantUuid != null) {
       costoBase = widget.variant.costoUnitarioSugerido;
     }
     _costoUnitarioCtrl.text = costoBase.toStringAsFixed(2);
-    
-    int totalUnidadesBase = widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
     _stockBaseCtrl.text = totalUnidadesBase.toString();
   }
 
   @override
   void didUpdateWidget(VariantEditorRow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Sincronización dinámica de todos los campos desde el variant hacia los TextFields
-    // Esto asegura que si el modal modifica la memoria, la UI la absorba correctamente.
-    if (_nombreCtrl.text != widget.variant.nombreEspecifico) _nombreCtrl.text = widget.variant.nombreEspecifico;
-    if (_codigoBarraCtrl.text != (widget.variant.codigoBarra ?? "")) _codigoBarraCtrl.text = widget.variant.codigoBarra ?? "";
-    if (_unidadVentaCtrl.text != widget.variant.effectiveUnidadVenta) _unidadVentaCtrl.text = widget.variant.effectiveUnidadVenta;
-    if (_unidadesVentaCtrl.text != widget.variant.effectiveFactorVenta.toString()) _unidadesVentaCtrl.text = widget.variant.effectiveFactorVenta.toString();
-    if (_margenCtrl.text != widget.variant.factorGananciaVentaSugerido.toStringAsFixed(2)) _margenCtrl.text = widget.variant.factorGananciaVentaSugerido.toStringAsFixed(2);
-    if (_precioVentaCtrl.text != widget.variant.precioVentaSugerido.toStringAsFixed(2)) _precioVentaCtrl.text = widget.variant.precioVentaSugerido.toStringAsFixed(2);
+    if (oldWidget.variant.uuidTemporal != widget.variant.uuidTemporal) {
+      oldWidget.provider.unregisterVariantKey(oldWidget.variant.uuidTemporal);
+      widget.provider.registerVariantKey(widget.variant.uuidTemporal, _rowKey);
+    }
+    // Sincronización reactiva de todos los campos desde el variant hacia los TextFields
+    // Asegura que cuando una variante madre reciba de vuelta unidades/costos de una hija eliminada,
+    // o cuando se divida desde el modal, sus controladores se sincronicen de inmediato.
+    if (_nombreCtrl.text != widget.variant.nombreEspecifico) {
+      _nombreCtrl.text = widget.variant.nombreEspecifico;
+    }
+    if (_codigoBarraCtrl.text != (widget.variant.codigoBarra ?? "")) {
+      _codigoBarraCtrl.text = widget.variant.codigoBarra ?? "";
+    }
+    if (_unidadVentaCtrl.text != widget.variant.effectiveUnidadVenta) {
+      _unidadVentaCtrl.text = widget.variant.effectiveUnidadVenta;
+    }
+    if (_unidadesVentaCtrl.text != widget.variant.effectiveFactorVenta.toString()) {
+      _unidadesVentaCtrl.text = widget.variant.effectiveFactorVenta.toString();
+    }
+    if (_margenCtrl.text != widget.variant.factorGananciaVentaSugerido.toStringAsFixed(2)) {
+      _margenCtrl.text = widget.variant.factorGananciaVentaSugerido.toStringAsFixed(2);
+    }
+    if (_precioVentaCtrl.text != widget.variant.precioVentaSugerido.toStringAsFixed(2)) {
+      _precioVentaCtrl.text = widget.variant.precioVentaSugerido.toStringAsFixed(2);
+    }
     
-    if (_umpCompraCtrl.text != widget.variant.umpCompra) _umpCompraCtrl.text = widget.variant.umpCompra;
-    if (_cantCompraCtrl.text != _formatSmartDecimal(widget.variant.cantidadUmpComprada)) _cantCompraCtrl.text = _formatSmartDecimal(widget.variant.cantidadUmpComprada);
-    if (_totalPagoCtrl.text != widget.variant.totalPagoLote.toStringAsFixed(2)) _totalPagoCtrl.text = widget.variant.totalPagoLote.toStringAsFixed(2);
-    if (_unidadesLoteCtrl.text != widget.variant.unidadesPorLote.toString()) _unidadesLoteCtrl.text = widget.variant.unidadesPorLote.toString();
+    if (_umpCompraCtrl.text != widget.variant.umpCompra) {
+      _umpCompraCtrl.text = widget.variant.umpCompra;
+    }
+    String targetCant = widget.variant.allocatedBaseUnits != null
+        ? widget.variant.allocatedBaseUnits.toString()
+        : _formatSmartDecimal(widget.variant.cantidadUmpComprada);
+    if (_cantCompraCtrl.text != targetCant) {
+      _cantCompraCtrl.text = targetCant;
+    }
+    String targetTotal = widget.variant.allocatedPurchaseCost != null
+        ? widget.variant.allocatedPurchaseCost!.toStringAsFixed(2)
+        : widget.variant.totalPagoLote.toStringAsFixed(2);
+    if (_totalPagoCtrl.text != targetTotal) {
+      _totalPagoCtrl.text = targetTotal;
+    }
+    if (_unidadesLoteCtrl.text != widget.variant.unidadesPorLote.toString()) {
+      _unidadesLoteCtrl.text = widget.variant.unidadesPorLote.toString();
+    }
     
+    int expectedBase = widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
     double costoBase = 0.0;
-    if (widget.variant.cantidadUmpComprada > 0 && widget.variant.unidadesPorLote > 0) {
+    if (expectedBase > 0) {
+      costoBase = widget.variant.totalPagoLote / expectedBase;
+    } else if (widget.variant.cantidadUmpComprada > 0 && widget.variant.unidadesPorLote > 0) {
       costoBase = widget.variant.totalPagoLote / (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote);
     } else if (widget.variant.sourceVariantUuid != null) {
       costoBase = widget.variant.costoUnitarioSugerido;
@@ -131,15 +179,14 @@ class VariantEditorRowState extends State<VariantEditorRow> {
       _costoUnitarioCtrl.text = costoBase.toStringAsFixed(2);
     }
     
-    int currentBase = int.tryParse(_stockBaseCtrl.text) ?? -1;
-    int expectedBase = widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
-    if (currentBase != expectedBase && expectedBase >= 0) {
+    if (_stockBaseCtrl.text != expectedBase.toString() && expectedBase >= 0) {
       _stockBaseCtrl.text = expectedBase.toString();
     }
   }
 
   @override
   void dispose() {
+    widget.provider.unregisterVariantKey(widget.variant.uuidTemporal);
     _nombreCtrl.dispose(); _codigoBarraCtrl.dispose(); _unidadVentaCtrl.dispose(); _unidadesVentaCtrl.dispose();
     _margenCtrl.dispose(); _precioVentaCtrl.dispose(); _umpCompraCtrl.dispose();
     _cantCompraCtrl.dispose(); _totalPagoCtrl.dispose(); _unidadesLoteCtrl.dispose();
@@ -277,8 +324,8 @@ class VariantEditorRowState extends State<VariantEditorRow> {
     });
   }
 
-  void _openComparativeModal(Map<String, dynamic> dbData) {
-    ComparativeUpdateModal.show(
+  void _openComparativeModal(Map<String, dynamic> dbData) async {
+    final result = await ComparativeUpdateModal.show<String>(
       context,
       variant: widget.variant,
       group: widget.group,
@@ -288,8 +335,194 @@ class VariantEditorRowState extends State<VariantEditorRow> {
       onConfirm: () {
         _initControllers();
         widget.provider.notifyUIUpdate();
-        Navigator.pop(context);
       },
+    );
+    if (result != null) {
+      widget.provider.scrollToAndHighlightVariant(result);
+    }
+  }
+
+  Widget _buildFullWidthStockBalancePanel({required bool isVariantMatch}) {
+    final int stockBD = isVariantMatch ? (widget.variant.matchPresentacion.datos?.stockActual ?? 0) : 0;
+    final int totalBase = widget.variant.calculateTotalUnitsBase(stockActualBD: stockBD);
+    final int factor = widget.variant.effectiveFactorVenta;
+    final String unidad = widget.variant.effectiveUnidadVenta;
+    final bool isSumar = widget.variant.stockOperation == 'sumar';
+    final int stockIngreso = widget.variant.stockIngresanteBase;
+
+    String currentStockLabel = factor > 1
+        ? "= ${ComparativeUpdateModal.formatUnitLabelForTest(stockBD ~/ factor, unidad)} (x$factor)"
+        : "= ${ComparativeUpdateModal.formatUnitLabelForTest(stockBD, unidad)}";
+
+    String incomingStockLabel = factor > 1
+        ? "= +${ComparativeUpdateModal.formatUnitLabelForTest(stockIngreso ~/ factor, unidad)} (x$factor)"
+        : "= +${ComparativeUpdateModal.formatUnitLabelForTest(stockIngreso, unidad)}";
+
+    int finalPkgs = factor > 0 ? (totalBase ~/ factor) : totalBase;
+    int finalLeftover = factor > 0 ? (totalBase % factor) : 0;
+    String finalStockLabel = factor > 1
+        ? (finalLeftover > 0 
+            ? "= ${ComparativeUpdateModal.formatUnitLabelForTest(finalPkgs, unidad)} + $finalLeftover sueltas" 
+            : "= ${ComparativeUpdateModal.formatUnitLabelForTest(finalPkgs, unidad)}")
+        : "= ${ComparativeUpdateModal.formatUnitLabelForTest(totalBase, unidad)}";
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: widget.isDark ? const Color(0xFF161622) : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: widget.isDark ? Colors.white12 : Colors.grey.shade300,
+        ),
+      ),
+      child: Row(
+        children: [
+          // 1. Stock Actual
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  "Stock Actual",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 3),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    "$stockBD unid.",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: widget.isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    currentStockLabel,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                      color: widget.isDark ? Colors.blue[300] : Colors.blue[700],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              isSumar ? "+" : "→",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: widget.isDark ? Colors.grey[500] : Colors.grey[400],
+              ),
+            ),
+          ),
+          // 2. Ingreso Factura
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  "Ingreso Factura",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 3),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    "+$stockIngreso unid.",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: widget.isDark ? Colors.green[300] : Colors.green[700],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    incomingStockLabel,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                      color: widget.isDark ? Colors.green[300] : Colors.green[700],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              "=",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: widget.isDark ? Colors.grey[500] : Colors.grey[400],
+              ),
+            ),
+          ),
+          // 3. Nuevo Total
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  "Nuevo Total",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 3),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    "$totalBase unid.",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: widget.isDark ? Colors.tealAccent : Colors.teal[800],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    finalStockLabel,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                      color: widget.isDark ? Colors.tealAccent[400] : Colors.teal[800],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -319,9 +552,12 @@ class VariantEditorRowState extends State<VariantEditorRow> {
           children: [
             Icon(Icons.check_circle, size: 15, color: widget.isDark ? Colors.green[300] : Colors.green[700]),
             const SizedBox(width: 6),
-            Text(
-              "Stock exacto: $completas $unidad ($totalBase unid. base)",
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[800]),
+            Flexible(
+              child: Text(
+                "Stock exacto: ${ComparativeUpdateModal.formatUnitLabelForTest(completas, unidad)} ($totalBase unid. base)",
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[800]),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
@@ -397,10 +633,10 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                     widget.provider.adaptVariantUnit(widget.variant.uuidTemporal);
                     _initControllers();
                   },
-                  icon: const Icon(Icons.bolt, size: 14),
+                  icon: const Icon(Icons.flash_on, size: 14),
                   label: const Text("Adaptar a Unidad (x1)", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[700],
+                    backgroundColor: Colors.blue[800],
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     minimumSize: const Size(0, 30),
@@ -418,22 +654,6 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                     side: BorderSide(color: widget.isDark ? Colors.red[300]! : Colors.red.shade300),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     minimumSize: const Size(0, 30),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      widget.variant.allowDeficitApproved = true;
-                    });
-                    widget.provider.notifyUIUpdate();
-                  },
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: const Size(0, 30),
-                  ),
-                  child: Text(
-                    "Autorizar registro en 0",
-                    style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[300] : Colors.grey[700], decoration: TextDecoration.underline),
                   ),
                 ),
               ],
@@ -455,11 +675,11 @@ class VariantEditorRowState extends State<VariantEditorRow> {
         ),
         child: Row(
           children: [
-            Icon(Icons.check_circle_outline, size: 15, color: widget.isDark ? Colors.teal[300] : Colors.teal[800]),
+            Icon(Icons.inventory_2_outlined, size: 15, color: widget.isDark ? Colors.teal[300] : Colors.teal[800]),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                "✅ $completas $unidad (+$sobrante unid. en reserva base)",
+                ComparativeUpdateModal.formatAccumulationBadgeText(completas, unidad, sobrante),
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.teal[200] : Colors.teal[900]),
               ),
             ),
@@ -494,7 +714,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  "Sobrante detectado: Forman $completas $unidad completas, pero sobran $sobrante unid. sueltas.",
+                  "Sobrante detectado: Forman ${ComparativeUpdateModal.formatUnitLabelForTest(completas, unidad)} completas, pero sobran $sobrante unid. sueltas.",
                   style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[200] : Colors.orange[900]),
                 ),
               ),
@@ -507,11 +727,14 @@ class VariantEditorRowState extends State<VariantEditorRow> {
             children: [
               ElevatedButton.icon(
                 onPressed: () {
-                  widget.provider.createLeftoverVariant(widget.variant.uuidTemporal, sobrante);
+                  final newUuid = widget.provider.createLeftoverVariant(widget.variant.uuidTemporal, sobrante);
                   _initControllers();
+                  if (newUuid != null) {
+                    widget.provider.scrollToAndHighlightVariant(newUuid);
+                  }
                 },
                 icon: const Icon(Icons.add, size: 14),
-                label: Text("Enviar $sobrante unid. a 'Unidad (x1)'", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                label: Text("Enviar las $sobrante unid. a variante 'Unidad (x1)'", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange[800],
                   foregroundColor: Colors.white,
@@ -521,11 +744,25 @@ class VariantEditorRowState extends State<VariantEditorRow> {
               ),
               OutlinedButton.icon(
                 onPressed: () {
+                  widget.provider.activateSharedStockForGroup(widget.group.uuidTemporal, widget.variant.uuidTemporal);
+                  _initControllers();
+                },
+                icon: const Icon(Icons.all_inclusive_rounded, size: 14),
+                label: const Text("Activar Stock Compartido (Pool único)", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: widget.isDark ? Colors.tealAccent : Colors.teal.shade800,
+                  side: BorderSide(color: widget.isDark ? Colors.tealAccent : Colors.teal.shade400),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: const Size(0, 30),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () {
                   widget.provider.authorizeLeftoverInReserve(widget.variant.uuidTemporal);
                   _initControllers();
                 },
-                icon: const Icon(Icons.archive_outlined, size: 14),
-                label: const Text("Conservar en reserva base", style: TextStyle(fontSize: 11)),
+                icon: const Icon(Icons.inventory_2_outlined, size: 14),
+                label: Text("Acumular las $sobrante unid. para tu próxima compra", style: const TextStyle(fontSize: 11)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: widget.isDark ? Colors.orange[200] : Colors.orange[900],
                   side: BorderSide(color: widget.isDark ? Colors.orange[300]! : Colors.orange.shade300),
@@ -544,170 +781,216 @@ class VariantEditorRowState extends State<VariantEditorRow> {
   Widget build(BuildContext context) {
     bool isVariantMatch = widget.variant.matchPresentacion.estado.contains("MATCH");
     final textColor = widget.isDark ? Colors.white : Colors.black87;
+    final isHighlighted = widget.provider.highlightedVariantUuid == widget.variant.uuidTemporal;
 
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: isVariantMatch ? (widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[100]) : (widget.isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[100]), borderRadius: BorderRadius.circular(6)),
-                child: Text(isVariantMatch ? "VARIANTE EXISTENTE" : "NUEVA VARIANTE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isVariantMatch ? (widget.isDark ? Colors.green[300] : Colors.green[800]) : (widget.isDark ? Colors.orange[300] : Colors.orange[900]))),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (widget.variant.sourceVariantUuid == null && (widget.variant.hasSnapshotBeenModified || widget.variant.hasBeenModified))
-                    IconButton(
-                      icon: const Icon(Icons.restore),
-                      color: Colors.blue,
-                      iconSize: 22,
-                      tooltip: "Restaurar cambios",
-                      onPressed: () {
-                        if (widget.variant.hasSnapshotBeenModified) {
-                          widget.variant.restoreFromSnapshot();
-                        } else {
-                          widget.variant.restoreOriginals();
+    return AnimatedContainer(
+      key: _rowKey,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: isHighlighted 
+            ? (widget.isDark ? Colors.green.withValues(alpha: 0.12) : Colors.green.shade50) 
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isHighlighted ? Colors.greenAccent : Colors.transparent,
+          width: isHighlighted ? 2.5 : 1.0,
+        ),
+        boxShadow: isHighlighted
+            ? [
+                BoxShadow(
+                  color: Colors.greenAccent.withValues(alpha: 0.3),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                )
+              ]
+            : null,
+      ),
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: isVariantMatch ? (widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green[100]) : (widget.isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange[100]), borderRadius: BorderRadius.circular(6)),
+                  child: Text(isVariantMatch ? "VARIANTE EXISTENTE" : "NUEVA VARIANTE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isVariantMatch ? (widget.isDark ? Colors.green[300] : Colors.green[800]) : (widget.isDark ? Colors.orange[300] : Colors.orange[900]))),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.variant.sourceVariantUuid == null && (widget.variant.hasSnapshotBeenModified || widget.variant.hasBeenModified))
+                      IconButton(
+                        icon: const Icon(Icons.restore),
+                        color: Colors.blue,
+                        iconSize: 22,
+                        tooltip: "Restaurar cambios",
+                        onPressed: () {
+                          if (widget.variant.hasSnapshotBeenModified) {
+                            widget.variant.restoreFromSnapshot();
+                          } else {
+                            widget.variant.restoreOriginals();
+                          }
+                          _initControllers();
+                          widget.provider.notifyUIUpdate();
+                        },
+                      ),
+                    InkWell(onTap: widget.onDelete, child: Icon(Icons.close, size: 22, color: widget.isDark ? Colors.grey[500] : Colors.grey[600])),
+                  ],
+                )
+              ],
+            ),
+            const SizedBox(height: 10),
+            
+            if (widget.group.matchProducto.estado.contains("MATCH"))
+              _buildVariantCards(),
+
+            // 🔥 VARIANTE EXISTENTE (Diseño Adaptativo + Matemática unificada)
+            if (isVariantMatch) ...[
+               // BANNER O ETIQUETA DE DISCREPANCIA (si difiere la factura y no se ha editado)
+               Builder(builder: (ctx) {
+                 bool sameUnit = (widget.variant.unidadesPorVenta == widget.variant.effectiveFactorVenta);
+                 if (!sameUnit && !widget.variant.updateUnidadVenta) {
+                   return Container(
+                     margin: const EdgeInsets.only(bottom: 12),
+                     child: Row(
+                       children: [
+                         Icon(Icons.info_outline, size: 14, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                         const SizedBox(width: 6),
+                         Expanded(
+                           child: Text(
+                             "Unidad adaptada: Factura [x${widget.variant.unidadesPorVenta}] → Sistema [x${widget.variant.effectiveFactorVenta}]",
+                             style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontStyle: FontStyle.italic),
+                           ),
+                         ),
+                       ],
+                     ),
+                   );
+                 }
+                 return const SizedBox.shrink();
+               }),
+               Container(
+                 padding: const EdgeInsets.all(12),
+                 decoration: BoxDecoration(
+                   color: widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[50], 
+                   borderRadius: BorderRadius.circular(12), 
+                   border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade200),
+                 ),
+                 child: Column(
+                   crossAxisAlignment: CrossAxisAlignment.start,
+                   children: [                    // Fila Superior: Título de Variante y Unidad + Botón Control de Variante (Adaptativo)
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        void handleOpenModal() {
+                          Map<String, dynamic> dbData = {};
+                          final av = widget.variant.matchPresentacion.datos?.availablePresentations;
+                          if (av != null && av.isNotEmpty) {
+                            try {
+                              dbData = av.firstWhere((p) => p['id'] == widget.variant.matchPresentacion.datos?.id);
+                            } catch (_) {
+                              dbData = av.first;
+                            }
+                          }
+                          if (dbData.isEmpty) {
+                            final d = widget.variant.matchPresentacion.datos;
+                            dbData = {
+                              'id': d?.id,
+                              'nombre_especifico': d?.nombre,
+                              'unidad_venta': d?.unidadVenta ?? 'Unidad',
+                              'unidades_por_venta': d?.unidadesPorVenta ?? 1,
+                              'stock_actual': d?.stockActual ?? 0,
+                              'precio_venta': d?.precioVentaFinal ?? 0.0,
+                              'costo_unitario': d?.costoUnitarioCalculado ?? 0.0,
+                            };
+                          }
+                          _openComparativeModal(dbData);
                         }
-                        _initControllers();
-                        widget.provider.notifyUIUpdate();
+
+                        final isNarrow = constraints.maxWidth < 280;
+                        final controlButton = ElevatedButton.icon(
+                          icon: const Icon(Icons.tune, size: 14),
+                          label: const Text("Control de Variante", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: widget.isDark ? Colors.blue[800] : Colors.blue[600],
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            minimumSize: const Size(0, 30),
+                          ),
+                          onPressed: handleOpenModal,
+                        );
+
+                        if (isNarrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.variant.matchPresentacion.datos?.nombre ?? widget.variant.nombreEspecifico,
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.2),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      "Se venderá por: ${widget.variant.effectiveUnidadVenta} (x${widget.variant.effectiveFactorVenta})",
+                                      style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  controlButton,
+                                ],
+                              ),
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.variant.matchPresentacion.datos?.nombre ?? widget.variant.nombreEspecifico,
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.2),
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Se venderá por: ${widget.variant.effectiveUnidadVenta} (x${widget.variant.effectiveFactorVenta})",
+                                    style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            controlButton,
+                          ],
+                        );
                       },
                     ),
-                  InkWell(onTap: widget.onDelete, child: Icon(Icons.close, size: 22, color: widget.isDark ? Colors.grey[500] : Colors.grey[600])),
-                ],
-              )
-            ],
-          ),
-          const SizedBox(height: 10),
-          
-          if (widget.group.matchProducto.estado.contains("MATCH"))
-            _buildVariantCards(),
-
-          // 🔥 VARIANTE EXISTENTE (Diseño Adaptativo + Matemática unificada)
-          if (isVariantMatch) ...[
-             // BANNER O ETIQUETA DE DISCREPANCIA (si difiere la factura y no se ha editado)
-             Builder(builder: (ctx) {
-               bool sameUnit = (widget.variant.unidadesPorVenta == widget.variant.effectiveFactorVenta);
-               if (!sameUnit && !widget.variant.updateUnidadVenta) {
-                 return Container(
-                   margin: const EdgeInsets.only(bottom: 12),
-                   child: Row(
-                     children: [
-                       Icon(Icons.info_outline, size: 14, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
-                       const SizedBox(width: 6),
-                       Expanded(
-                         child: Text(
-                           "Unidad adaptada: Factura [x${widget.variant.unidadesPorVenta}] → Sistema [x${widget.variant.effectiveFactorVenta}]",
-                           style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontStyle: FontStyle.italic),
-                         ),
-                       ),
-                     ],
-                   ),
-                 );
-               }
-               return const SizedBox.shrink();
-             }),
-             Container(
-               padding: const EdgeInsets.all(12),
-               decoration: BoxDecoration(color: widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade200)),
-               child: Column(
-                 crossAxisAlignment: CrossAxisAlignment.start,
-                 children: [
-                   Row(
-                     crossAxisAlignment: CrossAxisAlignment.start,
-                     children: [
-                       Expanded(
-                         child: Column(
-                           crossAxisAlignment: CrossAxisAlignment.start,
-                           children: [
-                             Text(
-                               widget.variant.matchPresentacion.datos?.nombre ?? widget.variant.nombreEspecifico, 
-                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.2),
-                               maxLines: 3, overflow: TextOverflow.ellipsis,
-                             ),
-                             const SizedBox(height: 6),
-                             Text(
-                               "Se venderá por: ${widget.variant.effectiveUnidadVenta} (x${widget.variant.effectiveFactorVenta})", 
-                               style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)
-                             ),
-                             const SizedBox(height: 6),
-                             Builder(builder: (ctx) {
-                               final int stockBD = widget.variant.matchPresentacion.datos?.stockActual ?? 0;
-                               final int totalBase = widget.variant.calculateTotalUnitsBase(stockActualBD: stockBD);
-                               final int factor = widget.variant.effectiveFactorVenta;
-                               final int packIngreso = factor > 0 ? (widget.variant.stockIngresanteBase ~/ factor) : widget.variant.stockIngresanteBase;
-                               final int packTotal = factor > 0 ? (totalBase ~/ factor) : totalBase;
-                               final bool isSumar = widget.variant.stockOperation == 'sumar';
-
-                               return Column(
-                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                 children: [
-                                   Text(
-                                     "Ingresarán al Stock: +${widget.variant.stockIngresanteBase} unid. base (+$packIngreso ${widget.variant.effectiveUnidadVenta})", 
-                                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[700])
-                                   ),
-                                   const SizedBox(height: 2),
-                                   Text(
-                                     isSumar 
-                                       ? "Inventario: $stockBD actual + ${widget.variant.stockIngresanteBase} ingreso = $totalBase unid. base ($packTotal ${widget.variant.effectiveUnidadVenta})"
-                                       : "Reemplazo de Stock: $totalBase unid. base ($packTotal ${widget.variant.effectiveUnidadVenta})",
-                                     style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
-                                   ),
-                                 ],
-                               );
-                             }),
-                           ],
-                         ),
-                       ),
-                       const SizedBox(width: 8),
-                       ElevatedButton.icon(
-                         icon: const Icon(Icons.tune, size: 16),
-                         label: const Text("Control de Variante", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                         style: ElevatedButton.styleFrom(
-                           backgroundColor: widget.isDark ? Colors.blue[800] : Colors.blue[600],
-                           foregroundColor: Colors.white,
-                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                         ),
-                         onPressed: () {
-                           Map<String, dynamic> dbData = {};
-                           final av = widget.variant.matchPresentacion.datos?.availablePresentations;
-                           if (av != null && av.isNotEmpty) {
-                             try {
-                               dbData = av.firstWhere((p) => p['id'] == widget.variant.matchPresentacion.datos?.id);
-                             } catch (_) {
-                               dbData = av.first;
-                             }
-                           }
-                           if (dbData.isEmpty) {
-                             final d = widget.variant.matchPresentacion.datos;
-                             dbData = {
-                               'id': d?.id,
-                               'nombre_especifico': d?.nombre,
-                               'unidad_venta': d?.unidadVenta ?? 'Unidad',
-                               'unidades_por_venta': d?.unidadesPorVenta ?? 1,
-                               'stock_actual': d?.stockActual ?? 0,
-                               'precio_venta': d?.precioVentaFinal ?? 0.0,
-                               'costo_unitario': d?.costoUnitarioCalculado ?? 0.0,
-                             };
-                           }
-                           _openComparativeModal(dbData);
-                         },
-                       ),
-                     ],
-                   ),
-                   const SizedBox(height: 6),
-                   _buildStockAlertBlock(isVariantMatch: true),
-                 ],
-               ),
-             )
+                     const SizedBox(height: 8),
+                     // Fila Inferior: Panel de Balance de Stock al 100% de Ancho
+                     _buildFullWidthStockBalancePanel(isVariantMatch: true),
+                     const SizedBox(height: 6),
+                     // Alertas de Stock (Sobrante o Déficit)
+                     _buildStockAlertBlock(isVariantMatch: true),
+                   ],
+                 ),
+               )
           ] else ...[
              // 🔥 VARIANTE NUEVA (Bloques separados)
              Container(
@@ -716,7 +999,13 @@ class VariantEditorRowState extends State<VariantEditorRow> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("📦 Identificación", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                  Row(
+                    children: [
+                      Icon(Icons.inventory_2_outlined, size: 15, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                      const SizedBox(width: 6),
+                      Text("Identificación", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                    ],
+                  ),
                 // 1. Nombre
                 Row(children: [Expanded(
                   child: MiniInput(ctrl: _nombreCtrl, label: "Nombre Específico / Detalle", hint: "Ej: Rojo A4", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged()),
@@ -810,7 +1099,13 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                 
                   Divider(height: 16, color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
                   
-                  Text("🛒 Datos de Compra (Factura)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                  Row(
+                    children: [
+                      Icon(Icons.receipt_long_outlined, size: 15, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                      const SizedBox(width: 6),
+                      Text("Datos de Compra (Factura)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   Row(children: [
                     Expanded(child: MiniInput(ctrl: _umpCompraCtrl, label: "Empaque Prov.", hint: "Ejem: Caja, Ud, Docena...", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromEmpaque: true))),
@@ -907,7 +1202,13 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                   ],
                   Divider(height: 16, color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
 
-                  Text("💰 Venta y Precio", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                  Row(
+                    children: [
+                      Icon(Icons.sell_outlined, size: 15, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                      const SizedBox(width: 6),
+                      Text("Venta y Precio", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   // FASE 11: SmartUnitSelector movido aquí desde Identificación
                   SmartUnitSelector(
@@ -944,7 +1245,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
           ]
         ],
       ),
-    ));
+    )));
   }
 
   Widget _buildVariantCards() {
@@ -954,108 +1255,132 @@ class VariantEditorRowState extends State<VariantEditorRow> {
     int? selectedId = widget.variant.matchPresentacion.estado == "NUEVO_EN_PADRE" ? -1 : widget.variant.matchPresentacion.datos?.id;
     if (selectedId != -1 && selectedId != null && !alternatives.any((p) => p['id'] == selectedId)) selectedId = null; 
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      height: 90,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        itemCount: alternatives.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (ctx, i) {
-          if (i == alternatives.length) {
-            bool isSelected = selectedId == -1;
-            return GestureDetector(
-              onTap: () {
-                widget.provider.switchVariantToNew(widget.variant.uuidTemporal);
-                WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) _initControllers(); });
-              },
-              child: Container(
-                width: 140,
-                decoration: BoxDecoration(
-                  color: isSelected ? (widget.isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50) : (widget.isDark ? const Color(0xFF1A1A24) : Colors.grey.shade50),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected ? (widget.isDark ? Colors.blue : Colors.blue.shade400) : (widget.isDark ? Colors.white24 : Colors.grey.shade300),
-                    width: isSelected ? 2 : 1,
-                  ),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add, size: 18, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
-                      const SizedBox(width: 6),
-                      Text("Nueva", style: TextStyle(color: widget.isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold, fontSize: 13)),
-                    ],
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Row(
+            children: [
+              Icon(Icons.style_outlined, size: 14, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+              const SizedBox(width: 5),
+              Text(
+                "Variante Vinculada para esta Compra:",
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: widget.isDark ? Colors.grey[300] : Colors.grey[800],
                 ),
               ),
-            );
-          }
-
-          var p = alternatives[i];
-          bool isSelected = selectedId == p['id'];
-          String pName = p['nombre_completo']?.toString() ?? p['nombre_especifico']?.toString() ?? '';
-          if (pName.isEmpty || pName == 'null') pName = 'General';
-          
-          return GestureDetector(
-            onTap: () {
-              widget.provider.switchVariantLink(widget.variant.uuidTemporal, p['id']);
-              WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) _initControllers(); });
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 160,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? (widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.shade50) : (widget.isDark ? const Color(0xFF23232F) : Colors.white),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isSelected ? (widget.isDark ? Colors.green[400]! : Colors.green) : (widget.isDark ? Colors.white10 : Colors.grey.shade200),
-                  width: isSelected ? 2 : 1
-                ),
-                boxShadow: [
-                  if (!widget.isDark && !isSelected) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))
-                ]
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(pName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isSelected ? (widget.isDark ? Colors.green[300] : Colors.green[800]) : (widget.isDark ? Colors.white : Colors.black87)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  Text("${p['unidad'] ?? 'Unidad'} (x${p['factor_conversion'] ?? 1})", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text("Stock: ${p['stock_actual'] ?? 0}", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+            ],
+          ),
+        ),
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          height: 90,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            itemCount: alternatives.length + 1,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (ctx, i) {
+              if (i == alternatives.length) {
+                bool isSelected = selectedId == -1;
+                return GestureDetector(
+                  onTap: () {
+                    widget.provider.switchVariantToNew(widget.variant.uuidTemporal);
+                    WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) _initControllers(); });
+                  },
+                  child: Container(
+                    width: 140,
+                    decoration: BoxDecoration(
+                      color: isSelected ? (widget.isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50) : (widget.isDark ? const Color(0xFF1A1A24) : Colors.grey.shade50),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? (widget.isDark ? Colors.blue : Colors.blue.shade400) : (widget.isDark ? Colors.white24 : Colors.grey.shade300),
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: Center(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (p['precio_oferta'] != null)
-                            Text("S/${(p['precio_venta'] ?? 0.0).toStringAsFixed(2)}", style: TextStyle(fontSize: 9, decoration: TextDecoration.lineThrough, color: widget.isDark ? Colors.grey[500] : Colors.grey[400])),
-                          Row(
+                          Icon(Icons.add, size: 18, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                          const SizedBox(width: 6),
+                          Text("Nueva", style: TextStyle(color: widget.isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              var p = alternatives[i];
+              bool isSelected = selectedId == p['id'];
+              String pName = p['nombre_completo']?.toString() ?? p['nombre_especifico']?.toString() ?? '';
+              if (pName.isEmpty || pName == 'null') pName = 'General';
+              double pVenta = (p['precio_venta'] is num) ? (p['precio_venta'] as num).toDouble() : 0.0;
+              double? pOferta = (p['precio_oferta'] is num) ? (p['precio_oferta'] as num).toDouble() : null;
+              
+              return GestureDetector(
+                onTap: () {
+                  widget.provider.switchVariantLink(widget.variant.uuidTemporal, p['id']);
+                  WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) _initControllers(); });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 160,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? (widget.isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.shade50) : (widget.isDark ? const Color(0xFF23232F) : Colors.white),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected ? (widget.isDark ? Colors.green[400]! : Colors.green) : (widget.isDark ? Colors.white10 : Colors.grey.shade200),
+                      width: isSelected ? 2 : 1
+                    ),
+                    boxShadow: [
+                      if (!widget.isDark && !isSelected) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))
+                    ]
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(pName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isSelected ? (widget.isDark ? Colors.green[300] : Colors.green[800]) : (widget.isDark ? Colors.white : Colors.black87)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Text("${p['unidad'] ?? 'Unidad'} (x${p['factor_conversion'] ?? 1})", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      const Spacer(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text("Stock: ${p['stock_actual'] ?? 0}", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (p['precio_oferta'] != null)
-                                Container(margin: const EdgeInsets.only(right: 4), padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: Colors.purple, borderRadius: BorderRadius.circular(4)), child: const Text("PROMO", style: TextStyle(fontSize: 7, color: Colors.white, fontWeight: FontWeight.bold))),
-                              Text("S/${(p['precio_oferta'] ?? p['precio_venta'] ?? 0.0).toStringAsFixed(2)}", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: p['precio_oferta'] != null ? Colors.purple[400] : (widget.isDark ? Colors.blue[300] : Colors.blue[700]))),
+                              if (pOferta != null)
+                                Text(AppCurrency.format(pVenta), style: TextStyle(fontSize: 9, decoration: TextDecoration.lineThrough, color: widget.isDark ? Colors.grey[500] : Colors.grey[400])),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (pOferta != null)
+                                    Container(margin: const EdgeInsets.only(right: 4), padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: Colors.purple, borderRadius: BorderRadius.circular(4)), child: const Text("PROMO", style: TextStyle(fontSize: 7, color: Colors.white, fontWeight: FontWeight.bold))),
+                                  Text(AppCurrency.format(pOferta ?? pVenta), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: pOferta != null ? Colors.purple[400] : (widget.isDark ? Colors.blue[300] : Colors.blue[700]))),
+                                ],
+                              ),
                             ],
                           ),
                         ],
-                      ),
+                      )
                     ],
-                  )
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

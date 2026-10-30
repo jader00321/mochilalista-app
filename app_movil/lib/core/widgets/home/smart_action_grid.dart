@@ -1120,7 +1120,7 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
                 ],
               ),
               Text(
-                isHero ? "★ En Portada" : def.subtitle,
+                isHero ? "En Portada" : def.subtitle,
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
@@ -1350,7 +1350,7 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
                 ),
                 child: const Icon(Icons.flash_on_rounded, color: Colors.pinkAccent),
               ),
-              title: const Text("⚡ Nueva Venta Limpia", style: TextStyle(fontWeight: FontWeight.bold)),
+              title: const Text("Nueva Venta Limpia", style: TextStyle(fontWeight: FontWeight.bold)),
               subtitle: const Text("Vacía la caja y abre una nueva venta en blanco"),
               onTap: () {
                 Navigator.pop(ctx);
@@ -1370,7 +1370,7 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
                   child: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent),
                 ),
                 title: Text(
-                  "🧹 Vaciar Caja (${prov.cartItems.length} ítems)",
+                  "Vaciar Caja (${prov.cartItems.length} ítems)",
                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent),
                 ),
                 subtitle: const Text("Descarta todos los productos actualmente en cola"),

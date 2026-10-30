@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
@@ -9,12 +10,12 @@ class StockUpdateModal extends StatefulWidget {
   final ProductPresentation presentation;
   final InventoryProvider provider;
   final bool isDark;
-  
+
   const StockUpdateModal({
-    super.key, 
-    required this.presentation, 
-    required this.provider, 
-    required this.isDark
+    super.key,
+    required this.presentation,
+    required this.provider,
+    required this.isDark,
   });
 
   /// 🏆 Despliegue con InteractiveSheetWrapper (Swipe down to dismiss + Blindaje BUG-07)
@@ -39,12 +40,26 @@ class StockUpdateModal extends StatefulWidget {
 }
 
 class _StockUpdateModalState extends State<StockUpdateModal> {
-  // Modo: 0 = Sumar mercancía recibida, 1 = Fijar stock total exacto
+  // Modo: 0 = Sumar mercancía recibida, 1 = Fijar stock total exacto, 2 = Cupo de stock vendible (stock compartido)
   int _selectedMode = 1;
 
   late TextEditingController ctrl;
   bool _isSaving = false;
   late int _currentStockBase;
+
+  bool _showExcessWarning = false;
+  Timer? _warningTimer;
+
+  bool get _isShared => widget.presentation.usaStockCompartido;
+
+  Product? get _parentProduct {
+    for (final item in widget.provider.items) {
+      if (item.presentation.id == widget.presentation.id) {
+        return item.product;
+      }
+    }
+    return null;
+  }
 
   int get _factor => widget.presentation.unidadesPorVenta > 0
       ? widget.presentation.unidadesPorVenta
@@ -54,6 +69,19 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
 
   bool get _hasFactor => _factor > 1;
 
+  int get _poolBaseUnits {
+    if (_isShared) {
+      final p = _parentProduct;
+      if (p != null && p.stockCompartido > 0) {
+        return p.stockCompartido;
+      }
+      return widget.presentation.stockActual;
+    }
+    return _currentStockBase;
+  }
+
+  int get _maxPhysicalUnits => _poolBaseUnits ~/ _factor;
+
   int get _currentStockSalesUnits => _currentStockBase ~/ _factor;
 
   int get _currentStockRemainder => _currentStockBase % _factor;
@@ -61,6 +89,9 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
   int get _parsedInput => int.tryParse(ctrl.text.trim()) ?? 0;
 
   int get _calculatedNewStockBase {
+    if (_isShared) {
+      return _poolBaseUnits;
+    }
     if (_selectedMode == 0) {
       return _currentStockBase + (_parsedInput * _factor);
     } else {
@@ -74,18 +105,43 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
   void initState() {
     super.initState();
     _currentStockBase = widget.presentation.stockActual;
-    final initialStock = _selectedMode == 0 ? 1 : _currentStockSalesUnits;
-    ctrl = TextEditingController(text: initialStock.toString());
+
+    if (_isShared) {
+      _selectedMode = 2;
+      final currentVendible = widget.presentation.unidadesVendiblesDisponibles;
+      ctrl = TextEditingController(text: currentVendible.toString());
+    } else {
+      final initialStock = _selectedMode == 0 ? 1 : _currentStockSalesUnits;
+      ctrl = TextEditingController(text: initialStock.toString());
+    }
+
     ctrl.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
+    _warningTimer?.cancel();
     ctrl.dispose();
     super.dispose();
   }
 
+  void _triggerExcessWarning() {
+    HapticFeedback.heavyImpact();
+    _warningTimer?.cancel();
+    setState(() {
+      _showExcessWarning = true;
+    });
+    _warningTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        setState(() {
+          _showExcessWarning = false;
+        });
+      }
+    });
+  }
+
   void _onModeChanged(int mode) {
+    if (_isShared) return;
     if (_selectedMode == mode) return;
     HapticFeedback.selectionClick();
     setState(() {
@@ -99,6 +155,7 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
   }
 
   void _squareStock() {
+    if (_isShared) return;
     HapticFeedback.mediumImpact();
     setState(() {
       _currentStockBase = (_currentStockBase ~/ _factor) * _factor;
@@ -111,18 +168,12 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
   void _navigateToEdit() {
     final nav = Navigator.of(context);
     nav.pop();
-    Product? targetProduct;
-    for (final item in widget.provider.items) {
-      if (item.presentation.id == widget.presentation.id) {
-        targetProduct = item.product;
-        break;
-      }
-    }
+    Product? targetProduct = _parentProduct;
     if (targetProduct != null) {
       nav.push(
         MaterialPageRoute(
           builder: (_) => ProductEditScreen(
-            productToEdit: targetProduct!,
+            productToEdit: targetProduct,
             initialPresentationId: widget.presentation.id,
           ),
         ),
@@ -133,10 +184,20 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
   void _update(int val) {
     HapticFeedback.lightImpact();
     setState(() {
-      if (_selectedMode == 0) {
-        ctrl.text = val < 1 ? "1" : val.toString();
+      if (_isShared) {
+        if (val > _maxPhysicalUnits) {
+          _triggerExcessWarning();
+          val = _maxPhysicalUnits;
+        } else if (val < 0) {
+          val = 0;
+        }
+        ctrl.text = val.toString();
       } else {
-        ctrl.text = val < 0 ? "0" : val.toString();
+        if (_selectedMode == 0) {
+          ctrl.text = val < 1 ? "1" : val.toString();
+        } else {
+          ctrl.text = val < 0 ? "0" : val.toString();
+        }
       }
     });
   }
@@ -150,14 +211,19 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
     final isDark = widget.isDark;
     final textColor = isDark ? Colors.white : Colors.black87;
     final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final int resultingBase = _calculatedNewStockBase;
-    final int resultingSalesUnits = _calculatedNewStockSalesUnits;
 
-    final bool isOutOfStock = resultingBase <= 0;
-    final bool isCritical = resultingBase > 0 && resultingSalesUnits <= (widget.presentation.stockAlerta ?? 5);
+    final int resultingBase = _calculatedNewStockBase;
+    final int resultingSalesUnits = _isShared
+        ? _parsedInput
+        : _calculatedNewStockSalesUnits;
+
+    final bool isOutOfStock = resultingSalesUnits <= 0;
+    final bool isCritical =
+        resultingSalesUnits > 0 &&
+        resultingSalesUnits <= (widget.presentation.stockAlerta ?? 5);
 
     return InteractiveSheetWrapper(
-      maxHeightFactor: 0.92,
+      maxHeightFactor: 0.94,
       backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
       applyEffectiveBottomPadding: true,
       bottomAction: SizedBox(
@@ -165,22 +231,52 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
         height: 54,
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: widget.isDark ? Colors.blue[300] : Colors.blue[800], 
-            foregroundColor: widget.isDark ? Colors.black87 : Colors.white, 
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            backgroundColor: widget.isDark
+                ? Colors.blue[300]
+                : Colors.blue[800],
+            foregroundColor: widget.isDark ? Colors.black87 : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             elevation: 0,
           ),
-          onPressed: _isSaving ? null : () async {
-            setState(() => _isSaving = true);
-            final ok = await widget.provider.updatePresentation(
-              widget.presentation.id!,
-              stock: resultingBase,
-            );
-            if (context.mounted) Navigator.pop(context, ok);
-          },
-          child: _isSaving 
-            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
-            : const Text("APLICAR CAMBIOS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
+          onPressed: _isSaving
+              ? null
+              : () async {
+                  setState(() => _isSaving = true);
+                  bool ok;
+                  if (_isShared) {
+                    final int newQuota = _parsedInput;
+                    // Si el usuario fija un valor igual o mayor al máximo físico, se desactiva el cupo manual (null)
+                    final int? quotaToSave = newQuota >= _maxPhysicalUnits
+                        ? null
+                        : newQuota;
+                    ok = await widget.provider.updateVariantQuota(
+                      widget.presentation.id!,
+                      quotaToSave,
+                    );
+                  } else {
+                    ok = await widget.provider.updatePresentation(
+                      widget.presentation.id!,
+                      stock: resultingBase,
+                    );
+                  }
+                  if (context.mounted) Navigator.pop(context, ok);
+                },
+          child: _isSaving
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              : const Text(
+                  "APLICAR CAMBIOS",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    letterSpacing: 0.5,
+                  ),
+                ),
         ),
       ),
       child: SingleChildScrollView(
@@ -198,259 +294,577 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: (widget.isDark ? Colors.blue[300]! : Colors.blue[800]!).withValues(alpha: 0.15),
+                        color:
+                            (widget.isDark
+                                    ? Colors.blue[300]!
+                                    : Colors.blue[800]!)
+                                .withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(Icons.inventory_2_outlined, color: widget.isDark ? Colors.blue[300] : Colors.blue[800], size: 22),
+                      child: Icon(
+                        _isShared
+                            ? Icons.tune_rounded
+                            : Icons.inventory_2_outlined,
+                        color: widget.isDark
+                            ? Colors.blue[300]
+                            : Colors.blue[800],
+                        size: 22,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      "Abastecer / Editar Stock", 
-                      style: TextStyle(fontWeight: FontWeight.w900, color: textColor, fontSize: 18),
+                      _isShared
+                          ? "Ajustar Cupo de Stock"
+                          : "Abastecer / Editar Stock",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: textColor,
+                        fontSize: 18,
+                      ),
                     ),
                   ],
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, color: widget.isDark ? Colors.grey[500] : Colors.grey), 
-                  onPressed: () => Navigator.pop(context), 
-                  padding: EdgeInsets.zero, 
+                  icon: Icon(
+                    Icons.close,
+                    color: widget.isDark ? Colors.grey[500] : Colors.grey,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
               ],
             ),
             const SizedBox(height: 12),
 
-            // Selector de Modo (Sumar vs Fijar)
-            Container(
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white10 : Colors.grey[200],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _onModeChanged(0),
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _selectedMode == 0
-                              ? (isDark ? const Color(0xFF1E293B) : Colors.white)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: _selectedMode == 0
-                              ? [const BoxShadow(color: Colors.black12, blurRadius: 4)]
-                              : null,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.add_business_rounded,
-                              size: 16,
-                              color: _selectedMode == 0
-                                  ? (isDark ? Colors.blue[300] : Colors.blue[800])
-                                  : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              "Sumar Compra",
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: _selectedMode == 0
-                                    ? (isDark ? Colors.blue[300] : Colors.blue[800])
-                                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _onModeChanged(1),
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _selectedMode == 1
-                              ? (isDark ? const Color(0xFF1E293B) : Colors.white)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: _selectedMode == 1
-                              ? [const BoxShadow(color: Colors.black12, blurRadius: 4)]
-                              : null,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.edit_note_rounded,
-                              size: 16,
-                              color: _selectedMode == 1
-                                  ? (isDark ? Colors.teal[300] : Colors.teal[800])
-                                  : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              "Fijar Stock Total",
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: _selectedMode == 1
-                                    ? (isDark ? Colors.teal[300] : Colors.teal[800])
-                                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Selector de Granularidad Factor-Aware (si factor > 1)
-            if (_hasFactor) ...[
-              const SizedBox(height: 10),
+            // 🔥 Banner Informativo / Gestión para Variantes de Stock Compartido
+            if (_isShared) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: (isDark ? Colors.indigo[900]! : Colors.indigo[50]!).withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: (isDark ? Colors.indigo[400]! : Colors.indigo.shade200).withValues(alpha: 0.5)),
+                  color: isDark
+                      ? const Color(0xFF1E3A8A).withValues(alpha: 0.25)
+                      : const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.blue.shade700
+                        : const Color(0xFF93C5FD),
+                  ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "Unidad de ingreso:",
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.indigo[200] : Colors.indigo[900]),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.blue[800] : Colors.blue[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check, size: 12, color: isDark ? Colors.white : Colors.blue[900]),
-                          const SizedBox(width: 4),
-                          Text(
-                            "Por $_unidadVenta (x$_factor)",
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.hub_rounded,
+                          size: 20,
+                          color: isDark
+                              ? Colors.blue[300]
+                              : const Color(0xFF1E40AF),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Variante con Stock Compartido",
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 13,
                               fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.blue[900],
+                              color: isDark
+                                  ? Colors.blue[200]
+                                  : const Color(0xFF1E40AF),
                             ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Esta presentación usa el Pool Compartido con $_poolBaseUnits unidades base (máximo físico de $_maxPhysicalUnits $_unidadVenta).\n\nPuedes acotar un cupo vendible menor para esta variante sin alterar las unidades físicas del inventario.",
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        height: 1.35,
+                        color: isDark
+                            ? Colors.blue[100]
+                            : const Color(0xFF1E3A8A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 6,
+                                horizontal: 8,
+                              ),
+                              side: BorderSide(
+                                color: isDark
+                                    ? Colors.blue[400]!
+                                    : Colors.blue[800]!,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: () => _update(_maxPhysicalUnits),
+                            icon: const Icon(Icons.refresh, size: 13),
+                            label: Text(
+                              "Restaurar al máximo ($_maxPhysicalUnits)",
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 6,
+                                horizontal: 8,
+                              ),
+                              side: BorderSide(
+                                color: isDark
+                                    ? Colors.blue[400]!
+                                    : Colors.blue[800]!,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: _navigateToEdit,
+                            icon: const Icon(Icons.edit_note, size: 14),
+                            label: const Text(
+                              "Editar Producto",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // ⚠️ Banner Temporal Animado de Exceso de Máximo Físico (4 segundos)
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 300),
+                crossFadeState: _showExcessWarning
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+                firstChild: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.orange.shade900.withValues(alpha: 0.35)
+                        : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.orange.shade400
+                          : Colors.orange.shade700,
+                      width: 1.3,
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: isDark
+                            ? Colors.orange.shade300
+                            : Colors.orange.shade900,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "⚠️ No puedes aumentar más del máximo permitido ($_maxPhysicalUnits $_unidadVenta según tus $_poolBaseUnits unidades base compartidas).",
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: isDark
+                                    ? Colors.orange.shade200
+                                    : Colors.orange.shade900,
+                                height: 1.25,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "El cambio de la cantidad de unidades base solo se puede realizar en la ventana de Editar Producto.",
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark
+                                    ? Colors.orange.shade300
+                                    : Colors.orange.shade800,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: _navigateToEdit,
+                                icon: const Icon(Icons.arrow_forward, size: 13),
+                                label: const Text(
+                                  "Ir a Editar Producto",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  foregroundColor: isDark
+                                      ? Colors.orange.shade200
+                                      : Colors.orange.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                secondChild: const SizedBox.shrink(),
+              ),
+            ] else ...[
+              // Selector de Modo Normal (Sumar vs Fijar) para Stock Propio
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white10 : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _onModeChanged(0),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedMode == 0
+                                ? (isDark
+                                      ? const Color(0xFF1E293B)
+                                      : Colors.white)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: _selectedMode == 0
+                                ? [
+                                    const BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 4,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.add_business_rounded,
+                                size: 16,
+                                color: _selectedMode == 0
+                                    ? (isDark
+                                          ? Colors.blue[300]
+                                          : Colors.blue[800])
+                                    : (isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600]),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                "Sumar Compra",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: _selectedMode == 0
+                                      ? (isDark
+                                            ? Colors.blue[300]
+                                            : Colors.blue[800])
+                                      : (isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[600]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _onModeChanged(1),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedMode == 1
+                                ? (isDark
+                                      ? const Color(0xFF1E293B)
+                                      : Colors.white)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: _selectedMode == 1
+                                ? [
+                                    const BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 4,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.edit_note_rounded,
+                                size: 16,
+                                color: _selectedMode == 1
+                                    ? (isDark
+                                          ? Colors.teal[300]
+                                          : Colors.teal[800])
+                                    : (isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600]),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                "Fijar Stock Total",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: _selectedMode == 1
+                                      ? (isDark
+                                            ? Colors.teal[300]
+                                            : Colors.teal[800])
+                                      : (isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[600]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // Banner Inteligente Condicional de Unidades Residuales
-              if (_currentStockRemainder > 0) ...[
+              // Selector de Granularidad Factor-Aware (si factor > 1) para Stock Propio
+              if (_hasFactor) ...[
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(12),
+                    color: (isDark ? Colors.indigo[900]! : Colors.indigo[50]!)
+                        .withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: isDark ? Colors.amber[400]! : Colors.amber[800]!,
-                      width: 1.2,
+                      color:
+                          (isDark
+                                  ? Colors.indigo[400]!
+                                  : Colors.indigo.shade200)
+                              .withValues(alpha: 0.5),
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            size: 16,
-                            color: isDark ? Colors.amber[300]! : Colors.amber[900]!,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              "Hay $_currentStockRemainder u. base suelta(s) que no completan un $_unidadVenta (x$_factor).${_selectedMode == 1 ? ' Al fijar stock total, esas unidades sueltas se reemplazarán por el nuevo total exacto.' : ' Al sumar compra se conservarán intactas.'}",
+                      Text(
+                        "Unidad de ingreso:",
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isDark
+                              ? Colors.indigo[200]
+                              : Colors.indigo[900],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.blue[800] : Colors.blue[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check,
+                              size: 12,
+                              color: isDark ? Colors.white : Colors.blue[900],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "Por $_unidadVenta (x$_factor)",
                               style: TextStyle(
                                 fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.amber[200] : Colors.amber[900],
-                                height: 1.25,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.blue[900],
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                                side: BorderSide(color: isDark ? Colors.amber[400]! : Colors.amber[800]!),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              onPressed: _navigateToEdit,
-                              icon: const Icon(Icons.build_outlined, size: 13),
-                              label: const Text(
-                                "🛠️ Ir a Editar",
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isDark ? Colors.amber[700] : Colors.amber[800],
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                elevation: 0,
-                              ),
-                              onPressed: _squareStock,
-                              icon: const Icon(Icons.flash_on, size: 13),
-                              label: const Text(
-                                "⚡ Cuadrar aquí",
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
+
+                // Banner Inteligente Condicional de Unidades Residuales (SÓLO PARA STOCK PROPIO)
+                if (_currentStockRemainder > 0) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.amber[900]!.withValues(alpha: 0.25)
+                          : Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark ? Colors.amber[400]! : Colors.amber[800]!,
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              size: 16,
+                              color: isDark
+                                  ? Colors.amber[300]!
+                                  : Colors.amber[900]!,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                "Hay $_currentStockRemainder u. base suelta(s) que no completan un $_unidadVenta (x$_factor).${_selectedMode == 1 ? ' Al fijar stock total, esas unidades sueltas se reemplazarán por el nuevo total exacto.' : ' Al sumar compra se conservarán intactas.'}",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.amber[200]
+                                      : Colors.amber[900],
+                                  height: 1.25,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 6,
+                                    horizontal: 8,
+                                  ),
+                                  side: BorderSide(
+                                    color: isDark
+                                        ? Colors.amber[400]!
+                                        : Colors.amber[800]!,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                onPressed: _navigateToEdit,
+                                icon: const Icon(
+                                  Icons.build_outlined,
+                                  size: 13,
+                                ),
+                                label: const Text(
+                                  "🛠️ Ir a Editar",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isDark
+                                      ? Colors.amber[700]
+                                      : Colors.amber[800],
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 6,
+                                    horizontal: 8,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                onPressed: _squareStock,
+                                icon: const Icon(Icons.flash_on, size: 13),
+                                label: const Text(
+                                  "⚡ Cuadrar aquí",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ],
 
-            SizedBox(height: isKeyboardOpen ? 12 : 20),
-            
+            SizedBox(height: isKeyboardOpen ? 12 : 18),
+
             // Stepper y TextField central
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  decoration: BoxDecoration(color: widget.isDark ? Colors.white10 : Colors.grey[200], shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: widget.isDark ? Colors.white10 : Colors.grey[200],
+                    shape: BoxShape.circle,
+                  ),
                   child: IconButton(
-                    onPressed: () => _update(_parsedInput - 1), 
-                    icon: const Icon(Icons.remove), 
+                    onPressed: () => _update(_parsedInput - 1),
+                    icon: const Icon(Icons.remove),
                     color: widget.isDark ? Colors.white : Colors.black87,
                   ),
                 ),
@@ -458,26 +872,56 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                   width: 140,
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
-                    color: widget.isDark ? const Color(0xFF14141C) : Colors.grey[100], 
-                    borderRadius: BorderRadius.circular(16), 
-                    border: Border.all(color: widget.isDark ? Colors.white24 : Colors.grey.shade300),
+                    color: widget.isDark
+                        ? const Color(0xFF14141C)
+                        : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: widget.isDark
+                          ? Colors.white24
+                          : Colors.grey.shade300,
+                    ),
                   ),
                   child: TextField(
                     controller: ctrl,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87),
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: widget.isDark ? Colors.white : Colors.black87,
+                    ),
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (val) {
+                      if (_isShared) {
+                        final input = int.tryParse(val.trim()) ?? 0;
+                        if (input > _maxPhysicalUnits) {
+                          _triggerExcessWarning();
+                          ctrl.text = _maxPhysicalUnits.toString();
+                          ctrl.selection = TextSelection.fromPosition(
+                            TextPosition(offset: ctrl.text.length),
+                          );
+                        }
+                      }
+                      setState(() {});
+                    },
                     scrollPadding: const EdgeInsets.only(bottom: 90),
-                    decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 8)),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    ),
                   ),
                 ),
                 Container(
-                  decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[100], shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: widget.isDark
+                        ? Colors.blue.withValues(alpha: 0.2)
+                        : Colors.blue[100],
+                    shape: BoxShape.circle,
+                  ),
                   child: IconButton(
-                    onPressed: () => _update(_parsedInput + 1), 
-                    icon: const Icon(Icons.add), 
+                    onPressed: () => _update(_parsedInput + 1),
+                    icon: const Icon(Icons.add),
                     color: widget.isDark ? Colors.blue[300] : Colors.blue[800],
                   ),
                 ),
@@ -492,7 +936,8 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: [
-                  if (_selectedMode == 1) _buildChip("-5", -5, isDark),
+                  if (_isShared || _selectedMode == 1)
+                    _buildChip("-5", -5, isDark),
                   _buildChip("+1", 1, isDark),
                   _buildChip("+5", 5, isDark),
                   _buildChip("+10", 10, isDark),
@@ -508,17 +953,29 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: isOutOfStock
-                    ? (widget.isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red[50])
+                    ? (widget.isDark
+                          ? Colors.red.withValues(alpha: 0.1)
+                          : Colors.red[50])
                     : (isCritical
-                        ? (widget.isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50])
-                        : (widget.isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green[50])),
+                          ? (widget.isDark
+                                ? Colors.orange.withValues(alpha: 0.1)
+                                : Colors.orange[50])
+                          : (widget.isDark
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : Colors.green[50])),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: isOutOfStock
-                      ? (widget.isDark ? Colors.red.withValues(alpha: 0.3) : Colors.red.shade300)
+                      ? (widget.isDark
+                            ? Colors.red.withValues(alpha: 0.3)
+                            : Colors.red.shade300)
                       : (isCritical
-                          ? (widget.isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade300)
-                          : (widget.isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.shade300)),
+                            ? (widget.isDark
+                                  ? Colors.orange.withValues(alpha: 0.3)
+                                  : Colors.orange.shade300)
+                            : (widget.isDark
+                                  ? Colors.green.withValues(alpha: 0.3)
+                                  : Colors.green.shade300)),
                 ),
               ),
               child: Column(
@@ -529,23 +986,35 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                       Icon(
                         isOutOfStock
                             ? Icons.error_outline
-                            : (isCritical ? Icons.warning_amber_rounded : Icons.check_circle_outline),
+                            : (isCritical
+                                  ? Icons.warning_amber_rounded
+                                  : Icons.check_circle_outline),
                         size: 16,
                         color: isOutOfStock
                             ? (widget.isDark ? Colors.red[300] : Colors.red)
                             : (isCritical
-                                ? (widget.isDark ? Colors.orange[300] : Colors.orange)
-                                : (widget.isDark ? Colors.green[400] : Colors.green)),
+                                  ? (widget.isDark
+                                        ? Colors.orange[300]
+                                        : Colors.orange)
+                                  : (widget.isDark
+                                        ? Colors.green[400]
+                                        : Colors.green)),
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        isOutOfStock ? "¡Quedará Agotado!" : (isCritical ? "Stock Bajo" : "Stock Saludable"),
+                        isOutOfStock
+                            ? "¡Quedará Agotado!"
+                            : (isCritical ? "Stock Bajo" : "Stock Saludable"),
                         style: TextStyle(
                           color: isOutOfStock
                               ? (widget.isDark ? Colors.red[300] : Colors.red)
                               : (isCritical
-                                  ? (widget.isDark ? Colors.orange[300] : Colors.orange)
-                                  : (widget.isDark ? Colors.green[400] : Colors.green)),
+                                    ? (widget.isDark
+                                          ? Colors.orange[300]
+                                          : Colors.orange)
+                                    : (widget.isDark
+                                          ? Colors.green[400]
+                                          : Colors.green)),
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
@@ -554,11 +1023,15 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _hasFactor
-                        ? (resultingBase % _factor == 0
-                            ? "Resultado: $resultingSalesUnits $_unidadVenta = $resultingBase unidades base"
-                            : "Resultado: $resultingSalesUnits $_unidadVenta (+ ${resultingBase % _factor} u. base suelta) = $resultingBase unidades base")
-                        : "Resultado: $resultingBase unidades disponibles",
+                    _isShared
+                        ? (_parsedInput >= _maxPhysicalUnits
+                              ? "Cupo al máximo: $_parsedInput $_unidadVenta disponibles (toma de las $_poolBaseUnits u. base)"
+                              : "Cupo acotado: $_parsedInput $_unidadVenta disponibles (de un máx. físico de $_maxPhysicalUnits)")
+                        : (_hasFactor
+                              ? (resultingBase % _factor == 0
+                                    ? "Resultado: $resultingSalesUnits $_unidadVenta = $resultingBase unidades base"
+                                    : "Resultado: $resultingSalesUnits $_unidadVenta (+ ${resultingBase % _factor} u. base suelta) = $resultingBase unidades base")
+                              : "Resultado: $resultingBase unidades disponibles"),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,

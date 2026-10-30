@@ -398,23 +398,31 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
+                              if (selectedPresentation.usaStockCompartido) ...[
+                                Icon(
+                                  Icons.hub_rounded,
+                                  size: 12,
+                                  color: isDark ? Colors.blue[300] : const Color(0xFF1E40AF),
+                                ),
+                                const SizedBox(width: 3),
+                              ],
                               Text(
-                                "STOCK DISP.",
+                                selectedPresentation.usaStockCompartido ? "POOL DISP." : "STOCK DISP.",
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: isDark
-                                      ? Colors.purple[300]
-                                      : Colors.purple[700],
+                                  color: selectedPresentation.usaStockCompartido
+                                      ? (isDark ? Colors.blue[300] : const Color(0xFF1E40AF))
+                                      : (isDark ? Colors.purple[300] : Colors.purple[700]),
                                 ),
                               ),
                               const SizedBox(width: 4),
                               Icon(
                                 Icons.edit,
                                 size: 12,
-                                color: isDark
-                                    ? Colors.purple[300]
-                                    : Colors.purple[700],
+                                color: selectedPresentation.usaStockCompartido
+                                    ? (isDark ? Colors.blue[300] : const Color(0xFF1E40AF))
+                                    : (isDark ? Colors.purple[300] : Colors.purple[700]),
                               ),
                             ],
                           ),
@@ -429,6 +437,15 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
                                   : (isDark ? Colors.red[300] : Colors.red),
                             ),
                           ),
+                          if (selectedPresentation.usaStockCompartido)
+                            Text(
+                              "(${selectedPresentation.stockActual} base)",
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.blue[200] : const Color(0xFF1E40AF),
+                              ),
+                            ),
                         ],
                       ),
                     ),

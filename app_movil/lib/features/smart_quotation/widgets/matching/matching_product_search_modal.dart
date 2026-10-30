@@ -34,6 +34,7 @@ class MatchingProductSearchModal extends StatefulWidget {
   }) {
     return showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -277,7 +278,11 @@ class _MatchingProductSearchModalState extends State<MatchingProductSearchModal>
               : _localResults.isEmpty
                 ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.inventory_2_outlined, size: 80, color: widget.isDark ? Colors.white10 : Colors.grey[300]), const SizedBox(height: 16), Text("No se encontraron productos", style: textTheme.titleMedium?.copyWith(color: widget.isDark ? Colors.grey[500] : Colors.grey))]))
                 : ListView.separated(
-                    controller: _scrollCtrl, padding: const EdgeInsets.all(20), itemCount: _localResults.length + (_isLoadingMore ? 1 : 0), separatorBuilder: (_, __) => Divider(height: 20, color: widget.isDark ? Colors.white10 : Colors.grey[200]),
+                    controller: _scrollCtrl,
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 20 + InteractiveSheetWrapper.kModalScrollBottomClearance),
+                    itemCount: _localResults.length + (_isLoadingMore ? 1 : 0),
+                    separatorBuilder: (_, __) => Divider(height: 20, color: widget.isDark ? Colors.white10 : Colors.grey[200]),
                     itemBuilder: (ctx, i) {
                       if (i == _localResults.length) return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator()));
                       

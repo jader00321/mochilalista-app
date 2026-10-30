@@ -10,8 +10,8 @@ import 'package:app_movil/core/utils/currency_formatter.dart';
 class MatchingItemRow extends StatefulWidget {
   final MatchPair pair;
   final int index;
-  final bool isRepeated; 
-  final bool isClient; 
+  final bool isRepeated;
+  final bool isClient;
   final VoidCallback onTapProduct;
   final VoidCallback onChangeRequest;
   final VoidCallback onDelete;
@@ -22,7 +22,7 @@ class MatchingItemRow extends StatefulWidget {
     super.key,
     required this.pair,
     required this.index,
-    this.isRepeated = false, 
+    this.isRepeated = false,
     required this.isClient,
     required this.onTapProduct,
     required this.onChangeRequest,
@@ -75,20 +75,44 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
     final product = widget.pair.selectedProduct;
     final textColor = isDark ? Colors.white : Colors.black87;
 
+    final matchingProv = Provider.of<MatchingProvider>(context);
+    final sharedDemand = matchingProv.sharedDemandPerProduct;
+    bool isSharedPoolExceeded = false;
+    int currentPoolDemand = 0;
+    int currentPoolCapacity = 0;
+
+    if (product != null &&
+        product.usaStockCompartido &&
+        product.productId > 0 &&
+        product.sharedStockPool > 0) {
+      currentPoolDemand = sharedDemand[product.productId] ?? 0;
+      currentPoolCapacity = product.sharedStockPool;
+      isSharedPoolExceeded = currentPoolDemand > currentPoolCapacity;
+    }
+
     Color borderColor = isDark ? Colors.white10 : Colors.grey.shade300;
     bool noStock = false;
     bool exceedsStock = false;
-    
+
     if (product != null) {
-      if (widget.pair.status == MatchStatus.auto) borderColor = isDark ? Colors.green[400]! : Colors.green;
-      if (widget.pair.status == MatchStatus.suggestion) borderColor = isDark ? Colors.orange[400]! : Colors.orange;
-      if (widget.pair.status == MatchStatus.manual || widget.pair.isModified) borderColor = isDark ? Colors.blue[400]! : Colors.blue;
+      if (widget.pair.status == MatchStatus.auto) {
+        borderColor = isDark ? Colors.green[400]! : Colors.green;
+      }
+      if (widget.pair.status == MatchStatus.suggestion) {
+        borderColor = isDark ? Colors.orange[400]! : Colors.orange;
+      }
+      if (widget.pair.status == MatchStatus.manual || widget.pair.isModified) {
+        borderColor = isDark ? Colors.blue[400]! : Colors.blue;
+      }
 
-      noStock = product.stock <= 0;
-      exceedsStock = widget.pair.selectedQuantity > product.stock && !noStock;
+      final vendible = product.effectiveVendibleStock;
+      noStock = vendible <= 0;
+      exceedsStock = widget.pair.selectedQuantity > vendible && !noStock;
 
-      if (noStock || (widget.isClient && exceedsStock)) {
-         borderColor = isDark ? Colors.red[400]! : Colors.red.shade400;
+      if (noStock ||
+          (widget.isClient && exceedsStock) ||
+          isSharedPoolExceeded) {
+        borderColor = isDark ? Colors.red[400]! : Colors.red.shade400;
       }
     }
 
@@ -112,7 +136,7 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                     }(),
               child: _buildSourceInfo(isDark),
             ),
-            
+
             // Delete Button - Only visible when not expanded
             AnimatedContainer(
               duration: const Duration(milliseconds: 250),
@@ -120,21 +144,29 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 physics: const NeverScrollableScrollPhysics(),
-                child: SizedBox(
-                  width: 36.0,
-                  child: _buildDeleteButton(isDark),
-                ),
+                child: SizedBox(width: 36.0, child: _buildDeleteButton(isDark)),
               ),
             ),
-            
+
             // Right Card (Matched Product) - Expands when expanded
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+                transitionBuilder: (child, animation) =>
+                    FadeTransition(opacity: animation, child: child),
                 child: product == null
-                  ? _buildUnlinkedState(isDark)
-                  : _buildLinkedState(isDark, borderColor, textColor, noStock, exceedsStock, product),
+                    ? _buildUnlinkedState(isDark)
+                    : _buildLinkedState(
+                        isDark,
+                        borderColor,
+                        textColor,
+                        noStock,
+                        exceedsStock,
+                        product,
+                        isSharedPoolExceeded,
+                        currentPoolDemand,
+                        currentPoolCapacity,
+                      ),
               ),
             ),
           ],
@@ -148,15 +180,36 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
       key: const ValueKey('unlinked'),
       onTap: widget.onChangeRequest,
       child: Container(
-        decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade300, width: 2, style: BorderStyle.solid)),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF14141C) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark
+                ? Colors.red.withValues(alpha: 0.5)
+                : Colors.red.shade300,
+            width: 2,
+            style: BorderStyle.solid,
+          ),
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.touch_app_outlined, color: isDark ? Colors.red[300] : Colors.red.shade400, size: 36),
+            Icon(
+              Icons.touch_app_outlined,
+              color: isDark ? Colors.red[300] : Colors.red.shade400,
+              size: 36,
+            ),
             const SizedBox(height: 6),
             FittedBox(
               fit: BoxFit.scaleDown,
-              child: Text("Tocar para vincular", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red.shade600, fontWeight: FontWeight.bold, fontSize: 14)),
+              child: Text(
+                "Tocar para vincular",
+                style: TextStyle(
+                  color: isDark ? Colors.red[300] : Colors.red.shade600,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
             ),
           ],
         ),
@@ -164,7 +217,17 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
     );
   }
 
-  Widget _buildLinkedState(bool isDark, Color borderColor, Color textColor, bool noStock, bool exceedsStock, MatchedProduct product) {
+  Widget _buildLinkedState(
+    bool isDark,
+    Color borderColor,
+    Color textColor,
+    bool noStock,
+    bool exceedsStock,
+    MatchedProduct product,
+    bool isSharedPoolExceeded,
+    int currentPoolDemand,
+    int currentPoolCapacity,
+  ) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeInOut,
@@ -173,8 +236,12 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
         color: isDark ? const Color(0xFF23232F) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: _justMatched ? (isDark ? Colors.greenAccent : Colors.green) : borderColor,
-          width: _justMatched ? 2.5 : ((noStock || (widget.isClient && exceedsStock)) ? 2.0 : 1.5),
+          color: _justMatched
+              ? (isDark ? Colors.greenAccent : Colors.green)
+              : borderColor,
+          width: _justMatched
+              ? 2.5
+              : ((noStock || (widget.isClient && exceedsStock)) ? 2.0 : 1.5),
         ),
         boxShadow: [
           if (_justMatched)
@@ -184,7 +251,11 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
               spreadRadius: 1.5,
             )
           else if (widget.pair.isModified && !isDark)
-            BoxShadow(color: Colors.blue.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 2)),
+            BoxShadow(
+              color: Colors.blue.withValues(alpha: 0.08),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
         ],
       ),
       child: Column(
@@ -195,21 +266,30 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
             color: Colors.transparent,
             child: InkWell(
               onTap: widget.onTapProduct,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Imagen solo si está expandido
-                    AnimatedCrossFade(
-                      duration: const Duration(milliseconds: 250),
-                      crossFadeState: _isExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-                      firstChild: Padding(
+                    if (_isExpanded)
+                      Padding(
                         padding: const EdgeInsets.only(right: 12.0),
                         child: Container(
-                          width: 50, height: 50,
-                          decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.grey[50], borderRadius: BorderRadius.circular(10), border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200)),
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white10 : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.transparent
+                                  : Colors.grey.shade200,
+                            ),
+                          ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: UniversalImage(
@@ -221,9 +301,7 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                           ),
                         ),
                       ),
-                      secondChild: const SizedBox.shrink(),
-                    ),
-                    
+
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,27 +314,65 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    if (product.brand != null && product.brand!.isNotEmpty && product.brand != "null") 
-                                      Text(product.brand!.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: isDark ? Colors.indigo[300] : Colors.indigo[600], letterSpacing: 0.5)),
-                                    
+                                    if (product.brand != null &&
+                                        product.brand!.isNotEmpty &&
+                                        product.brand != "null")
+                                      Text(
+                                        product.brand!.toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w900,
+                                          color: isDark
+                                              ? Colors.indigo[300]
+                                              : Colors.indigo[600],
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+
                                     const SizedBox(height: 2),
-                                    
+
                                     RichText(
                                       maxLines: _isExpanded ? 3 : 2,
                                       overflow: TextOverflow.ellipsis,
                                       text: TextSpan(
                                         children: [
-                                          TextSpan(text: "${product.productName} ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, height: 1.2, color: textColor)),
-                                          if (product.specificName != null && product.specificName!.isNotEmpty)
-                                            TextSpan(text: product.specificName!, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: isDark ? Colors.teal[300] : Colors.teal[700])),
+                                          TextSpan(
+                                            text: "${product.productName} ",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                              height: 1.2,
+                                              color: textColor,
+                                            ),
+                                          ),
+                                          if (product.specificName != null &&
+                                              product.specificName!.isNotEmpty)
+                                            TextSpan(
+                                              text: product.specificName!,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 13,
+                                                color: isDark
+                                                    ? Colors.teal[300]
+                                                    : Colors.teal[700],
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),
-                                    
+
                                     if (_isExpanded) ...[
                                       const SizedBox(height: 4),
-                                      Text("${product.unit} (x${product.conversionFactor})", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                                    ]
+                                      Text(
+                                        "${product.unit} (x${product.conversionFactor})",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isDark
+                                              ? Colors.grey[400]
+                                              : Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -266,32 +382,76 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                                 child: Container(
                                   padding: const EdgeInsets.all(4),
                                   decoration: BoxDecoration(
-                                    color: isDark ? Colors.white10 : Colors.grey[200],
-                                    borderRadius: BorderRadius.circular(20)
+                                    color: isDark
+                                        ? Colors.white10
+                                        : Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(20),
                                   ),
-                                  child: Icon(_isExpanded ? Icons.keyboard_arrow_right : Icons.keyboard_arrow_left, size: 20, color: isDark ? Colors.white70 : Colors.black54),
+                                  child: Icon(
+                                    _isExpanded
+                                        ? Icons.keyboard_arrow_right
+                                        : Icons.keyboard_arrow_left,
+                                    size: 20,
+                                    color: isDark
+                                        ? Colors.white70
+                                        : Colors.black54,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                          
-                          if (widget.isRepeated || noStock || exceedsStock) ...[
+
+                          if (widget.isRepeated ||
+                              noStock ||
+                              exceedsStock ||
+                              isSharedPoolExceeded ||
+                              (product.usaStockCompartido &&
+                                  product.sharedStockPool > 0)) ...[
                             const SizedBox(height: 8),
                             Wrap(
-                              spacing: 6, runSpacing: 6,
+                              spacing: 6,
+                              runSpacing: 6,
                               children: [
                                 if (widget.isRepeated)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50, borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? Colors.transparent : Colors.blue.shade200)),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.blue.withValues(alpha: 0.2)
+                                          : Colors.blue.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? Colors.transparent
+                                            : Colors.blue.shade200,
+                                      ),
+                                    ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.info_outline, size: 10, color: isDark ? Colors.blue[300] : Colors.blue),
+                                        Icon(
+                                          Icons.info_outline,
+                                          size: 10,
+                                          color: isDark
+                                              ? Colors.blue[300]
+                                              : Colors.blue,
+                                        ),
                                         const SizedBox(width: 4),
-                                        Text("Repetido", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontSize: 9, fontWeight: FontWeight.bold)),
+                                        Text(
+                                          "Repetido",
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? Colors.blue[300]
+                                                : Colors.blue,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ],
-                                    )
+                                    ),
                                   ),
 
                                 if (noStock) ...[
@@ -299,14 +459,34 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                                     onTap: widget.onSuggestedReplacements,
                                     borderRadius: BorderRadius.circular(6),
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(color: isDark ? Colors.red[800] : Colors.red, borderRadius: BorderRadius.circular(6)),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.red[800]
+                                            : Colors.red,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
                                       child: const Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text("AGOTADO", style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                          Text(
+                                            "AGOTADO",
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
                                           SizedBox(width: 4),
-                                          Icon(Icons.swap_horiz, color: Colors.white, size: 12),
+                                          Icon(
+                                            Icons.swap_horiz,
+                                            color: Colors.white,
+                                            size: 12,
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -316,21 +496,38 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                                       onTap: widget.onSuggestedReplacements,
                                       borderRadius: BorderRadius.circular(6),
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
                                         decoration: BoxDecoration(
-                                          color: Colors.blueAccent.withValues(alpha: 0.2),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.4)),
+                                          color: Colors.blueAccent.withValues(
+                                            alpha: 0.2,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.blueAccent.withValues(
+                                              alpha: 0.4,
+                                            ),
+                                          ),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            const Icon(Icons.auto_awesome, color: Colors.blueAccent, size: 10),
+                                            const Icon(
+                                              Icons.auto_awesome,
+                                              color: Colors.blueAccent,
+                                              size: 10,
+                                            ),
                                             const SizedBox(width: 4),
                                             Text(
                                               "Reemplazos",
                                               style: TextStyle(
-                                                color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                                color: isDark
+                                                    ? Colors.blue[300]
+                                                    : Colors.blue[800],
                                                 fontSize: 9,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -341,11 +538,135 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                                     ),
                                 ],
 
-                                if (exceedsStock)
+                                if (isSharedPoolExceeded)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), 
-                                    decoration: BoxDecoration(color: widget.isClient ? (isDark ? Colors.red[800] : Colors.red) : (isDark ? Colors.orange[800] : Colors.orange), borderRadius: BorderRadius.circular(6)), 
-                                    child: Text(widget.isClient ? "Límite Excedido (Máx: ${product.stock})" : "Máx Stock: ${product.stock}", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold))
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.red[800]
+                                          : Colors.red,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.warning_amber_rounded,
+                                          color: Colors.white,
+                                          size: 11,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            "Pool Excedido ($currentPoolDemand/$currentPoolCapacity und. base)",
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                else if (product.usaStockCompartido &&
+                                    product.sharedStockPool > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      borderRadius: BorderRadius.circular(5),
+                                      border: Border.all(
+                                        color: Colors.blue.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.hub_outlined,
+                                          size: 11,
+                                          color: isDark
+                                              ? Colors.blue[300]
+                                              : Colors.blue[800],
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            "Pool: ${product.sharedStockPool} u. base",
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              color: isDark
+                                                  ? Colors.blue[300]
+                                                  : Colors.blue[800],
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                if (exceedsStock && !isSharedPoolExceeded)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: widget.isClient
+                                          ? (isDark
+                                                ? Colors.red[800]
+                                                : Colors.red)
+                                          : (isDark
+                                                ? Colors.orange[800]
+                                                : Colors.orange),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.warning_amber_rounded,
+                                          color: Colors.white,
+                                          size: 11,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            product.usaStockCompartido &&
+                                                    product.cupoMaximoVariante !=
+                                                        null &&
+                                                    widget.pair.selectedQuantity >
+                                                        product.cupoMaximoVariante!
+                                                ? (widget.isClient
+                                                      ? "Supera Cupo (Máx: ${product.cupoMaximoVariante})"
+                                                      : "Supera Cupo: ${product.cupoMaximoVariante}")
+                                                : (widget.isClient
+                                                      ? "Límite Excedido (Máx: ${product.effectiveVendibleStock})"
+                                                      : "Máx Stock: ${product.effectiveVendibleStock}"),
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                               ],
                             ),
@@ -358,10 +679,13 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
               ),
             ),
           ),
-          
+
           // ZONA MEDIA: Precios y Controles +/-
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 4.0,
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -370,92 +694,161 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (widget.pair.hasDiscount && _isExpanded)
-                        Text(AppCurrency.format(widget.pair.originalUnitPrice), style: TextStyle(fontSize: 11, decoration: TextDecoration.lineThrough, color: isDark ? Colors.grey[500] : Colors.grey, fontWeight: FontWeight.bold)),
-                      
-                      Row(
-                        children: [
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                _isExpanded ? "${AppCurrency.format(widget.pair.effectiveUnitPrice)} c/u" : AppCurrency.format(widget.pair.subtotal), 
-                                style: TextStyle(fontSize: _isExpanded ? 14 : 16, fontWeight: FontWeight.bold, color: widget.pair.hasDiscount ? (isDark ? Colors.green[400] : Colors.green[700]) : textColor)
-                              ),
-                            ),
-                          ),
-                          if (widget.pair.hasDiscount) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? Colors.green.withValues(alpha: 0.2)
-                                    : Colors.green.shade50,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: isDark
-                                      ? Colors.green.withValues(alpha: 0.3)
-                                      : Colors.green.shade200,
-                                ),
-                              ),
-                              child: Text(
-                                "-${AppCurrency.format((widget.pair.originalUnitPrice - widget.pair.effectiveUnitPrice) * widget.pair.selectedQuantity)}",
+                      // Línea superior de descuento (tachado + badge ahorro) siempre visible tanto retraído como expandido
+                      if (widget.pair.hasDiscount)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _isExpanded
+                                    ? AppCurrency.format(widget.pair.originalUnitPrice)
+                                    : AppCurrency.format(widget.pair.originalUnitPrice * widget.pair.selectedQuantity),
                                 style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark
-                                      ? Colors.green[300]
-                                      : Colors.green[800],
+                                  fontSize: 10.5,
+                                  decoration: TextDecoration.lineThrough,
+                                  color: isDark ? Colors.grey[500] : Colors.grey[600],
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ),
-                          ],
-                        ],
+                              const SizedBox(width: 5),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1.5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.green.withValues(alpha: 0.2)
+                                      : Colors.green.shade50,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.green.withValues(alpha: 0.3)
+                                        : Colors.green.shade200,
+                                  ),
+                                ),
+                                child: Text(
+                                  "-${AppCurrency.format((widget.pair.originalUnitPrice - widget.pair.effectiveUnitPrice) * widget.pair.selectedQuantity)}",
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark
+                                        ? Colors.green[300]
+                                        : Colors.green[800],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Línea de Precio Final (Subtotal en retraído, unitario en expandido) - Grande y despejado
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _isExpanded
+                              ? "${AppCurrency.format(widget.pair.effectiveUnitPrice)} c/u"
+                              : AppCurrency.format(widget.pair.subtotal),
+                          style: TextStyle(
+                            fontSize: _isExpanded ? 14 : 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.2,
+                            color: widget.pair.hasDiscount
+                                ? (isDark
+                                      ? Colors.green[400]
+                                      : Colors.green[700])
+                                : textColor,
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(width: 8),
 
-                // CONTROLES DE CANTIDAD
-                AnimatedCrossFade(
-                  duration: const Duration(milliseconds: 250),
-                  crossFadeState: _isExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-                  firstChild: ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 100, maxWidth: 120),
+                // CONTROLES DE CANTIDAD (Sin AnimatedCrossFade ni estiramiento)
+                if (_isExpanded)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 100,
+                      maxWidth: 120,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Container(
                           height: 32,
-                          decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.grey[100], borderRadius: BorderRadius.circular(8), border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300)),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF14141C)
+                                : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white10
+                                  : Colors.grey.shade300,
+                            ),
+                          ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              _iconBtn(Icons.remove, isDark ? Colors.red[300]! : Colors.red, () {
-                                if (widget.pair.selectedQuantity > 1) {
-                                  Provider.of<MatchingProvider>(context, listen: false).updatePairQuantity(widget.pair.sourceItem.id, widget.pair.selectedQuantity - 1);
-                                }
-                              }),
+                              _iconBtn(
+                                Icons.remove,
+                                isDark ? Colors.red[300]! : Colors.red,
+                                () {
+                                  if (widget.pair.selectedQuantity > 1) {
+                                    Provider.of<MatchingProvider>(
+                                      context,
+                                      listen: false,
+                                    ).updatePairQuantity(
+                                      widget.pair.sourceItem.id,
+                                      widget.pair.selectedQuantity - 1,
+                                    );
+                                  }
+                                },
+                              ),
                               Container(
                                 width: 32,
                                 alignment: Alignment.center,
-                                child: Text("${widget.pair.selectedQuantity}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                                child: Text(
+                                  "${widget.pair.selectedQuantity}",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: textColor,
+                                  ),
+                                ),
                               ),
-                              _iconBtn(Icons.add, isDark ? Colors.green[400]! : Colors.green, () {
-                                if (widget.isClient && widget.pair.selectedQuantity >= product.stock) {
-                                  CustomSnackBar.show(context, message: "Límite de stock alcanzado", isError: true);
-                                  return;
-                                }
-                                Provider.of<MatchingProvider>(context, listen: false).updatePairQuantity(widget.pair.sourceItem.id, widget.pair.selectedQuantity + 1);
-                              }),
+                              _iconBtn(
+                                Icons.add,
+                                isDark ? Colors.green[400]! : Colors.green,
+                                () {
+                                  if (widget.isClient &&
+                                      widget.pair.selectedQuantity >=
+                                          product.effectiveVendibleStock) {
+                                    CustomSnackBar.show(
+                                      context,
+                                      message:
+                                          "Límite de stock alcanzado (${product.effectiveVendibleStock} disp.)",
+                                      isError: true,
+                                    );
+                                    return;
+                                  }
+                                  Provider.of<MatchingProvider>(
+                                    context,
+                                    listen: false,
+                                  ).updatePairQuantity(
+                                    widget.pair.sourceItem.id,
+                                    widget.pair.selectedQuantity + 1,
+                                  );
+                                },
+                              ),
                             ],
                           ),
                         ),
@@ -463,78 +856,141 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                           const SizedBox(height: 4),
                           FittedBox(
                             fit: BoxFit.scaleDown,
-                            child: Text(AppCurrency.format(widget.pair.subtotal), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[800])),
-                          )
-                        ]
+                            child: Text(
+                              AppCurrency.format(widget.pair.subtotal),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isDark
+                                    ? Colors.blue[300]
+                                    : Colors.blue[800],
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.blue.withValues(alpha: 0.1)
+                          : Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      "${widget.pair.selectedQuantity} uds.",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: isDark ? Colors.blue[300] : Colors.blue[800],
+                      ),
+                    ),
                   ),
-                  secondChild: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50], borderRadius: BorderRadius.circular(8)),
-                    child: Text("${widget.pair.selectedQuantity} uds.", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[800])),
-                  ),
-                ),
               ],
             ),
           ),
-          
-          Divider(height: 8, color: isDark ? Colors.white10 : Colors.grey.shade200),
-          
-          // ZONA INFERIOR: Botones de Acción (Fuera del InkWell principal)
-          IntrinsicHeight(
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: widget.onUnlink,
-                    borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12)),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red.shade50,
-                        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12))
+
+          Divider(
+            height: 1,
+            color: isDark ? Colors.white10 : Colors.grey.shade200,
+          ),
+
+          // ZONA INFERIOR: Botones de Acción (Sin IntrinsicHeight redundante)
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: widget.onUnlink,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(12),
+                  ),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: _isExpanded ? 10 : 7),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.red.withValues(alpha: 0.15)
+                          : Colors.red.shade50,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(12),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.link_off, size: 16, color: isDark ? Colors.red[300] : Colors.red),
-                          if (_isExpanded) ...[
-                            const SizedBox(width: 6),
-                            Text("Desvincular", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red, fontSize: 12, fontWeight: FontWeight.bold))
-                          ]
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.link_off,
+                          size: 16,
+                          color: isDark ? Colors.red[300] : Colors.red,
+                        ),
+                        if (_isExpanded) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            "Desvincular",
+                            style: TextStyle(
+                              color: isDark ? Colors.red[300] : Colors.red,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ),
-                Container(width: 1, color: isDark ? Colors.transparent : Colors.grey.shade200),
-                Expanded(
-                  child: InkWell(
-                    onTap: widget.onChangeRequest,
-                    borderRadius: const BorderRadius.only(bottomRight: Radius.circular(12)),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50,
-                        borderRadius: const BorderRadius.only(bottomRight: Radius.circular(12))
+              ),
+              Container(
+                width: 1,
+                height: _isExpanded ? 36 : 28,
+                color: isDark ? Colors.white10 : Colors.grey.shade200,
+              ),
+              Expanded(
+                child: InkWell(
+                  onTap: widget.onChangeRequest,
+                  borderRadius: const BorderRadius.only(
+                    bottomRight: Radius.circular(12),
+                  ),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: _isExpanded ? 10 : 7),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.blue.withValues(alpha: 0.15)
+                          : Colors.blue.shade50,
+                      borderRadius: const BorderRadius.only(
+                        bottomRight: Radius.circular(12),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.search, size: 16, color: isDark ? Colors.blue[300] : Colors.blue),
-                          if (_isExpanded) ...[
-                            const SizedBox(width: 6),
-                            Text("Cambiar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontSize: 12, fontWeight: FontWeight.bold))
-                          ]
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search,
+                          size: 16,
+                          color: isDark ? Colors.blue[300] : Colors.blue,
+                        ),
+                        if (_isExpanded) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            "Cambiar",
+                            style: TextStyle(
+                              color: isDark ? Colors.blue[300] : Colors.blue,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
-          )
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -542,29 +998,67 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
 
   Widget _buildSourceInfo(bool isDark) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.1) : const Color(0xFFFFF8E1), borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? Colors.transparent : Colors.orange.shade100)),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.orange.withValues(alpha: 0.1)
+            : const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.transparent : Colors.orange.shade100,
+        ),
+      ),
       child: Column(
-        crossAxisAlignment: _isExpanded ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+        crossAxisAlignment: _isExpanded
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade100, borderRadius: BorderRadius.circular(6)), child: Text("#${widget.index + 1}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.orange[300] : Colors.orange.shade900))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.orange.withValues(alpha: 0.2)
+                  : Colors.orange.shade100,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              "#${widget.index + 1}",
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.orange[300] : Colors.orange.shade900,
+              ),
+            ),
+          ),
           if (!_isExpanded) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               widget.pair.sourceItem.fullName,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87, height: 1.25),
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87,
+                height: 1.2,
+              ),
               softWrap: true,
-              maxLines: 4,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Text("${widget.pair.sourceItem.quantity} ${widget.pair.sourceItem.unit ?? ''}", style: TextStyle(fontSize: 13, color: isDark ? Colors.orange[200] : Colors.brown.shade400, fontWeight: FontWeight.w500)),
+              child: Text(
+                "${widget.pair.sourceItem.quantity} ${widget.pair.sourceItem.unit ?? ''}",
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.orange[200] : Colors.brown.shade400,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
-          ]
+          ],
         ],
       ),
     );
@@ -574,9 +1068,22 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        IconButton(icon: Icon(Icons.delete_outline, size: 24, color: isDark ? Colors.red[400] : Colors.red), onPressed: widget.onDelete, padding: EdgeInsets.zero, tooltip: "Eliminar fila"),
+        IconButton(
+          icon: Icon(
+            Icons.delete_outline,
+            size: 24,
+            color: isDark ? Colors.red[400] : Colors.red,
+          ),
+          onPressed: widget.onDelete,
+          padding: EdgeInsets.zero,
+          tooltip: "Eliminar fila",
+        ),
         const SizedBox(height: 8),
-        Icon(Icons.arrow_forward, size: 16, color: isDark ? Colors.grey[600] : Colors.grey),
+        Icon(
+          Icons.arrow_forward,
+          size: 16,
+          color: isDark ? Colors.grey[600] : Colors.grey,
+        ),
       ],
     );
   }

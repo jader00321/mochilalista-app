@@ -15,6 +15,7 @@ import 'package:app_movil/features/scanner/services/invoice_file_service.dart';
 import 'package:app_movil/features/scanner/services/invoice_pdf_report_service.dart';
 import 'package:app_movil/features/scanner/widgets/shared/download_feedback_modal.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class InvoiceDetailScreen extends StatefulWidget {
   final int invoiceId;
@@ -169,10 +170,12 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setModalState) {
+          final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: kMinDefensiveBottomClearance);
           final filtered = invProv.providers
               .where(
                 (p) =>
@@ -180,85 +183,91 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               )
               .toList();
 
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.75,
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF23232F) : Colors.white,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
+          return SafeArea(
+            top: false,
+            bottom: true,
+            child: Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF23232F) : Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
               ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Column(
-                children: [
-                  Container(
-                    width: 50,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white24 : Colors.grey[300],
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    "Vincular Proveedor",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    autofocus: true,
-                    style: TextStyle(
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: "Buscar proveedor registrado...",
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      filled: true,
-                      fillColor: isDark
-                          ? const Color(0xFF14141C)
-                          : Colors.grey[100],
                     ),
-                    onChanged: (val) => setModalState(() => query = val),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => Divider(
-                        height: 1,
-                        color: isDark ? Colors.white10 : Colors.grey[200],
+                    const SizedBox(height: 20),
+                    Text(
+                      "Vincular Proveedor",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        color: isDark ? Colors.white : Colors.black87,
                       ),
-                      itemBuilder: (ctx, i) {
-                        final ProviderModel prov = filtered[i];
-                        return ListTile(
-                          title: Text(
-                            prov.nombreEmpresa,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.black87,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      autofocus: true,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: "Buscar proveedor registrado...",
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: isDark
+                            ? const Color(0xFF14141C)
+                            : Colors.grey[100],
+                      ),
+                      onChanged: (val) => setModalState(() => query = val),
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: ListView.separated(
+                        padding: EdgeInsets.only(bottom: effectiveBottom + kModalScrollBottomClearance),
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: isDark ? Colors.white10 : Colors.grey[200],
+                        ),
+                        itemBuilder: (ctx, i) {
+                          final ProviderModel prov = filtered[i];
+                          return ListTile(
+                            title: Text(
+                              prov.nombreEmpresa,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
                             ),
-                          ),
-                          subtitle: prov.ruc != null
-                              ? Text("RUC: ${prov.ruc}")
-                              : null,
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            _updateInvoice(proveedorId: prov.id);
-                          },
-                        );
-                      },
+                            subtitle: prov.ruc != null
+                                ? Text("RUC: ${prov.ruc}")
+                                : null,
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _updateInvoice(proveedorId: prov.id);
+                            },
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );

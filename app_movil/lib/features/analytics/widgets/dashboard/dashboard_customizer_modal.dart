@@ -26,6 +26,7 @@ class DashboardCustomizerModal extends StatefulWidget {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) => DashboardCustomizerModal(
         negocioId: negocioId,
@@ -97,11 +98,42 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
     return InteractiveSheetWrapper(
       backgroundColor: bgColor,
       maxHeightFactor: 0.90,
-      applyEffectiveBottomPadding: true,
+      applyEffectiveBottomPadding: false,
       showHandle: true,
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.84,
-        child: Column(
+      bottomAction: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar"),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.check, size: 18),
+              label: const Text(
+                "Guardar Cambios", 
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: _saveAndClose,
+            ),
+          ),
+        ],
+      ),
+      child: Column(
           children: [
             // Header (1 sola manija nativa provista por InteractiveSheetWrapper)
             Padding(
@@ -242,7 +274,7 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
             // Reorderable list con tarjetas sin textos recortados (Mandatory Technical Rule #3)
             Expanded(
               child: ReorderableListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, InteractiveSheetWrapper.kModalScrollBottomClearance),
                 physics: const BouncingScrollPhysics(),
                 itemCount: _sections.length,
                 onReorder: _onReorder,
@@ -347,51 +379,8 @@ class _DashboardCustomizerModalState extends State<DashboardCustomizerModal> {
                 },
               ),
             ),
-
-            // Bottom action buttons
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: bgColor,
-                border: Border(top: BorderSide(color: borderColor)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Cancelar"),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      icon: const Icon(Icons.check, size: 18),
-                      label: const Text(
-                        "Guardar Cambios", 
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: _saveAndClose,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
-      ),
     );
   }
 

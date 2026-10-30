@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class _PhoneNumberFormatter extends TextInputFormatter {
   @override
@@ -379,7 +380,6 @@ class _ClientProfileEditorState extends State<ClientProfileEditor> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
-
     return Container(
       height: MediaQuery.of(context).size.height * 0.92,
       decoration: BoxDecoration(
@@ -388,6 +388,7 @@ class _ClientProfileEditorState extends State<ClientProfileEditor> {
       ),
       child: SafeArea(
         top: false,
+        bottom: true,
         child: Column(
           children: [
             Padding(
@@ -594,41 +595,49 @@ class _ClientProfileEditorState extends State<ClientProfileEditor> {
                     textCapitalization: TextCapitalization.sentences,
                   ),
                   
-                  const SizedBox(height: 20),
+                  const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
                 ],
               ),
             ),
 
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: BoxDecoration(
-                color: surfaceColor,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 10,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleSave,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[800],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: _isLoading 
-                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                    : const Text(
-                        "GUARDAR CLIENTE",
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.8),
+            Builder(
+              builder: (bCtx) {
+                final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+                  bCtx,
+                  minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+                );
+                return Container(
+                  padding: EdgeInsets.fromLTRB(24, 14, 24, effectiveBottom),
+                  decoration: BoxDecoration(
+                    color: surfaceColor,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, -4),
                       ),
-                ),
-              ),
+                    ],
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _handleSave,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[800],
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: _isLoading 
+                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                        : const Text(
+                            "GUARDAR CLIENTE",
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.8),
+                          ),
+                    ),
+                  ),
+                );
+              },
             ),
           ],
         ),

@@ -161,7 +161,14 @@ class QuotationCard extends StatelessWidget {
                                     ),
                                     if (quotation.notas != null && quotation.notas!.isNotEmpty) ...[
                                       const SizedBox(width: 6),
-                                      Icon(Icons.push_pin, size: 16, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                                      Tooltip(
+                                        message: "Tiene notas internas",
+                                        child: Icon(
+                                          Icons.note_alt_outlined,
+                                          size: 16,
+                                          color: isDark ? Colors.orange[300] : Colors.orange[800],
+                                        ),
+                                      ),
                                     ]
                                   ],
                                 ),

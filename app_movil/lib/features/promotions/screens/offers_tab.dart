@@ -7,6 +7,7 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class OffersTab extends StatefulWidget {
   const OffersTab({super.key});
@@ -578,89 +579,98 @@ class _OffersTabState extends State<OffersTab> {
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E1E28) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(width: 50, height: 5, margin: const EdgeInsets.only(bottom: 24), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-              ),
-              Row(
+        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+        return SafeArea(
+          top: false,
+          bottom: true,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom + 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.15), shape: BoxShape.circle),
-                    child: const Icon(Icons.lightbulb_outline, color: Colors.orange, size: 28),
+                  Center(
+                    child: Container(width: 50, height: 5, margin: const EdgeInsets.only(bottom: 24), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
                   ),
-                  const SizedBox(width: 16),
-                  const Text("Insight Estratégico", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Text("¿Por qué sugerimos esto?", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 12),
-              RichText(
-                text: TextSpan(
-                  style: TextStyle(color: isDark ? Colors.grey[300] : Colors.black87, fontSize: 14, height: 1.5),
-                  children: [
-                    const TextSpan(text: "El producto "),
-                    TextSpan(text: fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const TextSpan(text: " lleva "),
-                    TextSpan(text: "$days días", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
-                    const TextSpan(text: " sin registrar movimiento. Tienes "),
-                    TextSpan(text: "$stock unidades", style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const TextSpan(text: " en stock, lo que equivale a "),
-                    TextSpan(text: currency.format(cost), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-                    const TextSpan(text: " de capital inmovilizado que no está generando rentabilidad."),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.15), shape: BoxShape.circle),
+                        child: const Icon(Icons.lightbulb_outline, color: Colors.orange, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      const Text("Insight Estratégico", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Text("¿Por qué sugerimos esto?", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 12),
+                  RichText(
+                    text: TextSpan(
+                      style: TextStyle(color: isDark ? Colors.grey[300] : Colors.black87, fontSize: 14, height: 1.5),
                       children: [
-                        const Icon(Icons.check_circle_outline, color: Colors.blue, size: 20),
-                        const SizedBox(width: 8),
-                        Text("Estrategia: $promoLabel", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blue)),
+                        const TextSpan(text: "El producto "),
+                        TextSpan(text: fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const TextSpan(text: " lleva "),
+                        TextSpan(text: "$days días", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                        const TextSpan(text: " sin registrar movimiento. Tienes "),
+                        TextSpan(text: "$stock unidades", style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const TextSpan(text: " en stock, lo que equivale a "),
+                        TextSpan(text: currency.format(cost), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                        const TextSpan(text: " de capital inmovilizado que no está generando rentabilidad."),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(strategyText, style: TextStyle(color: isDark ? Colors.blue[100] : Colors.blue[900], fontSize: 13, height: 1.4)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Entendido", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.check_circle_outline, color: Colors.blue, size: 20),
+                            const SizedBox(width: 8),
+                            Text("Estrategia: $promoLabel", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blue)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(strategyText, style: TextStyle(color: isDark ? Colors.blue[100] : Colors.blue[900], fontSize: 13, height: 1.4)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Entendido", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ),
-              SizedBox(height: MediaQuery.of(context).padding.bottom),
-            ],
+            ),
           ),
         );
       },

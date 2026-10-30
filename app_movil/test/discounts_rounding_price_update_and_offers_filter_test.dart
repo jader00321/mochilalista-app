@@ -46,6 +46,8 @@ class MockInventoryProvider extends InventoryProvider {
     String? tipoDesc,
     double? valorDesc,
     int? stock,
+    int? cupoMaximoVariante,
+    bool clearCupo = false,
     String? estado,
     String? imagenUrl,
   }) async {

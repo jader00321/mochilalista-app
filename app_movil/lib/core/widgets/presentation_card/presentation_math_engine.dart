@@ -137,6 +137,23 @@ class PresentationMathEngine {
   }
 
   void onUnidadVentaChanged(String unitName, int factor, bool isAutomatic) {
+    final bool isShared = controllerMap['usaStockCompartido'] == true;
+    if (isShared) {
+      final safeFactor = factor <= 0 ? 1 : factor;
+      final double baseCost =
+          (controllerMap['costoBaseUnitario'] as num?)?.toDouble() ??
+              costoBaseParaSobrante;
+      if (baseCost > 0) {
+        costoPresCtrl.text = formatDecimal(baseCost * safeFactor);
+        recalcularPrecios(fromMargen: true);
+        if (activeRoundingTarget != null) {
+          roundPrice(activeRoundingTarget!);
+        }
+        onStateUpdate();
+        return;
+      }
+    }
+
     bool isEdit = controllerMap['isEditMode'] == true;
     if (isEdit) {
       convertirUnidadEnEdicion(factor);
@@ -646,5 +663,288 @@ class PresentationMathEngine {
     controllerMap['preRoundedPrice'] = preRoundedPrice;
     controllerMap['preRoundedMargen'] = preRoundedMargen;
     onStateUpdate();
+  }
+
+  /// Aplica el Costo Base Unitario en cascada si esta variante opera en modo Compartido
+  void applyBaseCost(double baseCost) {
+    controllerMap['costoBaseUnitario'] = baseCost;
+    final bool isShared = controllerMap['usaStockCompartido'] == true;
+    if (!isShared) return;
+
+    final int factor = int.tryParse(unidadesVentaCtrl.text) ?? 1;
+    final int safeFactor = factor <= 0 ? 1 : factor;
+    final double newCost = baseCost * safeFactor;
+
+    costoPresCtrl.text = formatDecimal(newCost);
+    recalcularPrecios(fromMargen: true);
+
+    if (controllerMap['activeRoundingTarget'] != null) {
+      roundPrice(controllerMap['activeRoundingTarget'] as double);
+    }
+    onStateUpdate();
+  }
+
+  /// Alterna entre modo Compartido y Stock Propio preservando memoria bidireccional
+  void toggleSharedStockMode({
+    required bool isShared,
+    required double baseCost,
+  }) {
+    final bool isEdit = controllerMap['isEditMode'] == true;
+
+    if (isShared) {
+      // 1. Guardar Snapshot de Modo Propio
+      controllerMap['savedPropioSnapshot'] = {
+        'costoPres': costoPresCtrl.text,
+        'margen': margenCtrl.text,
+        'precioVenta': ventaCtrl.text,
+        'stockInicial': stockInicialCtrl.text,
+        'nuevoIngreso': nuevoIngresoCtrl.text,
+        'stockDescuento': stockDescuentoCtrl.text,
+        'stockFinal': stockFinalCtrl.text,
+        'descuentoActivo': controllerMap['descuentoActivo'],
+        'tipoDescuento': controllerMap['tipoDescuento'],
+        'valorDescuento': valorDescuentoCtrl.text,
+        'precioOfertaExacto': controllerMap['precioOfertaExacto'],
+        'activeRoundingTarget': controllerMap['activeRoundingTarget'],
+        'preRoundedPrice': controllerMap['preRoundedPrice'],
+        'preRoundedMargen': controllerMap['preRoundedMargen'],
+      };
+
+      controllerMap['usaStockCompartido'] = true;
+      controllerMap['costoBaseUnitario'] = baseCost;
+
+      // 2. Restaurar snapshot de Compartido si existía previamente
+      final snap = controllerMap['savedCompartidoSnapshot'] as Map<String, dynamic>?;
+      if (snap != null) {
+        controllerMap['cupoMaximoVariante'] = snap['cupoMaximoVariante'];
+        if (snap['margen'] != null && snap['margen'].toString().isNotEmpty) {
+          margenCtrl.text = snap['margen'].toString();
+        }
+        if (snap['descuentoActivo'] != null) {
+          controllerMap['descuentoActivo'] = snap['descuentoActivo'];
+        }
+        if (snap['tipoDescuento'] != null) {
+          controllerMap['tipoDescuento'] = snap['tipoDescuento'];
+        }
+        if (snap['valorDescuento'] != null) {
+          valorDescuentoCtrl.text = snap['valorDescuento'].toString();
+        }
+        controllerMap['precioOfertaExacto'] = snap['precioOfertaExacto'];
+        controllerMap['activeRoundingTarget'] = snap['activeRoundingTarget'];
+        controllerMap['preRoundedPrice'] = snap['preRoundedPrice'];
+        controllerMap['preRoundedMargen'] = snap['preRoundedMargen'];
+      }
+
+      // 3. Aplicar costo en cascada desde Costo Base Unitario
+      final int factor = int.tryParse(unidadesVentaCtrl.text) ?? 1;
+      final int safeFactor = factor <= 0 ? 1 : factor;
+      final double newCost = baseCost * safeFactor;
+      costoPresCtrl.text = formatDecimal(newCost);
+      recalcularPrecios(fromMargen: true);
+      if (controllerMap['activeRoundingTarget'] != null) {
+        roundPrice(controllerMap['activeRoundingTarget'] as double);
+      }
+    } else {
+      // 1. Guardar Snapshot de Modo Compartido
+      controllerMap['savedCompartidoSnapshot'] = {
+        'cupoMaximoVariante': controllerMap['cupoMaximoVariante'],
+        'margen': margenCtrl.text,
+        'precioVenta': ventaCtrl.text,
+        'descuentoActivo': controllerMap['descuentoActivo'],
+        'tipoDescuento': controllerMap['tipoDescuento'],
+        'valorDescuento': valorDescuentoCtrl.text,
+        'precioOfertaExacto': controllerMap['precioOfertaExacto'],
+        'activeRoundingTarget': controllerMap['activeRoundingTarget'],
+        'preRoundedPrice': controllerMap['preRoundedPrice'],
+        'preRoundedMargen': controllerMap['preRoundedMargen'],
+      };
+
+      controllerMap['usaStockCompartido'] = false;
+      controllerMap.remove('cupoMaximoVariante');
+
+      final snap = controllerMap['savedPropioSnapshot'] as Map<String, dynamic>?;
+      if (snap != null) {
+        // Restaurar datos propios guardados
+        costoPresCtrl.text = snap['costoPres'] ?? "0.00";
+        margenCtrl.text = snap['margen'] ?? "1.35";
+        ventaCtrl.text = snap['precioVenta'] ?? "0.00";
+        stockInicialCtrl.text = snap['stockInicial'] ?? "0";
+        nuevoIngresoCtrl.text = snap['nuevoIngreso'] ?? "0";
+        stockDescuentoCtrl.text = snap['stockDescuento'] ?? "0";
+        stockFinalCtrl.text = snap['stockFinal'] ?? "0";
+        controllerMap['descuentoActivo'] = snap['descuentoActivo'];
+        controllerMap['tipoDescuento'] = snap['tipoDescuento'];
+        valorDescuentoCtrl.text = snap['valorDescuento'] ?? "";
+        controllerMap['precioOfertaExacto'] = snap['precioOfertaExacto'];
+        controllerMap['activeRoundingTarget'] = snap['activeRoundingTarget'];
+        controllerMap['preRoundedPrice'] = snap['preRoundedPrice'];
+        controllerMap['preRoundedMargen'] = snap['preRoundedMargen'];
+
+        recalcularHaciaAtrasDesdeVisual(fromMargen: true);
+      } else {
+        if (!isEdit) {
+          // En Crear Producto sin snapshot previo: limpiar Costo para que el usuario escriba su propio costo
+          costoPresCtrl.text = "0.00";
+          ventaCtrl.text = "0.00";
+          margenCtrl.text = "1.35";
+          controllerMap['descuentoActivo'] = false;
+          valorDescuentoCtrl.text = "";
+          controllerMap.remove('precioOfertaExacto');
+          controllerMap.remove('activeRoundingTarget');
+          controllerMap.remove('preRoundedPrice');
+          controllerMap.remove('preRoundedMargen');
+          calcularStockFinal();
+        } else {
+          // En Editar Producto: restaurar costo base original
+          costoPresCtrl.text = formatDecimal(originalBaseCost * originalFactor);
+          recalcularPrecios(fromMargen: true);
+        }
+      }
+    }
+    onStateUpdate();
+  }
+
+  /// Aplica el cambio global de estrategia a una lista de controllerMaps
+  static void applyGlobalStrategyChange({
+    required List<Map<String, dynamic>> controllers,
+    required String newStrategy,
+    required double baseCost,
+    required bool isEditMode,
+  }) {
+    for (var c in controllers) {
+      c['costoBaseUnitario'] = baseCost;
+      final bool wasShared = c['usaStockCompartido'] == true;
+
+      if (newStrategy == 'COMPARTIDO') {
+        if (!wasShared) {
+          _applySnapshotToggle(c, isShared: true, baseCost: baseCost, isEditMode: isEditMode);
+        } else {
+          _refreshSharedCost(c, baseCost);
+        }
+      } else if (newStrategy == 'INDEPENDIENTE') {
+        if (wasShared) {
+          _applySnapshotToggle(c, isShared: false, baseCost: baseCost, isEditMode: isEditMode);
+        }
+      } else if (newStrategy == 'MIXTO') {
+        if (wasShared) {
+          _refreshSharedCost(c, baseCost);
+        }
+      }
+    }
+  }
+
+  static void _refreshSharedCost(Map<String, dynamic> c, double baseCost) {
+    final factorCtrl = c['unidadesVenta'] as TextEditingController?;
+    final costoCtrl = c['costoPres'] as TextEditingController?;
+    final margenCtrl = c['margen'] as TextEditingController?;
+    final ventaCtrl = c['precioVenta'] as TextEditingController?;
+    if (factorCtrl == null || costoCtrl == null || margenCtrl == null || ventaCtrl == null) return;
+
+    final int factor = int.tryParse(factorCtrl.text) ?? 1;
+    final int safeFactor = factor <= 0 ? 1 : factor;
+    final double newCost = baseCost * safeFactor;
+    costoCtrl.text = newCost.toStringAsFixed(2);
+    final double margen = double.tryParse(margenCtrl.text) ?? 1.35;
+    ventaCtrl.text = (newCost * margen).toStringAsFixed(2);
+  }
+
+  static void _applySnapshotToggle(
+    Map<String, dynamic> c, {
+    required bool isShared,
+    required double baseCost,
+    required bool isEditMode,
+  }) {
+    final costoCtrl = c['costoPres'] as TextEditingController?;
+    final margenCtrl = c['margen'] as TextEditingController?;
+    final ventaCtrl = c['precioVenta'] as TextEditingController?;
+    final stockIniCtrl = c['stockInicial'] as TextEditingController?;
+    final nuevoIngCtrl = c['nuevoIngreso'] as TextEditingController?;
+    final stockDescCtrl = c['stockDescuento'] as TextEditingController?;
+    final stockFinCtrl = c['stockFinal'] as TextEditingController?;
+    final valorDescCtrl = c['valorDescuento'] as TextEditingController?;
+
+    if (isShared) {
+      c['savedPropioSnapshot'] = {
+        'costoPres': costoCtrl?.text ?? "0.00",
+        'margen': margenCtrl?.text ?? "1.35",
+        'precioVenta': ventaCtrl?.text ?? "0.00",
+        'stockInicial': stockIniCtrl?.text ?? "0",
+        'nuevoIngreso': nuevoIngCtrl?.text ?? "0",
+        'stockDescuento': stockDescCtrl?.text ?? "0",
+        'stockFinal': stockFinCtrl?.text ?? "0",
+        'descuentoActivo': c['descuentoActivo'],
+        'tipoDescuento': c['tipoDescuento'],
+        'valorDescuento': valorDescCtrl?.text ?? "",
+        'precioOfertaExacto': c['precioOfertaExacto'],
+        'activeRoundingTarget': c['activeRoundingTarget'],
+        'preRoundedPrice': c['preRoundedPrice'],
+        'preRoundedMargen': c['preRoundedMargen'],
+      };
+      c['usaStockCompartido'] = true;
+
+      final snap = c['savedCompartidoSnapshot'] as Map<String, dynamic>?;
+      if (snap != null) {
+        c['cupoMaximoVariante'] = snap['cupoMaximoVariante'];
+        if (snap['margen'] != null && margenCtrl != null) {
+          margenCtrl.text = snap['margen'].toString();
+        }
+        c['descuentoActivo'] = snap['descuentoActivo'];
+        c['tipoDescuento'] = snap['tipoDescuento'];
+        if (snap['valorDescuento'] != null && valorDescCtrl != null) {
+          valorDescCtrl.text = snap['valorDescuento'].toString();
+        }
+        c['precioOfertaExacto'] = snap['precioOfertaExacto'];
+        c['activeRoundingTarget'] = snap['activeRoundingTarget'];
+        c['preRoundedPrice'] = snap['preRoundedPrice'];
+        c['preRoundedMargen'] = snap['preRoundedMargen'];
+      }
+
+      _refreshSharedCost(c, baseCost);
+    } else {
+      c['savedCompartidoSnapshot'] = {
+        'cupoMaximoVariante': c['cupoMaximoVariante'],
+        'margen': margenCtrl?.text ?? "1.35",
+        'precioVenta': ventaCtrl?.text ?? "0.00",
+        'descuentoActivo': c['descuentoActivo'],
+        'tipoDescuento': c['tipoDescuento'],
+        'valorDescuento': valorDescCtrl?.text ?? "",
+        'precioOfertaExacto': c['precioOfertaExacto'],
+        'activeRoundingTarget': c['activeRoundingTarget'],
+        'preRoundedPrice': c['preRoundedPrice'],
+        'preRoundedMargen': c['preRoundedMargen'],
+      };
+      c['usaStockCompartido'] = false;
+      c.remove('cupoMaximoVariante');
+
+      final snap = c['savedPropioSnapshot'] as Map<String, dynamic>?;
+      if (snap != null) {
+        if (costoCtrl != null) costoCtrl.text = snap['costoPres'] ?? "0.00";
+        if (margenCtrl != null) margenCtrl.text = snap['margen'] ?? "1.35";
+        if (ventaCtrl != null) ventaCtrl.text = snap['precioVenta'] ?? "0.00";
+        if (stockIniCtrl != null) stockIniCtrl.text = snap['stockInicial'] ?? "0";
+        if (nuevoIngCtrl != null) nuevoIngCtrl.text = snap['nuevoIngreso'] ?? "0";
+        if (stockDescCtrl != null) stockDescCtrl.text = snap['stockDescuento'] ?? "0";
+        if (stockFinCtrl != null) stockFinCtrl.text = snap['stockFinal'] ?? "0";
+        c['descuentoActivo'] = snap['descuentoActivo'];
+        c['tipoDescuento'] = snap['tipoDescuento'];
+        if (valorDescCtrl != null) valorDescCtrl.text = snap['valorDescuento'] ?? "";
+        c['precioOfertaExacto'] = snap['precioOfertaExacto'];
+        c['activeRoundingTarget'] = snap['activeRoundingTarget'];
+        c['preRoundedPrice'] = snap['preRoundedPrice'];
+        c['preRoundedMargen'] = snap['preRoundedMargen'];
+      } else {
+        if (!isEditMode) {
+          if (costoCtrl != null) costoCtrl.text = "0.00";
+          if (ventaCtrl != null) ventaCtrl.text = "0.00";
+          if (margenCtrl != null) margenCtrl.text = "1.35";
+          c['descuentoActivo'] = false;
+          if (valorDescCtrl != null) valorDescCtrl.text = "";
+          c.remove('precioOfertaExacto');
+          c.remove('activeRoundingTarget');
+          c.remove('preRoundedPrice');
+          c.remove('preRoundedMargen');
+        }
+      }
+    }
   }
 }

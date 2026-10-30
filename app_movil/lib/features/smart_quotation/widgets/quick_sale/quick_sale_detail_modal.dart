@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
@@ -13,13 +12,20 @@ import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/widgets/stock_update_modal.dart';
 import 'package:app_movil/core/widgets/price_update_modal.dart';
 import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class QuickSaleDetailModal extends StatefulWidget {
   final MatchedProduct product;
   final int initialQty;
   final double? initialOverridePrice;
   final Function(int presentationId, int newStockBase)? onStockUpdated;
-  final Function(int oldPresentationId, MatchedProduct product, int qty, double? overridePrice) onConfirm;
+  final Function(
+    int oldPresentationId,
+    MatchedProduct product,
+    int qty,
+    double? overridePrice,
+  )
+  onConfirm;
 
   const QuickSaleDetailModal({
     super.key,
@@ -37,7 +43,13 @@ class QuickSaleDetailModal extends StatefulWidget {
     required int initialQty,
     double? initialOverridePrice,
     Function(int presentationId, int newStockBase)? onStockUpdated,
-    required Function(int oldPresentationId, MatchedProduct product, int qty, double? overridePrice) onConfirm,
+    required Function(
+      int oldPresentationId,
+      MatchedProduct product,
+      int qty,
+      double? overridePrice,
+    )
+    onConfirm,
   }) {
     return InteractiveSheetWrapper.show(
       context: context,
@@ -58,10 +70,11 @@ class QuickSaleDetailModal extends StatefulWidget {
 class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
   Product? _fullProduct;
   bool _isLoadingVariants = true;
-  
+  bool _showVariantSelector = false;
+
   late MatchedProduct _currentSelection;
-  late double _systemPrice; 
-  
+  late double _systemPrice;
+
   final _qtyCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
@@ -77,13 +90,14 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
   void initState() {
     super.initState();
     _currentSelection = widget.product;
-    _systemPrice = widget.product.price; 
+    _systemPrice = widget.product.price;
     _qtyCtrl.text = widget.initialQty.toString();
 
     // 🛡️ Precision 1: Blindaje de Desactivación Real
     // Si la variante tiene oferta en BD, pero widget.initialOverridePrice coincide con el precio base regular
     // (o se guardó explícitamente _systemPrice), la oferta fue desactivada por el usuario para esta operación.
-    final bool isOverrideEqualBase = widget.initialOverridePrice != null &&
+    final bool isOverrideEqualBase =
+        widget.initialOverridePrice != null &&
         (widget.initialOverridePrice! - _systemPrice).abs() < 0.01;
 
     double effectivePrice;
@@ -96,7 +110,9 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
       _isDiscountActive = true;
       effectivePrice = widget.initialOverridePrice!;
       final double diffFromBase = _systemPrice - effectivePrice;
-      _discountCtrl.text = diffFromBase > 0 ? diffFromBase.toStringAsFixed(2) : "";
+      _discountCtrl.text = diffFromBase > 0
+          ? diffFromBase.toStringAsFixed(2)
+          : "";
       final double diffFromCatalog = _currentSelection.hasOffer
           ? (effectivePrice - _currentSelection.effectivePrice).abs()
           : 0.0;
@@ -106,7 +122,9 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
       _isCustomPrice = false;
       effectivePrice = _currentSelection.effectivePrice;
       final double diffFromBase = _systemPrice - effectivePrice;
-      _discountCtrl.text = diffFromBase > 0 ? diffFromBase.toStringAsFixed(2) : "";
+      _discountCtrl.text = diffFromBase > 0
+          ? diffFromBase.toStringAsFixed(2)
+          : "";
     } else {
       _isDiscountActive = false;
       _isCustomPrice = false;
@@ -142,7 +160,12 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     try {
       // 🛡️ Carga exhaustiva desde base de datos SQLite para evitar filtros o arrays parciales en memoria
       final prod = await invProv.fetchProductById(_currentSelection.productId);
-      if (mounted) setState(() { _fullProduct = prod; _isLoadingVariants = false; });
+      if (mounted) {
+        setState(() {
+          _fullProduct = prod;
+          _isLoadingVariants = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _isLoadingVariants = false);
     }
@@ -152,7 +175,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     if (_isSyncing) return;
     _isSyncing = true;
     double disc = double.tryParse(val) ?? 0.0;
-    
+
     if (disc < 0) disc = 0;
     if (disc > _systemPrice) {
       disc = _systemPrice;
@@ -163,20 +186,21 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     _priceCtrl.text = newPrice.toStringAsFixed(2);
 
     if (_currentSelection.hasOffer) {
-      _isCustomPrice = (newPrice - _currentSelection.effectivePrice).abs() >= 0.01;
+      _isCustomPrice =
+          (newPrice - _currentSelection.effectivePrice).abs() >= 0.01;
     } else {
       _isCustomPrice = disc > 0.01;
     }
 
     _isSyncing = false;
-    setState(() {}); 
+    setState(() {});
   }
 
   void _onPriceChanged(String val) {
     if (_isSyncing) return;
     _isSyncing = true;
     double price = double.tryParse(val) ?? _systemPrice;
-    
+
     if (price < 0) {
       price = 0;
       _priceCtrl.text = "0.00";
@@ -185,7 +209,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
       price = _systemPrice;
       _priceCtrl.text = _systemPrice.toStringAsFixed(2);
     }
-    
+
     double disc = _systemPrice - price;
     _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
 
@@ -196,7 +220,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     }
 
     _isSyncing = false;
-    setState(() {}); 
+    setState(() {});
   }
 
   void _restoreCatalogOffer() {
@@ -205,7 +229,10 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
         _isDiscountActive = true;
         _isCustomPrice = false;
         _priceCtrl.text = _currentSelection.offerPrice!.toStringAsFixed(2);
-        final disc = (_systemPrice - _currentSelection.offerPrice!).clamp(0.0, double.infinity);
+        final disc = (_systemPrice - _currentSelection.offerPrice!).clamp(
+          0.0,
+          double.infinity,
+        );
         _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
 
         _variantDrafts[_currentSelection.presentationId] = VariantDetailState(
@@ -231,18 +258,10 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
   }
 
   String _cleanName(String rawName) {
-    return rawName.replaceAll(RegExp(r'\([^)]*\)'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
-
-  String _formatPresentationChipLabel(ProductPresentation p) {
-    final hasSpecific = p.nombreEspecifico != null && p.nombreEspecifico!.trim().isNotEmpty;
-    final unit = p.unidadVenta ?? "Unidad";
-    final factor = p.unidadesPorVenta > 1 ? " (x${p.unidadesPorVenta})" : "";
-    
-    if (hasSpecific) {
-      return "${p.nombreEspecifico!.trim()} · $unit$factor";
-    }
-    return "$unit$factor";
+    return rawName
+        .replaceAll(RegExp(r'\([^)]*\)'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   void _updateVariant(ProductPresentation pres) {
@@ -261,7 +280,10 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
       String cleanProductName = _cleanName(_fullProduct!.nombre);
       String cleanSpecificName = _cleanName(pres.nombreEspecifico ?? "");
       String fullNameBuilder = cleanProductName;
-      if (cleanSpecificName.isNotEmpty && !cleanProductName.toLowerCase().contains(cleanSpecificName.toLowerCase())) {
+      if (cleanSpecificName.isNotEmpty &&
+          !cleanProductName.toLowerCase().contains(
+            cleanSpecificName.toLowerCase(),
+          )) {
         fullNameBuilder += " $cleanSpecificName";
       }
 
@@ -270,8 +292,21 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
       final double? calculatedCost = presCost > 0
           ? presCost
           : (pres.factorGananciaVenta != null && pres.factorGananciaVenta! > 0
-              ? pres.precioVentaFinal / pres.factorGananciaVenta!
-              : null);
+                ? pres.precioVentaFinal / pres.factorGananciaVenta!
+                : null);
+
+      final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
+      final pool =
+          _fullProduct?.stockCompartido ?? widget.product.sharedStockPool;
+      final int availableStock = pres.usaStockCompartido
+          ? quickProv.getRemainingAvailableForPresentation(
+              productId: _currentSelection.productId,
+              presentation: pres,
+              sharedStockPool: pool,
+              excludePresentationId: widget.product.presentationId,
+            )
+          : pres.stockActual ~/
+                (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1);
 
       _currentSelection = MatchedProduct(
         productId: _currentSelection.productId,
@@ -280,17 +315,19 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
         productName: _fullProduct!.nombre,
         specificName: pres.nombreEspecifico,
         brand: _fullProduct!.marcaNombre ?? _currentSelection.brand,
-        price: pres.precioVentaFinal, 
+        price: pres.precioVentaFinal,
         offerPrice: newOffer,
-        stock: pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1),
+        stock: availableStock,
         imageUrl: pres.imagenUrl ?? _fullProduct!.imagenUrl,
-        unit: pres.unidadVenta ?? "Unidad", 
-        conversionFactor: pres.unidadesPorVenta, 
+        unit: pres.unidadVenta ?? "Unidad",
+        conversionFactor: pres.unidadesPorVenta,
         cost: calculatedCost,
+        usaStockCompartido: pres.usaStockCompartido,
+        sharedStockPool: pool,
       );
-      
+
       _systemPrice = _currentSelection.price;
-      
+
       // 3. Restaurar borrador previo o inicializar nueva variante
       if (_variantDrafts.containsKey(pres.id!)) {
         final draft = _variantDrafts[pres.id!]!;
@@ -325,7 +362,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
           isCustomPrice: _isCustomPrice,
         );
       }
-      
+
       int currentQty = int.tryParse(_qtyCtrl.text) ?? 1;
       if (currentQty > _currentSelection.stock && _currentSelection.stock > 0) {
         _qtyCtrl.text = _currentSelection.stock.toString();
@@ -364,11 +401,15 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
   void _confirm() {
     int finalQty = int.tryParse(_qtyCtrl.text) ?? 1;
     if (finalQty <= 0) {
-      CustomSnackBar.show(context, message: "La cantidad debe ser mayor a 0.", isError: true);
+      CustomSnackBar.show(
+        context,
+        message: "La cantidad debe ser mayor a 0.",
+        isError: true,
+      );
       return;
     }
     double finalPrice = double.tryParse(_priceCtrl.text) ?? _systemPrice;
-    
+
     double? overridePrice;
     if (!_isDiscountActive) {
       // Si la variante tenía oferta en BD pero el usuario apagó el switch,
@@ -377,14 +418,18 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     } else {
       overridePrice = finalPrice;
     }
-    
-    widget.onConfirm(widget.product.presentationId, _currentSelection, finalQty, overridePrice);
+
+    widget.onConfirm(
+      widget.product.presentationId,
+      _currentSelection,
+      finalQty,
+      overridePrice,
+    );
     Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -409,7 +454,9 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     final String bStr = brandName.trim();
     final String cStr = categoryName.trim();
     String brandCategoryLabel = "";
-    if (bStr.isNotEmpty && cStr.isNotEmpty && !bStr.toUpperCase().contains(cStr.toUpperCase())) {
+    if (bStr.isNotEmpty &&
+        cStr.isNotEmpty &&
+        !bStr.toUpperCase().contains(cStr.toUpperCase())) {
       brandCategoryLabel = "${bStr.toUpperCase()} · ${cStr.toUpperCase()}";
     } else if (bStr.isNotEmpty) {
       brandCategoryLabel = bStr.toUpperCase();
@@ -421,12 +468,14 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
     double currentPrice = double.tryParse(_priceCtrl.text) ?? _systemPrice;
     double subtotal = currentPrice * currentQty;
     double totalSavings = (_systemPrice - currentPrice) * currentQty;
-    
-    bool isStockEmpty = _currentSelection.stock <= 0;
-    bool exceedsStock = currentQty > _currentSelection.stock && !_currentSelection.stock.isNegative;
-    
 
-    final bool hasRealImage = _currentSelection.imageUrl != null &&
+    final effectiveStock = _currentSelection.effectiveVendibleStock;
+    bool isStockEmpty = effectiveStock <= 0;
+    bool exceedsStock =
+        currentQty > effectiveStock && !effectiveStock.isNegative;
+
+    final bool hasRealImage =
+        _currentSelection.imageUrl != null &&
         _currentSelection.imageUrl!.isNotEmpty &&
         _currentSelection.imageUrl != 'null';
 
@@ -438,185 +487,258 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
         height: 54,
         width: double.infinity,
         child: ElevatedButton(
-          onPressed: (currentQty > 0 && subtotal >= 0 && !exceedsStock) ? _confirm : null,
+          onPressed: (currentQty > 0 && subtotal >= 0 && !exceedsStock)
+              ? _confirm
+              : null,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue[800], 
-            foregroundColor: Colors.white, 
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            backgroundColor: Colors.blue[800],
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
-          child: const Text("GUARDAR CAMBIOS", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+          child: const Text(
+            "GUARDAR CAMBIOS",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.8,
+            ),
+          ),
         ),
       ),
       child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, InteractiveSheetWrapper.kModalScrollBottomClearance),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-              // 1. INFO SUPERIOR (Con botón ✕ integrado en la cabecera)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  GestureDetector(
-                    onTap: hasRealImage
-                        ? () => showDialog(
-                            context: context,
-                            builder: (ctx) => Dialog(
-                              backgroundColor: Colors.transparent,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: UniversalImage(
-                                  path: _currentSelection.imageUrl,
-                                  productName: _currentSelection.productName,
-                                  categoryName: brandCategoryLabel.isNotEmpty ? brandCategoryLabel : brandName,
-                                  fit: BoxFit.contain,
-                                ),
+            // 1. INFO SUPERIOR (Con botón ✕ integrado en la cabecera)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: hasRealImage
+                      ? () => showDialog(
+                          context: context,
+                          builder: (ctx) => Dialog(
+                            backgroundColor: Colors.transparent,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: UniversalImage(
+                                path: _currentSelection.imageUrl,
+                                productName: _currentSelection.productName,
+                                categoryName: brandCategoryLabel.isNotEmpty
+                                    ? brandCategoryLabel
+                                    : brandName,
+                                fit: BoxFit.contain,
                               ),
                             ),
-                          )
-                        : null,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
+                          ),
+                        )
+                      : null,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 88,
+                        height: 88,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : Colors.white,
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white10
+                                : Colors.grey.shade300,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: UniversalImage(
+                            path: _currentSelection.imageUrl,
+                            productName: _currentSelection.productName,
+                            categoryName: brandCategoryLabel.isNotEmpty
+                                ? brandCategoryLabel
+                                : brandName,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      if (hasRealImage) ...[
                         Container(
                           width: 88,
                           height: 88,
                           decoration: BoxDecoration(
-                            color: isDark ? Colors.white10 : Colors.white,
-                            border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300),
                             borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: UniversalImage(
-                              path: _currentSelection.imageUrl,
-                              productName: _currentSelection.productName,
-                              categoryName: brandCategoryLabel.isNotEmpty ? brandCategoryLabel : brandName,
-                              fit: BoxFit.cover,
-                            ),
+                            color: Colors.black.withValues(alpha: 0.3),
                           ),
                         ),
-                        if (hasRealImage) ...[
-                          Container(
-                            width: 88,
-                            height: 88,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: Colors.black.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          const Icon(Icons.zoom_in, color: Colors.white, size: 28),
-                        ],
+                        const Icon(
+                          Icons.zoom_in,
+                          color: Colors.white,
+                          size: 28,
+                        ),
                       ],
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                brandCategoryLabel.isNotEmpty ? brandCategoryLabel : brandName.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  color: isDark ? Colors.indigo[300] : Colors.indigo[700],
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.5,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close_rounded, size: 22),
-                              tooltip: "Cerrar",
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => Navigator.of(context).pop(),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          "${_currentSelection.productName} ",
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
-                            height: 1.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (_currentSelection.specificName != null &&
-                            _currentSelection.specificName!.isNotEmpty &&
-                            _currentSelection.specificName != "Paquete")
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
                             child: Text(
-                              _currentSelection.specificName!,
+                              brandCategoryLabel.isNotEmpty
+                                  ? brandCategoryLabel
+                                  : brandName.toUpperCase(),
                               style: TextStyle(
-                                fontSize: 16,
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                fontSize: 11.5,
+                                color: isDark
+                                    ? Colors.indigo[300]
+                                    : Colors.indigo[700],
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
                               ),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white10 : Colors.grey[100],
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: isDark ? Colors.transparent : Colors.grey.shade300,
-                            ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 22),
+                            tooltip: "Cerrar",
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () => Navigator.of(context).pop(),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "${_currentSelection.productName} ",
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                          height: 1.2,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (_currentSelection.specificName != null &&
+                          _currentSelection.specificName!.isNotEmpty &&
+                          _currentSelection.specificName != "Paquete")
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
                           child: Text(
-                            "Se vende por: ${_currentSelection.unit} (x${_currentSelection.conversionFactor})",
+                            _currentSelection.specificName!,
                             style: TextStyle(
-                              fontSize: 11.5,
-                              color: isDark ? Colors.white70 : Colors.grey[800],
-                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
                             ),
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                isStockEmpty
-                                    ? "Agotado"
-                                    : "Stock disponible: ${_currentSelection.stock} ${_currentSelection.unit}",
-                                style: TextStyle(
-                                  color: isStockEmpty
-                                      ? (isDark ? Colors.red[300] : Colors.red)
-                                      : (isDark
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.transparent
+                                : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Text(
+                          "Se vende por: ${_currentSelection.unit} (x${_currentSelection.conversionFactor})",
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: isDark ? Colors.white70 : Colors.grey[800],
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              isStockEmpty
+                                  ? "Agotado"
+                                  : (_currentSelection.usaStockCompartido
+                                        ? "Stock vendible: ${_currentSelection.effectiveVendibleStock} ${_currentSelection.unit}"
+                                        : "Stock disponible: ${_currentSelection.stock} ${_currentSelection.unit}"),
+                              style: TextStyle(
+                                color: isStockEmpty
+                                    ? (isDark ? Colors.red[300] : Colors.red)
+                                    : (isDark
                                           ? Colors.green[400]
                                           : Colors.green),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
                               ),
                             ),
-                            InkWell(
-                              onTap: () async {
-                                final invProv = Provider.of<InventoryProvider>(
-                                  context,
-                                  listen: false,
+                          ),
+                          InkWell(
+                            onTap: () async {
+                              final invProv = Provider.of<InventoryProvider>(
+                                context,
+                                listen: false,
+                              );
+                              ProductPresentation? currentPres;
+                              if (_fullProduct != null) {
+                                currentPres = _fullProduct!.presentaciones
+                                    .where(
+                                      (p) =>
+                                          p.id ==
+                                          _currentSelection.presentationId,
+                                    )
+                                    .firstOrNull;
+                              }
+                              if (currentPres == null) {
+                                try {
+                                  final fresh = await invProv
+                                      .getFullProductWithFallback(
+                                        _currentSelection.productId,
+                                      );
+                                  currentPres = fresh?.presentaciones
+                                      .where(
+                                        (p) =>
+                                            p.id ==
+                                            _currentSelection.presentationId,
+                                      )
+                                      .firstOrNull;
+                                } catch (_) {}
+                              }
+                              if (!context.mounted) return;
+                              if (currentPres != null) {
+                                await StockUpdateModal.show(
+                                  context: context,
+                                  presentation: currentPres,
+                                  provider: invProv,
+                                  isDark: isDark,
                                 );
-                                ProductPresentation? currentPres;
+                                if (!context.mounted) return;
+                                await _loadVariants();
+                                ProductPresentation? updatedPres;
                                 if (_fullProduct != null) {
-                                  currentPres = _fullProduct!.presentaciones
+                                  updatedPres = _fullProduct!.presentaciones
                                       .where(
                                         (p) =>
                                             p.id ==
@@ -624,311 +746,726 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                                       )
                                       .firstOrNull;
                                 }
-                                if (currentPres == null) {
+                                if (updatedPres == null) {
                                   try {
-                                    final fresh = await invProv.getFullProductWithFallback(_currentSelection.productId);
-                                    currentPres = fresh?.presentaciones
-                                        .where((p) => p.id == _currentSelection.presentationId)
+                                    final fresh = await invProv
+                                        .getFullProductWithFallback(
+                                          _currentSelection.productId,
+                                        );
+                                    updatedPres = fresh?.presentaciones
+                                        .where(
+                                          (p) =>
+                                              p.id ==
+                                              _currentSelection.presentationId,
+                                        )
                                         .firstOrNull;
                                   } catch (_) {}
                                 }
-                                if (!context.mounted) return;
-                                if (currentPres != null) {
-                                  await StockUpdateModal.show(
-                                    context: context,
-                                    presentation: currentPres,
-                                    provider: invProv,
-                                    isDark: isDark,
+                                updatedPres ??= currentPres;
+                                final factor = updatedPres.unidadesPorVenta > 0
+                                    ? updatedPres.unidadesPorVenta
+                                    : 1;
+                                final newStockInSalesUnits =
+                                    updatedPres.stockActual ~/ factor;
+
+                                setState(() {
+                                  _currentSelection = _currentSelection
+                                      .copyWith(stock: newStockInSalesUnits);
+                                  int currentQty =
+                                      int.tryParse(_qtyCtrl.text) ?? 1;
+                                  if (currentQty > newStockInSalesUnits &&
+                                      newStockInSalesUnits > 0) {
+                                    _qtyCtrl.text = newStockInSalesUnits
+                                        .toString();
+                                  }
+                                  _variantDrafts[_currentSelection
+                                      .presentationId] = VariantDetailState(
+                                    presentationId:
+                                        _currentSelection.presentationId,
+                                    quantity: int.tryParse(_qtyCtrl.text) ?? 1,
+                                    isDiscountActive: _isDiscountActive,
+                                    price:
+                                        double.tryParse(_priceCtrl.text) ??
+                                        _systemPrice,
+                                    discountInput: _discountCtrl.text,
+                                    isCustomPrice: _isCustomPrice,
                                   );
-                                  if (!context.mounted) return;
-                                  await _loadVariants();
-                                  ProductPresentation? updatedPres;
-                                  if (_fullProduct != null) {
-                                    updatedPres = _fullProduct!.presentaciones.where(
-                                      (p) => p.id == _currentSelection.presentationId,
-                                    ).firstOrNull;
-                                  }
-                                  if (updatedPres == null) {
-                                    try {
-                                      final fresh = await invProv.getFullProductWithFallback(_currentSelection.productId);
-                                      updatedPres = fresh?.presentaciones
-                                          .where((p) => p.id == _currentSelection.presentationId)
-                                          .firstOrNull;
-                                    } catch (_) {}
-                                  }
-                                  updatedPres ??= currentPres;
-                                  final factor = updatedPres.unidadesPorVenta > 0 ? updatedPres.unidadesPorVenta : 1;
-                                  final newStockInSalesUnits = updatedPres.stockActual ~/ factor;
+                                });
 
-                                  setState(() {
-                                    _currentSelection = _currentSelection.copyWith(stock: newStockInSalesUnits);
-                                    int currentQty = int.tryParse(_qtyCtrl.text) ?? 1;
-                                    if (currentQty > newStockInSalesUnits && newStockInSalesUnits > 0) {
-                                      _qtyCtrl.text = newStockInSalesUnits.toString();
-                                    }
-                                    _variantDrafts[_currentSelection.presentationId] = VariantDetailState(
-                                      presentationId: _currentSelection.presentationId,
-                                      quantity: int.tryParse(_qtyCtrl.text) ?? 1,
-                                      isDiscountActive: _isDiscountActive,
-                                      price: double.tryParse(_priceCtrl.text) ?? _systemPrice,
-                                      discountInput: _discountCtrl.text,
-                                      isCustomPrice: _isCustomPrice,
-                                    );
-                                  });
-
-                                  widget.onStockUpdated?.call(_currentSelection.presentationId, updatedPres.stockActual);
-                                  if (context.mounted) {
-                                    final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
-                                    quickProv.syncItemPriceAndStock(
-                                      _currentSelection.presentationId,
-                                      newStock: newStockInSalesUnits,
-                                    );
-                                  }
+                                widget.onStockUpdated?.call(
+                                  _currentSelection.presentationId,
+                                  updatedPres.stockActual,
+                                );
+                                if (context.mounted) {
+                                  final quickProv =
+                                      Provider.of<QuickSaleProvider>(
+                                        context,
+                                        listen: false,
+                                      );
+                                  quickProv.syncItemPriceAndStock(
+                                    _currentSelection.presentationId,
+                                    newStock: newStockInSalesUnits,
+                                  );
                                 }
-                              },
-                              borderRadius: BorderRadius.circular(6),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: Colors.blue.withValues(alpha: 0.3),
                                 ),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: Colors.blue.withValues(alpha: 0.3),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.edit_note_rounded,
+                                    size: 15,
+                                    color: isDark
+                                        ? Colors.blue[300]
+                                        : Colors.blue[700],
                                   ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.edit_note_rounded,
-                                      size: 15,
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    "Ajustar",
+                                    style: TextStyle(
+                                      fontSize: 11,
                                       color: isDark
                                           ? Colors.blue[300]
                                           : Colors.blue[700],
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                    const SizedBox(width: 3),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // 2. VARIANTES CON FORMATO DESCRIPTIVO
+            if (_isLoadingVariants)
+              const Center(child: LinearProgressIndicator())
+            else if (_fullProduct != null &&
+                _fullProduct!.presentaciones.length > 1) ...[
+              InkWell(
+                onTap: () => setState(
+                  () => _showVariantSelector = !_showVariantSelector,
+                ),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.dashboard_customize_outlined,
+                              size: 18,
+                              color: isDark
+                                  ? Colors.blue[300]
+                                  : Colors.blue[800],
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                "Seleccionar Variante / Presentación",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: textColor,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.blue.withValues(alpha: 0.25)
+                                    : Colors.blue.shade100,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                "${_fullProduct!.presentaciones.length}",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark
+                                      ? Colors.blue[200]
+                                      : Colors.blue[900],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Row(
+                        children: [
+                          Text(
+                            _showVariantSelector ? "Ocultar" : "Ver otras",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.blue[300]
+                                  : Colors.blue[800],
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            _showVariantSelector
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
+                            size: 18,
+                            color: isDark ? Colors.blue[300] : Colors.blue[800],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              if (_showVariantSelector) ...[
+                if (_currentSelection.usaStockCompartido) ...[
+                  Builder(
+                    builder: (ctx) {
+                      final quickProv = Provider.of<QuickSaleProvider>(ctx);
+                      final pool = _fullProduct!.stockCompartido > 0
+                          ? _fullProduct!.stockCompartido
+                          : widget.product.sharedStockPool;
+                      final remainingPool = quickProv.getRemainingPoolStock(
+                        _fullProduct!.id,
+                        pool,
+                      );
+                      final factor = _currentSelection.conversionFactor > 0
+                          ? _currentSelection.conversionFactor
+                          : 1;
+                      final maxPhysical = remainingPool ~/ factor;
+                      final cupo = _currentSelection.cupoMaximoVariante;
+                      final cupoStr = cupo != null
+                          ? " · Cupo: $cupo disp."
+                          : "";
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF1E3A8A).withValues(alpha: 0.25)
+                              : const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.blue.shade700
+                                : const Color(0xFF93C5FD),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.hub_rounded,
+                              size: 16,
+                              color: isDark
+                                  ? Colors.blue[300]
+                                  : const Color(0xFF1E40AF),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                "Pool Base: $remainingPool und. (= máx. $maxPhysical ${_currentSelection.unit}$cupoStr)",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark
+                                      ? Colors.blue[200]
+                                      : const Color(0xFF1E40AF),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ] else ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white10 : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDark ? Colors.white12 : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 16,
+                          color: isDark ? Colors.grey[300] : Colors.grey[700],
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "📦 Stock Propio disponible: ${_currentSelection.stock} ${_currentSelection.unit}",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.grey[200]
+                                  : Colors.grey[800],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                ShaderMask(
+                  shaderCallback: (Rect bounds) {
+                    return const LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [Colors.black, Colors.black, Colors.transparent],
+                      stops: [0.0, 0.94, 1.0],
+                    ).createShader(bounds);
+                  },
+                  blendMode: BlendMode.dstIn,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: _fullProduct!.presentaciones.map((p) {
+                        final isSelected =
+                            p.id == _currentSelection.presentationId;
+                        final quickProv = Provider.of<QuickSaleProvider>(
+                          context,
+                          listen: false,
+                        );
+                        final specName =
+                            (p.nombreEspecifico != null &&
+                                p.nombreEspecifico!.trim().isNotEmpty)
+                            ? p.nombreEspecifico!.trim()
+                            : (p.esDefault
+                                  ? "Principal"
+                                  : (p.unidadVenta ?? "Variante"));
+                        final factorStr = p.unidadesPorVenta > 1
+                            ? " (x${p.unidadesPorVenta})"
+                            : "";
+
+                        int dispStock;
+                        if (p.usaStockCompartido) {
+                          final pool =
+                              _fullProduct?.stockCompartido ??
+                              widget.product.sharedStockPool;
+                          dispStock = quickProv
+                              .getRemainingAvailableForPresentation(
+                                productId: _currentSelection.productId,
+                                presentation: p,
+                                sharedStockPool: pool,
+                                excludePresentationId:
+                                    _currentSelection.presentationId,
+                              );
+                        } else {
+                          dispStock =
+                              p.stockActual ~/
+                              (p.unidadesPorVenta > 0 ? p.unidadesPorVenta : 1);
+                        }
+                        final bool isOutOfStock = dispStock <= 0;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: ChoiceChip(
+                            label: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
                                     Text(
-                                      "Ajustar",
+                                      specName,
                                       style: TextStyle(
-                                        fontSize: 11,
-                                        color: isDark
-                                            ? Colors.blue[300]
-                                            : Colors.blue[700],
-                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        fontWeight: isSelected
+                                            ? FontWeight.w900
+                                            : FontWeight.bold,
+                                        color: isSelected
+                                            ? (isDark
+                                                  ? Colors.blue[200]
+                                                  : Colors.blue[900])
+                                            : (isDark
+                                                  ? Colors.white
+                                                  : Colors.black87),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Container(
+                                      width: 7,
+                                      height: 7,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: isOutOfStock
+                                            ? Colors.red
+                                            : (dispStock < 10
+                                                  ? Colors.orange
+                                                  : Colors.green),
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "${p.unidadVenta ?? 'Und'}$factorStr · ${AppCurrency.format(p.precioVentaFinal)} · ${isOutOfStock ? 'Agotado' : '$dispStock disp.'}",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isSelected
+                                        ? (isDark
+                                              ? Colors.blue[100]
+                                              : Colors.blue[800])
+                                        : (isDark
+                                              ? Colors.grey[400]
+                                              : Colors.grey[600]),
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ],
+                            selected: isSelected,
+                            onSelected: (v) => v ? _updateVariant(p) : null,
+                            selectedColor: isDark
+                                ? Colors.blue.withValues(alpha: 0.3)
+                                : Colors.blue[100],
+                            backgroundColor: isDark
+                                ? Colors.white10
+                                : Colors.grey[100],
+                            labelStyle: TextStyle(
+                              color: isSelected
+                                  ? (isDark
+                                        ? Colors.blue[300]
+                                        : Colors.blue[900])
+                                  : textColor,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  )
-                ],
-              ),
-              const SizedBox(height: 14),
-
-              // 2. VARIANTES CON FORMATO DESCRIPTIVO
-              if (_isLoadingVariants) const Center(child: LinearProgressIndicator())
-              else if (_fullProduct != null && _fullProduct!.presentaciones.length > 1) ...[
-                Text("Seleccionar Presentación:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.grey[300] : Colors.grey[800])),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _fullProduct!.presentaciones.map((p) {
-                      final isSelected = p.id == _currentSelection.presentationId;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: ChoiceChip(
-                          label: Text(_formatPresentationChipLabel(p), style: TextStyle(fontSize: 14, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)), 
-                          selected: isSelected, 
-                          onSelected: (v) => v ? _updateVariant(p) : null, 
-                          selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100],
-                          backgroundColor: isDark ? Colors.white10 : Colors.grey[100],
-                          labelStyle: TextStyle(color: isSelected ? (isDark ? Colors.blue[300] : Colors.blue[900]) : textColor),
-                        ),
-                      );
-                    }).toList(),
                   ),
                 ),
                 const SizedBox(height: 14),
               ],
+            ],
 
-              // 3. SECCIÓN DE DESCUENTO (UNIFICADA CON ManualPriceModifier)
-              ManualPriceModifier(
-                isManualPrice: _isDiscountActive,
-                isCustomPrice: _isCustomPrice,
-                systemPrice: _systemPrice,
-                discountCtrl: _discountCtrl,
-                priceCtrl: _priceCtrl,
-                discountFocusNode: _discountFocusNode,
-                catalogHasOffer: _currentSelection.hasOffer,
-                catalogOfferPrice: _currentSelection.offerPrice,
-                catalogDiscountPercent: _currentSelection.discountPercentRounded,
-                onToggle: _handleDiscountToggle,
-                onDiscountChanged: _onDiscountChanged,
-                onPriceChanged: _onPriceChanged,
-                onRestoreCatalogOffer: _restoreCatalogOffer,
-                onEditCatalogPrice: () async {
-                  final invProv = Provider.of<InventoryProvider>(
-                    context,
-                    listen: false,
-                  );
-                  ProductPresentation? targetPres;
-                  if (_fullProduct != null) {
-                    targetPres = _fullProduct!.presentaciones
-                        .where(
-                          (p) => p.id == _currentSelection.presentationId,
-                        )
-                        .firstOrNull;
-                  }
-                  if (targetPres == null) {
-                    try {
-                      final freshProd = await invProv.fetchProductById(_currentSelection.productId);
-                      targetPres = freshProd?.presentaciones
-                          .where((p) => p.id == _currentSelection.presentationId)
-                          .firstOrNull;
-                    } catch (_) {}
-                  }
-                  if (!context.mounted) return;
-                  if (targetPres != null) {
-                    final didUpdate = await PriceUpdateModal.show(
-                      context: context,
-                      presentation: targetPres,
-                      provider: invProv,
-                      isDark: isDark,
+            // 3. SECCIÓN DE DESCUENTO (UNIFICADA CON ManualPriceModifier)
+            ManualPriceModifier(
+              isManualPrice: _isDiscountActive,
+              isCustomPrice: _isCustomPrice,
+              systemPrice: _systemPrice,
+              discountCtrl: _discountCtrl,
+              priceCtrl: _priceCtrl,
+              discountFocusNode: _discountFocusNode,
+              catalogHasOffer: _currentSelection.hasOffer,
+              catalogOfferPrice: _currentSelection.offerPrice,
+              catalogDiscountPercent: _currentSelection.discountPercentRounded,
+              onToggle: _handleDiscountToggle,
+              onDiscountChanged: _onDiscountChanged,
+              onPriceChanged: _onPriceChanged,
+              onRestoreCatalogOffer: _restoreCatalogOffer,
+              onEditCatalogPrice: () async {
+                final invProv = Provider.of<InventoryProvider>(
+                  context,
+                  listen: false,
+                );
+                ProductPresentation? targetPres;
+                if (_fullProduct != null) {
+                  targetPres = _fullProduct!.presentaciones
+                      .where((p) => p.id == _currentSelection.presentationId)
+                      .firstOrNull;
+                }
+                if (targetPres == null) {
+                  try {
+                    final freshProd = await invProv.fetchProductById(
+                      _currentSelection.productId,
                     );
-                    if (!context.mounted) return;
-                    if (didUpdate == true) {
-                      await _loadVariants();
-                      if (_fullProduct != null) {
-                        final exactPres = _fullProduct!.presentaciones
-                            .where(
-                              (p) => p.id == _currentSelection.presentationId,
-                            )
-                            .firstOrNull;
-                        if (exactPres != null) {
-                          final factor = exactPres.unidadesPorVenta > 0 ? exactPres.unidadesPorVenta : 1;
-                          final newOffer = exactPres.hasOffer ? exactPres.effectivePrice : null;
-                          final double presCost = exactPres.costoPresentacionFinal;
-                          final double? calculatedCost = presCost > 0
-                              ? presCost
-                              : (exactPres.factorGananciaVenta != null && exactPres.factorGananciaVenta! > 0
-                                  ? exactPres.precioVentaFinal / exactPres.factorGananciaVenta!
+                    targetPres = freshProd?.presentaciones
+                        .where((p) => p.id == _currentSelection.presentationId)
+                        .firstOrNull;
+                  } catch (_) {}
+                }
+                if (!context.mounted) return;
+                if (targetPres != null) {
+                  final didUpdate = await PriceUpdateModal.show(
+                    context: context,
+                    presentation: targetPres,
+                    provider: invProv,
+                    isDark: isDark,
+                  );
+                  if (!context.mounted) return;
+                  if (didUpdate == true) {
+                    await _loadVariants();
+                    if (_fullProduct != null) {
+                      final exactPres = _fullProduct!.presentaciones
+                          .where(
+                            (p) => p.id == _currentSelection.presentationId,
+                          )
+                          .firstOrNull;
+                      if (exactPres != null) {
+                        final factor = exactPres.unidadesPorVenta > 0
+                            ? exactPres.unidadesPorVenta
+                            : 1;
+                        final newOffer = exactPres.hasOffer
+                            ? exactPres.effectivePrice
+                            : null;
+                        final double presCost =
+                            exactPres.costoPresentacionFinal;
+                        final double? calculatedCost = presCost > 0
+                            ? presCost
+                            : (exactPres.factorGananciaVenta != null &&
+                                      exactPres.factorGananciaVenta! > 0
+                                  ? exactPres.precioVentaFinal /
+                                        exactPres.factorGananciaVenta!
                                   : null);
 
-                          setState(() {
-                            _systemPrice = exactPres.precioVentaFinal;
-                            _currentSelection = _currentSelection.copyWith(
-                              price: exactPres.precioVentaFinal,
-                              offerPrice: newOffer,
-                              clearOfferPrice: !exactPres.hasOffer,
-                              stock: exactPres.stockActual ~/ factor,
-                              cost: calculatedCost,
-                            );
+                        setState(() {
+                          _systemPrice = exactPres.precioVentaFinal;
+                          _currentSelection = _currentSelection.copyWith(
+                            price: exactPres.precioVentaFinal,
+                            offerPrice: newOffer,
+                            clearOfferPrice: !exactPres.hasOffer,
+                            stock: exactPres.stockActual ~/ factor,
+                            cost: calculatedCost,
+                          );
 
-                            // 🛡️ Blindaje 3: Si se editó en el catálogo y guardó en BD, NO bloquear con _isCustomPrice.
-                            // Restablecer siempre _isCustomPrice = false y sincronizar con los valores del catálogo recién guardados.
-                            _isCustomPrice = false;
-                            if (exactPres.hasOffer) {
-                              _isDiscountActive = true;
-                              _priceCtrl.text = exactPres.effectivePrice.toStringAsFixed(2);
-                              final disc = _systemPrice - exactPres.effectivePrice;
-                              _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
-                            } else {
-                              _isDiscountActive = false;
-                              _priceCtrl.text = exactPres.precioVentaFinal.toStringAsFixed(2);
-                              _discountCtrl.clear();
-                            }
-
-                            // Sincronizar el borrador de la variante inmediatamente
-                            _variantDrafts[_currentSelection.presentationId] = VariantDetailState(
-                              presentationId: _currentSelection.presentationId,
-                              quantity: int.tryParse(_qtyCtrl.text) ?? 1,
-                              isDiscountActive: _isDiscountActive,
-                              price: double.tryParse(_priceCtrl.text) ?? _systemPrice,
-                              discountInput: _discountCtrl.text,
-                              isCustomPrice: _isCustomPrice,
-                              customName: null,
-                            );
-                          });
-
-                          // Propagar a 0ms a QuickSaleProvider
-                          if (context.mounted) {
-                            final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
-                            quickProv.syncItemPriceAndStock(
-                              exactPres.id!,
-                              newPrice: exactPres.precioVentaFinal,
-                              newOfferPrice: exactPres.hasOffer ? exactPres.effectivePrice : null,
-                              clearOffer: !exactPres.hasOffer,
-                              newStock: exactPres.stockActual ~/ factor,
-                            );
+                          // 🛡️ Blindaje 3: Si se editó en el catálogo y guardó en BD, NO bloquear con _isCustomPrice.
+                          // Restablecer siempre _isCustomPrice = false y sincronizar con los valores del catálogo recién guardados.
+                          _isCustomPrice = false;
+                          if (exactPres.hasOffer) {
+                            _isDiscountActive = true;
+                            _priceCtrl.text = exactPres.effectivePrice
+                                .toStringAsFixed(2);
+                            final disc =
+                                _systemPrice - exactPres.effectivePrice;
+                            _discountCtrl.text = disc > 0
+                                ? disc.toStringAsFixed(2)
+                                : "";
+                          } else {
+                            _isDiscountActive = false;
+                            _priceCtrl.text = exactPres.precioVentaFinal
+                                .toStringAsFixed(2);
+                            _discountCtrl.clear();
                           }
+
+                          // Sincronizar el borrador de la variante inmediatamente
+                          _variantDrafts[_currentSelection
+                              .presentationId] = VariantDetailState(
+                            presentationId: _currentSelection.presentationId,
+                            quantity: int.tryParse(_qtyCtrl.text) ?? 1,
+                            isDiscountActive: _isDiscountActive,
+                            price:
+                                double.tryParse(_priceCtrl.text) ??
+                                _systemPrice,
+                            discountInput: _discountCtrl.text,
+                            isCustomPrice: _isCustomPrice,
+                            customName: null,
+                          );
+                        });
+
+                        // Propagar a 0ms a QuickSaleProvider
+                        if (context.mounted) {
+                          final quickProv = Provider.of<QuickSaleProvider>(
+                            context,
+                            listen: false,
+                          );
+                          quickProv.syncItemPriceAndStock(
+                            exactPres.id!,
+                            newPrice: exactPres.precioVentaFinal,
+                            newOfferPrice: exactPres.hasOffer
+                                ? exactPres.effectivePrice
+                                : null,
+                            clearOffer: !exactPres.hasOffer,
+                            newStock: exactPres.stockActual ~/ factor,
+                          );
                         }
                       }
                     }
                   }
-                },
-              ),
-              const SizedBox(height: 16),
+                }
+              },
+            ),
+            const SizedBox(height: 16),
 
-              // 4. CANTIDAD Y TOTALES
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Cantidad a llevar", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontWeight: FontWeight.bold, fontSize: 14)),
-                      const SizedBox(height: 8),
-                      Container(
-                        height: 55,
-                        decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.white, border: Border.all(color: exceedsStock ? (isDark ? Colors.red[400]! : Colors.red) : (isDark ? Colors.white24 : Colors.grey.shade300), width: 1.5), borderRadius: BorderRadius.circular(16)),
-                        child: Row(
-                          children: [
-                            IconButton(icon: Icon(Icons.remove, color: isDark ? Colors.red[300] : Colors.red, size: 24), onPressed: () => _qtyAction(-1)),
-                            SizedBox(
-                              width: 50,
-                              child: TextField(
-                                controller: _qtyCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-                                onChanged: (v) => setState((){}),
-                              ),
+            // 4. CANTIDAD Y TOTALES
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Cantidad a llevar",
+                      style: TextStyle(
+                        color: isDark ? Colors.grey[400] : Colors.grey,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 55,
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF14141C) : Colors.white,
+                        border: Border.all(
+                          color: exceedsStock
+                              ? (isDark ? Colors.red[400]! : Colors.red)
+                              : (isDark
+                                    ? Colors.white24
+                                    : Colors.grey.shade300),
+                          width: 1.5,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.remove,
+                              color: isDark ? Colors.red[300] : Colors.red,
+                              size: 24,
                             ),
-                            IconButton(icon: Icon(Icons.add, color: isDark ? Colors.green[400] : Colors.green, size: 24), onPressed: () => _qtyAction(1)),
-                          ],
+                            onPressed: () => _qtyAction(-1),
+                          ),
+                          SizedBox(
+                            width: 50,
+                            child: TextField(
+                              controller: _qtyCtrl,
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                              onChanged: (v) => setState(() {}),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              Icons.add,
+                              color: isDark ? Colors.green[400] : Colors.green,
+                              size: 24,
+                            ),
+                            onPressed: () => _qtyAction(1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (totalSavings > 0)
+                        Text(
+                          "Ahorro: ${AppCurrency.format(totalSavings)}",
+                          style: TextStyle(
+                            color: isDark ? Colors.green[300] : Colors.green,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      Text(
+                        "Subtotal",
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey,
+                          fontSize: 14,
+                        ),
+                      ),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          AppCurrency.format(subtotal),
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            color: isDark ? Colors.blue[300] : Colors.blue,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const Spacer(),
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (totalSavings > 0) Text("Ahorro: ${currency.format(totalSavings)}", style: TextStyle(color: isDark ? Colors.green[300] : Colors.green, fontWeight: FontWeight.bold, fontSize: 14)),
-                        Text("Subtotal", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 14)),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(currency.format(subtotal), style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue)),
-                        ),
-                      ],
-                    ),
-                  )
-                ],
+                ),
+              ],
+            ),
+            if (exceedsStock)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(
+                  "Supera el stock actual de ${_currentSelection.effectiveVendibleStock}",
+                  style: TextStyle(
+                    color: isDark ? Colors.red[300] : Colors.red,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
               ),
-              if (exceedsStock) Padding(padding: const EdgeInsets.only(top: 10), child: Text("Supera el stock actual de ${_currentSelection.stock}", style: TextStyle(color: isDark ? Colors.red[300] : Colors.red, fontWeight: FontWeight.bold, fontSize: 14))),
-            ],
-          ),
+          ],
         ),
+      ),
     );
   }
 }

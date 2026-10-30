@@ -6,6 +6,7 @@ import 'package:app_movil/core/providers/backup_provider.dart';
 import 'package:app_movil/core/utils/backup_manager.dart';
 import 'package:app_movil/features/profile/services/business_backup_service.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 // ============================================================
 // BOTTOM SHEET: Restaurar Backup (elegir tipo de archivo)
@@ -14,104 +15,116 @@ void showProfileRestoreBottomSheet(BuildContext context) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   showModalBottomSheet(
     context: context,
+    useSafeArea: true,
+    isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E28) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.restore_rounded, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 28),
-              const SizedBox(width: 12),
-              Text("Restaurar Backup", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87)),
-            ],
+    builder: (ctx) {
+      final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+      return SafeArea(
+        top: false,
+        bottom: true,
+        child: Container(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom + 12),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
           ),
-          const SizedBox(height: 8),
-          Text("Elige el tipo de archivo que deseas restaurar.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14)),
-          const SizedBox(height: 24),
-          InkWell(
-            onTap: () {
-              Navigator.pop(ctx);
-              handleUnifiedProfileRestore(context, type: 'mlb');
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.purple.withValues(alpha: 0.1) : Colors.purple.shade50,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.purple.withValues(alpha: 0.2), shape: BoxShape.circle),
-                    child: const Icon(Icons.inventory_2_rounded, color: Colors.purple),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.restore_rounded, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 28),
+                    const SizedBox(width: 12),
+                    Text("Restaurar Backup", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text("Elige el tipo de archivo que deseas restaurar.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14)),
+                const SizedBox(height: 24),
+                InkWell(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    handleUnifiedProfileRestore(context, type: 'mlb');
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.purple.withValues(alpha: 0.1) : Colors.purple.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
                       children: [
-                        const Text("Importar Negocio (.mlb)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        const SizedBox(height: 4),
-                        Text("Agrega un perfil de negocio exportado previamente.", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: Colors.purple.withValues(alpha: 0.2), shape: BoxShape.circle),
+                          child: const Icon(Icons.inventory_2_rounded, color: Colors.purple),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("Importar Negocio (.mlb)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              const SizedBox(height: 4),
+                              Text("Agrega un perfil de negocio exportado previamente.", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.purple),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.purple),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          InkWell(
-            onTap: () {
-              Navigator.pop(ctx);
-              handleUnifiedProfileRestore(context, type: 'db');
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.redAccent.withValues(alpha: 0.1) : Colors.red.shade50,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.redAccent.withValues(alpha: 0.2)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.2), shape: BoxShape.circle),
-                    child: const Icon(Icons.storage_rounded, color: Colors.redAccent),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+                const SizedBox(height: 16),
+                InkWell(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    handleUnifiedProfileRestore(context, type: 'db');
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.redAccent.withValues(alpha: 0.1) : Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.redAccent.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
                       children: [
-                        const Text("Restaurar Sistema Completo (.mlbg o .db)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        const SizedBox(height: 4),
-                        Text("Reemplaza TODA la aplicación con una copia global.", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.2), shape: BoxShape.circle),
+                          child: const Icon(Icons.storage_rounded, color: Colors.redAccent),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("Restaurar Sistema Completo (.mlbg o .db)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              const SizedBox(height: 4),
+                              Text("Reemplaza TODA la aplicación con una copia global.", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[700])),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.redAccent),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.redAccent),
-                ],
-              ),
+                ),
+                const SizedBox(height: 12),
+              ],
             ),
           ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   );
 }
 

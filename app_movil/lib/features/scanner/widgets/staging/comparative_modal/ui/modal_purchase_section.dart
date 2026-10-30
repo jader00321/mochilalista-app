@@ -34,11 +34,11 @@ extension _ModalPurchaseSection on _ComparativeUpdateModalState {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("🛒 Proveedor", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
+                        Text("Proveedor", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
                         if (!_showProveedor) ...[
                           const SizedBox(height: 2),
                           Text(
-                            "$summaryUmp (x$summaryUnidLote) | Cant: $summaryCant | Total: S/$summaryTotal",
+                            "$summaryUmp (x$summaryUnidLote) | Cant: $summaryCant | Total: ${AppCurrency.format(double.tryParse(summaryTotal) ?? 0)}",
                             style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.orange[200] : Colors.orange[800]),
                             maxLines: 1, overflow: TextOverflow.ellipsis,
                           ),
@@ -82,7 +82,7 @@ extension _ModalPurchaseSection on _ComparativeUpdateModalState {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            "Último: ${widget.variant.originalUmpCompra} (x${widget.variant.originalUnidadesPorLote}) | Cant: ${widget.variant.originalCantidadUmpComprada} | S/${widget.variant.originalTotalPagoLote}",
+                            "Último: ${widget.variant.originalUmpCompra} (x${widget.variant.originalUnidadesPorLote}) | Cant: ${widget.variant.originalCantidadUmpComprada} | ${AppCurrency.format(widget.variant.originalTotalPagoLote)}",
                             style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.orange[200] : Colors.orange[900]),
                             maxLines: 1, overflow: TextOverflow.ellipsis,
                           ),

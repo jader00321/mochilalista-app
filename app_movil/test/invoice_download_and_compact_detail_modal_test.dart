@@ -8,6 +8,7 @@ import 'package:app_movil/features/scanner/models/invoice_model.dart';
 import 'package:app_movil/features/scanner/services/invoice_file_service.dart';
 import 'package:app_movil/features/scanner/services/invoice_pdf_report_service.dart';
 import 'package:app_movil/features/smart_quotation/widgets/manual/manual_price_modifier.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -229,7 +230,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Inicialmente con oferta de catálogo (12.50 y -10%)
-      expect(find.textContaining('12,50'), findsOneWidget);
+      expect(find.textContaining(AppCurrency.format(12.50)), findsOneWidget);
       expect(find.text('-10%'), findsOneWidget);
 
       // Usuario escribe '2.00' de descuento (precio final resultante = 11.90, -14%)
@@ -237,7 +238,7 @@ void main() {
       priceCtrl.text = '11.90';
       await tester.pump(); // 0ms pump
 
-      expect(find.textContaining('11,90'), findsOneWidget);
+      expect(find.textContaining(AppCurrency.format(11.90)), findsOneWidget);
       expect(find.text('-14%'), findsOneWidget);
 
       // Si el usuario escribe un descuento mayor: '5.00' (precio final = 8.90, -36%)
@@ -245,7 +246,7 @@ void main() {
       priceCtrl.text = '8.90';
       await tester.pump(); // 0ms pump
 
-      expect(find.textContaining('8,90'), findsOneWidget);
+      expect(find.textContaining(AppCurrency.format(8.90)), findsOneWidget);
       expect(find.text('-36%'), findsOneWidget);
     });
 
@@ -274,9 +275,9 @@ void main() {
         ),
       );
 
-      // Debe mostrar claramente "Precio Base: S/ 13,90" y el badge de advertencia de oferta desactivada
+      // Debe mostrar claramente "Precio Base: S/ 13.90" y el badge de advertencia de oferta desactivada
       expect(find.textContaining('Precio Base:'), findsOneWidget);
-      expect(find.textContaining('13,90'), findsOneWidget);
+      expect(find.textContaining(AppCurrency.format(13.90)), findsOneWidget);
       expect(find.text('🚫 Oferta desactivada para esta operación'), findsOneWidget);
       // No debe mostrar el precio de oferta ni el badge -10% en el bloque activo
       expect(find.text('-10%'), findsNothing);

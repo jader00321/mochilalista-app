@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -10,6 +9,8 @@ import 'package:app_movil/features/analytics/services/commercial_radar_service.d
 import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+
+enum RadarTab { noticiasDelDia, guardadas }
 
 class CommercialRadarScreen extends StatefulWidget {
   final String initialRegion;
@@ -25,6 +26,7 @@ class CommercialRadarScreen extends StatefulWidget {
 
 class _CommercialRadarScreenState extends State<CommercialRadarScreen> with SingleTickerProviderStateMixin {
   late String _selectedRegion;
+  RadarTab _activeTab = RadarTab.noticiasDelDia;
   String _selectedCategory = 'Todas';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -36,7 +38,6 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
   late AnimationController _pulseController;
 
   static const String _prefRegionKey = 'commercial_radar_selected_region';
-  static const String _prefSavedItemsKey = 'commercial_radar_bookmarked_items_json';
   static const List<String> _predefinedRegions = [
     'Talara / Piura',
     'Piura / Región Norte',
@@ -48,14 +49,13 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
     'Cusco',
   ];
 
-  List<String> get _categories => [
+  final List<String> _categories = [
     'Todas',
-    '📍 Mi Región',
-    '🌦️ Clima y Rutas',
-    '⚖️ Leyes y SUNAT',
-    '🚛 Proveedores y Abastecimiento',
-    '📅 Fechas y Campañas',
-    '📌 Guardadas (${_savedNewsMap.length})',
+    'Mi Región',
+    'Clima y Rutas',
+    'Leyes y SUNAT',
+    'Proveedores y Abastecimiento',
+    'Fechas y Campañas',
   ];
 
   @override
@@ -79,32 +79,40 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
         });
       }
 
-      final savedItemsJson = prefs.getString(_prefSavedItemsKey);
-      if (savedItemsJson != null && savedItemsJson.isNotEmpty) {
-        final List<dynamic> decoded = jsonDecode(savedItemsJson);
-        for (var d in decoded) {
-          final item = CommercialNewsItem.fromJson(d);
-          _savedNewsMap[item.id] = item;
-        }
-        if (mounted) setState(() {});
+      final savedList = await CommercialRadarService.getSavedNews();
+      if (mounted) {
+        setState(() {
+          _savedNewsMap.clear();
+          for (var item in savedList) {
+            _savedNewsMap[item.id] = item;
+          }
+        });
       }
     } catch (_) {}
     _fetchNews(forceRefresh: false);
   }
 
   Future<void> _toggleBookmark(CommercialNewsItem item) async {
+    final wasSaved = _savedNewsMap.containsKey(item.id);
     setState(() {
-      if (_savedNewsMap.containsKey(item.id)) {
+      if (wasSaved) {
         _savedNewsMap.remove(item.id);
       } else {
         _savedNewsMap[item.id] = item;
       }
     });
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = _savedNewsMap.values.map((i) => i.toJson()).toList();
-      await prefs.setString(_prefSavedItemsKey, jsonEncode(list));
-    } catch (_) {}
+
+    if (wasSaved) {
+      await CommercialRadarService.removeSavedNews(item.id);
+      if (mounted) {
+        CustomSnackBar.show(context, message: "Noticia retirada de Guardadas");
+      }
+    } else {
+      await CommercialRadarService.saveNewsItem(item);
+      if (mounted) {
+        CustomSnackBar.show(context, message: "Noticia guardada en favoritos");
+      }
+    }
   }
 
   @override
@@ -119,7 +127,9 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
     _streamSubscription?.cancel();
     setState(() {
       _isLoading = true;
-      if (forceRefresh) _allNewsItems.clear();
+      if (forceRefresh) {
+        _visibleCount = 6;
+      }
     });
 
     // Cargar caché si existe para evitar pantalla vacía
@@ -149,7 +159,23 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
         if (mounted) setState(() => _isLoading = false);
       },
       onDone: () {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+          if (forceRefresh) {
+            final newCount = CommercialRadarService.lastNewSignalsCount;
+            if (newCount > 0) {
+              CustomSnackBar.show(
+                context,
+                message: "$newCount nuevas señales agregadas al radar",
+              );
+            } else {
+              CustomSnackBar.show(
+                context,
+                message: "Radar actualizado con las últimas señales del día",
+              );
+            }
+          }
+        }
       },
     );
   }
@@ -170,17 +196,17 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
 
   void _shareAlert(CommercialNewsItem item) {
     final text = '''
-🚨 *ALERTA RADAR COMERCIAL - MOCHILALISTA*
-📍 *Zona:* $_selectedRegion
-📰 *${item.cleanTitle}*
+ALERTA RADAR COMERCIAL - MOCHILALISTA
+Zona: $_selectedRegion
+${item.cleanTitle}
 
-🚛 *Impacto en tu Negocio / Ruta:*
+Impacto en tu Negocio / Ruta:
 ${item.impactAnalysis.isNotEmpty ? item.impactAnalysis : item.summary}
 
-💡 *Medidas y Recomendaciones Clave:*
+Medidas y Recomendaciones Clave:
 ${item.actionableAdvice}
 
-🔗 *Fuente:* ${item.sourceName} (${item.sourceUrl})
+Fuente: ${item.sourceName} (${item.sourceUrl})
 ''';
     // ignore: deprecated_member_use
     Share.share(text.trim());
@@ -204,6 +230,7 @@ ${item.actionableAdvice}
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => InteractiveSheetWrapper(
@@ -249,6 +276,7 @@ ${item.actionableAdvice}
                 child: ListView(
                   shrinkWrap: true,
                   physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(bottom: InteractiveSheetWrapper.kModalScrollBottomClearance),
                   children: [
                     ..._predefinedRegions.map((reg) {
                       final isSelected = reg == _selectedRegion;
@@ -358,16 +386,12 @@ ${item.actionableAdvice}
   List<CommercialNewsItem> _getFilteredNews() {
     List<CommercialNewsItem> baseList;
 
-    if (_selectedCategory.startsWith('📌 Guardadas')) {
+    if (_activeTab == RadarTab.guardadas) {
       baseList = _savedNewsMap.values.toList();
     } else if (_selectedCategory == 'Todas') {
       baseList = _allNewsItems;
     } else {
-      final targetCat = _selectedCategory
-          .replaceAll(RegExp(r'^[^\w\s]+'), '')
-          .trim()
-          .toLowerCase();
-
+      final targetCat = _selectedCategory.toLowerCase();
       baseList = _allNewsItems.where((item) {
         final itemCat = item.category.toLowerCase();
         if (targetCat.contains('región') || targetCat.contains('region')) {
@@ -382,8 +406,8 @@ ${item.actionableAdvice}
         if (targetCat.contains('proveedor') || targetCat.contains('abastecimiento')) {
           return itemCat.contains('proveedor') || itemCat.contains('abastecimiento');
         }
-        if (targetCat.contains('campaña') || targetCat.contains('campana')) {
-          return itemCat.contains('campaña') || itemCat.contains('campana');
+        if (targetCat.contains('campaña') || targetCat.contains('campana') || targetCat.contains('fecha')) {
+          return itemCat.contains('campaña') || itemCat.contains('campana') || itemCat.contains('fecha');
         }
         return itemCat.contains(targetCat);
       }).toList();
@@ -478,6 +502,17 @@ ${item.actionableAdvice}
     };
   }
 
+  IconData _getCategoryChipIcon(String category) {
+    final cat = category.toLowerCase();
+    if (cat == 'todas') return Icons.public_rounded;
+    if (cat.contains('región') || cat.contains('region')) return Icons.location_on_outlined;
+    if (cat.contains('clima') || cat.contains('ruta')) return Icons.wb_cloudy_outlined;
+    if (cat.contains('ley') || cat.contains('sunat')) return Icons.gavel_rounded;
+    if (cat.contains('proveedor') || cat.contains('abastecimiento')) return Icons.local_shipping_outlined;
+    if (cat.contains('campaña') || cat.contains('campana') || cat.contains('fecha')) return Icons.event_available_outlined;
+    return Icons.label_outline_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -485,6 +520,7 @@ ${item.actionableAdvice}
     final filtered = _getFilteredNews();
     final paged = filtered.take(_visibleCount).toList();
     final pulse = _calculateOperationalPulse();
+    final isNoticiasTab = _activeTab == RadarTab.noticiasDelDia;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -561,7 +597,7 @@ ${item.actionableAdvice}
                                   )
                                 ],
                               ),
-                              child: const Icon(Icons.radar, color: Colors.redAccent, size: 24),
+                              child: const Icon(Icons.radar_rounded, color: Colors.redAccent, size: 24),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -596,47 +632,42 @@ ${item.actionableAdvice}
                               ],
                             ),
                           ),
-                          // Píldora de Región Completa sin truncamiento artificial
+                          // Píldora de Región
                           InkWell(
                             onTap: () => _openRegionPicker(isDark),
                             borderRadius: BorderRadius.circular(20),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
-                                color: Colors.blueAccent.withValues(alpha: 0.12),
+                                color: Colors.blueAccent.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.45)),
+                                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.35)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.location_on, size: 14, color: Colors.blueAccent),
+                                  const Icon(Icons.location_on, size: 13, color: Colors.blueAccent),
                                   const SizedBox(width: 4),
                                   ConstrainedBox(
-                                    constraints: const BoxConstraints(maxWidth: 130),
+                                    constraints: const BoxConstraints(maxWidth: 90),
                                     child: Text(
                                       _selectedRegion,
-                                      style: const TextStyle(
-                                        fontSize: 11, 
-                                        fontWeight: FontWeight.bold, 
-                                        color: Colors.blueAccent,
-                                      ),
+                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.blueAccent),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   const SizedBox(width: 2),
-                                  const Icon(Icons.arrow_drop_down, size: 16, color: Colors.blueAccent),
+                                  const Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.blueAccent),
                                 ],
                               ),
                             ),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 14),
 
-                      const SizedBox(height: 12),
-
-                      // Semáforo de Pulso Operativo (3 Indicadores Clave)
+                      // Semáforo de Pulso Operativo (con FittedBox para cero desborde)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                         decoration: BoxDecoration(
@@ -684,20 +715,121 @@ ${item.actionableAdvice}
               ),
             ),
 
-            // Sliver 2: Sticky Header Pinned con Buscador y Chips de Categoría
+            // Sliver 2: Sticky Header Pinned con Pestañas Segmentadas, Buscador y Chips de Categoría
             SliverPersistentHeader(
               pinned: true,
               delegate: _RadarStickyHeaderDelegate(
-                height: 98.0,
+                height: isNoticiasTab ? 142.0 : 96.0,
                 child: Container(
                   color: bgColor,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Buscador en Tiempo Real (38dp exactos)
+                      // Pestaña Segmentada Superior: Noticias del Día vs Guardadas (X)
                       Container(
                         height: 38,
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E293B) : Colors.black.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() {
+                                  _activeTab = RadarTab.noticiasDelDia;
+                                  _visibleCount = 6;
+                                }),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: _activeTab == RadarTab.noticiasDelDia
+                                        ? Colors.blueAccent
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.radar_rounded,
+                                        size: 15,
+                                        color: _activeTab == RadarTab.noticiasDelDia
+                                            ? Colors.white
+                                            : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        "Noticias del Día",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: _activeTab == RadarTab.noticiasDelDia
+                                              ? FontWeight.bold
+                                              : FontWeight.w500,
+                                          color: _activeTab == RadarTab.noticiasDelDia
+                                              ? Colors.white
+                                              : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() {
+                                  _activeTab = RadarTab.guardadas;
+                                  _visibleCount = 6;
+                                }),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: _activeTab == RadarTab.guardadas
+                                        ? Colors.blueAccent
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.bookmarks_rounded,
+                                        size: 15,
+                                        color: _activeTab == RadarTab.guardadas
+                                            ? Colors.white
+                                            : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        "Guardadas (${_savedNewsMap.length})",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: _activeTab == RadarTab.guardadas
+                                              ? FontWeight.bold
+                                              : FontWeight.w500,
+                                          color: _activeTab == RadarTab.guardadas
+                                              ? Colors.white
+                                              : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Buscador en Tiempo Real
+                      Container(
+                        height: 36,
                         margin: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
                           color: isDark ? const Color(0xFF1E293B) : Colors.white,
@@ -707,14 +839,15 @@ ${item.actionableAdvice}
                         child: TextField(
                           controller: _searchController,
                           onChanged: (val) => setState(() => _searchQuery = val),
-                          style: TextStyle(fontSize: 12.5, color: isDark ? Colors.white : Colors.black87),
+                          style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87),
                           decoration: InputDecoration(
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                             border: InputBorder.none,
-                            hintText: "Buscar noticias, rutas, SUNAT o abastecimiento...",
-                            hintStyle: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                            prefixIcon: const Icon(Icons.search, size: 18, color: Colors.blueAccent),
+                            hintText: "Buscar noticias, rutas, SUNAT...",
+                            hintStyle: TextStyle(fontSize: 11.5, color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                            prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            prefixIcon: const Icon(Icons.search, size: 17, color: Colors.blueAccent),
                             suffixIcon: _searchQuery.isNotEmpty
                                 ? GestureDetector(
                                     onTap: () {
@@ -728,144 +861,136 @@ ${item.actionableAdvice}
                         ),
                       ),
 
-                      const SizedBox(height: 8),
-
-                      // Chips de Categoría + 📌 Guardadas (36dp exactos)
-                      SizedBox(
-                        height: 36,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            children: _categories.map((cat) {
-                              final isSelected = _selectedCategory == cat;
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: ChoiceChip(
-                                  visualDensity: VisualDensity.compact,
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                                  label: Text(
-                                    cat,
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                      color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                      // Chips de Categorías Vectoriales Limpios (Solo si está en Noticias del Día)
+                      if (isNoticiasTab) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 34,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: _categories.map((cat) {
+                                final isSelected = _selectedCategory == cat;
+                                final iconData = _getCategoryChipIcon(cat);
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ChoiceChip(
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    avatar: Icon(
+                                      iconData,
+                                      size: 13,
+                                      color: isSelected ? Colors.white : Colors.blueAccent,
                                     ),
-                                  ),
-                                  selected: isSelected,
-                                  onSelected: (_) => setState(() {
-                                    _selectedCategory = cat;
-                                    _visibleCount = 6;
-                                  }),
-                                  selectedColor: Colors.blueAccent,
-                                  backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.grey[200],
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                    side: BorderSide(
-                                      color: isSelected ? Colors.blueAccent : (isDark ? Colors.white10 : Colors.grey[300]!),
+                                    labelPadding: const EdgeInsets.only(left: 2, right: 4),
+                                    label: Text(
+                                      cat,
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                        color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                                      ),
                                     ),
+                                    selected: isSelected,
+                                    onSelected: (_) => setState(() {
+                                      _selectedCategory = cat;
+                                      _visibleCount = 6;
+                                    }),
+                                    selectedColor: Colors.blueAccent,
+                                    backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.grey[200],
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      side: BorderSide(
+                                        color: isSelected ? Colors.blueAccent : (isDark ? Colors.white10 : Colors.grey[300]!),
+                                      ),
+                                    ),
+                                    showCheckmark: false,
                                   ),
-                                  showCheckmark: false,
-                                ),
-                              );
-                            }).toList(),
+                                );
+                              }).toList(),
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
 
-            // Sliver 3: Lista de Alertas Curadas
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              sliver: _isLoading && _allNewsItems.isEmpty
-                  ? SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 48.0),
-                        child: Center(
-                          child: Column(
-                            children: [
-                              const CircularProgressIndicator(strokeWidth: 3),
-                              const SizedBox(height: 16),
-                              Text(
-                                "Sintonizando noticias en vivo para $_selectedRegion...",
-                                style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                              ),
-                            ],
-                          ),
-                        ),
+            // Sliver 3: Feed de Alertas con Staggered Streaming
+            if (_isLoading && _allNewsItems.isEmpty)
+              const SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: Colors.blueAccent),
+                      SizedBox(height: 16),
+                      Text("Sintonizando radar con inteligencia artificial...", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+              )
+            else if (filtered.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _activeTab == RadarTab.guardadas ? Icons.bookmarks_outlined : Icons.radar_outlined,
+                        size: 48,
+                        color: Colors.grey,
                       ),
-                    )
-                  : filtered.isEmpty
-                      ? SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 48.0),
-                            child: Center(
-                              child: Column(
-                                children: [
-                                  const Icon(Icons.newspaper, size: 48, color: Colors.grey),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    _searchQuery.isNotEmpty 
-                                        ? "No hay alertas coincidentes con '$_searchQuery'."
-                                        : "No se encontraron alertas en '$_selectedCategory'.",
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextButton.icon(
-                                    onPressed: () => setState(() {
-                                      _selectedCategory = 'Todas';
-                                      _searchQuery = '';
-                                      _searchController.clear();
-                                    }),
-                                    icon: const Icon(Icons.all_inclusive, size: 16),
-                                    label: const Text("Ver Todas las Noticias"),
-                                  ),
-                                ],
+                      const SizedBox(height: 12),
+                      Text(
+                        _activeTab == RadarTab.guardadas
+                            ? "No tienes noticias guardadas aún"
+                            : "No se encontraron noticias con los filtros actuales",
+                        style: const TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      if (index < paged.length) {
+                        return _buildNewsCard(paged[index], isDark);
+                      } else if (paged.length < filtered.length) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Center(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _visibleCount += 6;
+                                });
+                              },
+                              icon: const Icon(Icons.add, size: 16),
+                              label: Text("Cargar más señales (${filtered.length - paged.length} restantes)"),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.blueAccent,
+                                side: const BorderSide(color: Colors.blueAccent),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                               ),
                             ),
                           ),
-                        )
-                      : SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              if (index < paged.length) {
-                                return _buildFullNewsCard(paged[index], isDark);
-                              }
-
-                              // Botón Cargar Más
-                              if (paged.length < filtered.length) {
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                                  child: Center(
-                                    child: OutlinedButton.icon(
-                                      onPressed: () {
-                                        setState(() {
-                                          _visibleCount += 6;
-                                        });
-                                      },
-                                      style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                      ),
-                                      icon: const Icon(Icons.add, size: 18),
-                                      label: Text("Cargar más alertas (${filtered.length - paged.length} restantes)"),
-                                    ),
-                                  ),
-                                );
-                              }
-                              return const SizedBox(height: 24);
-                            },
-                            childCount: paged.length + (paged.length < filtered.length ? 1 : 0),
-                          ),
-                        ),
-            ),
+                        );
+                      }
+                      return null;
+                    },
+                    childCount: paged.length < filtered.length ? paged.length + 1 : paged.length,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -879,74 +1004,89 @@ ${item.actionableAdvice}
     required Color statusColor,
     required bool isDark,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                const SizedBox(width: 4),
+                Text(
                   title,
                   style: TextStyle(
-                    fontSize: 10.5,
-                    color: isDark ? Colors.grey[400] : Colors.grey[700],
-                    fontWeight: FontWeight.w500,
+                    fontSize: 11, 
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.grey[300] : Colors.grey[700],
                   ),
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 3),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: statusColor),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                status,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.bold,
-                  color: statusColor,
+        ),
+        const SizedBox(height: 3),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: statusColor),
                 ),
-              ),
-            ],
+                const SizedBox(width: 5),
+                Text(
+                  status,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                  maxLines: 1,
+                  softWrap: false,
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildFullNewsCard(CommercialNewsItem item, bool isDark) {
+  Widget _buildNewsCard(CommercialNewsItem item, bool isDark) {
     final catColor = _getCategoryColor(item.category);
     final catIcon = _getCategoryIcon(item.category);
     final isBookmarked = _savedNewsMap.containsKey(item.id);
-    final isLogisticsOrSupply = item.category.toLowerCase().contains('clima') ||
-        item.category.toLowerCase().contains('ruta') ||
-        item.category.toLowerCase().contains('proveedor') ||
-        item.category.toLowerCase().contains('abastecimiento');
+    final bool isLogisticsOrSupply = item.category.toLowerCase().contains('proveedor') ||
+        item.category.toLowerCase().contains('abastecimiento') ||
+        item.category.toLowerCase().contains('clima') ||
+        item.category.toLowerCase().contains('ruta');
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 18),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isDark ? Colors.white12 : Colors.grey[200]!),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.06),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -956,7 +1096,7 @@ ${item.actionableAdvice}
         children: [
           // Banner Clicable con degradado temático + Acciones Rápidas
           Container(
-            height: 52,
+            height: 50,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -967,16 +1107,16 @@ ${item.actionableAdvice}
             ),
             child: Row(
               children: [
-                Icon(catIcon, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
+                Icon(catIcon, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     item.category.toUpperCase(),
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      letterSpacing: 0.5,
+                      fontSize: 11.5,
+                      letterSpacing: 0.4,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1012,39 +1152,46 @@ ${item.actionableAdvice}
                 // Metadata: Medio Verificado + Fecha y Antigüedad
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: (isDark ? Colors.blue[400]! : Colors.blue[700]!).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        item.sourceName,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.blue[300] : Colors.blue[800],
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: (isDark ? Colors.blue[400]! : Colors.blue[700]!).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          item.sourceName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.blue[300] : Colors.blue[800],
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        item.formattedDateWithTimeAgo,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          fontWeight: FontWeight.w500,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          item.compactTimeAgo,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
 
-                // Titular limpio sin emojis residuales
+                // Titular limpio sin emojis
                 InkWell(
                   onTap: () => _launchUrl(item.sourceUrl),
                   child: Text(
@@ -1061,7 +1208,7 @@ ${item.actionableAdvice}
 
                 // Resumen
                 Text(
-                  item.summary,
+                  item.cleanSummary,
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.4,
@@ -1071,7 +1218,7 @@ ${item.actionableAdvice}
                 const SizedBox(height: 14),
 
                 // Bloque 1 de Análisis IA: Impacto en tu Negocio / Ruta
-                if (item.impactAnalysis.isNotEmpty)
+                if (item.cleanImpact.isNotEmpty)
                   Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
@@ -1099,7 +1246,7 @@ ${item.actionableAdvice}
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                item.impactAnalysis,
+                                item.cleanImpact,
                                 style: TextStyle(
                                   fontSize: 12,
                                   height: 1.35,
@@ -1140,7 +1287,7 @@ ${item.actionableAdvice}
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              item.actionableAdvice,
+                              item.cleanAdvice,
                               style: TextStyle(
                                 fontSize: 12,
                                 height: 1.35,
@@ -1155,7 +1302,7 @@ ${item.actionableAdvice}
                 ),
                 const SizedBox(height: 14),
 
-                // Botones de Acción Directa en 1 Toque + Compartir por WhatsApp
+                // Botones de Acción Directa en 1 Toque (Iconos Vectoriales Nativos Cero Emojis)
                 Row(
                   children: [
                     if (isLogisticsOrSupply)
@@ -1171,7 +1318,7 @@ ${item.actionableAdvice}
                           ),
                           icon: const Icon(Icons.inventory_2_outlined, size: 15),
                           label: const Text(
-                            "📦 Revisar Stock Crítico",
+                            "Revisar Stock Crítico",
                             style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                           ),
                           onPressed: () {
@@ -1189,7 +1336,7 @@ ${item.actionableAdvice}
                           ),
                           icon: const Icon(Icons.checklist_rounded, size: 15),
                           label: const Text(
-                            "📋 Ir a Mesa de Trabajo",
+                            "Ir a Mesa de Trabajo",
                             style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                           ),
                           onPressed: () {
@@ -1237,16 +1384,16 @@ ${item.actionableAdvice}
     if (lower.contains('clima') || lower.contains('ruta')) return const Color(0xFF0284C7);
     if (lower.contains('ley') || lower.contains('sunat')) return const Color(0xFF7C3AED);
     if (lower.contains('proveedor') || lower.contains('abastecimiento')) return const Color(0xFFD97706);
-    if (lower.contains('campaña') || lower.contains('campana')) return const Color(0xFFE11D48);
+    if (lower.contains('campaña') || lower.contains('campana') || lower.contains('fecha')) return const Color(0xFFE11D48);
     return const Color(0xFF059669);
   }
 
   IconData _getCategoryIcon(String category) {
     final lower = category.toLowerCase();
-    if (lower.contains('clima') || lower.contains('ruta')) return Icons.cloud_outlined;
+    if (lower.contains('clima') || lower.contains('ruta')) return Icons.wb_cloudy_outlined;
     if (lower.contains('ley') || lower.contains('sunat')) return Icons.gavel_rounded;
-    if (lower.contains('proveedor') || lower.contains('abastecimiento')) return Icons.inventory_2_outlined;
-    if (lower.contains('campaña') || lower.contains('campana')) return Icons.celebration_rounded;
+    if (lower.contains('proveedor') || lower.contains('abastecimiento')) return Icons.local_shipping_outlined;
+    if (lower.contains('campaña') || lower.contains('campana') || lower.contains('fecha')) return Icons.event_available_outlined;
     return Icons.location_on_outlined;
   }
 }

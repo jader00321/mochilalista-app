@@ -146,15 +146,30 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
   String _getGroupLabel(String group) {
     switch (group) {
       case 'resumen':
-        return "📊 Resumen";
+        return "Resumen";
       case 'graficos':
-        return "📈 Gráficos";
+        return "Gráficos";
       case 'inventario':
-        return "📦 Inventario";
+        return "Inventario";
       case 'radar':
-        return "📰 Radar Comercial";
+        return "Radar Comercial";
       default:
-        return "📋 $group";
+        return group;
+    }
+  }
+
+  IconData _getGroupIcon(String group) {
+    switch (group) {
+      case 'resumen':
+        return Icons.dashboard_outlined;
+      case 'graficos':
+        return Icons.show_chart_rounded;
+      case 'inventario':
+        return Icons.inventory_2_outlined;
+      case 'radar':
+        return Icons.radar_rounded;
+      default:
+        return Icons.auto_awesome_outlined;
     }
   }
 
@@ -861,6 +876,7 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
                             groups: _activeCategoryGroups,
                             chipKeys: _chipKeys,
                             getLabel: _getGroupLabel,
+                            getIcon: _getGroupIcon,
                             onSelectGroup: _jumpToGroup,
                             isDark: isDark,
                           );
@@ -905,7 +921,7 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
       {'val': AnalyticsPeriod.month, 'label': '30 Días'},
       {'val': AnalyticsPeriod.sixMonths, 'label': '6 Meses'},
       {'val': AnalyticsPeriod.allTime, 'label': 'Todo'},
-      {'val': AnalyticsPeriod.custom, 'label': 'Personalizado 📅'},
+      {'val': AnalyticsPeriod.custom, 'label': 'Personalizado'},
     ];
 
     return ListView.separated(
@@ -1049,6 +1065,7 @@ class _FluidChipTabBar extends StatefulWidget {
   final List<String> groups;
   final Map<String, GlobalKey> chipKeys;
   final String Function(String) getLabel;
+  final IconData Function(String) getIcon;
   final void Function(String) onSelectGroup;
   final bool isDark;
 
@@ -1058,6 +1075,7 @@ class _FluidChipTabBar extends StatefulWidget {
     required this.groups,
     required this.chipKeys,
     required this.getLabel,
+    required this.getIcon,
     required this.onSelectGroup,
     required this.isDark,
   });
@@ -1151,12 +1169,13 @@ class _FluidChipTabBarState extends State<_FluidChipTabBar> {
                 ),
               ),
 
-            // 2. Fila de Chips con Etiquetas
+            // 2. Fila de Chips con Iconos Vectoriales y Etiquetas
             Row(
               mainAxisSize: MainAxisSize.min,
               children: widget.groups.map((group) {
                 final isSelected = widget.activeGroup == group;
                 final label = widget.getLabel(group);
+                final icon = widget.getIcon(group);
                 final key = widget.chipKeys.putIfAbsent(group, () => GlobalKey());
 
                 return GestureDetector(
@@ -1166,15 +1185,28 @@ class _FluidChipTabBarState extends State<_FluidChipTabBar> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     alignment: Alignment.center,
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                        color: isSelected
-                            ? Colors.white
-                            : (widget.isDark ? Colors.white70 : Colors.black87),
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          icon,
+                          size: 13,
+                          color: isSelected
+                              ? Colors.white
+                              : (widget.isDark ? Colors.white70 : Colors.black87),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            color: isSelected
+                                ? Colors.white
+                                : (widget.isDark ? Colors.white70 : Colors.black87),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );

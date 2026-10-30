@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class WeeklySalesChart extends StatefulWidget {
   const WeeklySalesChart({super.key});
@@ -84,7 +85,7 @@ class _WeeklySalesChartState extends State<WeeklySalesChart> {
                   ),
                   if (!_isExpanded && hasSales)
                     Text(
-                      NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ').format(currentWeekTotal),
+                      AppCurrency.format(currentWeekTotal),
                       style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.greenAccent[400] : Colors.green[700], fontSize: 14),
                     ),
                   const SizedBox(width: 8),
@@ -226,11 +227,11 @@ class _WeeklySalesChartState extends State<WeeklySalesChart> {
 
     if (value == 0) return "$dayName - Sin ventas";
     
-    final formattedValue = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ').format(value);
+    final formattedValue = AppCurrency.format(value);
     final isHighest = value == highestVal && value > 0;
     
     if (isHighest) {
-      return "🔥 ¡Mejor día! $dayName - $formattedValue ($count ventas)";
+      return "Día con mayor venta: $dayName - $formattedValue ($count ventas)";
     }
     return "$dayName - $formattedValue ($count ventas)";
   }

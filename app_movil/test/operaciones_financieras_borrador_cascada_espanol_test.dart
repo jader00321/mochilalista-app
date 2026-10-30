@@ -302,9 +302,9 @@ void main() {
       expect(find.text('Días hábiles para el cobro mensual'), findsOneWidget);
 
       // 6. Verificar los 3 chips de acceso rápido
-      final domChip = find.text('🚫 Omitir Domingos');
-      final lunVieChip = find.text('💼 Solo Lun - Vie');
-      final todosChip = find.text('📅 Todos los días');
+      final domChip = find.text('Omitir Domingos');
+      final lunVieChip = find.text('Solo Lun - Vie');
+      final todosChip = find.text('Todos los días');
 
       await tester.ensureVisible(domChip);
       expect(domChip, findsOneWidget);

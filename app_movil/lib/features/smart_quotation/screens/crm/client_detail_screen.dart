@@ -82,6 +82,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
   void _showPaymentModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => PaymentEntryModal(client: _currentClient),
@@ -93,6 +94,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
   void _openEditor(BuildContext context) async {
     final updatedClient = await showModalBottomSheet<ClientModel>(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => ClientProfileEditor(client: _currentClient),

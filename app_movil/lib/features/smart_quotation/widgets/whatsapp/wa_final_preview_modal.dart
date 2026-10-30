@@ -247,7 +247,7 @@ class _WaFinalPreviewModalState extends State<WaFinalPreviewModal> {
                   child: SingleChildScrollView(
                     controller: _scrollController,
                     physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                    padding: const EdgeInsets.only(left: 14, right: 14, top: 14, bottom: 36),
+                    padding: const EdgeInsets.only(left: 14, right: 14, top: 14, bottom: kModalScrollBottomClearance),
                     child: _isEditing
                         ? TextField(
                             controller: widget.messageCtrl,

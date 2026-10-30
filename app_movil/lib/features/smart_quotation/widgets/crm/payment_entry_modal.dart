@@ -179,16 +179,17 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.92, 
-      padding: EdgeInsets.only(
-        bottom: InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 16.0, includeKeyboard: true),
-      ),
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SafeArea(
+        top: false,
+        bottom: true,
+        maintainBottomViewPadding: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Drag handle
           Center(
             child: Container(
@@ -377,42 +378,52 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
             ),
 
           // ==================== BOTÓN INFERIOR DE ACCIÓN ====================
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-            decoration: BoxDecoration(
-              color: surfaceColor,
-              border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200)),
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: canSubmit ? () => _submitPayment(maxDebtAllowed) : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: isDark ? Colors.white10 : Colors.grey[300],
-                  disabledForegroundColor: isDark ? Colors.grey[600] : Colors.grey[500],
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: canSubmit ? 2 : 0,
+          Builder(
+            builder: (btnCtx) {
+              final bottomPadding = InteractiveSheetWrapper.getEffectiveBottomPadding(
+                btnCtx,
+                minPadding: kMinDefensiveBottomClearance,
+                includeKeyboard: true,
+              );
+              return Container(
+                padding: EdgeInsets.fromLTRB(20, 10, 20, bottomPadding),
+                decoration: BoxDecoration(
+                  color: surfaceColor,
+                  border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200)),
                 ),
-                child: _isLoading 
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                  : Text(
-                      generatesChange && !_keepAsCredit ? "REGISTRAR Y DAR VUELTO" : "PROCESAR PAGO",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: canSubmit ? () => _submitPayment(maxDebtAllowed) : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: isDark ? Colors.white10 : Colors.grey[300],
+                      disabledForegroundColor: isDark ? Colors.grey[600] : Colors.grey[500],
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: canSubmit ? 2 : 0,
                     ),
-              ),
-            ),
-          )
+                    child: _isLoading 
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : Text(
+                          generatesChange && !_keepAsCredit ? "REGISTRAR Y DAR VUELTO" : "PROCESAR PAGO",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5),
+                        ),
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   /// Mini-Header Compacto (< 48px) que maximiza el 85% de la pantalla en Pago Específico
   Widget _buildCollapsedStickyMiniHeader(double enteredAmount, Color textColor, bool isDark) {
@@ -938,7 +949,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
           child: ListView.builder(
             controller: _specificScrollCtrl,
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24 + kModalScrollBottomClearance),
             itemCount: debts.length,
             itemBuilder: (ctx, i) {
               final sale = debts[i];

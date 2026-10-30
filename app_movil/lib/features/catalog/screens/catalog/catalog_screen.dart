@@ -563,46 +563,6 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
     );
   }
 
-  Widget _buildStoreModeBanner(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 8,
-      ),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.amber[900]!.withValues(alpha: 0.2)
-            : Colors.amber[50],
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: Colors.amber.withValues(alpha: 0.5),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.verified_user_outlined,
-            size: 18,
-            color: Colors.amber,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              "Modo Tienda: Costos y márgenes ocultos para atención directa al cliente.",
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: isDark
-                    ? Colors.amber[200]
-                    : Colors.amber[900],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -675,6 +635,11 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                 icon: Icons.point_of_sale_rounded,
                 text:
                     "Pasa los ítems de tu carrito directamente a Caja Rápida o Cotización Manual.",
+              ),
+              InfoTip(
+                icon: Icons.storefront_rounded,
+                text:
+                    "Modo Tienda: Actívalo en la barra superior para mostrar una vista limpia de vitrina comercial al presentar el catálogo a clientes.",
               ),
             ],
           ),
@@ -793,7 +758,6 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                   // 📌 1. NIVEL 1: Fila Fija del Buscador propio del catálogo
                   CatalogHeader(
                     onFilterTap: () => LiveFilterBottomSheet.show(context),
-                    onSortTap: () => CatalogSortModal.show(context, provider),
                     showCategories: false,
                   ),
 
@@ -806,7 +770,6 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                           ? Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (_isStoreMode) _buildStoreModeBanner(isDark),
                                 CatalogCategoriesBar(provider: provider, isDark: isDark),
                                 CatalogCounterBar(
                                   provider: provider,

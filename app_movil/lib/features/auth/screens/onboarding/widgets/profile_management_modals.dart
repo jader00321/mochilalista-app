@@ -72,6 +72,7 @@ void showProfileManagementModal({
 
   showModalBottomSheet(
     context: context,
+    useSafeArea: true,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     elevation: 0,
@@ -80,43 +81,46 @@ void showProfileManagementModal({
       icon: Icons.dashboard_customize_rounded,
       iconColor: isDark ? Colors.blue[300] : Colors.blue[700],
       maxHeightFactor: 0.7,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            "Elige una acción para tus perfiles.",
-            style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-          ),
-          const SizedBox(height: 20),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Elige una acción para tus perfiles.",
+              style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+            ),
+            const SizedBox(height: 20),
 
-          // Opción: Crear Backup
-          ModalOptionTile(
-            icon: Icons.backup_rounded,
-            label: "Crear Backup",
-            subtitle: "Respalda un negocio o todo el sistema",
-            color: Colors.indigoAccent,
-            isDark: isDark,
-            onTap: () {
-              Navigator.pop(ctx);
-              onBackupOptionSelected();
-            },
-          ),
-          const SizedBox(height: 12),
+            // Opción: Crear Backup
+            ModalOptionTile(
+              icon: Icons.backup_rounded,
+              label: "Crear Backup",
+              subtitle: "Respalda un negocio o todo el sistema",
+              color: Colors.indigoAccent,
+              isDark: isDark,
+              onTap: () {
+                Navigator.pop(ctx);
+                onBackupOptionSelected();
+              },
+            ),
+            const SizedBox(height: 12),
 
-          // Opción: Eliminar Perfil
-          ModalOptionTile(
-            icon: Icons.delete_forever_rounded,
-            label: "Eliminar Perfil",
-            subtitle: "Borra permanentemente un negocio",
-            color: Colors.redAccent,
-            isDark: isDark,
-            onTap: () {
-              Navigator.pop(ctx);
-              onDeleteOptionSelected();
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
+            // Opción: Eliminar Perfil
+            ModalOptionTile(
+              icon: Icons.delete_forever_rounded,
+              label: "Eliminar Perfil",
+              subtitle: "Borra permanentemente un negocio",
+              color: Colors.redAccent,
+              isDark: isDark,
+              onTap: () {
+                Navigator.pop(ctx);
+                onDeleteOptionSelected();
+              },
+            ),
+            const SizedBox(height: kModalScrollBottomClearance),
+          ],
+        ),
       ),
     ),
   );
@@ -134,6 +138,7 @@ void showBackupTypeModal({
 
   showModalBottomSheet(
     context: context,
+    useSafeArea: true,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     elevation: 0,
@@ -142,43 +147,46 @@ void showBackupTypeModal({
       icon: Icons.cloud_upload_rounded,
       iconColor: isDark ? Colors.indigoAccent : Colors.indigo[700],
       maxHeightFactor: 0.7,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            "¿Qué deseas respaldar?",
-            style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-          ),
-          const SizedBox(height: 20),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "¿Qué deseas respaldar?",
+              style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+            ),
+            const SizedBox(height: 20),
 
-          // Opción: Perfil específico
-          ModalOptionTile(
-            icon: Icons.store_rounded,
-            label: "Perfil / Negocio Específico",
-            subtitle: "Respalda un solo negocio (.mlb)",
-            color: Colors.purple,
-            isDark: isDark,
-            onTap: () {
-              Navigator.pop(ctx);
-              onSpecificProfileSelected();
-            },
-          ),
-          const SizedBox(height: 12),
+            // Opción: Perfil específico
+            ModalOptionTile(
+              icon: Icons.store_rounded,
+              label: "Perfil / Negocio Específico",
+              subtitle: "Respalda un solo negocio (.mlb)",
+              color: Colors.purple,
+              isDark: isDark,
+              onTap: () {
+                Navigator.pop(ctx);
+                onSpecificProfileSelected();
+              },
+            ),
+            const SizedBox(height: 12),
 
-          // Opción: Sistema completo
-          ModalOptionTile(
-            icon: Icons.storage_rounded,
-            label: "Sistema Completo",
-            subtitle: "Respalda todos los datos (.mlbg)",
-            color: Colors.blue,
-            isDark: isDark,
-            onTap: () {
-              Navigator.pop(ctx);
-              onFullSystemSelected();
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
+            // Opción: Sistema Completo
+            ModalOptionTile(
+              icon: Icons.storage_rounded,
+              label: "Sistema Completo",
+              subtitle: "Respalda todos los datos (.mlbg)",
+              color: Colors.blue,
+              isDark: isDark,
+              onTap: () {
+                Navigator.pop(ctx);
+                onFullSystemSelected();
+              },
+            ),
+            const SizedBox(height: kModalScrollBottomClearance),
+          ],
+        ),
       ),
     ),
   );
@@ -199,6 +207,7 @@ void showBackupConfirmationModal({
 
   showModalBottomSheet(
     context: context,
+    useSafeArea: true,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     elevation: 0,
@@ -207,80 +216,81 @@ void showBackupConfirmationModal({
       icon: Icons.backup_rounded,
       iconColor: Colors.purple,
       maxHeightFactor: 0.65,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      bottomAction: Row(
         children: [
-          // Info del perfil seleccionado
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.storefront_rounded, size: 18, color: isDark ? Colors.purple[200] : Colors.purple),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(bName, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: isDark ? Colors.white : Colors.black87), overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.person_outline_rounded, size: 18, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(uName, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]), overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-              ],
+          Expanded(
+            child: TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                onCancel();
+              },
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: Text("Volver", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontWeight: FontWeight.w700, fontSize: 15)),
             ),
           ),
-          const SizedBox(height: 24),
-
-          // Botones
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    onCancel();
-                  },
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Text("Volver", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontWeight: FontWeight.w700, fontSize: 15)),
-                ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                onConfirm();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    onConfirm();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: const Text("Confirmar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                ),
-              ),
-            ],
+              child: const Text("Confirmar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
           ),
         ],
+      ),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Info del perfil seleccionado
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.storefront_rounded, size: 18, color: isDark ? Colors.purple[200] : Colors.purple),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(bName, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: isDark ? Colors.white : Colors.black87), overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.person_outline_rounded, size: 18, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(uName, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]), overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     ),
   );

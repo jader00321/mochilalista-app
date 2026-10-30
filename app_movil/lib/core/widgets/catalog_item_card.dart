@@ -111,9 +111,9 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   child: Container(
-                    height: 125,
+                    height: 112,
                     color: isDark ? Colors.white10 : Colors.grey[50],
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     child: Hero(
                       tag: "cat_${pres.id}",
                       child: Material(
@@ -131,7 +131,7 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                 
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -169,18 +169,66 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                           ),
                         ),
                         
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 4),
                         
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, 
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            salesUnitBadge.toUpperCase(), 
-                            style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[700]),
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50, 
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Text(
+                                  salesUnitBadge.toUpperCase(), 
+                                  style: TextStyle(fontSize: 9.0, fontWeight: FontWeight.bold, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: widget.item.hasSharedStock
+                                      ? (isDark ? const Color(0xFF1E3A8A).withValues(alpha: 0.4) : const Color(0xFFDBEAFE))
+                                      : (isDark ? Colors.white10 : Colors.grey.shade100),
+                                  borderRadius: BorderRadius.circular(5),
+                                  border: widget.item.hasSharedStock
+                                      ? Border.all(color: isDark ? Colors.blue.shade700 : const Color(0xFF93C5FD), width: 0.8)
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (widget.item.hasSharedStock) ...[
+                                      Icon(Icons.hub_rounded, size: 9, color: isDark ? Colors.blue[300] : const Color(0xFF1E40AF)),
+                                      const SizedBox(width: 2.5),
+                                    ],
+                                    Flexible(
+                                      child: Text(
+                                        widget.item.hasSharedStock
+                                            ? "Pool: ${widget.item.displayStock} disp."
+                                            : "${widget.item.displayStock} disp.",
+                                        style: TextStyle(
+                                          fontSize: 9.0,
+                                          fontWeight: FontWeight.w600,
+                                          color: widget.item.hasSharedStock
+                                              ? (isDark ? Colors.blue[200] : const Color(0xFF1E40AF))
+                                              : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         
                         const Spacer(),

@@ -19,6 +19,7 @@ import 'package:app_movil/features/profile/screens/notifications_screen.dart';
 import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
 import 'package:app_movil/core/widgets/shimmer_box.dart';
 import 'package:app_movil/core/widgets/marquee_text.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class DashboardHeader extends StatefulWidget {
   const DashboardHeader({super.key});
@@ -446,8 +447,8 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
     if (_kpiIndex == 0) {
       label = "Ventas Hoy";
       target = salesProv.todaySalesTotal;
-      formatter = (v) => currency.format(v);
-      value = currency.format(target);
+      formatter = (v) => AppCurrency.format(v);
+      value = AppCurrency.format(target);
       color = Colors.greenAccent;
       icon = Icons.trending_up_rounded;
     } else if (_kpiIndex == 1) {
@@ -463,8 +464,8 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
         value = "...";
       } else {
         target = salesProv.currentMonthSalesTotal!;
-        formatter = (v) => currency.format(v);
-        value = currency.format(target);
+        formatter = (v) => AppCurrency.format(v);
+        value = AppCurrency.format(target);
       }
       color = Colors.cyanAccent;
       icon = Icons.calendar_month_rounded;

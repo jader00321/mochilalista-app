@@ -20,6 +20,8 @@ class ProductPresentationList extends StatelessWidget {
   final Map<String, GlobalKey>? presentationKeys;
   final VoidCallback? onBeforeDiscreteMutation;
   final VoidCallback? onDiscreteMutationCompleted;
+  final String modoStock;
+  final TextEditingController? sharedStockCtrl;
 
   const ProductPresentationList({
     super.key,
@@ -38,7 +40,12 @@ class ProductPresentationList extends StatelessWidget {
     this.presentationKeys,
     this.onBeforeDiscreteMutation,
     this.onDiscreteMutationCompleted,
+    this.modoStock = 'INDEPENDIENTE',
+    this.sharedStockCtrl,
+    this.baseCostCtrl,
   });
+
+  final TextEditingController? baseCostCtrl;
 
   String _getProviderName(int? providerId, String? deferredName) {
     if (deferredName != null && deferredName.isNotEmpty) {
@@ -130,6 +137,9 @@ class ProductPresentationList extends StatelessWidget {
           controllerMap: ctrlMap,
           presentationIndex: index,
           totalPresentations: presentationControllers.length,
+          modoStock: modoStock,
+          sharedStockCtrl: sharedStockCtrl,
+          baseCostCtrl: baseCostCtrl,
           onSetDefault: onSetDefault != null ? () => onSetDefault!(index) : null,
           onMoveUp: onMoveUp != null && index > 0 ? () => onMoveUp!(index) : null,
           onMoveDown: onMoveDown != null && index < presentationControllers.length - 1

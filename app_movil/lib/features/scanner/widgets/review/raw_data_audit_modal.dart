@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
 import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class RawDataAuditModal {
   static void show(BuildContext context, bool isDark) {
@@ -15,9 +16,11 @@ class RawDataAuditModal {
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
+        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
         bool showRawJson = false;
 
         return StatefulBuilder(
@@ -26,19 +29,22 @@ class RawDataAuditModal {
               initialChildSize: 0.85,
               minChildSize: 0.5,
               maxChildSize: 0.95,
-              builder: (_, scrollController) => Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1A1A24) : Colors.grey[50],
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
+              builder: (_, scrollController) => SafeArea(
+                top: false,
+                bottom: true,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1A1A24) : Colors.grey[50],
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
                   ),
-                ),
-                padding: const EdgeInsets.only(
-                  top: 8,
-                  bottom: 24,
-                  left: 16,
-                  right: 16,
-                ),
+                  padding: EdgeInsets.only(
+                    top: 8,
+                    bottom: effectiveBottom + 8,
+                    left: 16,
+                    right: 16,
+                  ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -300,9 +306,10 @@ class RawDataAuditModal {
                   ],
                 ),
               ),
-            );
-          },
-        );
+            ),
+          );
+        },
+      );
       },
     );
   }

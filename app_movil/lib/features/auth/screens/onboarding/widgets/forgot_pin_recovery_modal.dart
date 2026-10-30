@@ -24,6 +24,7 @@ class ForgotPinRecoveryModal extends StatefulWidget {
   }) {
     return showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -200,41 +201,45 @@ class _ForgotPinRecoveryModalState extends State<ForgotPinRecoveryModal> {
       icon: Icons.security_rounded,
       iconColor: Colors.blue,
       maxHeightFactor: 0.85,
-      child: AnimatedSize(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_errorMessage.isNotEmpty) ...[
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.shade300),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _errorMessage,
-                        style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_errorMessage.isNotEmpty) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _errorMessage,
+                          style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
 
-            if (_currentStep == 0) _buildMethodSelection(isDark, textColor),
-            if (_currentStep == 1) _buildBusinessDataChallenge(isDark, textColor),
-            if (_currentStep == 2) _buildNewPinForm(isDark, textColor),
-          ],
+              if (_currentStep == 0) _buildMethodSelection(isDark, textColor),
+              if (_currentStep == 1) _buildBusinessDataChallenge(isDark, textColor),
+              if (_currentStep == 2) _buildNewPinForm(isDark, textColor),
+              const SizedBox(height: kModalScrollBottomClearance),
+            ],
+          ),
         ),
       ),
     );

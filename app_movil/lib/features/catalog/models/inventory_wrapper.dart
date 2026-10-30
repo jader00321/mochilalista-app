@@ -61,6 +61,22 @@ class InventoryWrapper {
       displayStock > 0 &&
       displayStock <= (presentation.stockAlerta ?? 5);
 
+  /// Indica si esta presentación específica usa stock compartido
+  bool get usaStockCompartido => presentation.usaStockCompartido;
+
+  /// Indica si el producto o la presentación tienen un pool de stock compartido
+  bool get hasSharedStock =>
+      product.isStockCompartido ||
+      (product.isStockMixto && presentation.usaStockCompartido);
+
+  /// Stock base efectivo para esta presentación (del pool compartido si aplica o su stock independiente)
+  int get effectiveBaseStock {
+    if (hasSharedStock && product.stockCompartido > 0) {
+      return product.stockCompartido;
+    }
+    return presentation.stockActual;
+  }
+
   /// Factor de conversión de la presentación (unidades por unidad de venta)
   int get factor => presentation.unidadesPorVenta > 0 ? presentation.unidadesPorVenta : 1;
 
@@ -70,13 +86,21 @@ class InventoryWrapper {
   int get displayStock {
     int factor = presentation.unidadesPorVenta;
     if (factor <= 0) factor = 1;
-    return presentation.stockActual ~/ factor;
+    final int baseCalculated = effectiveBaseStock ~/ factor;
+    if (presentation.usaStockCompartido &&
+        presentation.cupoMaximoVariante != null &&
+        presentation.cupoMaximoVariante! > 0) {
+      return presentation.cupoMaximoVariante! < baseCalculated
+          ? presentation.cupoMaximoVariante!
+          : baseCalculated;
+    }
+    return baseCalculated;
   }
 
   int get stockRemainder {
     int factor = presentation.unidadesPorVenta;
     if (factor <= 1) return 0;
-    return presentation.stockActual % factor;
+    return effectiveBaseStock % factor;
   }
 
   bool get hasLooseUnits => stockRemainder > 0;

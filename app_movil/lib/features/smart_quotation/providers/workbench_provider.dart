@@ -233,6 +233,26 @@ class WorkbenchProvider with ChangeNotifier {
     try {
       final db = await dbHelper.database;
       
+      // 🧹 Saneamiento preventivo de borradores corruptos (0 ítems y total 0.0)
+      final corruptDrafts = await db.rawQuery('''
+        SELECT id FROM smart_quotations 
+        WHERE negocio_id = ? 
+          AND (total_amount = 0.0 OR total_amount IS NULL) 
+          AND (status = 'DRAFT' OR status = 'PENDING') 
+          AND id NOT IN (SELECT DISTINCT quotation_id FROM smart_quotation_items)
+      ''', [_negocioId]);
+
+      if (corruptDrafts.isNotEmpty) {
+        await db.transaction((txn) async {
+          for (var row in corruptDrafts) {
+            final corruptId = row['id'] as int;
+            await txn.update('ventas', {'cotizacion_id': null}, where: 'cotizacion_id = ?', whereArgs: [corruptId]);
+            await txn.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [corruptId]);
+            await txn.delete('smart_quotations', where: 'id = ?', whereArgs: [corruptId]);
+          }
+        });
+      }
+
       final quotesRows = await db.query('smart_quotations', where: 'negocio_id = ?', whereArgs: [_negocioId]);
       final itemsRows = await db.rawQuery(
         'SELECT * FROM smart_quotation_items WHERE quotation_id IN (SELECT id FROM smart_quotations WHERE negocio_id = ?)',
@@ -370,6 +390,9 @@ class WorkbenchProvider with ChangeNotifier {
     required List<Map<String, dynamic>> items, required double totalAmount,
     double totalSavings = 0.0, String status = "DRAFT", String type = "manual",
   }) async {
+    if (items.isEmpty) {
+      throw ArgumentError("No se puede guardar una cotización sin productos");
+    }
     if (_negocioId == null || _usuarioId == null) return null;
     _isLoading = true;
     notifyListeners();
@@ -492,8 +515,11 @@ class WorkbenchProvider with ChangeNotifier {
         throw Exception("No se puede eliminar una cotización que ya fue vendida.");
       }
 
-      await db.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
-      await db.delete('smart_quotations', where: 'id = ?', whereArgs: [id]);
+      await db.transaction((txn) async {
+        await txn.update('ventas', {'cotizacion_id': null}, where: 'cotizacion_id = ?', whereArgs: [id]);
+        await txn.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
+        await txn.delete('smart_quotations', where: 'id = ?', whereArgs: [id]);
+      });
       
       await loadDashboard(); 
       return true;

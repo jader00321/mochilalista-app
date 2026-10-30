@@ -54,15 +54,29 @@ class OmniSearchBar extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                "Buscar productos, clientes, cotizaciones...",
-                style: TextStyle(
-                  color: isDark ? Colors.grey[400] : Colors.grey[500],
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final String placeholderText = width >= 260
+                      ? "Buscar productos, clientes o ventas"
+                      : (width >= 190
+                          ? "Buscar productos o clientes"
+                          : "Buscar productos...");
+
+                  return FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      placeholderText,
+                      style: TextStyle(
+                        color: isDark ? Colors.grey[400] : Colors.grey[500],
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                    ),
+                  );
+                },
               ),
             ),
             if (onBarcodeTap != null) ...[

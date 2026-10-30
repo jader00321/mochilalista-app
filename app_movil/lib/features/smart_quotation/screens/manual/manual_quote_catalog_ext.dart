@@ -4,7 +4,7 @@ extension _ManualQuoteCatalogExt on _ManualQuotationScreenState {
 
   void _showCatalogModal(bool isDark) {
     showModalBottomSheet(
-      context: context, isScrollControlled: true, backgroundColor: Colors.transparent, useSafeArea: false,
+      context: context, isScrollControlled: true, backgroundColor: Colors.transparent, useSafeArea: true,
       builder: (ctx) => CatalogSearchModal(
         onAddProduct: (product, quantity, overridePrice, customName) {
           updateState(() {

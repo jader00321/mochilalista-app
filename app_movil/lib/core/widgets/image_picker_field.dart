@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:app_movil/core/widgets/universal_image.dart'; 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart'; 
 
 class ImagePickerField extends StatefulWidget {
   final TextEditingController controller;
@@ -38,28 +39,37 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
   void _showOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.photo_library, color: Colors.blue)),
-                title: Text('Galería', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: widget.isDark ? Colors.white : Colors.black87)),
-                onTap: () { Navigator.pop(context); _pickImage(ImageSource.gallery); },
+      builder: (ctx) {
+        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+        return SafeArea(
+          top: false,
+          bottom: true,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Padding(
+              padding: EdgeInsets.only(top: 16, bottom: effectiveBottom + 8),
+              child: Wrap(
+                children: [
+                  ListTile(
+                    leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.photo_library, color: Colors.blue)),
+                    title: Text('Galería', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: widget.isDark ? Colors.white : Colors.black87)),
+                    onTap: () { Navigator.pop(context); _pickImage(ImageSource.gallery); },
+                  ),
+                  const Divider(height: 1, indent: 60),
+                  ListTile(
+                    leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.camera_alt, color: Colors.orange)),
+                    title: Text('Cámara', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: widget.isDark ? Colors.white : Colors.black87)),
+                    onTap: () { Navigator.pop(context); _pickImage(ImageSource.camera); },
+                  ),
+                ],
               ),
-              const Divider(height: 1, indent: 60),
-              ListTile(
-                leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.camera_alt, color: Colors.orange)),
-                title: Text('Cámara', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: widget.isDark ? Colors.white : Colors.black87)),
-                onTap: () { Navigator.pop(context); _pickImage(ImageSource.camera); },
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

@@ -475,6 +475,7 @@ class _CategoriesTabState extends State<CategoriesTab> {
                               onTap: () {
                                 showModalBottomSheet(
                                   context: context,
+                                  useSafeArea: true,
                                   isScrollControlled: true,
                                   backgroundColor: Colors.transparent,
                                   builder: (_) => MasterDetailModal(

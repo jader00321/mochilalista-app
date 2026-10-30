@@ -28,6 +28,7 @@ import 'package:app_movil/core/widgets/home/recent_activity_list.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/persistent_work_dock.dart';
 import 'package:app_movil/core/widgets/omni_search_bar.dart';
+import 'package:app_movil/core/widgets/explorer_conversion_dock.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -250,7 +251,9 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const BarcodeScannerScreen(),
+                            builder: (_) => const BarcodeScannerScreen(
+                              isFromHomeGlobalSearch: true,
+                            ),
                           ),
                         );
                       },
@@ -264,8 +267,11 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                         const SizedBox(height: 16),
                       ],
                     ],
-                    if (isGuest)
-                        _buildGuestBanner(context, isDark)
+                    if (isGuest) ...[
+                      const ExplorerConversionDock(),
+                      const SizedBox(height: 12),
+                      _buildGuestBanner(context, isDark),
+                    ]
                     else if (auth.isOwner || auth.isWorker) ...[
                       const WeeklySalesChart(),
                       const SizedBox(height: 20),

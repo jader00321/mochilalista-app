@@ -128,16 +128,29 @@ class CatalogCounterBar extends StatelessWidget {
                       duration: const Duration(milliseconds: 300),
                       transitionBuilder: (child, anim) =>
                           FadeTransition(opacity: anim, child: child),
-                      child: Text(
-                        "${provider.sortOption.emoji} ${provider.sortOption.shortLabel}",
+                      child: Row(
                         key: ValueKey(provider.sortOption),
-                        style: textTheme.titleMedium?.copyWith(
-                          color: isDark
-                              ? Colors.blue[300]
-                              : Colors.blue[700],
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            provider.sortOption.icon,
+                            size: 15,
+                            color: isDark
+                                ? Colors.blue[300]
+                                : Colors.blue[700],
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            provider.sortOption.shortLabel,
+                            style: textTheme.titleMedium?.copyWith(
+                              color: isDark
+                                  ? Colors.blue[300]
+                                  : Colors.blue[700],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 6),

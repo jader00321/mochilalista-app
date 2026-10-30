@@ -34,6 +34,8 @@ import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
 
 // Screens Principales de Navegación y Seguridad
+import 'package:app_movil/core/services/app_launch_manager.dart';
+import 'package:app_movil/core/screens/splash/cold_start_splash_screen.dart';
 import 'package:app_movil/core/screens/home_screen.dart';
 import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
 import 'package:app_movil/features/auth/screens/onboarding/lock_screen.dart';
@@ -243,6 +245,10 @@ class MochilaListaApp extends StatelessWidget {
 
             home: Consumer<AuthProvider>(
               builder: (context, auth, _) {
+                if (!AppLaunchManager.coldStartCompleted) {
+                  return const ColdStartSplashScreen();
+                }
+
                 if (auth.status == AuthStatus.checking) {
                   return const Scaffold(body: Center(child: CircularProgressIndicator()));
                 }

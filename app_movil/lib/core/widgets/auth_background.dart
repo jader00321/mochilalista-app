@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:app_movil/core/widgets/theme_toggle_button.dart';
 
 class AuthBackground extends StatefulWidget {
   final Widget child;
   final Widget headerContent;
+  final Widget? leadingAction;
+  final bool showThemeToggle;
 
   const AuthBackground({
     super.key,
     required this.child,
     required this.headerContent,
+    this.leadingAction,
+    this.showThemeToggle = true,
   });
 
   @override
@@ -42,6 +47,10 @@ class _AuthBackgroundState extends State<AuthBackground> with SingleTickerProvid
     final size = MediaQuery.of(context).size;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final headerGradients = isDark
+        ? [const Color(0xFF0D1F18), const Color(0xFF132820), const Color(0xFF0F172A)]
+        : [const Color(0xFF0284C7), const Color(0xFF0369A1), const Color(0xFF075985)];
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SizedBox(
@@ -49,33 +58,28 @@ class _AuthBackgroundState extends State<AuthBackground> with SingleTickerProvid
         height: double.infinity,
         child: Stack(
           children: [
-            // 1. Fondo Degradado Superior Elegante
+            // 1. Fondo Degradado Superior Elegante con Curvatura Suave
             AnimatedContainer(
-              duration: const Duration(milliseconds: 500),
-              height:
-                  size.height * 0.42, // Ligeramente más grande para dar respiro
+              duration: const Duration(milliseconds: 400),
+              height: size.height * 0.42,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: isDark
-                      ? [const Color(0xFF0F3A11), const Color(0xFF142C23)]
-                      : [
-                          const Color(0xFF1976D2),
-                          const Color(0xFF0D47A1),
-                        ], // Cambiado a azul para coincidir con la app
+                  colors: headerGradients,
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(60),
-                  bottomRight: Radius.circular(60),
+                  bottomLeft: Radius.circular(54),
+                  bottomRight: Radius.circular(54),
                 ),
                 boxShadow: [
-                  if (!isDark)
-                    BoxShadow(
-                      color: Colors.blue.shade900.withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 5),
-                    ),
+                  BoxShadow(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.4)
+                        : const Color(0xFF0284C7).withValues(alpha: 0.25),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
                 ],
               ),
             ),
@@ -93,7 +97,7 @@ class _AuthBackgroundState extends State<AuthBackground> with SingleTickerProvid
                         width: 150 * _breathAnim.value,
                         height: 150 * _breathAnim.value,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.04),
+                          color: Colors.white.withValues(alpha: isDark ? 0.03 : 0.07),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -105,7 +109,7 @@ class _AuthBackgroundState extends State<AuthBackground> with SingleTickerProvid
                         width: 200 * _breathAnim.value,
                         height: 200 * _breathAnim.value,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.05),
+                          color: Colors.white.withValues(alpha: isDark ? 0.04 : 0.08),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -119,17 +123,34 @@ class _AuthBackgroundState extends State<AuthBackground> with SingleTickerProvid
             SafeArea(
               child: Column(
                 children: [
+                  // Barra de acciones superiores (leading y toggle de tema)
                   Padding(
-                    padding: const EdgeInsets.only(top: 10, bottom: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        widget.leadingAction ?? const SizedBox(width: 40, height: 40),
+                        if (widget.showThemeToggle)
+                          ThemeToggleButton(
+                            backgroundColor: Colors.white.withValues(alpha: isDark ? 0.15 : 0.20),
+                            iconColor: Colors.white,
+                          )
+                        else
+                          const SizedBox(width: 40, height: 40),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 0, bottom: 16),
                     child: widget.headerContent,
                   ),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: widget.child,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                 ],
               ),
             ),

@@ -63,7 +63,15 @@ extension _ManualQuoteSaveExt on _ManualQuotationScreenState {
        return;
     }
 
-    bool hasStockIssues = _items.any((item) => (_quantities[item.presentationId] ?? 1) > item.stock || item.stock <= 0);
+    final sharedDemand = _computeSharedDemand();
+    bool hasStockIssues = _items.any((item) {
+      final q = _quantities[item.presentationId] ?? 1;
+      if (q > item.stock || item.stock <= 0) return true;
+      if (item.usaStockCompartido && item.productId > 0 && item.sharedStockPool > 0) {
+        if ((sharedDemand[item.productId] ?? 0) > item.sharedStockPool) return true;
+      }
+      return false;
+    });
 
     if (hasStockIssues) {
       bool? proceed = await ManualQuoteDialogHelper.showStockIssuesDialog(context, isDark);
@@ -243,7 +251,7 @@ extension _ManualQuoteSaveExt on _ManualQuotationScreenState {
     }
     
     showModalBottomSheet(
-      context: context, backgroundColor: Colors.transparent, isScrollControlled: true,
+      context: context, backgroundColor: Colors.transparent, isScrollControlled: true, useSafeArea: true,
       builder: (ctx) => ManualQuoteSaveModal(
         isEditing: _currentQuotationId != null,
         isAppOrder: _isAppOrder,

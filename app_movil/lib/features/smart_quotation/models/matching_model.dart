@@ -25,6 +25,9 @@ class MatchedProduct {
   final bool isOriginalItem;
   final int? bundleId;
   final double? cost;
+  final bool usaStockCompartido;
+  final int sharedStockPool;
+  final int? cupoMaximoVariante;
 
   MatchedProduct({
     required this.productId,
@@ -44,6 +47,9 @@ class MatchedProduct {
     this.isOriginalItem = false,
     this.bundleId,
     this.cost,
+    this.usaStockCompartido = false,
+    this.sharedStockPool = 0,
+    this.cupoMaximoVariante,
   });
 
   factory MatchedProduct.fromJson(Map<String, dynamic> json) {
@@ -69,6 +75,9 @@ class MatchedProduct {
       isOriginalItem: json['is_original_item'] ?? false,
       bundleId: json['bundle_id'],
       cost: json['cost'] != null ? (json['cost'] as num).toDouble() : null,
+      usaStockCompartido: json['usa_stock_compartido'] == 1 || json['usa_stock_compartido'] == true,
+      sharedStockPool: (json['stock_compartido'] as num?)?.toInt() ?? 0,
+      cupoMaximoVariante: (json['cupo_maximo_variante'] as num?)?.toInt() ?? (json['cupoMaximoVariante'] as num?)?.toInt(),
     );
   }
 
@@ -96,6 +105,14 @@ class MatchedProduct {
   int get discountPercentRounded =>
       hasOffer ? (((price - offerPrice!) / price) * 100).round() : 0;
 
+  /// Stock vendible efectivo considerando el cupo máximo de la variante si aplica
+  int get effectiveVendibleStock {
+    if (usaStockCompartido && cupoMaximoVariante != null) {
+      return stock < cupoMaximoVariante! ? stock : cupoMaximoVariante!;
+    }
+    return stock;
+  }
+
   MatchedProduct clone() {
     return MatchedProduct(
       productId: productId, presentationId: presentationId, fullName: fullName,
@@ -106,6 +123,9 @@ class MatchedProduct {
       isOriginalItem: isOriginalItem,
       bundleId: bundleId,
       cost: cost,
+      usaStockCompartido: usaStockCompartido,
+      sharedStockPool: sharedStockPool,
+      cupoMaximoVariante: cupoMaximoVariante,
     );
   }
 
@@ -128,6 +148,10 @@ class MatchedProduct {
     bool? isOriginalItem,
     int? bundleId,
     double? cost,
+    bool? usaStockCompartido,
+    int? sharedStockPool,
+    int? cupoMaximoVariante,
+    bool clearCupo = false,
   }) {
     return MatchedProduct(
       productId: productId ?? this.productId,
@@ -147,6 +171,9 @@ class MatchedProduct {
       isOriginalItem: isOriginalItem ?? this.isOriginalItem,
       bundleId: bundleId ?? this.bundleId,
       cost: cost ?? this.cost,
+      usaStockCompartido: usaStockCompartido ?? this.usaStockCompartido,
+      sharedStockPool: sharedStockPool ?? this.sharedStockPool,
+      cupoMaximoVariante: clearCupo ? null : (cupoMaximoVariante ?? this.cupoMaximoVariante),
     );
   }
 }

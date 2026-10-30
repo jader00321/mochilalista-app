@@ -7,6 +7,7 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/theme_provider.dart';
 import 'package:app_movil/features/profile/providers/team_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class AccessCodesTab extends StatelessWidget {
   const AccessCodesTab({super.key});
@@ -103,71 +104,79 @@ class AccessCodesTab extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
-          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+          final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+            context,
+            minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+          );
           return Container(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+            padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF14141C) : Colors.white,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Generador de Códigos", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                const SizedBox(height: 20),
-                
-                DropdownButtonFormField<String>(
-                  initialValue: selectedRole,
-                  decoration: InputDecoration(labelText: "Rol a otorgar", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                  items: const [
-                    DropdownMenuItem(value: "trabajador", child: Text("Trabajador / Cajero")),
-                    DropdownMenuItem(value: "cliente_comunidad", child: Text("Cliente de Comunidad (VIP)")),
-                  ],
-                  onChanged: (v) => setState(() => selectedRole = v!),
-                ),
-                const SizedBox(height: 20),
-                
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text("Usos permitidos:", style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                    Row(
-                      children: [
-                        IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () => setState(() => maxUses = maxUses > 1 ? maxUses - 1 : 1)),
-                        Text(maxUses == 1000 ? "Infinito" : maxUses.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => setState(() => maxUses = maxUses == 10 ? 1000 : (maxUses == 1000 ? 1000 : maxUses + 1))),
-                      ],
-                    )
-                  ],
-                ),
-                Text("Nota: Sube a 'Infinito' si es un código general para tus clientes.", style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                const SizedBox(height: 30),
-                
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: teamProv.isLoading ? null : () async {
-                      final newCode = await teamProv.generateAccessCode(auth.activeBusinessId!, selectedRole, maxUses, null);
-                      if (newCode != null && ctx.mounted) {
-                        Navigator.pop(ctx);
-                        _showCodeSuccessDialog(context, newCode.codigo);
-                      } else if (ctx.mounted) {
-                        CustomSnackBar.show(context, message: teamProv.errorMessage, isError: true);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                    child: teamProv.isLoading 
-                        ? const CircularProgressIndicator(color: Colors.white) 
-                        : const Text("Generar Código", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Generador de Códigos", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 20),
+                  
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedRole,
+                    decoration: InputDecoration(labelText: "Rol a otorgar", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                    items: const [
+                      DropdownMenuItem(value: "trabajador", child: Text("Trabajador / Cajero")),
+                      DropdownMenuItem(value: "cliente_comunidad", child: Text("Cliente de Comunidad (VIP)")),
+                    ],
+                    onChanged: (v) => setState(() => selectedRole = v!),
                   ),
-                )
-              ],
+                  const SizedBox(height: 20),
+                  
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Usos permitidos:", style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
+                      Row(
+                        children: [
+                          IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () => setState(() => maxUses = maxUses > 1 ? maxUses - 1 : 1)),
+                          Text(maxUses == 1000 ? "Infinito" : maxUses.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => setState(() => maxUses = maxUses == 10 ? 1000 : (maxUses == 1000 ? 1000 : maxUses + 1))),
+                        ],
+                      )
+                    ],
+                  ),
+                  Text("Nota: Sube a 'Infinito' si es un código general para tus clientes.", style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                  const SizedBox(height: 30),
+                  
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: teamProv.isLoading ? null : () async {
+                        final newCode = await teamProv.generateAccessCode(auth.activeBusinessId!, selectedRole, maxUses, null);
+                        if (newCode != null && ctx.mounted) {
+                          Navigator.pop(ctx);
+                          _showCodeSuccessDialog(context, newCode.codigo);
+                        } else if (ctx.mounted) {
+                          CustomSnackBar.show(context, message: teamProv.errorMessage, isError: true);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      child: teamProv.isLoading 
+                          ? const CircularProgressIndicator(color: Colors.white) 
+                          : const Text("Generar Código", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
+                ],
+              ),
             ),
           );
         }

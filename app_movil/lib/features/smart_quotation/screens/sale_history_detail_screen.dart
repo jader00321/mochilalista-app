@@ -196,6 +196,11 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
       try {
         await trackingProv.loadClients();
       } catch (_) {}
+      try {
+        if (mounted) {
+          Provider.of<InventoryProvider>(context, listen: false).refreshAfterSale();
+        }
+      } catch (_) {}
 
       if (mounted) {
         final isLoan = _saleData!['origen_venta'] == 'prestamo_personal';
@@ -232,6 +237,7 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
 
       showModalBottomSheet(
         context: context,
+        useSafeArea: true,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (ctx) => PaymentEntryModal(

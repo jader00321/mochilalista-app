@@ -10,6 +10,7 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/client_card.dart'
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_profile_editor.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ClientTrackingScreen extends StatefulWidget {
   const ClientTrackingScreen({super.key});
@@ -194,6 +195,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
@@ -201,9 +203,13 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
 
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
+            final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+              context,
+              minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+            );
             return Container(
               height: MediaQuery.of(context).size.height * 0.85, 
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.fromLTRB(20, 20, 20, effectiveBottom),
               decoration: BoxDecoration(
                 color: bgColor,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28))
@@ -230,6 +236,8 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                   
                   Expanded(
                     child: ListView.separated(
+                      padding: const EdgeInsets.only(bottom: InteractiveSheetWrapper.kModalScrollBottomClearance),
+                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                       itemCount: debtors.length,
                       separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
                       itemBuilder: (context, index) {
@@ -281,6 +289,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
   void _showSortOptions(BuildContext context, TrackingProvider provider, bool isDark, Color surfaceColor, Color textColor) {
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
         Widget buildSortTile(String title, IconData icon, String targetSortBy) {
@@ -313,22 +322,30 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
           );
         }
 
+        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+          context,
+          minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+        );
+
         return Container(
           decoration: BoxDecoration(color: surfaceColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-          padding: const EdgeInsets.symmetric(vertical: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 5, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-              Text("Ordenar resultados por:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
-              const SizedBox(height: 16),
-              
-              buildSortTile("Más recientes", Icons.calendar_today, "newest"),
-              buildSortTile("Más antiguos", Icons.history, "oldest"),
-              buildSortTile("Alfabético (A-Z)", Icons.sort_by_alpha, "name_asc"),
-              
-              const SizedBox(height: 10),
-            ],
+          padding: EdgeInsets.fromLTRB(0, 24, 0, effectiveBottom),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 40, height: 5, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+                Text("Ordenar resultados por:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+                const SizedBox(height: 16),
+                
+                buildSortTile("Más recientes", Icons.calendar_today, "newest"),
+                buildSortTile("Más antiguos", Icons.history, "oldest"),
+                buildSortTile("Alfabético (A-Z)", Icons.sort_by_alpha, "name_asc"),
+                
+                const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
+              ],
+            ),
           ),
         );
       }

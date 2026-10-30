@@ -46,6 +46,7 @@ class _FinancialSummaryCardState extends State<FinancialSummaryCard> with Single
   void _showFinancialBreakdown(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       transitionAnimationController: _modalAnimationController,

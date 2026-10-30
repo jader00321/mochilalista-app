@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
@@ -49,6 +50,8 @@ class MockInventoryProvider extends InventoryProvider {
     String? tipoDesc,
     double? valorDesc,
     int? stock,
+    int? cupoMaximoVariante,
+    bool clearCupo = false,
     String? estado,
     String? imagenUrl,
   }) async {
@@ -415,7 +418,6 @@ void main() {
     });
 
     testWidgets('ManualQuoteItemCard muestra precio regular tachado y badge -X%', (tester) async {
-      final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
       final item = MatchedProduct(
         productId: 2,
         presentationId: 20,
@@ -446,8 +448,8 @@ void main() {
         ),
       );
 
-      expect(find.text(currency.format(15.0)), findsOneWidget);
-      expect(find.text(currency.format(12.0)), findsOneWidget);
+      expect(find.text(AppCurrency.format(15.0)), findsOneWidget);
+      expect(find.text(AppCurrency.format(12.0)), findsOneWidget);
       expect(find.text("-20%"), findsOneWidget);
     });
   });

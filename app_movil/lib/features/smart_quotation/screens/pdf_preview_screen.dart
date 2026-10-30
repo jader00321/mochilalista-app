@@ -18,6 +18,7 @@ import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/smart_quotation/widgets/manual/client_search_modal.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 /// 📱 PANTALLA DE VISTA PREVIA PDF ("MOBILE AWARDS")
 /// Incorpora barra de controles rápidos (A4 vs Ticket 80mm + paleta cromática),
@@ -711,10 +712,14 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
     final surfaceColor = isDark ? const Color(0xFF1E1E2C) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
     final authProv = Provider.of<AuthProvider>(context, listen: false);
+    final businessScrollController = ScrollController();
+    final additionalInfoKey = GlobalKey();
+    final paymentAccountsKey = GlobalKey();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true, 
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black45,
       builder: (ctx) => DefaultTabController(
@@ -738,6 +743,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
               ),
               child: SafeArea(
                 top: false,
+                bottom: true,
+                maintainBottomViewPadding: true,
                 child: Column(
                   children: [
                     // Handle superior
@@ -793,7 +800,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                           // PESTAÑA 1: FORMATO Y ESTILO VISUAL
                           // ----------------------------------------------------
                           ListView(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 80 + kModalScrollBottomClearance),
                             children: [
                               _buildSectionTitle("Plantilla Estructural del PDF", Icons.dashboard_outlined, isDark),
                               IntrinsicHeight(
@@ -958,7 +966,9 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                           // PESTAÑA 2: MI NEGOCIO Y DATOS DEL CLIENTE
                           // ----------------------------------------------------
                           ListView(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            controller: businessScrollController,
+                            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 80 + kModalScrollBottomClearance),
                             children: [
                               // Tarjeta de Mi Negocio
                               _buildSectionTitle("Datos de Mi Negocio", Icons.store_rounded, isDark),
@@ -1095,9 +1105,26 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                                         subtitle: Text(isQuickSale ? "Imprime la nota registrada" : "Colegio / Grado / Notas", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12)),
                                         value: _config.showInstitutionInfo,
                                         activeThumbColor: Colors.orange,
-                                        onChanged: (v) => updateConfig(() => _config.showInstitutionInfo = v),
+                                        onChanged: (v) {
+                                          updateConfig(() {
+                                            _config.showInstitutionInfo = v;
+                                            if (v) {
+                                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                                if (additionalInfoKey.currentContext != null) {
+                                                  Scrollable.ensureVisible(
+                                                    additionalInfoKey.currentContext!,
+                                                    duration: const Duration(milliseconds: 300),
+                                                    curve: Curves.easeInOut,
+                                                    alignment: 0.5,
+                                                  );
+                                                }
+                                              });
+                                            }
+                                          });
+                                        },
                                       ),
                                       AnimatedSize(
+                                        key: additionalInfoKey,
                                         duration: const Duration(milliseconds: 250),
                                         curve: Curves.easeInOut,
                                         child: !_config.showInstitutionInfo
@@ -1169,13 +1196,122 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                                       ),
                                       onChanged: (v) => updateConfig(() => _config.footerNote = v.trim().isEmpty ? null : v.trim()),
                                     ),
+                                    const SizedBox(height: 10),
+
+                                    // Fila 1: Tiempo de Validez (Selección Única)
+                                    Row(
+                                      children: [
+                                        Text(
+                                          "⏳ 1. Tiempo de Validez",
+                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.withValues(alpha: isDark ? 0.25 : 0.12),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            "Selección única",
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                     const SizedBox(height: 6),
                                     Wrap(
                                       spacing: 6,
                                       runSpacing: 6,
                                       children: [
-                                        ("⏳ Válida por 7 días", "Válida por 7 días"),
-                                        ("⏳ Válida por 15 días", "Válida por 15 días"),
+                                        ("⏳ Válida por 7 días", "Válida por 7 días", 7),
+                                        ("⏳ Válida por 15 días", "Válida por 15 días", 15),
+                                        ("⏳ Válida por 30 días", "Válida por 30 días", 30),
+                                      ].map((item) {
+                                        final displayLabel = item.$1;
+                                        final cleanText = item.$2;
+                                        final daysNum = item.$3;
+                                        final currentText = _footerNoteCtrl.text;
+                                        final isSelected = RegExp(r'v[áa]lida\s+por\s+' + daysNum.toString() + r'\s+d[íi]as', caseSensitive: false).hasMatch(currentText);
+
+                                        return FilterChip(
+                                          visualDensity: VisualDensity.compact,
+                                          selected: isSelected,
+                                          showCheckmark: true,
+                                          checkmarkColor: Colors.white,
+                                          selectedColor: Colors.blue.shade700,
+                                          backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.grey.shade100,
+                                          side: BorderSide(color: isSelected ? Colors.blue : (isDark ? Colors.white24 : Colors.grey.shade300)),
+                                          label: Text(
+                                            displayLabel,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                            ),
+                                          ),
+                                          onSelected: (_) {
+                                            updateConfig(() {
+                                              final fullValidityPattern = RegExp(r'(?:Cotizaci[óo]n\s+)?v[áa]lida\s+por\s+\d+\s+d[íi]as', caseSensitive: false);
+                                              if (isSelected) {
+                                                // Deseleccionar y limpiar la cláusula de validez completa
+                                                String updated = currentText.replaceAll(fullValidityPattern, '');
+                                                updated = updated.replaceAll(RegExp(r'\.\s*\.'), '.').trim();
+                                                if (updated.startsWith('.')) updated = updated.substring(1).trim();
+                                                if (updated.endsWith('.')) updated = updated.substring(0, updated.length - 1).trim();
+                                                updated = updated.replaceAll(RegExp(r'\s+'), ' ');
+                                                _footerNoteCtrl.text = updated;
+                                                _config.footerNote = updated.isEmpty ? null : updated;
+                                              } else {
+                                                // Exclusión mutua: si ya hay alguna validez, reemplazarla limpiamente
+                                                if (fullValidityPattern.hasMatch(currentText)) {
+                                                  final match = fullValidityPattern.firstMatch(currentText);
+                                                  final hadCotizacionPrefix = match != null && match.group(0)!.toLowerCase().startsWith('cotizaci');
+                                                  final replacement = hadCotizacionPrefix ? "Cotización ${cleanText.toLowerCase()}" : cleanText;
+                                                  final updated = currentText.replaceFirst(fullValidityPattern, replacement);
+                                                  _footerNoteCtrl.text = updated;
+                                                  _config.footerNote = updated;
+                                                } else {
+                                                  String current = currentText.trim();
+                                                  if (current.endsWith('.')) current = current.substring(0, current.length - 1).trim();
+                                                  final newText = current.isEmpty ? cleanText : "$current. $cleanText";
+                                                  _footerNoteCtrl.text = newText;
+                                                  _config.footerNote = newText;
+                                                }
+                                              }
+                                            });
+                                          },
+                                        );
+                                      }).toList(),
+                                    ),
+                                    const SizedBox(height: 12),
+
+                                    // Fila 2: Condiciones y Cierre (Múltiple)
+                                    Row(
+                                      children: [
+                                        Text(
+                                          "📋 2. Condiciones y Cierre",
+                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.withValues(alpha: isDark ? 0.25 : 0.12),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            "Múltiple",
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: [
                                         ("🚚 Entrega inmediata", "Entrega inmediata"),
                                         ("🧾 Precios incluyen IGV", "Precios incluyen IGV"),
                                         ("📦 Sujeto a stock", "Sujeto a stock"),
@@ -1219,22 +1355,11 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                                                 _footerNoteCtrl.text = updated;
                                                 _config.footerNote = updated.isEmpty ? null : updated;
                                               } else {
-                                                // Exclusión mutua: Válida por 7 días vs Válida por 15 días
                                                 String current = currentText.trim();
-                                                if (cleanText == "Válida por 7 días" && current.contains(RegExp(r'Válida por 15 días', caseSensitive: false))) {
-                                                  current = current.replaceAll(RegExp(r'Válida por 15 días', caseSensitive: false), cleanText);
-                                                  _footerNoteCtrl.text = current;
-                                                  _config.footerNote = current;
-                                                } else if (cleanText == "Válida por 15 días" && current.contains(RegExp(r'Válida por 7 días', caseSensitive: false))) {
-                                                  current = current.replaceAll(RegExp(r'Válida por 7 días', caseSensitive: false), cleanText);
-                                                  _footerNoteCtrl.text = current;
-                                                  _config.footerNote = current;
-                                                } else {
-                                                  if (current.endsWith('.')) current = current.substring(0, current.length - 1).trim();
-                                                  final newText = current.isEmpty ? cleanText : "$current. $cleanText";
-                                                  _footerNoteCtrl.text = newText;
-                                                  _config.footerNote = newText;
-                                                }
+                                                if (current.endsWith('.')) current = current.substring(0, current.length - 1).trim();
+                                                final newText = current.isEmpty ? cleanText : "$current. $cleanText";
+                                                _footerNoteCtrl.text = newText;
+                                                _config.footerNote = newText;
                                               }
                                             });
                                           },
@@ -1248,9 +1373,26 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                                       subtitle: Text("Imprime tus números de pago al pie", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12)),
                                       value: _config.showPaymentAccounts,
                                       activeThumbColor: Colors.orange,
-                                      onChanged: (v) => updateConfig(() => _config.showPaymentAccounts = v),
+                                      onChanged: (v) {
+                                        updateConfig(() {
+                                          _config.showPaymentAccounts = v;
+                                          if (v) {
+                                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                                              if (paymentAccountsKey.currentContext != null) {
+                                                Scrollable.ensureVisible(
+                                                  paymentAccountsKey.currentContext!,
+                                                  duration: const Duration(milliseconds: 300),
+                                                  curve: Curves.easeInOut,
+                                                  alignment: 0.8,
+                                                );
+                                              }
+                                            });
+                                          }
+                                        });
+                                      },
                                     ),
                                     AnimatedSize(
+                                      key: paymentAccountsKey,
                                       duration: const Duration(milliseconds: 250),
                                       curve: Curves.easeInOut,
                                       child: !_config.showPaymentAccounts
@@ -1369,7 +1511,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                           // PESTAÑA 3: COLUMNAS DE TABLA Y TOTALES
                           // ----------------------------------------------------
                           ListView(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 80 + kModalScrollBottomClearance),
                             children: [
                               // Fotos de Productos
                               Container(
@@ -1512,42 +1655,50 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                     ),
 
                     // Barra Inferior Fija del Modal: Guardar como diseño por defecto
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: surfaceColor,
-                        border: Border(top: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade200)),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () async {
-                                final success = await PdfPreferencesService.saveDefaultConfig(_config);
-                                if (context.mounted && success) {
-                                  HapticFeedback.mediumImpact();
-                                  CustomSnackBar.show(context, message: "¡Configuración guardada como diseño por defecto!", isError: false);
-                                }
-                              },
-                              icon: const Icon(Icons.bookmark_added_outlined, size: 18),
-                              label: const Text("Guardar mi diseño por defecto", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 13),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    Builder(
+                      builder: (bCtx) {
+                        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+                          bCtx,
+                          minPadding: kMinDefensiveBottomClearance,
+                        );
+                        return Container(
+                          padding: EdgeInsets.fromLTRB(20, 12, 20, effectiveBottom),
+                          decoration: BoxDecoration(
+                            color: surfaceColor,
+                            border: Border(top: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade200)),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () async {
+                                    final success = await PdfPreferencesService.saveDefaultConfig(_config);
+                                    if (context.mounted && success) {
+                                      HapticFeedback.mediumImpact();
+                                      CustomSnackBar.show(context, message: "¡Configuración guardada como diseño por defecto!", isError: false);
+                                    }
+                                  },
+                                  icon: const Icon(Icons.bookmark_added_outlined, size: 18),
+                                  label: const Text("Guardar mi diseño por defecto", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 13),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 10),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: const Text("Aplicar", style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 10),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: const Text("Aplicar", style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ],
                 ),

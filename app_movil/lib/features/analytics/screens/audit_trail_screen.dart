@@ -36,6 +36,22 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
   int _totalEntradas = 0;
   int _totalSalidas = 0;
 
+  bool _activeIsShared = false;
+  int _activeFactor = 1;
+  String _activeVariantName = '';
+
+  String get _variantEquivString {
+    if (!_activeIsShared || _activeFactor <= 1) return "";
+    final equiv = _currentStock ~/ _activeFactor;
+    String name = _activeVariantName.isEmpty ? 'Packs' : _activeVariantName;
+    if (name.toLowerCase() == 'par' && equiv != 1) {
+      name = 'Pares';
+    } else if (name.toLowerCase() == 'caja' && equiv != 1) {
+      name = 'Cajas';
+    }
+    return "$equiv $name x$_activeFactor";
+  }
+
   // Filtro de eventos
   String _selectedFilter = 'todos'; // 'todos', 'stock', 'precios', 'ficha'
 
@@ -55,6 +71,17 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
     try {
       final db = await LocalDatabase.instance.database;
       
+      // Consultar información del producto (modo_stock, stock_compartido, costo_base)
+      final prodRows = await db.query(
+        'productos',
+        where: 'id = ?',
+        whereArgs: [widget.productId],
+      );
+      final prodData = prodRows.isNotEmpty ? prodRows.first : <String, dynamic>{};
+      final modoStock = prodData['modo_stock']?.toString() ?? 'INDEPENDIENTE';
+      final int stockCompartido = (prodData['stock_compartido'] as num?)?.toInt() ?? 0;
+      final double costoBase = (prodData['costo_base'] as num?)?.toDouble() ?? 0.0;
+
       // Consultar todas las variantes activas del producto para el selector
       final ppRows = await db.query(
         'presentaciones_producto',
@@ -62,36 +89,72 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
         orderBy: 'orden ASC, id ASC',
       );
 
-      Map<String, dynamic> activePres = {};
-      if (ppRows.isNotEmpty) {
-        activePres = ppRows.firstWhere(
-          (r) => (r['id'] as num).toInt() == _activePresentationId,
-          orElse: () => ppRows.first,
-        );
-        _activePresentationId = (activePres['id'] as num).toInt();
+      final List<Map<String, dynamic>> presentationOptions = [];
+      bool hasSharedPres = ppRows.any((r) => (r['usa_stock_compartido'] as int? ?? 0) == 1);
+      if (hasSharedPres || modoStock == 'COMPARTIDO' || modoStock == 'MIXTO') {
+        presentationOptions.add({
+          'id': -1,
+          'nombre_especifico': 'Pool Compartido',
+          'usa_stock_compartido': 1,
+          'stock_actual': stockCompartido,
+          'costo_unitario_calculado': costoBase,
+          'precio_venta_final': 0.0,
+        });
+      }
+      presentationOptions.addAll(ppRows);
+
+      int stock = 0;
+      double cost = 0.0;
+      double price = 0.0;
+      String presName = '';
+      String resolvedTitle = '';
+      bool isShared = false;
+      int factor = 1;
+
+      if (_activePresentationId == -1) {
+        stock = stockCompartido;
+        cost = costoBase;
+        price = 0.0;
+        presName = 'Pool Compartido';
+        resolvedTitle = '${widget.productName} • Pool Compartido';
+        isShared = true;
+        factor = 1;
       } else {
-        // Fallback si la variante específica está inactiva o difiere el producto_id
-        final fallback = await db.query(
-          'presentaciones_producto',
-          where: 'id = ?',
-          whereArgs: [_activePresentationId],
-        );
-        if (fallback.isNotEmpty) activePres = fallback.first;
+        Map<String, dynamic> activePres = {};
+        if (ppRows.isNotEmpty) {
+          activePres = ppRows.firstWhere(
+            (r) => (r['id'] as num).toInt() == _activePresentationId,
+            orElse: () => ppRows.first,
+          );
+          _activePresentationId = (activePres['id'] as num).toInt();
+        } else {
+          final fallback = await db.query(
+            'presentaciones_producto',
+            where: 'id = ?',
+            whereArgs: [_activePresentationId],
+          );
+          if (fallback.isNotEmpty) activePres = fallback.first;
+        }
+
+        isShared = (activePres['usa_stock_compartido'] as num?)?.toInt() == 1;
+        factor = (activePres['unidades_por_venta'] as num?)?.toInt() ?? 1;
+        if (factor <= 0) factor = 1;
+
+        // Si usa stock compartido, la escala base es el stock del pool
+        stock = isShared ? stockCompartido : ((activePres['stock_actual'] as num?)?.toInt() ?? 0);
+        cost = (activePres['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
+        price = (activePres['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
+        presName = (activePres['nombre_especifico'] as String? ?? '').trim();
+
+        String baseProdName = widget.productName.contains(' • ')
+            ? widget.productName.split(' • ').first.trim()
+            : widget.productName.trim();
+        resolvedTitle = (presName.isNotEmpty && presName != 'Unidad')
+            ? '$baseProdName • $presName'
+            : baseProdName;
       }
 
-      int stock = (activePres['stock_actual'] as num?)?.toInt() ?? 0;
-      double cost = (activePres['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
-      double price = (activePres['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
-      String presName = (activePres['nombre_especifico'] as String? ?? '').trim();
-
-      String baseProdName = widget.productName.contains(' • ')
-          ? widget.productName.split(' • ').first.trim()
-          : widget.productName.trim();
-      String resolvedTitle = (presName.isNotEmpty && presName != 'Unidad')
-          ? '$baseProdName • $presName'
-          : baseProdName;
-
-      // Obtener el Audit Trail exacto para la variante activa
+      // Obtener el Audit Trail exacto para la variante activa o pool consolidado (-1)
       final data = await _biService.getAuditTrail(_activePresentationId, widget.productId);
 
       int entradas = 0;
@@ -109,7 +172,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
 
       if (mounted) {
         setState(() {
-          _presentations = ppRows;
+          _presentations = presentationOptions;
           _displayedTitle = resolvedTitle;
           _history = data;
           _currentStock = stock;
@@ -117,6 +180,9 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           _currentPrice = price;
           _totalEntradas = entradas;
           _totalSalidas = salidas;
+          _activeIsShared = isShared;
+          _activeFactor = factor;
+          _activeVariantName = presName;
           _isLoading = false;
         });
       }
@@ -269,9 +335,25 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  _displayedTitle.isNotEmpty ? _displayedTitle : widget.productName,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _displayedTitle.isNotEmpty ? _displayedTitle : widget.productName,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    if (_activeIsShared && _activeFactor > 1) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        "Stock Pool: $_currentStock und. base ($_variantEquivString)",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.cyanAccent,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               IconButton(
@@ -321,13 +403,26 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                         ),
                       ),
                       alignment: Alignment.center,
-                      child: Text(
-                        pLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? const Color(0xFF312E81) : Colors.white.withValues(alpha: 0.9),
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            (p['usa_stock_compartido'] == 1 || pId == -1)
+                                ? Icons.hub_outlined
+                                : Icons.inventory_2_outlined,
+                            size: 11,
+                            color: isSelected ? const Color(0xFF312E81) : Colors.white.withValues(alpha: 0.9),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            pLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              color: isSelected ? const Color(0xFF312E81) : Colors.white.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -350,7 +445,9 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                 Expanded(
                   child: _buildHeaderMetric(
                     label: "Stock Actual",
-                    value: "$_currentStock und",
+                    value: (_activeIsShared && _activeFactor > 1)
+                        ? "$_currentStock und. base\n($_variantEquivString)"
+                        : "$_currentStock und",
                     color: Colors.white,
                   ),
                 ),
@@ -401,7 +498,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                       const SizedBox(width: 5),
                       Flexible(
                         child: Text(
-                          "Entradas: +$_totalEntradas und",
+                          "Entradas: +$_totalEntradas und. base",
                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -426,7 +523,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                       const SizedBox(width: 5),
                       Flexible(
                         child: Text(
-                          "Salidas: -$_totalSalidas und",
+                          "Salidas: -$_totalSalidas und. base",
                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -437,31 +534,62 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
               ),
             ],
           ),
-          // Conciliación de Stock Inicial si aplica
-          if (_currentStock != (_totalEntradas - _totalSalidas)) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.info_outline, size: 12, color: Colors.white70),
-                  const SizedBox(width: 5),
-                  Flexible(
-                    child: Text(
-                      "Stock Inicial Base: ${_currentStock - (_totalEntradas - _totalSalidas)} und  •  Saldo: (${_currentStock - (_totalEntradas - _totalSalidas)} + $_totalEntradas - $_totalSalidas = $_currentStock und)",
-                      style: const TextStyle(fontSize: 10, color: Colors.white70),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+          // Conciliación de Stock Inicial y Saldo Auditoría en 2 líneas adaptables y responsivas
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
             ),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.flag_outlined, size: 13, color: Colors.white70),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          "Stock Inicial Base: ${_currentStock - (_totalEntradas - _totalSalidas)} und. base",
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.calculate_outlined, size: 13, color: Colors.cyanAccent),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          "Saldo Auditoría: ${_currentStock - (_totalEntradas - _totalSalidas)} + $_totalEntradas - $_totalSalidas = $_currentStock und. base${_activeIsShared && _activeFactor > 1 ? ' ($_variantEquivString)' : ''}",
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.cyanAccent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -516,30 +644,36 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           children: [
-            _buildFilterChip("Todos (${_history.length})", 'todos', isDark),
+            _buildFilterChip("Todos (${_history.length})", Icons.list_alt_rounded, 'todos', isDark),
             const SizedBox(width: 8),
-            _buildFilterChip("📦 Movimientos ($stockOpsCount)", 'stock', isDark),
+            _buildFilterChip("Movimientos ($stockOpsCount)", Icons.inventory_2_outlined, 'stock', isDark),
             const SizedBox(width: 8),
-            _buildFilterChip("💰 Precios y Costos ($priceCostCount)", 'precios', isDark),
+            _buildFilterChip("Precios y Costos ($priceCostCount)", Icons.attach_money_rounded, 'precios', isDark),
             const SizedBox(width: 8),
             _buildFilterChip(
-              "🏷️ Descuentos ($discountsCount)", 
+              "Descuentos ($discountsCount)", 
+              Icons.local_offer_outlined,
               'descuentos', 
               isDark,
               activeColor: const Color(0xFFE11D48),
             ),
             const SizedBox(width: 8),
-            _buildFilterChip("📋 Ficha ($fichaCount)", 'ficha', isDark),
+            _buildFilterChip("Ficha Técnica ($fichaCount)", Icons.edit_note_rounded, 'ficha', isDark),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFilterChip(String label, String filterKey, bool isDark, {Color? activeColor}) {
+  Widget _buildFilterChip(String label, IconData icon, String filterKey, bool isDark, {Color? activeColor}) {
     bool isSelected = _selectedFilter == filterKey;
     return FilterChip(
       selected: isSelected,
+      avatar: Icon(
+        icon,
+        size: 13,
+        color: isSelected ? Colors.white : (activeColor ?? Colors.purpleAccent),
+      ),
       label: Text(
         label,
         style: TextStyle(
@@ -730,6 +864,10 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
         icon = Icons.label;
         color = Colors.blueAccent;
         displayAction = rawAction == 'categoria_id' ? 'Categoría Modificada' : 'Marca Modificada';
+      } else if (rawAction == 'modo_stock') {
+        icon = Icons.hub;
+        color = Colors.teal;
+        displayAction = 'Estrategia de Stock Modificada';
       } else {
         icon = Icons.build_circle_outlined;
         color = Colors.purpleAccent;
@@ -797,16 +935,60 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                         children: [
                           Icon(Icons.tag, size: 14, color: Colors.grey[400]),
                           const SizedBox(width: 4),
-                          Text(
-                            "Cantidad involucrada: ${((item['cantidad'] as num?)?.toInt() ?? 0) > 0 ? '+' : ''}${item['cantidad']} und", 
-                            style: TextStyle(
-                              fontSize: 13, 
-                              fontWeight: FontWeight.bold,
-                              color: ((item['cantidad'] as num?)?.toInt() ?? 0) > 0 ? Colors.green : Colors.redAccent,
+                          Expanded(
+                            child: RichText(
+                              text: TextSpan(
+                                style: TextStyle(
+                                  fontSize: 13, 
+                                  fontWeight: FontWeight.bold,
+                                  color: ((item['cantidad'] as num?)?.toInt() ?? 0) > 0 ? Colors.green : Colors.redAccent,
+                                ),
+                                children: [
+                                  TextSpan(text: "Cantidad: ${((item['cantidad'] as num?)?.toInt() ?? 0) > 0 ? '+' : ''}${item['cantidad']} und. base"),
+                                  if (item['presentacion_nombre'] != null && (item['presentacion_nombre'] as String).trim().isNotEmpty && item['presentacion_nombre'] != 'Unidad')
+                                    TextSpan(
+                                      text: " (${item['presentacion_nombre']})",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.normal,
+                                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
+                      if (item['es_presentacion_hermana'] == 1) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blueAccent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.25)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.hub_outlined, size: 12, color: Colors.blueAccent),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  "Impacto en Pool Común vía presentación hermana: ${item['presentacion_nombre'] ?? 'Variante'} (Factor x${item['unidades_por_venta'] ?? 1})",
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blueAccent,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ] else ...[
                       _buildMetaOpContent(item, isDark),
                     ],
@@ -826,6 +1008,38 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
   // RENDERIZADO ELEGANTE DE METADATOS (MANDATORY RULE 4: NOMBRES Y APP_CURRENCY)
   // =========================================================================
   Widget _buildMetaOpContent(Map<String, dynamic> item, bool isDark) {
+    if (item['accion'] == 'modo_stock') {
+      String oldVal = item['valor_anterior_label'] ?? item['valor_anterior']?.toString() ?? 'INDEPENDIENTE';
+      String newVal = item['valor_nuevo_label'] ?? item['valor_nuevo']?.toString() ?? 'COMPARTIDO';
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.teal.withValues(alpha: isDark ? 0.15 : 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.teal.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.hub_outlined, size: 15, color: Colors.teal),
+            const SizedBox(width: 8),
+            Expanded(
+              child: RichText(
+                text: TextSpan(
+                  style: TextStyle(fontSize: 12, color: isDark ? Colors.teal[100] : Colors.teal[900]),
+                  children: [
+                    const TextSpan(text: "Estrategia: "),
+                    TextSpan(text: oldVal, style: const TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey)),
+                    const TextSpan(text: " ➔ "),
+                    TextSpan(text: newVal, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (item['accion'] == 'descuento') {
       String oldVal = item['valor_anterior_label'] ?? item['valor_anterior']?.toString() ?? 'Sin descuento';
       String newVal = item['valor_nuevo_label'] ?? item['valor_nuevo']?.toString() ?? '';

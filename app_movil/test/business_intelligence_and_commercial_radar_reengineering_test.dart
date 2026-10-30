@@ -692,9 +692,9 @@ void main() {
 
       // 2. Chips de categorías dedicadas
       expect(find.text("Todas"), findsOneWidget);
-      expect(find.text("📍 Mi Región"), findsOneWidget);
-      expect(find.text("🌦️ Clima y Rutas"), findsOneWidget);
-      expect(find.text("⚖️ Leyes y SUNAT"), findsOneWidget);
+      expect(find.text("Mi Región"), findsOneWidget);
+      expect(find.text("Clima y Rutas"), findsOneWidget);
+      expect(find.text("Leyes y SUNAT"), findsOneWidget);
 
       // 3. Medidas y Recomendaciones Clave estructuradas
       expect(find.textContaining("Medidas y Recomendaciones Clave:"), findsWidgets);

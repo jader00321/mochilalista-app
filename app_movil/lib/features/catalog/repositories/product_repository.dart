@@ -419,7 +419,7 @@ class ProductRepository {
       whereArgs: [id],
     );
 
-    List<String> fieldsToTrack = ['marca_id', 'categoria_id'];
+    List<String> fieldsToTrack = ['marca_id', 'categoria_id', 'modo_stock', 'stock_compartido'];
     for (String field in fieldsToTrack) {
       if (data.containsKey(field)) {
         String oldVal = old[field]?.toString() ?? '';
@@ -545,16 +545,33 @@ class ProductRepository {
       if (diff != 0) {
         int? prodId = old['producto_id'] as int?;
         int negocioId = 0;
+        bool isShared = (old['usa_stock_compartido'] == 1);
         if (prodId != null) {
           final pRows = await txn.query(
             'productos',
-            columns: ['negocio_id'],
+            columns: ['negocio_id', 'modo_stock'],
             where: 'id = ?',
             whereArgs: [prodId],
           );
           if (pRows.isNotEmpty) {
             negocioId = (pRows.first['negocio_id'] as num?)?.toInt() ?? 0;
+            final modoStock = pRows.first['modo_stock'] as String?;
+            if (modoStock == 'COMPARTIDO') {
+              isShared = true;
+            }
           }
+        }
+
+        // Sincronizar atómicamente el pool de stock compartido y sus variantes vinculadas
+        if (isShared && prodId != null) {
+          await txn.rawUpdate(
+            'UPDATE productos SET stock_compartido = ? WHERE id = ?',
+            [newStock, prodId],
+          );
+          await txn.rawUpdate(
+            'UPDATE presentaciones_producto SET stock_actual = ? WHERE producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
+            [newStock, prodId, id],
+          );
         }
 
         await txn.insert('stock_ledger', {
@@ -711,6 +728,9 @@ class ProductRepository {
     'imagen_url',
     'estado',
     'fecha_actualizacion',
+    'modo_stock',
+    'stock_compartido',
+    'costo_base',
   };
 
   static const Set<String> _kPresentacionColumns = {
@@ -741,6 +761,8 @@ class ProductRepository {
     'es_default',
     'orden',
     'activo',
+    'usa_stock_compartido',
+    'cupo_maximo_variante',
   };
 
   Future<void> createFullProductTransaction(
@@ -886,6 +908,7 @@ class ProductRepository {
       int pId = await txn.insert('productos', productData);
 
       // 6. Whitelist Canónico SQLite para la tabla presentaciones_producto
+      bool sharedLedgerRecorded = false;
       for (int i = 0; i < presentationsData.length; i++) {
         final pres = presentationsData[i];
         pres['producto_id'] = pId;
@@ -894,6 +917,7 @@ class ProductRepository {
         }
         pres.remove('id');
         pres.remove('db_id');
+        bool isShared = pres['usa_stock_compartido'] == 1 || pres['usa_stock_compartido'] == true;
         int stock = (pres['stock_actual'] as num?)?.toInt() ?? 0;
         double cost = (pres['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
         double price = (pres['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
@@ -901,7 +925,10 @@ class ProductRepository {
         pres.removeWhere((key, _) => !_kPresentacionColumns.contains(key));
         int newPresId = await txn.insert('presentaciones_producto', pres);
 
-        if (stock > 0) {
+        // Si es stock compartido, solo registrar el INVENTARIO_INICIAL una sola vez en el ledger para el pool
+        bool shouldRecordLedger = stock > 0 && (!isShared || !sharedLedgerRecorded);
+        if (shouldRecordLedger) {
+          if (isShared) sharedLedgerRecorded = true;
           await txn.insert('stock_ledger', {
             'presentation_id': newPresId,
             'negocio_id': negocioId,
@@ -1137,6 +1164,15 @@ class ProductRepository {
 
         // Registrar descuento inicial si nace con oferta activa
         await _recordInitialDiscountTxn(txn, newPresId, presCopy);
+      }
+
+      // 9. Sincronización atómica de presentaciones con stock compartido si el pool común cambió
+      if (productData.containsKey('stock_compartido') && productData['stock_compartido'] != null) {
+        int sharedStock = (productData['stock_compartido'] as num).toInt();
+        await txn.rawUpdate(
+          'UPDATE presentaciones_producto SET stock_actual = ? WHERE producto_id = ? AND usa_stock_compartido = 1',
+          [sharedStock, productId],
+        );
       }
     });
   }

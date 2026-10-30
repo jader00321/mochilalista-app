@@ -458,18 +458,38 @@ class AnalyticsProvider with ChangeNotifier {
         }
       }
 
-      // Valor del inventario actual
-      final inventoryValueQuery = await db.rawQuery('''
-        SELECT SUM(pp.stock_actual * pp.precio_venta_final) as total_inv
+      // Valor del inventario actual (Fase 7 - Regla Obligatoria 1: 'COMPARTIDO' + 'MIXTO' + 'INDEPENDIENTE')
+      // 1. Productos con stock compartido (se contabiliza 1 sola vez por producto usando el precio base de la variante compartida principal)
+      final sharedInvQuery = await db.rawQuery('''
+        SELECT IFNULL(SUM(p.stock_compartido * (
+          SELECT (pr_def.precio_venta_final / CASE WHEN pr_def.unidades_por_venta > 0 THEN pr_def.unidades_por_venta ELSE 1 END)
+          FROM presentaciones_producto pr_def 
+          WHERE pr_def.producto_id = p.id AND pr_def.activo = 1 
+          ORDER BY pr_def.usa_stock_compartido DESC, pr_def.es_default DESC, pr_def.orden ASC LIMIT 1
+        )), 0.0) as valor_compartido
+        FROM productos p
+        WHERE p.negocio_id = ? AND p.modo_stock IN ('COMPARTIDO', 'MIXTO') AND p.stock_compartido > 0
+      ''', [_negocioId]);
+
+      // 2. Variantes con stock independiente
+      final independentInvQuery = await db.rawQuery('''
+        SELECT IFNULL(SUM(
+          (pp.stock_actual / CASE WHEN pp.unidades_por_venta > 0 THEN pp.unidades_por_venta ELSE 1 END) * pp.precio_venta_final
+        ), 0.0) as valor_independiente
         FROM presentaciones_producto pp
         JOIN productos p ON pp.producto_id = p.id
-        WHERE p.negocio_id = ? AND pp.activo = 1
+        WHERE p.negocio_id = ? AND pp.activo = 1 AND (pp.usa_stock_compartido = 0 OR p.modo_stock = 'INDEPENDIENTE') AND pp.stock_actual > 0
       ''', [_negocioId]);
-      double invValue = (inventoryValueQuery.first['total_inv'] as num?)?.toDouble() ?? 0.0;
 
-      // Inventario Muerto y Capital Inmovilizado
+      double valorCompartido = (sharedInvQuery.first['valor_compartido'] as num?)?.toDouble() ?? 0.0;
+      double valorIndependiente = (independentInvQuery.first['valor_independiente'] as num?)?.toDouble() ?? 0.0;
+      double invValue = valorCompartido + valorIndependiente;
+
+      // Inventario Muerto y Capital Inmovilizado (sin duplicar pool compartido)
       final deadStockQuery = await db.rawQuery('''
-        SELECT pp.id, p.id as producto_id, pp.nombre_especifico, p.nombre as producto_nombre, m.nombre as marca_nombre, pp.stock_actual, pp.costo_unitario_calculado,
+        SELECT pp.id, p.id as producto_id, pp.nombre_especifico, p.nombre as producto_nombre, m.nombre as marca_nombre, 
+               pp.stock_actual, pp.costo_unitario_calculado, pp.unidades_por_venta, pp.usa_stock_compartido,
+               p.modo_stock, p.stock_compartido, p.costo_base,
                MAX(IFNULL(v.fecha_venta, '1900-01-01')) as ultima_venta,
                (SELECT MIN(fecha_cambio) FROM product_history WHERE entidad_tipo='producto' AND entidad_id=p.id) as fecha_creacion_historial,
                p.fecha_actualizacion
@@ -484,6 +504,7 @@ class AnalyticsProvider with ChangeNotifier {
       
       List<Map<String, dynamic>> deadStockList = [];
       double immobilizedCapital = 0.0;
+      final Set<int> processedSharedProductIds = {};
 
       for (var row in deadStockQuery) {
         String lastSaleStr = row['ultima_venta'] as String;
@@ -503,13 +524,39 @@ class AnalyticsProvider with ChangeNotifier {
         int daysDormant = now.difference(referenceDate).inDays;
 
         if (daysDormant > _deadStockThresholdDays) {
-          Map<String, dynamic> item = Map<String, dynamic>.from(row);
-          item['dias_estancado'] = daysDormant;
-          deadStockList.add(item);
+          bool isShared = (row['usa_stock_compartido'] as int? ?? 0) == 1 || (row['modo_stock'] == 'COMPARTIDO');
+          int prodId = (row['producto_id'] as num?)?.toInt() ?? 0;
+          int factor = (row['unidades_por_venta'] as num?)?.toInt() ?? 1;
+          if (factor <= 0) factor = 1;
 
-          int stock = (row['stock_actual'] as num?)?.toInt() ?? 0;
-          double cost = (row['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
-          immobilizedCapital += stock * cost;
+          if (isShared && prodId > 0) {
+            if (processedSharedProductIds.contains(prodId)) {
+              // Ya se contabilizó el pool compartido de este producto una vez
+              continue;
+            }
+            processedSharedProductIds.add(prodId);
+
+            int poolStock = (row['stock_compartido'] as num?)?.toInt() ?? ((row['stock_actual'] as num?)?.toInt() ?? 0);
+            double baseCost = (row['costo_base'] as num?)?.toDouble() ?? 
+                (((row['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0) / factor);
+
+            Map<String, dynamic> item = Map<String, dynamic>.from(row);
+            item['dias_estancado'] = daysDormant;
+            item['nombre_especifico'] = 'Pool Compartido';
+            item['stock_actual'] = poolStock;
+            item['costo_unitario_calculado'] = baseCost;
+            deadStockList.add(item);
+
+            immobilizedCapital += poolStock * baseCost;
+          } else {
+            Map<String, dynamic> item = Map<String, dynamic>.from(row);
+            item['dias_estancado'] = daysDormant;
+            deadStockList.add(item);
+
+            int stock = (row['stock_actual'] as num?)?.toInt() ?? 0;
+            double cost = (row['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
+            immobilizedCapital += (stock / factor) * cost;
+          }
         }
       }
 
@@ -531,13 +578,16 @@ class AnalyticsProvider with ChangeNotifier {
       _statusMessage = "Generando recomendaciones e insights...";
       notifyListeners();
 
-      // Alertas de Stock Crítico
+      // Alertas de Stock Crítico (consolidadas para pool compartido)
       final lowStockQuery = await db.rawQuery('''
-        SELECT pp.id as presentacion_id, p.id as producto_id, p.nombre, m.nombre as marca_nombre, pp.nombre_especifico as presentacion_nombre, pp.stock_actual, IFNULL(pp.stock_alerta, 5) as stock_alerta
+        SELECT pp.id as presentacion_id, p.id as producto_id, p.nombre, m.nombre as marca_nombre, 
+               CASE WHEN pp.usa_stock_compartido = 1 THEN 'Pool Compartido' ELSE pp.nombre_especifico END as presentacion_nombre, 
+               pp.stock_actual, IFNULL(pp.stock_alerta, 5) as stock_alerta
         FROM presentaciones_producto pp
         JOIN productos p ON pp.producto_id = p.id
         LEFT JOIN marcas m ON p.marca_id = m.id
         WHERE p.negocio_id = ? AND pp.activo = 1 AND pp.stock_actual <= IFNULL(pp.stock_alerta, 5)
+        GROUP BY CASE WHEN pp.usa_stock_compartido = 1 THEN p.id ELSE pp.id END
         ORDER BY pp.stock_actual ASC
         LIMIT 10
       ''', [_negocioId]);

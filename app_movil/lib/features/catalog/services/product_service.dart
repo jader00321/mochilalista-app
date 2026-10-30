@@ -5,6 +5,8 @@ import 'package:app_movil/core/database/product_queries.dart';
 import 'package:app_movil/core/services/image_service.dart';
 import 'package:app_movil/features/catalog/repositories/product_repository.dart';
 
+import 'package:app_movil/core/services/demo_data_service.dart';
+
 class ProductService {
   int? _negocioId;
   final _repository = ProductRepository();
@@ -17,7 +19,9 @@ class ProductService {
   Future<List<InventoryWrapper>?> fetchInventory(
     Map<String, dynamic> queryParams,
   ) async {
-    if (_negocioId == null) return null;
+    if (_negocioId == null) {
+      return List.from(DemoDataService.demoInventory);
+    }
     try {
       final rows = await _repository.fetchInventoryRaw(
         _negocioId!,
@@ -33,7 +37,12 @@ class ProductService {
   Future<Map<String, int>> countInventory(
     Map<String, dynamic> queryParams,
   ) async {
-    if (_negocioId == null) return {'products': 0, 'presentations': 0};
+    if (_negocioId == null) {
+      return {
+        'products': DemoDataService.demoInventory.length,
+        'presentations': DemoDataService.demoInventory.length,
+      };
+    }
     try {
       return await _repository.countInventoryRaw(_negocioId!, queryParams);
     } catch (e, stack) {
@@ -114,6 +123,9 @@ class ProductService {
     String? imagenUrl,
     String? codigoBarras,
     required List<ProductPresentation> presentaciones,
+    String modoStock = 'INDEPENDIENTE',
+    int stockCompartido = 0,
+    double costoBase = 0.0,
   }) async {
     if (_negocioId == null) {
       _lastError = "No hay negocio seleccionado.";
@@ -138,6 +150,9 @@ class ProductService {
         'imagen_url': finalParentUrl,
         'codigo_barras': codigoBarras,
         'estado': estado,
+        'modo_stock': modoStock,
+        'stock_compartido': stockCompartido,
+        'costo_base': costoBase,
         'fecha_actualizacion': DateTime.now().toIso8601String(),
       };
 
@@ -152,6 +167,10 @@ class ProductService {
         sqliteMap['imagen_url'] = finalPresUrl;
         sqliteMap.remove('id');
         sqliteMap['orden'] = i;
+        if (modoStock == 'COMPARTIDO') {
+          sqliteMap['usa_stock_compartido'] = 1;
+          sqliteMap['stock_actual'] = stockCompartido;
+        }
         if (sqliteMap['proveedor_id'] == null &&
             sqliteMap['deferred_provider_name'] == null) {
           sqliteMap['proveedor_id'] = proveedorId;
@@ -195,6 +214,9 @@ class ProductService {
     String? codigoBarras,
     required List<ProductPresentation> presentaciones,
     required List<int> idsToDelete,
+    String? modoStock,
+    int? stockCompartido,
+    double? costoBase,
   }) async {
     try {
       final oldProd = await _repository.getProductImagesRaw(productId);
@@ -213,6 +235,9 @@ class ProductService {
         'codigo_barras': codigoBarras,
         'estado': estado,
         'fecha_actualizacion': DateTime.now().toIso8601String(),
+        if (modoStock != null) 'modo_stock': modoStock,
+        if (stockCompartido != null) 'stock_compartido': stockCompartido,
+        if (costoBase != null) 'costo_base': costoBase,
         if (deferredBrandName != null) 'deferred_brand_name': deferredBrandName,
         if (deferredCategoryName != null)
           'deferred_category_name': deferredCategoryName,
@@ -232,6 +257,12 @@ class ProductService {
 
           Map<String, dynamic> updateMap = pres.toSqlite(productId);
           updateMap['imagen_url'] = finalPresUrl;
+          if (modoStock == 'COMPARTIDO') {
+            updateMap['usa_stock_compartido'] = 1;
+            if (stockCompartido != null) {
+              updateMap['stock_actual'] = stockCompartido;
+            }
+          }
           if (updateMap['proveedor_id'] == null &&
               pres.deferredProviderName == null) {
             updateMap['proveedor_id'] = proveedorId;
@@ -246,6 +277,12 @@ class ProductService {
           Map<String, dynamic> insertMap = pres.toSqlite(productId);
           insertMap['imagen_url'] = finalPresUrl;
           insertMap.remove('id');
+          if (modoStock == 'COMPARTIDO') {
+            insertMap['usa_stock_compartido'] = 1;
+            if (stockCompartido != null) {
+              insertMap['stock_actual'] = stockCompartido;
+            }
+          }
           if (insertMap['proveedor_id'] == null &&
               pres.deferredProviderName == null) {
             insertMap['proveedor_id'] = proveedorId;

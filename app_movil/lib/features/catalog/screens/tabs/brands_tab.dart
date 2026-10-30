@@ -228,6 +228,7 @@ class _BrandsTabState extends State<BrandsTab> {
                               onTap: () {
                                 showModalBottomSheet(
                                   context: context,
+                                  useSafeArea: true,
                                   isScrollControlled: true,
                                   backgroundColor: Colors.transparent,
                                   builder: (_) => MasterDetailModal(

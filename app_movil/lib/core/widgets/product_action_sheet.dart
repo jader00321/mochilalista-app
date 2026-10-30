@@ -97,7 +97,8 @@ class _ProductActionSheetState extends State<ProductActionSheet> {
           backgroundColor: surfaceColor,
           applyEffectiveBottomPadding: true,
           child: SingleChildScrollView( 
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, kModalScrollBottomClearance),
+            physics: const BouncingScrollPhysics(),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

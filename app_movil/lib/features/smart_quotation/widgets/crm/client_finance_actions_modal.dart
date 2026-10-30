@@ -120,6 +120,7 @@ class ClientFinanceActionsModal extends StatefulWidget {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (ctx) => ClientFinanceActionsModal(
@@ -191,9 +192,16 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     _amountCtrl.addListener(_onAmountChanged);
     _numCuotasCtrl.addListener(_onNumCuotasChanged);
     _interestCtrl.addListener(_onInterestChanged);
-    _noteCtrl.addListener(_saveCurrentDraft);
+    _noteCtrl.addListener(_onNoteChanged);
 
     _tabController.addListener(_onTabChanged);
+  }
+
+  void _onNoteChanged() {
+    _saveCurrentDraft();
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -202,7 +210,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     _amountCtrl.removeListener(_onAmountChanged);
     _numCuotasCtrl.removeListener(_onNumCuotasChanged);
     _interestCtrl.removeListener(_onInterestChanged);
-    _noteCtrl.removeListener(_saveCurrentDraft);
+    _noteCtrl.removeListener(_onNoteChanged);
     _tabController.removeListener(_onTabChanged);
 
     _tabController.dispose();
@@ -473,14 +481,14 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         DateTime rawCandidate = current.add(const Duration(days: 1));
         DateTime quotaDate = rawCandidate;
         bool wasShifted = false;
-        String shiftReason = '↪ Día hábil';
+        String shiftReason = 'Día hábil';
 
         while (_excludedWeekdays.contains(quotaDate.weekday)) {
           if (quotaDate.weekday == DateTime.sunday) {
             shiftedSundaysCount++;
-            shiftReason = '↪ Dom omitido';
+            shiftReason = 'Dom omitido';
           } else if (quotaDate.weekday == DateTime.saturday) {
-            shiftReason = '↪ Sáb omitido';
+            shiftReason = 'Sáb omitido';
           }
           wasShifted = true;
           quotaDate = quotaDate.add(const Duration(days: 1));
@@ -510,14 +518,14 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       DateTime firstRaw = _startDate.add(const Duration(days: 7));
       DateTime firstValid = firstRaw;
       bool firstShifted = false;
-      String firstReason = '↪ Día hábil';
+      String firstReason = 'Día hábil';
 
       while (_excludedWeekdays.contains(firstValid.weekday)) {
         if (firstValid.weekday == DateTime.sunday) {
           shiftedSundaysCount++;
-          firstReason = '↪ Dom omitido';
+          firstReason = 'Dom omitido';
         } else if (firstValid.weekday == DateTime.saturday) {
-          firstReason = '↪ Sáb omitido';
+          firstReason = 'Sáb omitido';
         }
         firstShifted = true;
         firstValid = firstValid.add(const Duration(days: 1));
@@ -534,14 +542,14 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
           DateTime rawWeekly = firstValid.add(Duration(days: 7 * (i - 1)));
           quotaDate = rawWeekly;
           bool wasShifted = false;
-          String shiftReason = '↪ Día hábil';
+          String shiftReason = 'Día hábil';
 
           while (_excludedWeekdays.contains(quotaDate.weekday)) {
             if (quotaDate.weekday == DateTime.sunday) {
               shiftedSundaysCount++;
-              shiftReason = '↪ Dom omitido';
+              shiftReason = 'Dom omitido';
             } else if (quotaDate.weekday == DateTime.saturday) {
-              shiftReason = '↪ Sáb omitido';
+              shiftReason = 'Sáb omitido';
             }
             wasShifted = true;
             quotaDate = quotaDate.add(const Duration(days: 1));
@@ -578,14 +586,14 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         DateTime theoreticalDate = _startDate.add(Duration(days: 15 * i));
         DateTime quotaDate = theoreticalDate;
         bool wasShifted = false;
-        String shiftReason = '↪ Día hábil';
+        String shiftReason = 'Día hábil';
 
         while (_excludedWeekdays.contains(quotaDate.weekday)) {
           if (quotaDate.weekday == DateTime.sunday) {
             shiftedSundaysCount++;
-            shiftReason = '↪ Dom omitido';
+            shiftReason = 'Dom omitido';
           } else if (quotaDate.weekday == DateTime.saturday) {
-            shiftReason = '↪ Sáb omitido';
+            shiftReason = 'Sáb omitido';
           }
           wasShifted = true;
           quotaDate = quotaDate.add(const Duration(days: 1));
@@ -621,14 +629,14 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         DateTime theoreticalDate = _addMonthsClamped(_startDate, i);
         DateTime quotaDate = theoreticalDate;
         bool wasShifted = false;
-        String shiftReason = '↪ Día hábil';
+        String shiftReason = 'Día hábil';
 
         while (_excludedWeekdays.contains(quotaDate.weekday)) {
           if (quotaDate.weekday == DateTime.sunday) {
             shiftedSundaysCount++;
-            shiftReason = '↪ Dom omitido';
+            shiftReason = 'Dom omitido';
           } else if (quotaDate.weekday == DateTime.saturday) {
-            shiftReason = '↪ Sáb omitido';
+            shiftReason = 'Sáb omitido';
           }
           wasShifted = true;
           quotaDate = quotaDate.add(const Duration(days: 1));
@@ -666,19 +674,19 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       if (_excludedWeekdays.length == 1 &&
           _excludedWeekdays.contains(DateTime.sunday)) {
         _scheduleUpdateFeedback = shiftedSundaysCount > 0
-            ? "✨ Fechas actualizadas • $shiftedSundaysCount domingo(s) omitido(s)"
-            : "✨ Fechas actualizadas • Domingos omitidos";
+            ? "Fechas actualizadas • $shiftedSundaysCount domingo(s) omitido(s)"
+            : "Fechas actualizadas • Domingos omitidos";
       } else if (_excludedWeekdays.length == 2 &&
           _excludedWeekdays.contains(DateTime.saturday) &&
           _excludedWeekdays.contains(DateTime.sunday)) {
         _scheduleUpdateFeedback =
-            "✨ Fechas actualizadas • Solo cobros de Lunes a Viernes";
+            "Fechas actualizadas • Solo cobros de Lunes a Viernes";
       } else if (_excludedWeekdays.isEmpty) {
         _scheduleUpdateFeedback =
-            "🔄 Fechas restauradas • Cobro todos los días habilitado";
+            "Fechas restauradas • Cobro todos los días habilitado";
       } else {
         _scheduleUpdateFeedback =
-            "✨ Fechas actualizadas • ${7 - _excludedWeekdays.length} días de cobro activos";
+            "Fechas actualizadas • ${7 - _excludedWeekdays.length} días de cobro activos";
       }
     }
     _feedbackTrigger++;
@@ -801,7 +809,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         );
       }
       _scheduleUpdateFeedback =
-          "↪️ Cuota #${fromIndex + 1} actualizada • Cuotas siguientes corridas en cascada";
+          "Cuota #${fromIndex + 1} actualizada • Cuotas siguientes corridas en cascada";
       _feedbackTrigger++;
     });
     _saveCurrentDraft();
@@ -1102,77 +1110,41 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
 
     return InteractiveSheetWrapper(
       enableDragToDismiss: false,
+      enableHeaderDragToDismiss: true,
       maintainFixedHeightOnKeyboard: true,
       maxHeightFactor: 0.92,
       applyEffectiveBottomPadding: false,
-      showHandle: false,
+      showHandle: true,
+      showCloseButton: true,
+      title: "Operaciones Financieras",
+      icon: Icons.account_balance_wallet,
+      iconColor:
+          widget.isDark ? Colors.blueGrey[300] : Colors.blueGrey[700],
+      actions: [
+        Tooltip(
+          message:
+              isWithdrawTab ? "Limpiar retiro" : "Limpiar préstamo",
+          child: TextButton.icon(
+            icon: const Icon(Icons.cleaning_services_outlined,
+                size: 16),
+            label: const Text("Limpiar",
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.bold)),
+            style: TextButton.styleFrom(
+              foregroundColor:
+                  isWithdrawTab ? Colors.teal : Colors.orange[800],
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 4),
+              visualDensity: VisualDensity.compact,
+            ),
+            onPressed: _cleanActiveTab,
+          ),
+        ),
+      ],
       backgroundColor: surfaceColor,
       child: Column(
         children: [
-            // Handle bar
-            Center(
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withAlpha(76),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-
-            // Header con título, botón Limpiar y botón Cerrar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.account_balance_wallet,
-                    size: 26,
-                    color: widget.isDark
-                        ? Colors.blueGrey[300]
-                        : Colors.blueGrey[700],
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      "Operaciones Financieras",
-                      style: TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.bold,
-                          color: textColor),
-                    ),
-                  ),
-                  Tooltip(
-                    message:
-                        isWithdrawTab ? "Limpiar retiro" : "Limpiar préstamo",
-                    child: TextButton.icon(
-                      icon: const Icon(Icons.cleaning_services_outlined,
-                          size: 16),
-                      label: const Text("Limpiar",
-                          style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.bold)),
-                      style: TextButton.styleFrom(
-                        foregroundColor:
-                            isWithdrawTab ? Colors.teal : Colors.orange[800],
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      onPressed: _cleanActiveTab,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: Icon(Icons.close, color: textColor),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 8),
+          const SizedBox(height: 8),
 
             // TabBar con estilo blindado
             Container(
@@ -1245,7 +1217,15 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
 
             // Bottom Action Bar
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                InteractiveSheetWrapper.getEffectiveBottomPadding(
+                  context,
+                  minPadding: 28.0,
+                ),
+              ),
               decoration: BoxDecoration(
                 color: surfaceColor,
                 border: Border(
@@ -1577,41 +1557,48 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                 fontWeight: FontWeight.bold,
                 color: Colors.grey[600])),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _motivosSug.map((motivo) {
-            final isSelected = _noteCtrl.text == motivo;
-            return ChoiceChip(
-              label: Text(motivo),
-              selected: isSelected,
-              onSelected: (val) {
-                if (val) {
-                  _noteCtrl.text = motivo;
-                  FocusScope.of(context).unfocus();
-                  _saveCurrentDraft();
-                  setState(() {});
-                }
-              },
-              selectedColor: Colors.orange.withValues(alpha: 0.25),
-              labelStyle: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected
-                    ? Colors.orange
-                    : (widget.isDark ? Colors.grey[300] : Colors.grey[800]),
-              ),
-              backgroundColor:
-                  widget.isDark ? Colors.white10 : Colors.grey[100],
-              side: BorderSide(
-                color: isSelected
-                    ? Colors.orange
-                    : (widget.isDark
-                        ? Colors.white10
-                        : Colors.grey.shade300),
-              ),
-            );
-          }).toList(),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: _motivosSug.map((motivo) {
+              final isSelected = _noteCtrl.text == motivo;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(motivo),
+                  selected: isSelected,
+                  onSelected: (val) {
+                    if (val) {
+                      _noteCtrl.text = motivo;
+                    } else {
+                      _noteCtrl.clear();
+                    }
+                    FocusScope.of(context).unfocus();
+                    _saveCurrentDraft();
+                    setState(() {});
+                  },
+                  selectedColor: Colors.orange.withValues(alpha: 0.25),
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    color: isSelected
+                        ? Colors.orange
+                        : (widget.isDark ? Colors.grey[300] : Colors.grey[800]),
+                  ),
+                  backgroundColor:
+                      widget.isDark ? Colors.white10 : Colors.grey[100],
+                  side: BorderSide(
+                    color: isSelected
+                        ? Colors.orange
+                        : (widget.isDark
+                            ? Colors.white10
+                            : Colors.grey.shade300),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ),
 
         const SizedBox(height: 12),
@@ -1816,7 +1803,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                         };
                         _recalculateMultipleInstallments(
                           customFeedback:
-                              "📅 Cronograma recalculado • Frecuencia ${names[v] ?? v}",
+                              "Cronograma recalculado • Frecuencia ${names[v] ?? v}",
                         );
                       });
                     }
@@ -1889,28 +1876,15 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Días de Cobro Permitidos",
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: widget.isDark
-                          ? Colors.grey[300]
-                          : Colors.grey[700],
-                    ),
-                  ),
-                  Text(
-                    "${7 - _excludedWeekdays.length} activos",
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.orange,
-                    ),
-                  ),
-                ],
+              Text(
+                "Días de Cobro Permitidos",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: widget.isDark
+                      ? Colors.grey[300]
+                      : Colors.grey[700],
+                ),
               ),
               const SizedBox(height: 2),
               Text(
@@ -1946,7 +1920,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                 runSpacing: 6,
                 children: [
                   _buildPresetChip(
-                    label: "🚫 Omitir Domingos",
+                    label: "Omitir Domingos",
+                    icon: Icons.event_busy_rounded,
                     isSelected: _excludedWeekdays.length == 1 &&
                         _excludedWeekdays.contains(DateTime.sunday),
                     onTap: () {
@@ -1958,7 +1933,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                           _excludedWeekdays.clear();
                           _recalculateMultipleInstallments(
                             customFeedback:
-                                "🔄 Fechas restauradas • Cobro todos los días habilitado",
+                                "Fechas restauradas • Cobro todos los días habilitado",
                           );
                         } else {
                           // Activar Omitir Domingos
@@ -1969,7 +1944,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                     },
                   ),
                   _buildPresetChip(
-                    label: "💼 Solo Lun - Vie",
+                    label: "Solo Lun - Vie",
+                    icon: Icons.business_center_outlined,
                     isSelected: _excludedWeekdays.length == 2 &&
                         _excludedWeekdays.contains(DateTime.saturday) &&
                         _excludedWeekdays.contains(DateTime.sunday),
@@ -1983,7 +1959,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                           _excludedWeekdays.clear();
                           _recalculateMultipleInstallments(
                             customFeedback:
-                                "🔄 Fechas restauradas • Cobro todos los días habilitado",
+                                "Fechas restauradas • Cobro todos los días habilitado",
                           );
                         } else {
                           // Activar Solo Lun - Vie
@@ -1993,21 +1969,22 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                           };
                           _recalculateMultipleInstallments(
                             customFeedback:
-                                "✨ Fechas actualizadas • Solo cobros de Lunes a Viernes",
+                                "Fechas actualizadas • Solo cobros de Lunes a Viernes",
                           );
                         }
                       });
                     },
                   ),
                   _buildPresetChip(
-                    label: "📅 Todos los días",
+                    label: "Todos los días",
+                    icon: Icons.calendar_month_outlined,
                     isSelected: _excludedWeekdays.isEmpty,
                     onTap: () {
                       setState(() {
                         _excludedWeekdays.clear();
                         _recalculateMultipleInstallments(
                           customFeedback:
-                              "🔄 Fechas restauradas • Cobro todos los días habilitado",
+                              "Fechas restauradas • Cobro todos los días habilitado",
                         );
                       });
                     },
@@ -2171,26 +2148,40 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   vertical: 4, horizontal: 2),
-                              child: Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    _formatDateSpanish(dueDate),
-                                    style: TextStyle(
-                                        color: textColor,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.5),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _formatDateSpanish(dueDate),
+                                          style: TextStyle(
+                                              color: textColor,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Icon(Icons.edit_calendar,
+                                            size: 14,
+                                            color: widget.isDark
+                                                ? Colors.blue[300]
+                                                : Colors.blue[600]),
+                                      ],
+                                    ),
                                   ),
-                                  const SizedBox(width: 4),
-                                  Icon(Icons.edit_calendar,
-                                      size: 15,
-                                      color: widget.isDark
-                                          ? Colors.blue[300]
-                                          : Colors.blue[600]),
                                   if (_installmentShiftReasons.containsKey(cuota.installmentNumber)) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
+                                    const SizedBox(height: 3),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 5, vertical: 2),
+                                          horizontal: 5, vertical: 1.5),
                                       decoration: BoxDecoration(
                                         color: widget.isDark
                                             ? Colors.amber.withValues(alpha: 0.2)
@@ -2203,16 +2194,30 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                                           width: 0.8,
                                         ),
                                       ),
-                                      child: Text(
-                                        _installmentShiftReasons[cuota.installmentNumber]!,
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: widget.isDark
-                                              ? Colors.amber[300]
-                                              : Colors.amber[900],
-                                        ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.subdirectory_arrow_right_rounded,
+                                            size: 11,
+                                            color: widget.isDark
+                                                ? Colors.amber[300]
+                                                : Colors.amber[900],
+                                          ),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            _installmentShiftReasons[cuota.installmentNumber]!,
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: widget.isDark
+                                                  ? Colors.amber[300]
+                                                  : Colors.amber[900],
+                                            ),
+                                          ),
+                                        ],
                                       ),
+                                    ),
                                     ),
                                   ],
                                 ],
@@ -2364,6 +2369,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
 
   Widget _buildPresetChip({
     required String label,
+    IconData? icon,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
@@ -2394,7 +2400,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.orange.withValues(alpha: isDark ? 0.25 : 0.15),
+                    color:
+                        Colors.orange.withValues(alpha: isDark ? 0.25 : 0.15),
                     blurRadius: 4,
                     offset: const Offset(0, 1),
                   ),
@@ -2404,22 +2411,16 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              transitionBuilder: (child, anim) =>
-                  ScaleTransition(scale: anim, child: child),
-              child: isSelected
-                  ? Padding(
-                      key: const ValueKey("chip_check"),
-                      padding: const EdgeInsets.only(right: 5),
-                      child: Icon(
-                        Icons.check_circle_rounded,
-                        size: 13,
-                        color: isDark ? Colors.orange[300] : Colors.orange[800],
-                      ),
-                    )
-                  : const SizedBox.shrink(key: ValueKey("chip_none")),
-            ),
+            if (icon != null) ...[
+              Icon(
+                isSelected ? Icons.check_circle_rounded : icon,
+                size: 14,
+                color: isSelected
+                    ? (isDark ? Colors.orange[300] : Colors.orange[800])
+                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
+              ),
+              const SizedBox(width: 5),
+            ],
             Text(
               label,
               style: TextStyle(

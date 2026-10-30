@@ -358,6 +358,7 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
       onPressed: () {
         showModalBottomSheet(
           context: context,
+          useSafeArea: true,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (ctx) => ClientFullStatsModal(client: widget.client, isDark: widget.isDark),

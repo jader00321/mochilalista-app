@@ -201,6 +201,8 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                 stock: pres.stockActual ~/ factor,
                 price: pres.precioVentaFinal,
                 offerPrice: newOffer,
+                cupoMaximoVariante: pres.cupoMaximoVariante,
+                clearCupo: pres.cupoMaximoVariante == null,
               );
               _items[i] = updatedItem;
               if (_overriddenPrices.containsKey(item.presentationId)) {
@@ -278,6 +280,18 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       _isAutoTitleMode = true;
     }
     _isGeneratingName = false;
+  }
+
+  Map<int, int> _computeSharedDemand() {
+    final Map<int, int> demand = {};
+    for (final it in _items) {
+      if (it.usaStockCompartido && it.productId > 0) {
+        final q = _quantities[it.presentationId] ?? 1;
+        final f = it.conversionFactor > 0 ? it.conversionFactor : 1;
+        demand[it.productId] = (demand[it.productId] ?? 0) + (q * f);
+      }
+    }
+    return demand;
   }
 
   @override
@@ -554,6 +568,11 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                         },
                         itemBuilder: (ctx, i) {
                           final item = _items[i];
+                          final sharedDemand = _computeSharedDemand();
+                          final isShared = item.usaStockCompartido && item.productId > 0 && item.sharedStockPool > 0;
+                          final currentDemand = isShared ? (sharedDemand[item.productId] ?? 0) : 0;
+                          final isSharedPoolExceeded = isShared && currentDemand > item.sharedStockPool;
+
                           return Padding(
                             key: ValueKey("manual_item_${item.presentationId}_$i"),
                             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -564,6 +583,9 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                               isClient: isClient,
                               isEditing: _currentQuotationId != null, 
                               isBundleOutdated: _currentQuotationId != null && item.bundleId != null && (workbench.getValidationFor(_currentQuotationId!)?.bundleChanges.any((bc) => bc.bundleId == item.bundleId) ?? false),
+                              isSharedPoolExceeded: isSharedPoolExceeded,
+                              sharedPoolDemand: isShared ? currentDemand : null,
+                              sharedPoolCapacity: isShared ? item.sharedStockPool : null,
                               quantity: _quantities[item.presentationId] ?? 1,
                               manualPrice: _overriddenPrices[item.presentationId] ?? (item.offerPrice ?? item.price),
                               customName: _customNames[item.presentationId] ?? "", 
@@ -573,9 +595,16 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                               }),
                               onIncrease: () {
                                 int current = _quantities[item.presentationId] ?? 1;
-                                if (isClient && current >= item.stock) {
-                                  CustomSnackBar.show(context, message: "Límite de stock alcanzado (${item.stock} disp.)", isError: true);
+                                if (isClient && current >= item.effectiveVendibleStock) {
+                                  CustomSnackBar.show(context, message: "Límite de stock alcanzado (${item.effectiveVendibleStock} disp.)", isError: true);
                                   return;
+                                }
+                                if (isClient && isShared) {
+                                  final factor = item.conversionFactor > 0 ? item.conversionFactor : 1;
+                                  if (currentDemand + factor > item.sharedStockPool) {
+                                    CustomSnackBar.show(context, message: "Límite de stock alcanzado en pool compartido (${item.sharedStockPool} und. base)", isError: true);
+                                    return;
+                                  }
                                 }
                                 setState(() { 
                                   _quantities[item.presentationId] = current + 1; 

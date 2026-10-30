@@ -765,6 +765,9 @@ class InventoryProvider with ChangeNotifier {
     String? imagenUrl,
     String? codigoBarras,
     required List<ProductPresentation> presentaciones,
+    String modoStock = 'INDEPENDIENTE',
+    int stockCompartido = 0,
+    double costoBase = 0.0,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -782,6 +785,9 @@ class InventoryProvider with ChangeNotifier {
         imagenUrl: imagenUrl,
         codigoBarras: codigoBarras,
         presentaciones: presentaciones,
+        modoStock: modoStock,
+        stockCompartido: stockCompartido,
+        costoBase: costoBase,
       );
       if (ok) {
         _errorMessage = '';
@@ -813,6 +819,9 @@ class InventoryProvider with ChangeNotifier {
     String? codigoBarras,
     required List<ProductPresentation> presentaciones,
     required List<int> idsToDelete,
+    String? modoStock,
+    int? stockCompartido,
+    double? costoBase,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -832,6 +841,9 @@ class InventoryProvider with ChangeNotifier {
         codigoBarras: codigoBarras,
         presentaciones: presentaciones,
         idsToDelete: idsToDelete,
+        modoStock: modoStock,
+        stockCompartido: stockCompartido,
+        costoBase: costoBase,
       );
       if (ok) {
         _errorMessage = '';
@@ -864,6 +876,8 @@ class InventoryProvider with ChangeNotifier {
     String? tipoDesc,
     double? valorDesc,
     int? stock,
+    int? cupoMaximoVariante,
+    bool clearCupo = false,
     String? estado,
     String? imagenUrl,
   }) async {
@@ -903,6 +917,11 @@ class InventoryProvider with ChangeNotifier {
       }
     }
     if (stock != null) body['stock_actual'] = stock;
+    if (clearCupo) {
+      body['cupo_maximo_variante'] = null;
+    } else if (cupoMaximoVariante != null) {
+      body['cupo_maximo_variante'] = cupoMaximoVariante;
+    }
     if (estado != null) body['estado'] = estado;
 
     if (imagenUrl != null) {
@@ -953,6 +972,9 @@ class InventoryProvider with ChangeNotifier {
           precioVentaFinal: precioVentaFinal ?? oldPres.precioVentaFinal,
 
           stockActual: stock ?? oldPres.stockActual,
+          cupoMaximoVariante: clearCupo
+              ? null
+              : (cupoMaximoVariante ?? oldPres.cupoMaximoVariante),
           precioOferta: oferta == -1 ? null : (oferta ?? oldPres.precioOferta),
           tipoDescuento:
               oferta == -1 ? null : (tipoDesc ?? oldPres.tipoDescuento),
@@ -960,6 +982,7 @@ class InventoryProvider with ChangeNotifier {
               oferta == -1 ? null : (valorDesc ?? oldPres.valorDescuento),
           estado: estado ?? oldPres.estado,
           activo: oldPres.activo,
+          usaStockCompartido: oldPres.usaStockCompartido,
         );
 
         _inventoryItems[index] = InventoryWrapper(
@@ -971,11 +994,104 @@ class InventoryProvider with ChangeNotifier {
           (p) => p.id == presentationId,
         );
         if (presIndex != -1) productRef.presentaciones[presIndex] = updatedPres;
+
+        // 🔥 Sincronización en memoria a 0ms de Variantes Hermanas con Stock Compartido
+        if (oldPres.usaStockCompartido && stock != null) {
+          final updatedProduct = productRef.copyWith(
+            stockCompartido: stock,
+          );
+
+          for (int i = 0; i < _inventoryItems.length; i++) {
+            final w = _inventoryItems[i];
+            if (w.product.id == productRef.id) {
+              if (w.presentation.usaStockCompartido) {
+                final siblingPres = ProductPresentation(
+                  id: w.presentation.id,
+                  nombreEspecifico: w.presentation.nombreEspecifico,
+                  codigoBarras: w.presentation.codigoBarras,
+                  descripcion: w.presentation.descripcion,
+                  proveedorId: w.presentation.proveedorId,
+                  esDefault: w.presentation.esDefault,
+                  imagenUrl: w.presentation.imagenUrl,
+                  umpCompra: w.presentation.umpCompra,
+                  precioUmpProveedor: w.presentation.precioUmpProveedor,
+                  cantidadUmpComprada: w.presentation.cantidadUmpComprada,
+                  totalPagoLote: w.presentation.totalPagoLote,
+                  unidadesPorLote: w.presentation.unidadesPorLote,
+                  unidadVenta: w.presentation.unidadVenta,
+                  unidadesPorVenta: w.presentation.unidadesPorVenta,
+                  costoUnitarioCalculado: w.presentation.costoUnitarioCalculado,
+                  factorGananciaVenta: w.presentation.factorGananciaVenta,
+                  precioVentaFinal: w.presentation.precioVentaFinal,
+                  stockActual: stock,
+                  cupoMaximoVariante: w.presentation.cupoMaximoVariante,
+                  precioOferta: w.presentation.precioOferta,
+                  tipoDescuento: w.presentation.tipoDescuento,
+                  valorDescuento: w.presentation.valorDescuento,
+                  estado: w.presentation.estado,
+                  activo: w.presentation.activo,
+                  usaStockCompartido: true,
+                );
+                _inventoryItems[i] = InventoryWrapper(
+                  product: updatedProduct,
+                  presentation: siblingPres,
+                );
+              } else {
+                _inventoryItems[i] = InventoryWrapper(
+                  product: updatedProduct,
+                  presentation: w.presentation,
+                );
+              }
+            }
+          }
+
+          for (int pIdx = 0; pIdx < updatedProduct.presentaciones.length; pIdx++) {
+            final p = updatedProduct.presentaciones[pIdx];
+            if (p.usaStockCompartido) {
+              updatedProduct.presentaciones[pIdx] = ProductPresentation(
+                id: p.id,
+                nombreEspecifico: p.nombreEspecifico,
+                codigoBarras: p.codigoBarras,
+                descripcion: p.descripcion,
+                proveedorId: p.proveedorId,
+                esDefault: p.esDefault,
+                imagenUrl: p.imagenUrl,
+                umpCompra: p.umpCompra,
+                precioUmpProveedor: p.precioUmpProveedor,
+                cantidadUmpComprada: p.cantidadUmpComprada,
+                totalPagoLote: p.totalPagoLote,
+                unidadesPorLote: p.unidadesPorLote,
+                unidadVenta: p.unidadVenta,
+                unidadesPorVenta: p.unidadesPorVenta,
+                costoUnitarioCalculado: p.costoUnitarioCalculado,
+                factorGananciaVenta: p.factorGananciaVenta,
+                precioVentaFinal: p.precioVentaFinal,
+                stockActual: stock,
+                cupoMaximoVariante: p.cupoMaximoVariante,
+                precioOferta: p.precioOferta,
+                tipoDescuento: p.tipoDescuento,
+                valorDescuento: p.valorDescuento,
+                estado: p.estado,
+                activo: p.activo,
+                usaStockCompartido: true,
+              );
+            }
+          }
+        }
         notifyListeners();
       }
     } else {
       _lastActionError = "Error al actualizar presentación";
     }
     return ok;
+  }
+
+  /// 🎯 Actualiza únicamente el cupo máximo de una variante con stock compartido
+  Future<bool> updateVariantQuota(int presentationId, int? newQuota) async {
+    return await updatePresentation(
+      presentationId,
+      cupoMaximoVariante: newQuota,
+      clearCupo: newQuota == null,
+    );
   }
 }

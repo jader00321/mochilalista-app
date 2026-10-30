@@ -179,7 +179,7 @@ class _MasterDetailModalState extends State<MasterDetailModal> {
         ],
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, kModalScrollBottomClearance),
         physics: const BouncingScrollPhysics(),
         child: Column(
           mainAxisSize: MainAxisSize.min,

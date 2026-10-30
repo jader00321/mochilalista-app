@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class ManualPriceModifier extends StatefulWidget {
   final bool isManualPrice;
@@ -82,7 +83,6 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
   @override
   Widget build(BuildContext context) {
     final isDark = widget.isDark ?? (Theme.of(context).brightness == Brightness.dark);
-    final currency = widget.currency ?? NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final textColor = isDark ? Colors.white : Colors.black87;
 
     String? badgeText;
@@ -248,7 +248,7 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
                           // Si el switch está apagado: Mostrar siempre "Precio Base: S/ X"
                           if (!widget.isManualPrice) {
                             return Text(
-                              "Precio Base: ${currency.format(widget.systemPrice)}",
+                              "Precio Base: ${AppCurrency.format(widget.systemPrice)}",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
@@ -279,7 +279,7 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
                             return Row(
                               children: [
                                 Text(
-                                  currency.format(widget.systemPrice),
+                                  AppCurrency.format(widget.systemPrice),
                                   style: TextStyle(
                                     fontSize: 12,
                                     decoration: TextDecoration.lineThrough,
@@ -288,7 +288,7 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  currency.format(activePrice),
+                                  AppCurrency.format(activePrice),
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
@@ -315,7 +315,7 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
                             );
                           } else {
                             return Text(
-                              "Precio Base: ${currency.format(widget.systemPrice)}",
+                              "Precio Base: ${AppCurrency.format(widget.systemPrice)}",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,

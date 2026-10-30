@@ -85,6 +85,8 @@ class ProductCreateOperations {
       'activeRoundingTarget': p['activeRoundingTarget'] as double?,
       'preRoundedPrice': p['preRoundedPrice'] as String?,
       'preRoundedMargen': p['preRoundedMargen'] as String?,
+      'usaStockCompartido': p['usaStockCompartido'] == true,
+      'cupoMaximoVariante': p['cupoMaximoVariante'] as int?,
     };
   }
 
@@ -103,6 +105,9 @@ class ProductCreateOperations {
     required int generalState,
     required List<Map<String, dynamic>> controllers,
     required Map<int, String> deferredProviderNames,
+    String modoStock = 'INDEPENDIENTE',
+    int stockCompartido = 0,
+    double costoBase = 0.0,
   }) {
     final presList = controllers.map((c) {
       final pId = c['providerId'] as int?;
@@ -140,6 +145,8 @@ class ProductCreateOperations {
         'activeRoundingTarget': c['activeRoundingTarget'] as double?,
         'preRoundedPrice': c['preRoundedPrice'] as String?,
         'preRoundedMargen': c['preRoundedMargen'] as String?,
+        'usaStockCompartido': c['usaStockCompartido'] == true,
+        'cupoMaximoVariante': c['cupoMaximoVariante'] as int?,
       };
     }).toList();
 
@@ -156,6 +163,9 @@ class ProductCreateOperations {
       imageUrl: imgUrlCtrl.text,
       barcode: barcodeCtrl.text,
       presentations: presList,
+      modoStock: modoStock,
+      stockCompartido: stockCompartido,
+      costoBase: costoBase,
     );
   }
 
@@ -283,6 +293,8 @@ class ProductCreateOperations {
       'activeRoundingTarget': source['activeRoundingTarget'] as double?,
       'preRoundedPrice': source['preRoundedPrice'] as String?,
       'preRoundedMargen': source['preRoundedMargen'] as String?,
+      'usaStockCompartido': source['usaStockCompartido'] == true,
+      'cupoMaximoVariante': source['cupoMaximoVariante'] as int?,
     };
 
     controllers.insert(index + 1, newMap);
@@ -557,6 +569,9 @@ class ProductCreateOperations {
     required int generalState,
     required List<Map<String, dynamic>> controllers,
     required Map<int, String> deferredProviderNames,
+    String modoStock = 'INDEPENDIENTE',
+    int stockCompartido = 0,
+    double costoBase = 0.0,
   }) async {
     if (!formKey.currentState!.validate()) return false;
     if (nameCtrl.text.trim().isEmpty) {
@@ -589,7 +604,16 @@ class ProductCreateOperations {
           stockBaseGuardar = int.tryParse(ajusteText) ?? stockBaseGuardar;
         }
 
-        if (factorVenta > 1) {
+        bool isShared = false;
+        if (modoStock == 'COMPARTIDO') {
+          isShared = true;
+        } else if (modoStock == 'MIXTO') {
+          isShared = c['usaStockCompartido'] == true;
+        }
+
+        int finalStockBase = isShared ? stockCompartido : stockBaseGuardar;
+
+        if (factorVenta > 1 && !isShared) {
           StockValidationResult? validation = c['stockValidation'] as StockValidationResult?;
           if (validation != null) {
             if (validation.status == StockValidationStatus.deficit) {
@@ -657,7 +681,8 @@ class ProductCreateOperations {
             costoUnitarioCalculado: costoPresFinal,
             factorGananciaVenta: margen,
             precioVentaFinal: pVenta,
-            stockActual: stockBaseGuardar,
+            stockActual: finalStockBase,
+            usaStockCompartido: isShared,
             umpCompra: umpC.isEmpty ? null : umpC,
             cantidadUmpComprada: cantC > 0 ? cantC : null,
             totalPagoLote: totalP > 0 ? totalP : null,
@@ -705,6 +730,9 @@ class ProductCreateOperations {
       deferredBrandName: defBrandName,
       deferredCategoryName: defCategoryName,
       deferredProviderName: defGenProvName,
+      modoStock: modoStock,
+      stockCompartido: stockCompartido,
+      costoBase: costoBase,
     );
 
     if (success && context.mounted) {
@@ -772,8 +800,18 @@ class ProductCreateOperations {
           generalState: generalState,
           isDefault: true,
         );
-      } else if (!controllers.any((c) => c['isDefault'] == true)) {
+      }
+      if (!controllers.any((c) => c['isDefault'] == true)) {
         controllers.first['isDefault'] = true;
+      }
+
+      // 🛡️ Situación 4: Inyección garantizada de initialBarcode en Padre y primera Variante con borrador
+      if (initialBarcode != null && initialBarcode.trim().isNotEmpty) {
+        final code = initialBarcode.trim();
+        barcodeCtrl.text = code;
+        if (controllers.isNotEmpty && controllers.first['barcode'] is TextEditingController) {
+          (controllers.first['barcode'] as TextEditingController).text = code;
+        }
       }
 
       return ProductCreateHydratedData(
@@ -783,6 +821,9 @@ class ProductCreateOperations {
         categoryName: draft.deferredCategoryName,
         generalProviderId: draft.generalProviderId,
         generalProviderName: draft.deferredGeneralProviderName,
+        modoStock: draft.modoStock,
+        stockCompartido: draft.stockCompartido,
+        costoBase: draft.costoBase,
       );
     }
 
@@ -795,8 +836,14 @@ class ProductCreateOperations {
         generalState: generalState,
         isDefault: true,
       );
-      if (initialBarcode != null && initialBarcode.isNotEmpty && controllers.isNotEmpty) {
-        (controllers.first['barcode'] as TextEditingController).text = initialBarcode;
+    }
+
+    // 🛡️ Situación 4: Inyección garantizada de initialBarcode en Padre y primera Variante sin borrador
+    if (initialBarcode != null && initialBarcode.trim().isNotEmpty) {
+      final code = initialBarcode.trim();
+      barcodeCtrl.text = code;
+      if (controllers.isNotEmpty && controllers.first['barcode'] is TextEditingController) {
+        (controllers.first['barcode'] as TextEditingController).text = code;
       }
     }
     return null;
@@ -854,6 +901,9 @@ class ProductCreateHydratedData {
   final String? categoryName;
   final int? generalProviderId;
   final String? generalProviderName;
+  final String modoStock;
+  final int stockCompartido;
+  final double costoBase;
 
   const ProductCreateHydratedData({
     this.brandId,
@@ -862,5 +912,8 @@ class ProductCreateHydratedData {
     this.categoryName,
     this.generalProviderId,
     this.generalProviderName,
+    this.modoStock = 'INDEPENDIENTE',
+    this.stockCompartido = 0,
+    this.costoBase = 0.0,
   });
 }

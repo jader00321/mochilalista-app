@@ -43,11 +43,11 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("💰 Venta y Precios", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
+                        Text("Venta y Precios", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87)),
                         if (!_showVenta) ...[
                           const SizedBox(height: 2),
                           Text(
-                            "$summaryUnidad (x$summaryFactor) | Costo: S/$summaryCosto | P.Venta: S/$summaryPrecio",
+                            "$summaryUnidad (x$summaryFactor) | Costo: ${AppCurrency.format(double.tryParse(summaryCosto) ?? 0)} | P.Venta: ${AppCurrency.format(double.tryParse(summaryPrecio) ?? 0)}",
                             style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.blue[200] : Colors.blue[800]),
                             maxLines: 1, overflow: TextOverflow.ellipsis,
                           ),
@@ -85,11 +85,11 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
                         Text("Último registrado:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
                         const SizedBox(height: 2),
                         Text(
-                          "Venta: ${widget.variant.originalUnidadVenta} (x${widget.variant.originalUnidadesPorVenta}) | Margen: x${widget.variant.originalMargen.toStringAsFixed(2)} | P.Venta: S/${widget.variant.originalPrecioVenta.toStringAsFixed(2)}",
+                          "Venta: ${widget.variant.originalUnidadVenta} (x${widget.variant.originalUnidadesPorVenta}) | Margen: x${widget.variant.originalMargen.toStringAsFixed(2)} | P.Venta: ${AppCurrency.format(widget.variant.originalPrecioVenta)}",
                           style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.white70 : Colors.black87),
                         ),
                         Text(
-                          "→ Costo Unit. Base: S/${costoUnitarioBase.toStringAsFixed(2)} c/u",
+                          "→ Costo Unit. Base: ${AppCurrency.format(costoUnitarioBase)} c/u",
                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
                         ),
                       ],

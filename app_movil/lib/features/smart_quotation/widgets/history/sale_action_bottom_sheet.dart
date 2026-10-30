@@ -10,6 +10,7 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/utils/receipt_manager.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
 import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';
@@ -25,6 +26,7 @@ class SaleActionBottomSheet extends StatefulWidget {
   static Future<void> show(BuildContext context, {required SaleModel sale}) {
     return showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -67,6 +69,7 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
       if (mounted) {
         showModalBottomSheet(
           context: context,
+          useSafeArea: true,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (ctx) => PaymentEntryModal(
@@ -145,6 +148,7 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
       final List<String> motivos = ["Error de digitación", "Falta de stock", "Precio muy alto", "Cliente arrepentido", "Mala atención", "Otro"];
       final String? selectedReason = await showModalBottomSheet<String>(
         context: context,
+        useSafeArea: true,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (ctx) {
@@ -229,6 +233,11 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
       setState(() => _isLoading = true);
       try {
         await provider.voidSale(widget.sale.id, selectedReason);
+        try {
+          if (mounted) {
+            Provider.of<InventoryProvider>(context, listen: false).refreshAfterSale();
+          }
+        } catch (_) {}
         if (widget.sale.clientId != null) {
           try {
             await trackingProv.loadClients();
@@ -247,6 +256,8 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
       // Modal de Restauración
       final bool? confirm = await showModalBottomSheet<bool>(
         context: context,
+        useSafeArea: true,
+        isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (ctx) => InteractiveSheetWrapper(
           maxHeightFactor: 0.6,

@@ -12,6 +12,11 @@ class CustomTextField extends StatefulWidget {
   final List<TextInputFormatter>? inputFormatters; 
   final String? Function(String?)? validator; // 🔥 Añadido para validación de formularios
 
+  final String? hintText;
+  final FocusNode? focusNode;
+  final void Function(String)? onChanged;
+  final TextCapitalization textCapitalization;
+
   const CustomTextField({
     super.key,
     required this.label,
@@ -23,6 +28,10 @@ class CustomTextField extends StatefulWidget {
     this.maxLength,
     this.inputFormatters,
     this.validator,
+    this.hintText,
+    this.focusNode,
+    this.onChanged,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   @override
@@ -45,17 +54,24 @@ class _CustomTextFieldState extends State<CustomTextField> {
 
     return TextFormField(
       controller: widget.controller,
+      focusNode: widget.focusNode,
       obscureText: widget.isPassword ? _obscureText : false,
       keyboardType: widget.keyboardType,
+      textCapitalization: widget.textCapitalization,
       maxLines: widget.maxLines,
       maxLength: widget.maxLength,
       inputFormatters: widget.inputFormatters,
       validator: widget.validator,
+      onChanged: widget.onChanged,
       onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
       style: textTheme.bodyLarge?.copyWith(color: isDark ? Colors.white : Colors.black87),
       decoration: InputDecoration(
         counterText: "", 
         labelText: widget.label,
+        hintText: widget.hintText,
+        hintStyle: textTheme.bodyMedium?.copyWith(
+          color: isDark ? Colors.white24 : Colors.black26,
+        ),
         labelStyle: textTheme.bodyMedium?.copyWith(color: isDark ? Colors.grey[500] : Colors.grey[600]),
         prefixIcon: Icon(widget.icon, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 22), 
         suffixIcon: widget.isPassword

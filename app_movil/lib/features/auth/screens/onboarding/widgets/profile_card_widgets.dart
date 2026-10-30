@@ -117,6 +117,9 @@ class ProfileCardContent extends StatelessWidget {
   final bool isSelectionMode;
   final bool isSelected;
   final ProfileScreenMode screenMode;
+  final bool isLastActive;
+  final bool hasPin;
+  final bool isDuplicateName;
 
   const ProfileCardContent({
     super.key,
@@ -125,6 +128,9 @@ class ProfileCardContent extends StatelessWidget {
     required this.isSelectionMode,
     this.isSelected = false,
     this.screenMode = ProfileScreenMode.normal,
+    this.isLastActive = false,
+    this.hasPin = false,
+    this.isDuplicateName = false,
   });
 
   @override
@@ -171,6 +177,7 @@ class ProfileCardContent extends StatelessWidget {
         ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Avatar
           Container(
@@ -209,29 +216,101 @@ class ProfileCardContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (isLastActive)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF065F46) : const Color(0xFFD1FAE5),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.fiber_manual_record,
+                            size: 8,
+                            color: isDark ? const Color(0xFF34D399) : const Color(0xFF047857),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Último activo",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? const Color(0xFF34D399) : const Color(0xFF047857),
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 Text(
                   bName,
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
-                    fontSize: 17,
+                    fontSize: 16,
+                    height: 1.25,
                     color: isDark ? Colors.white : Colors.black87,
                   ),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 3),
-                Row(
+                const SizedBox(height: 4),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 2,
                   children: [
-                    Icon(Icons.person_outline, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        profile.fullName,
-                        style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.person_outline, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          profile.fullName,
+                          style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13),
+                        ),
+                      ],
                     ),
+                    if (hasPin)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock_rounded, size: 13, color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
+                          const SizedBox(width: 3),
+                          Text(
+                            "PIN",
+                            style: TextStyle(
+                              color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    if (isDuplicateName)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          "#${profile.id}",
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.grey[300] : Colors.grey[700],
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ],

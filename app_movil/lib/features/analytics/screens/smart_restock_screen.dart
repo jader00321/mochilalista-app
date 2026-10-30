@@ -35,6 +35,11 @@ class SmartRestockItem {
   final Color statusColor;
   final String statusText;
   bool hasZeroCost;
+  final bool isSharedPool;
+  final String? sharedPresentationsBadge;
+  final String? formatBreakAlert;
+  final String? suggestedOrderRecommendation;
+  final String modoStock;
 
   SmartRestockItem({
     required this.presentationId,
@@ -57,6 +62,11 @@ class SmartRestockItem {
     required this.statusColor,
     required this.statusText,
     required this.hasZeroCost,
+    this.isSharedPool = false,
+    this.sharedPresentationsBadge,
+    this.formatBreakAlert,
+    this.suggestedOrderRecommendation,
+    this.modoStock = 'INDEPENDIENTE',
   });
 }
 
@@ -100,7 +110,8 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
       
       final products = await db.rawQuery('''
         SELECT pp.id as presentation_id, p.id as product_id, p.nombre, IFNULL(m.nombre, 'Sin Marca') as marca_nombre, 
-               pp.nombre_especifico, pp.stock_actual, pp.costo_unitario_calculado, IFNULL(pp.stock_alerta, 5) as stock_alerta
+               pp.nombre_especifico, pp.stock_actual, pp.costo_unitario_calculado, IFNULL(pp.stock_alerta, 5) as stock_alerta,
+               pp.usa_stock_compartido, pp.unidades_por_venta, p.modo_stock, p.stock_compartido, p.costo_base
         FROM presentaciones_producto pp
         INNER JOIN productos p ON pp.producto_id = p.id
         LEFT JOIN marcas m ON p.marca_id = m.id
@@ -109,11 +120,159 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
 
       List<SmartRestockItem> results = [];
       
+      final Map<int, List<Map<String, dynamic>>> sharedByProduct = {};
+      final List<Map<String, dynamic>> independentRows = [];
+
       for (var row in products) {
+        bool isShared = (row['usa_stock_compartido'] as int? ?? 0) == 1;
+        if (isShared) {
+          int prodId = row['product_id'] as int;
+          sharedByProduct.putIfAbsent(prodId, () => []).add(row);
+        } else {
+          independentRows.add(row);
+        }
+      }
+
+      // 1. Consolidación de 1 Sola Tarjeta por Pool Compartido (Regla Obligatoria 3)
+      for (var entry in sharedByProduct.entries) {
+        int prodId = entry.key;
+        final rows = entry.value;
+        final firstRow = rows.first;
+        
+        final presNames = rows
+            .map((r) => (r['nombre_especifico'] as String? ?? 'Unidad').trim())
+            .where((n) => n.isNotEmpty)
+            .toList();
+        final badgeText = "Pool Compartido: ${presNames.join(', ')}";
+
+        int currentPoolStock = (firstRow['stock_compartido'] as num?)?.toInt() ?? 
+            ((firstRow['stock_actual'] as num?)?.toInt() ?? 0);
+        int configuredAlert = rows
+            .map((r) => (r['stock_alerta'] as num?)?.toInt() ?? 5)
+            .reduce(math.max);
+        double cost = (firstRow['costo_base'] as num?)?.toDouble() ?? 
+            ((firstRow['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0);
+
+        // Detección de Quiebres de Formato en Variantes del Pool Compartido
+        List<String> formatBreaks = [];
+        int maxMissingBase = 0;
+        String? targetBreakVariant;
+        int maxVariantFactor = 1;
+
+        for (var r in rows) {
+          final int factor = (r['unidades_por_venta'] as num?)?.toInt() ?? 1;
+          final String pName = (r['nombre_especifico'] as String? ?? 'Variante').trim();
+          if (factor > maxVariantFactor) maxVariantFactor = factor;
+          if (factor > 1 && currentPoolStock < factor) {
+            int missingBase = factor - currentPoolStock;
+            formatBreaks.add("$pName (0 disponibles, faltan $missingBase u. base)");
+            if (missingBase > maxMissingBase) {
+              maxMissingBase = missingBase;
+              targetBreakVariant = pName;
+            }
+          }
+        }
+        final String? formatBreakAlert = formatBreaks.isNotEmpty 
+            ? formatBreaks.join(' • ')
+            : null;
+
+        final biData = await _biService.calculateSharedPoolReorderPoint(
+          prodId,
+          currentPoolStock,
+          configuredAlertStock: configuredAlert,
+        );
+
+        int rop = (biData['rop'] as num).toInt();
+        double vel = (biData['velocity_per_day'] as num).toDouble();
+        String velocityDisplay = biData['velocity_display'] as String? ?? "${vel.toStringAsFixed(1)}/d";
+        double daysToStockout = (biData['days_to_stockout'] as num).toDouble();
+        String stockoutDate = biData['stockout_date'] as String? ?? "";
+        int suggestedQty = (biData['suggested_order_qty'] as num).toInt();
+        String status = biData['status'] as String? ?? "saludable";
+
+        // Recomendación exacta de compra por variante ante quiebre de formato o sin ventas históricas
+        int effectiveSuggested = suggestedQty;
+        if (maxMissingBase > 0 && effectiveSuggested < maxMissingBase) {
+          effectiveSuggested = maxMissingBase;
+        }
+        if (vel <= 0) {
+          int deficitMin = configuredAlert > currentPoolStock ? (configuredAlert - currentPoolStock) : 0;
+          int needed = math.max(deficitMin, maxMissingBase);
+          if (needed > effectiveSuggested) {
+            effectiveSuggested = needed;
+          }
+        }
+
+        // Si hay quiebre de formato o déficit respecto al stock mínimo, el estado no debe ser saludable
+        if (formatBreakAlert != null || (vel <= 0 && currentPoolStock <= configuredAlert && configuredAlert > 0)) {
+          if (status == 'saludable') {
+            status = currentPoolStock == 0 ? 'agotado' : 'critico';
+          }
+        }
+
+        Color statusColor;
+        String statusText;
+
+        if (status == 'agotado') {
+          statusColor = Colors.red[900]!;
+          statusText = 'Agotado';
+        } else if (status == 'critico') {
+          statusColor = Colors.redAccent;
+          statusText = 'Stock Crítico';
+        } else if (status == 'preventivo') {
+          statusColor = Colors.orangeAccent;
+          statusText = 'Preventivo';
+        } else {
+          statusColor = Colors.green;
+          statusText = 'Saludable';
+        }
+
+        String? suggestedOrderRecommendation;
+        if (targetBreakVariant != null && maxMissingBase > 0) {
+          suggestedOrderRecommendation = "Comprar mín. $maxMissingBase u. base para completar 1 $targetBreakVariant";
+        } else if (effectiveSuggested > 0) {
+          suggestedOrderRecommendation = "Comprar $effectiveSuggested u. base para reponer nivel óptimo";
+        }
+
+        bool isRestockItem = status != 'saludable' || effectiveSuggested > 0 || formatBreakAlert != null;
+        int initialOrderQty = effectiveSuggested > 0 ? effectiveSuggested : math.max(1, rop);
+
+        results.add(SmartRestockItem(
+          presentationId: firstRow['presentation_id'] as int,
+          productId: prodId,
+          productName: firstRow['nombre'] as String,
+          brandName: firstRow['marca_nombre'] as String,
+          presentationName: 'Pool Compartido',
+          currentStock: currentPoolStock,
+          cost: cost,
+          velocityPerDay: vel,
+          velocityDisplay: velocityDisplay,
+          safetyStock: (biData['safety_stock'] as num).toInt(),
+          rop: rop,
+          suggestedQty: effectiveSuggested,
+          orderQty: initialOrderQty,
+          isSelected: isRestockItem,
+          daysToStockout: daysToStockout,
+          stockoutDate: stockoutDate,
+          status: status,
+          statusColor: statusColor,
+          statusText: statusText,
+          hasZeroCost: cost <= 0,
+          isSharedPool: true,
+          sharedPresentationsBadge: badgeText,
+          formatBreakAlert: formatBreakAlert,
+          suggestedOrderRecommendation: suggestedOrderRecommendation,
+          modoStock: firstRow['modo_stock']?.toString() ?? 'COMPARTIDO',
+        ));
+      }
+
+      // 2. Variantes independientes (usa_stock_compartido = 0)
+      for (var row in independentRows) {
         int presId = row['presentation_id'] as int;
         int currentStock = (row['stock_actual'] as num?)?.toInt() ?? 0;
         int configuredAlert = (row['stock_alerta'] as num?)?.toInt() ?? 5;
         double cost = (row['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
+        String modoStockProd = row['modo_stock']?.toString() ?? 'INDEPENDIENTE';
 
         final biData = await _biService.calculateReorderPoint(
           presId, 
@@ -129,26 +288,39 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
         int suggestedQty = (biData['suggested_order_qty'] as num).toInt();
         String status = biData['status'] as String? ?? "saludable";
 
+        int effectiveSuggested = suggestedQty;
+        if (vel <= 0 && currentStock <= configuredAlert && configuredAlert > 0) {
+          int deficit = math.max(1, configuredAlert - currentStock);
+          if (deficit > effectiveSuggested) effectiveSuggested = deficit;
+          if (status == 'saludable') {
+            status = currentStock == 0 ? 'agotado' : 'critico';
+          }
+        }
+
         Color statusColor;
         String statusText;
 
         if (status == 'agotado') {
           statusColor = Colors.red[900]!;
-          statusText = '🚨 Agotado';
+          statusText = 'Agotado';
         } else if (status == 'critico') {
           statusColor = Colors.redAccent;
-          statusText = '🔴 Stock Crítico'; // Texto compactado para dar ancho al nombre del producto
+          statusText = 'Stock Crítico';
         } else if (status == 'preventivo') {
           statusColor = Colors.orangeAccent;
-          statusText = '🟠 Preventivo';
+          statusText = 'Preventivo';
         } else {
           statusColor = Colors.green;
-          statusText = '🟢 Saludable';
+          statusText = 'Saludable';
         }
 
-        // Selección por defecto: todos los ítems de "Por Pedir" (requieren reposición o suggestedQty > 0)
-        bool isRestockItem = status != 'saludable' || suggestedQty > 0;
-        int initialOrderQty = suggestedQty > 0 ? suggestedQty : math.max(1, rop);
+        String? suggestedOrderRecommendation;
+        if (effectiveSuggested > 0) {
+          suggestedOrderRecommendation = "Comprar $effectiveSuggested und (reposición stock mínimo)";
+        }
+
+        bool isRestockItem = status != 'saludable' || effectiveSuggested > 0;
+        int initialOrderQty = effectiveSuggested > 0 ? effectiveSuggested : math.max(1, rop);
 
         results.add(SmartRestockItem(
           presentationId: presId,
@@ -162,7 +334,7 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
           velocityDisplay: velocityDisplay,
           safetyStock: (biData['safety_stock'] as num).toInt(),
           rop: rop,
-          suggestedQty: suggestedQty,
+          suggestedQty: effectiveSuggested,
           orderQty: initialOrderQty,
           isSelected: isRestockItem,
           daysToStockout: daysToStockout,
@@ -171,6 +343,9 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
           statusColor: statusColor,
           statusText: statusText,
           hasZeroCost: cost <= 0,
+          isSharedPool: false,
+          suggestedOrderRecommendation: suggestedOrderRecommendation,
+          modoStock: modoStockProd,
         ));
       }
       
@@ -255,17 +430,21 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                "${item.productName} (${item.presentationName})",
+                item.isSharedPool
+                    ? "${item.productName} (🔗 Pool Compartido)"
+                    : "${item.productName} (${item.presentationName})",
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 6),
               Text(
-                "Ingresa el costo unitario de compra a tu proveedor para calcular la inversión requerida y proteger tu margen.",
+                item.isSharedPool
+                    ? "Ingresa el costo base de compra para el pool. Se propagará proporcionalmente a todas las presentaciones vinculadas (usa_stock_compartido = 1)."
+                    : "Ingresa el costo unitario de compra a tu proveedor para calcular la inversión requerida y proteger tu margen.",
                 style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[700]),
               ),
               const SizedBox(height: 20),
               Text(
-                "Costo Unitario de Compra (Proveedor)",
+                item.isSharedPool ? "Costo Base de Compra (Pool)" : "Costo Unitario de Compra (Proveedor)",
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
@@ -281,7 +460,9 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
                   prefixText: "S/ ",
                   hintText: "0.00",
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  helperText: "Ejemplo: 3.50 — Se actualizará en todo el inventario",
+                  helperText: item.isSharedPool
+                      ? "Costo por unidad base — Se recalcularán las variantes vinculadas"
+                      : "Ejemplo: 3.50 — Se actualizará en todo el inventario",
                 ),
               ),
               const SizedBox(height: 24),
@@ -308,34 +489,79 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
 
                     try {
                       final db = await LocalDatabase.instance.database;
-                      await db.update(
-                        'presentaciones_producto',
-                        {'costo_unitario_calculado': newCost},
-                        where: 'id = ?',
-                        whereArgs: [item.presentationId],
-                      );
 
-                      // Registrar cambio en product_history
-                      await db.insert('product_history', {
-                        'entidad_tipo': 'PRESENTACION',
-                        'entidad_id': item.presentationId,
-                        'campo_modificado': 'costo_unitario_calculado',
-                        'valor_anterior': item.cost.toString(),
-                        'valor_nuevo': newCost.toString(),
-                        'fecha_cambio': DateTime.now().toIso8601String(),
-                      });
+                      if (item.isSharedPool) {
+                        await db.transaction((txn) async {
+                          // 1. Actualizar costo base en producto
+                          await txn.update(
+                            'productos',
+                            {'costo_base': newCost},
+                            where: 'id = ?',
+                            whereArgs: [item.productId],
+                          );
+
+                          // 2. Propagar atómicamente a todas las variantes vinculadas
+                          await txn.rawUpdate('''
+                            UPDATE presentaciones_producto
+                            SET costo_unitario_calculado = ? * CAST(unidades_por_venta AS REAL)
+                            WHERE producto_id = ? AND usa_stock_compartido = 1
+                          ''', [newCost, item.productId]);
+
+                          // 3. Registrar auditoría
+                          await txn.insert('product_history', {
+                            'entidad_tipo': 'PRODUCTO',
+                            'entidad_id': item.productId,
+                            'campo_modificado': 'costo_base',
+                            'valor_anterior': item.cost.toString(),
+                            'valor_nuevo': newCost.toString(),
+                            'fecha_cambio': DateTime.now().toIso8601String(),
+                          });
+                        });
+                      } else {
+                        await db.transaction((txn) async {
+                          await txn.update(
+                            'presentaciones_producto',
+                            {'costo_unitario_calculado': newCost},
+                            where: 'id = ?',
+                            whereArgs: [item.presentationId],
+                          );
+
+                          // Registrar cambio en product_history
+                          await txn.insert('product_history', {
+                            'entidad_tipo': 'PRESENTACION',
+                            'entidad_id': item.presentationId,
+                            'campo_modificado': 'costo_unitario_calculado',
+                            'valor_anterior': item.cost.toString(),
+                            'valor_nuevo': newCost.toString(),
+                            'fecha_cambio': DateTime.now().toIso8601String(),
+                          });
+                        });
+                      }
 
                       if (!mounted) return;
                       setState(() {
                         item.cost = newCost;
                         item.hasZeroCost = false;
+                        if (item.isSharedPool) {
+                          for (final other in _items) {
+                            if (other.productId == item.productId && other.isSharedPool) {
+                              other.cost = newCost;
+                              other.hasZeroCost = false;
+                            }
+                          }
+                        }
                       });
                       if (ctx.mounted) {
                         Navigator.pop(ctx);
                       }
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Costo actualizado a ${AppCurrency.format(newCost)}."), backgroundColor: Colors.green),
+                        SnackBar(
+                          content: Text(item.isSharedPool
+                              ? "Costo base y variantes vinculadas actualizadas a ${AppCurrency.format(newCost)}."
+                              : "Costo actualizado a ${AppCurrency.format(newCost)}."),
+                          backgroundColor: Colors.green,
+                        ),
                       );
                     } catch (e) {
                       if (!mounted) return;
@@ -715,6 +941,109 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
                 ),
               ],
             ),
+            if (item.isSharedPool && item.sharedPresentationsBadge != null) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.teal.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.teal.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.hub_outlined, size: 12, color: Colors.teal),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        item.sharedPresentationsBadge!,
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.teal),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (!item.isSharedPool && item.modoStock == 'MIXTO') ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.indigo.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.account_tree_outlined, size: 12, color: Colors.indigoAccent),
+                    SizedBox(width: 4),
+                    Text(
+                      "Stock Propio (Estrategia Mixta)",
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.indigoAccent),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (item.formatBreakAlert != null) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 13, color: Colors.amber),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        "Quiebre de formato: ${item.formatBreakAlert}",
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (item.suggestedOrderRecommendation != null) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blueAccent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.recommend_rounded, size: 16, color: Colors.blueAccent),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        "Recomendación: ${item.suggestedOrderRecommendation}",
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueAccent,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
 
             // Fila de Métricas: Stock, Velocidad y ROP
@@ -875,9 +1204,23 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
               children: [
                 Row(
                   children: [
-                    Text(
-                      "Pedir:",
-                      style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Pedir:",
+                          style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                        ),
+                        if (item.suggestedQty > 0)
+                          Text(
+                            "Sugerido: ${item.suggestedQty} ${item.isSharedPool ? 'u. base' : 'und'}",
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blueAccent,
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(width: 8),
                     _buildQtyStepper(item),
@@ -1167,6 +1510,7 @@ class _StickySearchAndFilterHeaderDelegate extends SliverPersistentHeaderDelegat
   Widget _buildFilterChip({
     required String label,
     required String filterKey,
+    IconData? icon,
     Color? color,
   }) {
     bool isSelected = currentFilter == filterKey;
@@ -1174,6 +1518,13 @@ class _StickySearchAndFilterHeaderDelegate extends SliverPersistentHeaderDelegat
 
     return FilterChip(
       selected: isSelected,
+      avatar: icon != null
+          ? Icon(
+              icon,
+              size: 13,
+              color: isSelected ? Colors.white : effectiveColor,
+            )
+          : null,
       label: Text(
         label,
         style: TextStyle(
@@ -1257,31 +1608,36 @@ class _StickySearchAndFilterHeaderDelegate extends SliverPersistentHeaderDelegat
               scrollDirection: Axis.horizontal,
               children: [
                 _buildFilterChip(
-                  label: "✓ Por Pedir ($porPedirCount)",
+                  label: "Por Pedir ($porPedirCount)",
+                  icon: Icons.checklist_rounded,
                   filterKey: 'por_pedir',
                   color: Colors.blueAccent,
                 ),
                 const SizedBox(width: 8),
                 _buildFilterChip(
-                  label: "🚨 Urgentes ($urgentesCount)",
+                  label: "Urgentes ($urgentesCount)",
+                  icon: Icons.warning_amber_rounded,
                   filterKey: 'urgentes',
                   color: Colors.redAccent,
                 ),
                 const SizedBox(width: 8),
                 _buildFilterChip(
-                  label: "🟠 Preventivos ($preventivosCount)",
+                  label: "Preventivos ($preventivosCount)",
+                  icon: Icons.shield_outlined,
                   filterKey: 'preventivos',
                   color: Colors.orangeAccent,
                 ),
                 const SizedBox(width: 8),
                 _buildFilterChip(
-                  label: "🟢 Saludables ($saludablesCount)",
+                  label: "Saludables ($saludablesCount)",
+                  icon: Icons.check_circle_outline,
                   filterKey: 'saludables',
                   color: Colors.green,
                 ),
                 const SizedBox(width: 8),
                 _buildFilterChip(
                   label: "Todos (${items.length})",
+                  icon: Icons.list_alt_rounded,
                   filterKey: 'todos',
                   color: Colors.blueAccent,
                 ),

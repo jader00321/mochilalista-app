@@ -181,22 +181,22 @@ void main() {
       // 3. Sticky Header con buscador en tiempo real
       expect(find.byType(SliverPersistentHeader), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
-      expect(find.text("Buscar noticias, rutas, SUNAT o abastecimiento..."), findsOneWidget);
+      expect(find.textContaining("Buscar noticias, rutas, SUNAT"), findsOneWidget);
 
-      // 4. Categorías completas incluyendo pestaña "📌 Guardadas (0)"
+      // 4. Categorías completas incluyendo pestaña "Guardadas"
       expect(find.text("Todas"), findsOneWidget);
-      expect(find.text("📍 Mi Región"), findsOneWidget);
-      expect(find.text("🌦️ Clima y Rutas"), findsOneWidget);
-      expect(find.text("⚖️ Leyes y SUNAT"), findsOneWidget);
-      expect(find.textContaining("📌 Guardadas"), findsOneWidget);
+      expect(find.text("Mi Región"), findsOneWidget);
+      expect(find.text("Clima y Rutas"), findsOneWidget);
+      expect(find.text("Leyes y SUNAT"), findsOneWidget);
+      expect(find.textContaining("Guardadas"), findsOneWidget);
 
       // 5. Botones de acción directa en tarjetas
-      expect(find.text("📦 Revisar Stock Crítico"), findsWidgets);
+      expect(find.text("Revisar Stock Crítico"), findsWidgets);
       expect(find.byIcon(Icons.share_outlined), findsWidgets);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('CommercialRadarScreen guarda alertas en SharedPreferences y filtra en "📌 Guardadas"', (tester) async {
+    testWidgets('CommercialRadarScreen guarda alertas en SharedPreferences y filtra en "Guardadas"', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: CommercialRadarScreen(initialRegion: 'Talara / Piura'),
@@ -213,12 +213,12 @@ void main() {
       await tester.tap(bookmarkButtons.first);
       await tester.pump(const Duration(milliseconds: 300));
 
-      // 2. El chip debe reflejar ahora 📌 Guardadas (1)
-      expect(find.text("📌 Guardadas (1)"), findsOneWidget);
+      // 2. El tab debe reflejar ahora Guardadas (1)
+      expect(find.text("Guardadas (1)"), findsOneWidget);
 
-      // 3. Tocamos el chip para filtrar exclusivamente las guardadas
-      await tester.tap(find.text("📌 Guardadas (1)"), warnIfMissed: false);
-      await tester.pump(const Duration(milliseconds: 300));
+      // 3. Tocamos el tab para filtrar exclusivamente las guardadas
+      await tester.tap(find.text("Guardadas (1)"), warnIfMissed: false);
+      await tester.pump(const Duration(seconds: 3));
 
       // 4. Verificamos que la tarjeta guardada se mantiene visible con icono relleno
       expect(find.byIcon(Icons.bookmark), findsWidgets);
@@ -292,34 +292,34 @@ void main() {
       expect(find.text("Balance Total"), findsWidgets);
 
       // 2. Verificar chips de salto rápido
-      expect(find.text("📊 Resumen"), findsOneWidget);
-      expect(find.text("📰 Radar Comercial"), findsOneWidget);
-      expect(find.text("📦 Inventario"), findsOneWidget);
-      expect(find.text("📈 Gráficos"), findsOneWidget);
+      expect(find.text("Resumen"), findsOneWidget);
+      expect(find.text("Radar Comercial"), findsOneWidget);
+      expect(find.text("Inventario"), findsOneWidget);
+      expect(find.text("Gráficos"), findsOneWidget);
 
       // 3. Prueba de 5 saltos consecutivos en cualquier dirección
       // Salto 1: Radar
-      await tester.tap(find.text("📰 Radar Comercial"), warnIfMissed: false);
+      await tester.tap(find.text("Radar Comercial"), warnIfMissed: false);
       await tester.pump(const Duration(milliseconds: 350));
       expect(tester.takeException(), isNull);
 
       // Salto 2: Inventario
-      await tester.tap(find.text("📦 Inventario"), warnIfMissed: false);
+      await tester.tap(find.text("Inventario"), warnIfMissed: false);
       await tester.pump(const Duration(milliseconds: 350));
       expect(tester.takeException(), isNull);
 
       // Salto 3: Gráficos
-      await tester.tap(find.text("📈 Gráficos"), warnIfMissed: false);
+      await tester.tap(find.text("Gráficos"), warnIfMissed: false);
       await tester.pump(const Duration(milliseconds: 350));
       expect(tester.takeException(), isNull);
 
       // Salto 4: Radar (hacia arriba)
-      await tester.tap(find.text("📰 Radar Comercial"), warnIfMissed: false);
+      await tester.tap(find.text("Radar Comercial"), warnIfMissed: false);
       await tester.pump(const Duration(milliseconds: 350));
       expect(tester.takeException(), isNull);
 
       // Salto 5: Resumen (hacia arriba al inicio)
-      await tester.tap(find.text("📊 Resumen"), warnIfMissed: false);
+      await tester.tap(find.text("Resumen"), warnIfMissed: false);
       await tester.pump(const Duration(milliseconds: 350));
       expect(tester.takeException(), isNull);
 

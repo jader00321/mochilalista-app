@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/scanner/models/scanner_models.dart';
@@ -95,24 +96,47 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
   }
 
   void _confirmDeleteVariant(String variantUuid) {
+    if (widget.groupIndex >= widget.provider.stagingData!.productosAgrupados.length) return;
+    final group = widget.provider.stagingData!.productosAgrupados[widget.groupIndex];
+    final variant = group.variantes.where((v) => v.uuidTemporal == variantUuid).firstOrNull;
+    final bool isLeftoverChild = variant?.sourceVariantUuid != null;
+    final int unitsToReturn = variant?.allocatedBaseUnits ?? variant?.stockIngresanteBase ?? 0;
+    final double costToReturn = variant?.allocatedPurchaseCost ?? variant?.totalPagoLote ?? 0.0;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: widget.isDark ? const Color(0xFF23232F) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          "¿Eliminar variante?",
-          style: TextStyle(
-            color: widget.isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+        title: Row(
+          children: [
+            Icon(
+              isLeftoverChild ? Icons.restore_page_outlined : Icons.delete_outline,
+              color: isLeftoverChild
+                  ? (widget.isDark ? Colors.orange[300] : Colors.orange[800])
+                  : (widget.isDark ? Colors.red[300] : Colors.red),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isLeftoverChild ? "¿Eliminar variante sobrante?" : "¿Eliminar variante?",
+                style: TextStyle(
+                  color: widget.isDark ? Colors.white : Colors.black87,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
         ),
         content: Text(
-          "Esta fila se descartará y no ingresará al inventario.",
+          isLeftoverChild
+              ? "Esta variante fue creada a partir del stock sobrante.\n\nAl eliminarla, sus $unitsToReturn unidades base y su costo (${AppCurrency.format(costToReturn)}) regresarán automáticamente a la presentación principal, restaurando el balance exacto de la factura."
+              : "Esta fila se descartará y no ingresará al inventario.",
           style: TextStyle(
-            color: widget.isDark ? Colors.grey[400] : Colors.grey[700],
+            color: widget.isDark ? Colors.grey[300] : Colors.grey[800],
             fontSize: 13,
+            height: 1.4,
           ),
         ),
         actions: [
@@ -132,15 +156,19 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
               widget.provider.removeVariantByUuid(variantUuid);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: widget.isDark ? Colors.red[800] : Colors.red[50],
+              backgroundColor: isLeftoverChild
+                  ? (widget.isDark ? Colors.orange[800] : Colors.orange[700])
+                  : (widget.isDark ? Colors.red[800] : Colors.red[50]),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
             child: Text(
-              "Eliminar",
+              isLeftoverChild ? "Eliminar y Devolver" : "Eliminar",
               style: TextStyle(
-                color: widget.isDark ? Colors.white : Colors.red,
+                color: isLeftoverChild
+                    ? Colors.white
+                    : (widget.isDark ? Colors.white : Colors.red),
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),
@@ -271,47 +299,43 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
                               group.nombreOriginalFactura!.isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 2, bottom: 4),
-                              child: Text(
-                                "En Factura: '${group.nombreOriginalFactura}'",
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontStyle: FontStyle.italic,
-                                  color: widget.isDark
-                                      ? Colors.white70
-                                      : Colors.black54,
-                                ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.receipt_long_outlined,
+                                    size: 13,
+                                    color: widget.isDark
+                                        ? Colors.white60
+                                        : Colors.black54,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      "En Factura: '${group.nombreOriginalFactura}'",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontStyle: FontStyle.italic,
+                                        color: widget.isDark
+                                            ? Colors.white70
+                                            : Colors.black54,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
 
                           if (isParentMatch)
-                            Builder(
-                              builder: (context) {
-                                String variantName = "";
-                                if (group.variantes.isNotEmpty &&
-                                    group
-                                        .variantes
-                                        .first
-                                        .matchPresentacion
-                                        .estado
-                                        .contains("MATCH")) {
-                                  variantName =
-                                      group
-                                          .variantes
-                                          .first
-                                          .matchPresentacion
-                                          .datos
-                                          ?.nombre ??
-                                      "";
-                                }
-                                return Text(
-                                  "${group.matchProducto.datos?.nombre ?? group.nombrePadre}${variantName.isNotEmpty ? ' - $variantName' : ''}",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 16,
-                                    color: textColor,
-                                  ),
-                                );
-                              },
+                            Text(
+                              group.matchProducto.datos?.nombre ?? group.nombrePadre,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                color: textColor,
+                              ),
                             )
                           else
                             SizedBox(
@@ -364,7 +388,7 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
                         onPressed: () => widget.provider.unlinkProductGroup(
                           group.uuidTemporal,
                         ),
-                        tooltip: "Desvincular",
+                        tooltip: "Desvincular producto del inventario",
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       )
@@ -481,17 +505,54 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
           stockMostrar;
     }
 
+    final String modoStock = group.modoStock;
+    final MaterialColor modoColor = modoStock == 'COMPARTIDO'
+        ? Colors.teal
+        : (modoStock == 'MIXTO' ? Colors.amber : Colors.blueGrey);
+    final String modoLabel = modoStock == 'COMPARTIDO'
+        ? 'Stock Compartido'
+        : (modoStock == 'MIXTO' ? 'Stock Mixto' : 'Stock Independiente');
+    final IconData modoIcon = modoStock == 'COMPARTIDO'
+        ? Icons.all_inclusive_rounded
+        : (modoStock == 'MIXTO'
+            ? Icons.electric_bolt_outlined
+            : Icons.inventory_2_outlined);
+
     return Wrap(
       spacing: 6,
       runSpacing: 6,
       children: [
         _tag(
-          "Stock: $stockMostrar",
-          isDark ? Colors.grey[400]! : Colors.grey,
+          "Stock actual: $stockMostrar",
+          isDark ? Colors.green[300]! : Colors.green[800]!,
           isDark,
+          icon: Icons.inventory_2_outlined,
         ),
-        _tag(marca, isDark ? Colors.blueGrey[300]! : Colors.blueGrey, isDark),
-        _tag(categoria, isDark ? Colors.indigo[300]! : Colors.indigo, isDark),
+        _tag(
+          modoLabel,
+          isDark ? modoColor[300]! : modoColor[800]!,
+          isDark,
+          icon: modoIcon,
+        ),
+        if (modoStock == 'COMPARTIDO' && group.stockCompartido > 0)
+          _tag(
+            "Pool: ${group.stockCompartido} uds",
+            isDark ? Colors.tealAccent : Colors.teal.shade700,
+            isDark,
+            icon: Icons.hub_outlined,
+          ),
+        _tag(
+          marca,
+          isDark ? Colors.blueGrey[300]! : Colors.blueGrey[800]!,
+          isDark,
+          icon: Icons.branding_watermark_outlined,
+        ),
+        _tag(
+          categoria,
+          isDark ? Colors.indigo[300]! : Colors.indigo[800]!,
+          isDark,
+          icon: Icons.category_outlined,
+        ),
       ],
     );
   }
@@ -514,92 +575,176 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
         ? group.marcaTexto
         : "Marca...";
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          flex: 5,
-          child: SmartDropdownSearch<dynamic>(
-            label: "Marca",
-            items: inventoryProv.brands,
-            selectedValue: selectedBrand,
-            hintText: brandHint,
-            itemAsString: (b) => b.nombre,
-            onChanged: (b) {
-              if (b != null) {
-                setState(() {
-                  group.matchMarca = MatchResult(
-                    estado: "MATCH_MANUAL",
-                    confianza: 100,
-                    datos: MatchData(id: b.id, nombre: b.nombre),
-                  );
-                  group.marcaTexto = b.nombre;
-                });
-              }
-            },
-            onAddNew: (text) async {
-              int? newId = await inventoryProv.createBrand(text);
-              if (newId != null && context.mounted) {
-                setState(() {
-                  group.matchMarca = MatchResult(
-                    estado: "MATCH_MANUAL",
-                    confianza: 100,
-                    datos: MatchData(id: newId, nombre: text),
-                  );
-                  group.marcaTexto = text;
-                });
-              }
-            },
-          ),
+        Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: SmartDropdownSearch<dynamic>(
+                label: "Marca",
+                items: inventoryProv.brands,
+                selectedValue: selectedBrand,
+                hintText: brandHint,
+                itemAsString: (b) => b.nombre,
+                onChanged: (b) {
+                  if (b != null) {
+                    setState(() {
+                      group.matchMarca = MatchResult(
+                        estado: "MATCH_MANUAL",
+                        confianza: 100,
+                        datos: MatchData(id: b.id, nombre: b.nombre),
+                      );
+                      group.marcaTexto = b.nombre;
+                    });
+                  }
+                },
+                onAddNew: (text) async {
+                  int? newId = await inventoryProv.createBrand(text);
+                  if (newId != null && context.mounted) {
+                    setState(() {
+                      group.matchMarca = MatchResult(
+                        estado: "MATCH_MANUAL",
+                        confianza: 100,
+                        datos: MatchData(id: newId, nombre: text),
+                      );
+                      group.marcaTexto = text;
+                    });
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 5,
+              child: SmartDropdownSearch<dynamic>(
+                label: "Categoría",
+                items: inventoryProv.categories,
+                selectedValue: group.categoriaSugeridaId != null
+                    ? inventoryProv.categories
+                          .where((c) => c.id == group.categoriaSugeridaId)
+                          .firstOrNull
+                    : null,
+                itemAsString: (c) => c.nombre,
+                onChanged: (c) {
+                  if (c != null) setState(() => group.categoriaSugeridaId = c.id);
+                },
+                onAddNew: (text) async {
+                  int? newId = await inventoryProv.createCategory(text);
+                  if (newId != null && context.mounted) {
+                    setState(() => group.categoriaSugeridaId = newId);
+                  }
+                },
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 5,
-          child: SmartDropdownSearch<dynamic>(
-            label: "Categoría",
-            items: inventoryProv.categories,
-            selectedValue: group.categoriaSugeridaId != null
-                ? inventoryProv.categories
-                      .where((c) => c.id == group.categoriaSugeridaId)
-                      .firstOrNull
-                : null,
-            itemAsString: (c) => c.nombre,
-            onChanged: (c) {
-              if (c != null) setState(() => group.categoriaSugeridaId = c.id);
-            },
-            onAddNew: (text) async {
-              int? newId = await inventoryProv.createCategory(text);
-              if (newId != null && context.mounted) {
-                setState(() => group.categoriaSugeridaId = newId);
-              }
-            },
-          ),
-        ),
+        const SizedBox(height: 10),
+        _buildStrategySelectorChips(group, isDark),
       ],
     );
   }
 
-  Widget _tag(String text, Color color, bool isDark) {
+  Widget _buildStrategySelectorChips(StagingProductGroup group, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              "Estrategia de Stock:",
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.grey[400] : Colors.grey[700],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Wrap(
+              spacing: 6,
+              children: [
+                _buildStrategyChoiceChip(group, 'COMPARTIDO', '🔗 Compartido', Colors.teal, isDark),
+                _buildStrategyChoiceChip(group, 'INDEPENDIENTE', '📦 Independiente', Colors.blueGrey, isDark),
+                _buildStrategyChoiceChip(group, 'MIXTO', '⚡ Mixto', Colors.amber, isDark),
+              ],
+            ),
+          ],
+        ),
+        if (group.modoStock == 'COMPARTIDO')
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              "Todas las presentaciones compartirán un stock común en unidades base.",
+              style: TextStyle(fontSize: 10.5, fontStyle: FontStyle.italic, color: isDark ? Colors.tealAccent : Colors.teal.shade800),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStrategyChoiceChip(StagingProductGroup group, String strategyKey, String label, MaterialColor baseColor, bool isDark) {
+    final isSelected = group.modoStock == strategyKey;
+    final color = isDark ? baseColor[300]! : baseColor[800]!;
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? (isDark ? Colors.black87 : Colors.white) : color,
+        ),
+      ),
+      selected: isSelected,
+      selectedColor: color,
+      backgroundColor: isDark ? const Color(0xFF1F1F2C) : Colors.grey.shade100,
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+      onSelected: (selected) {
+        if (selected) {
+          setState(() {
+            widget.provider.setGroupStockStrategy(group.uuidTemporal, strategyKey);
+          });
+        }
+      },
+    );
+  }
+
+  Widget _tag(String text, Color color, bool isDark, {IconData? icon}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: isDark
             ? color.withValues(alpha: 0.15)
-            : color.withValues(alpha: 0.1),
+            : color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
           color: isDark
               ? color.withValues(alpha: 0.3)
-              : color.withValues(alpha: 0.5),
+              : color.withValues(alpha: 0.4),
         ),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 10,
-          color: isDark ? color : Color.lerp(color, Colors.black, 0.2)!,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(
+              icon,
+              size: 11,
+              color: isDark ? color : Color.lerp(color, Colors.black, 0.2)!,
+            ),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 10.5,
+              color: isDark ? color : Color.lerp(color, Colors.black, 0.2)!,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
       ),
     );
   }

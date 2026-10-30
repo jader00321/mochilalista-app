@@ -14,8 +14,13 @@ class ThemeProvider with ChangeNotifier {
 
   Future<void> _loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
-    final isDark = prefs.getBool(_key) ?? false;
-    _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    if (!prefs.containsKey(_key)) {
+      // Regla estricta: Usuarios nuevos inician SIEMPRE en Modo Claro
+      _themeMode = ThemeMode.light;
+    } else {
+      final isDark = prefs.getBool(_key) ?? false;
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    }
     notifyListeners();
   }
 
@@ -24,6 +29,10 @@ class ThemeProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_key, isDark);
     notifyListeners();
+  }
+
+  Future<void> toggleCurrentTheme() async {
+    await toggleTheme(!isDarkMode);
   }
 
   // =========================================================================

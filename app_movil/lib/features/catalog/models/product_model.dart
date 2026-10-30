@@ -25,9 +25,11 @@ class ProductPresentation {
   final int? stockAlerta;
   final bool esDefault;
   final int orden;
+  final bool usaStockCompartido;
   final double? precioOferta;
   final String? tipoDescuento;
   final double? valorDescuento;
+  final int? cupoMaximoVariante;
   final String estado;
   final bool activo;
 
@@ -54,6 +56,8 @@ class ProductPresentation {
     this.stockAlerta = 5,
     this.esDefault = false,
     this.orden = 0,
+    this.usaStockCompartido = false,
+    this.cupoMaximoVariante,
     this.precioOferta,
     this.tipoDescuento,
     this.valorDescuento,
@@ -84,6 +88,9 @@ class ProductPresentation {
     int? stockAlerta,
     bool? esDefault,
     int? orden,
+    bool? usaStockCompartido,
+    int? cupoMaximoVariante,
+    bool clearCupo = false,
     double? precioOferta,
     String? tipoDescuento,
     double? valorDescuento,
@@ -114,6 +121,8 @@ class ProductPresentation {
       stockAlerta: stockAlerta ?? this.stockAlerta,
       esDefault: esDefault ?? this.esDefault,
       orden: orden ?? this.orden,
+      usaStockCompartido: usaStockCompartido ?? this.usaStockCompartido,
+      cupoMaximoVariante: clearCupo ? null : (cupoMaximoVariante ?? this.cupoMaximoVariante),
       precioOferta: precioOferta ?? this.precioOferta,
       tipoDescuento: tipoDescuento ?? this.tipoDescuento,
       valorDescuento: valorDescuento ?? this.valorDescuento,
@@ -150,6 +159,11 @@ class ProductPresentation {
       stockAlerta: json['stock_alerta'],
       esDefault: json['es_default'] == 1 || json['es_default'] == true,
       orden: (json['orden'] as num?)?.toInt() ?? 0,
+      usaStockCompartido: json['usa_stock_compartido'] == 1 ||
+          json['usa_stock_compartido'] == true,
+      cupoMaximoVariante: json['cupo_maximo_variante'] != null
+          ? (json['cupo_maximo_variante'] as num).toInt()
+          : null,
       activo:
           json['activo'] == 1 ||
           json['activo'] == true ||
@@ -190,6 +204,8 @@ class ProductPresentation {
       'stock_alerta': stockAlerta,
       'es_default': esDefault ? 1 : 0,
       'orden': orden,
+      'usa_stock_compartido': usaStockCompartido ? 1 : 0,
+      'cupo_maximo_variante': cupoMaximoVariante,
       'estado': estado,
       'activo': activo ? 1 : 0,
       'precio_oferta': precioOferta,
@@ -221,12 +237,26 @@ class ProductPresentation {
       'stock_alerta': stockAlerta,
       'es_default': esDefault ? 1 : 0,
       'orden': orden,
+      'usa_stock_compartido': usaStockCompartido ? 1 : 0,
+      'cupo_maximo_variante': cupoMaximoVariante,
       'precio_oferta': precioOferta,
       'tipo_descuento': tipoDescuento,
       'valor_descuento': valorDescuento,
       'estado': estado,
       'activo': activo ? 1 : 0,
     };
+  }
+
+  /// Retorna las unidades vendibles disponibles de esta presentación (stock_actual ~/ unidades_por_venta, respetando cupo si existe)
+  int get unidadesVendiblesDisponibles {
+    final int factor = unidadesPorVenta > 0 ? unidadesPorVenta : 1;
+    final int baseDisponibles = stockActual ~/ factor;
+    if (usaStockCompartido && cupoMaximoVariante != null) {
+      return cupoMaximoVariante! < baseDisponibles
+          ? cupoMaximoVariante!
+          : baseDisponibles;
+    }
+    return baseDisponibles;
   }
 
   /// Factor de empaque de compra (unidadesPorLote)
@@ -322,6 +352,9 @@ class Product {
   final String estado;
   final List<ProductPresentation> presentaciones;
   final int stockTotalCalculado;
+  final String modoStock;
+  final int stockCompartido;
+  final double costoBase;
   final String? fechaActualizacion;
 
   Product({
@@ -336,8 +369,16 @@ class Product {
     this.estado = 'privado',
     this.presentaciones = const [],
     this.stockTotalCalculado = 0,
+    this.modoStock = 'INDEPENDIENTE',
+    this.stockCompartido = 0,
+    this.costoBase = 0.0,
     this.fechaActualizacion,
   });
+
+  bool get isStockCompartido => modoStock == 'COMPARTIDO';
+  bool get isStockMixto => modoStock == 'MIXTO';
+  bool get isStockIndependiente => modoStock == 'INDEPENDIENTE';
+  bool get hasSharedStock => modoStock == 'COMPARTIDO' || modoStock == 'MIXTO';
 
   factory Product.fromJson(Map<String, dynamic> json) {
     var list = json['presentaciones'] as List? ?? [];
@@ -357,6 +398,9 @@ class Product {
       estado: json['estado'] ?? 'privado',
       presentaciones: presentationList,
       stockTotalCalculado: json['stock_total_calculado'] ?? 0,
+      modoStock: json['modo_stock'] ?? 'INDEPENDIENTE',
+      stockCompartido: json['stock_compartido'] ?? 0,
+      costoBase: (json['costo_base'] as num?)?.toDouble() ?? 0.0,
       fechaActualizacion: json['fecha_actualizacion'],
     );
   }
@@ -373,6 +417,9 @@ class Product {
     String? estado,
     List<ProductPresentation>? presentaciones,
     int? stockTotalCalculado,
+    String? modoStock,
+    int? stockCompartido,
+    double? costoBase,
     String? fechaActualizacion,
   }) {
     return Product(
@@ -387,6 +434,9 @@ class Product {
       estado: estado ?? this.estado,
       presentaciones: presentaciones ?? this.presentaciones,
       stockTotalCalculado: stockTotalCalculado ?? this.stockTotalCalculado,
+      modoStock: modoStock ?? this.modoStock,
+      stockCompartido: stockCompartido ?? this.stockCompartido,
+      costoBase: costoBase ?? this.costoBase,
       fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
     );
   }
@@ -402,6 +452,9 @@ class Product {
       'descripcion': descripcion,
       'imagen_url': imagenUrl,
       'estado': estado,
+      'modo_stock': modoStock,
+      'stock_compartido': stockCompartido,
+      'costo_base': costoBase,
       'fecha_actualizacion': DateTime.now().toIso8601String(),
     };
   }
@@ -417,6 +470,9 @@ class Product {
       'codigo_barras': codigoBarras,
       'estado': estado,
       'stock_total_calculado': stockTotalCalculado,
+      'modo_stock': modoStock,
+      'stock_compartido': stockCompartido,
+      'costo_base': costoBase,
       'fecha_actualizacion': fechaActualizacion,
       'presentaciones': presentaciones.map((p) => p.toJson()).toList(),
     };

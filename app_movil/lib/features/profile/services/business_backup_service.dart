@@ -533,6 +533,9 @@ class BusinessBackupService {
             item['negocio_id'] = targetNegocioId;
             if (item['categoria_id'] != null) item['categoria_id'] = categoryIdMap[item['categoria_id']];
             if (item['marca_id'] != null) item['marca_id'] = brandIdMap[item['marca_id']];
+            item['modo_stock'] = item['modo_stock'] ?? 'INDEPENDIENTE';
+            item['stock_compartido'] = item['stock_compartido'] ?? 0;
+            item['costo_base'] = item['costo_base'] ?? 0.0;
             int newId = await txn.insert('productos', item);
             productIdMap[oldId] = newId;
           }
@@ -556,6 +559,8 @@ class BusinessBackupService {
             if (item['producto_id'] != null) item['producto_id'] = productIdMap[item['producto_id']];
             if (item['proveedor_id'] != null) item['proveedor_id'] = supplierIdMap[item['proveedor_id']];
             if (item['factura_carga_id'] != null) item['factura_carga_id'] = invoiceIdMap[item['factura_carga_id']];
+            item['usa_stock_compartido'] = item['usa_stock_compartido'] ?? 0;
+            item['cupo_maximo_variante'] = item['cupo_maximo_variante'];
             int newId = await txn.insert('presentaciones_producto', item);
             presentationIdMap[oldId] = newId;
           }

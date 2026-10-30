@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ClientFilterBar extends StatelessWidget {
   const ClientFilterBar({super.key});
@@ -161,18 +162,25 @@ class ClientFilterBar extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
+        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+          context,
+          minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+        );
         return Container(
           decoration: BoxDecoration(
             color: surfaceColor,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          padding: EdgeInsets.fromLTRB(20, 16, 20, effectiveBottom),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               Center(
                 child: Container(
                   width: 40,
@@ -239,7 +247,9 @@ class ClientFilterBar extends StatelessWidget {
                   },
                 );
               }),
+              const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
             ],
+          ),
           ),
         );
       },

@@ -67,7 +67,36 @@ class MatchingProvider with ChangeNotifier {
   }
 
   int get matchedCount => _currentState.pairs.where((p) => p.selectedProduct != null).length;
-  bool get hasStockWarnings => _currentState.pairs.any((p) => p.hasStockWarning);
+  Map<int, int> get sharedDemandPerProduct {
+    final Map<int, int> demand = {};
+    for (final pair in _currentState.pairs) {
+      final p = pair.selectedProduct;
+      if (p != null && p.usaStockCompartido && p.productId > 0) {
+        final factor = p.conversionFactor > 0 ? p.conversionFactor : 1;
+        demand[p.productId] = (demand[p.productId] ?? 0) + (pair.selectedQuantity * factor);
+      }
+    }
+    return demand;
+  }
+
+  bool isSharedPoolExceeded(int productId, int poolCapacity) {
+    if (productId <= 0 || poolCapacity <= 0) return false;
+    final demand = sharedDemandPerProduct[productId] ?? 0;
+    return demand > poolCapacity;
+  }
+
+  bool get hasStockWarnings {
+    final sharedDemand = sharedDemandPerProduct;
+    for (final pair in _currentState.pairs) {
+      if (pair.hasStockWarning) return true;
+      final p = pair.selectedProduct;
+      if (p != null && p.usaStockCompartido && p.productId > 0 && p.sharedStockPool > 0) {
+        final demand = sharedDemand[p.productId] ?? 0;
+        if (demand > p.sharedStockPool) return true;
+      }
+    }
+    return false;
+  }
 
   bool isProductRepeated(int? presentationId) {
     if (presentationId == null) return false;

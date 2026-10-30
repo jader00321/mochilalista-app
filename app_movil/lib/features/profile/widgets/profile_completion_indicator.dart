@@ -11,10 +11,11 @@ class ProfileCompletionIndicator extends StatelessWidget {
   final UserModel user;
   final bool hasPin;
   final bool isDark;
-  final VoidCallback? onEditProfile;
-  final VoidCallback? onEditBusiness;
+  final void Function(String? focusField)? onEditProfile;
+  final void Function(String? focusField)? onEditBusiness;
   final VoidCallback? onChangeLogo;
   final VoidCallback? onChangePin;
+  final VoidCallback? onConfigureGps;
 
   const ProfileCompletionIndicator({
     super.key,
@@ -25,6 +26,7 @@ class ProfileCompletionIndicator extends StatelessWidget {
     this.onEditBusiness,
     this.onChangeLogo,
     this.onChangePin,
+    this.onConfigureGps,
   });
 
   List<_ProfileField> _getFields() {
@@ -32,61 +34,61 @@ class ProfileCompletionIndicator extends StatelessWidget {
     return [
       _ProfileField(
         label: 'Nombre',
-        icon: Icons.person,
+        icon: Icons.person_outline,
         isComplete: user.fullName.isNotEmpty && user.fullName != 'Usuario',
-        onTap: onEditProfile,
+        onTap: () => onEditProfile?.call('name'),
       ),
       _ProfileField(
         label: 'Teléfono',
-        icon: Icons.phone,
+        icon: Icons.phone_outlined,
         isComplete: user.phone != null && user.phone!.isNotEmpty,
-        onTap: onEditProfile,
+        onTap: () => onEditProfile?.call('phone'),
       ),
       _ProfileField(
         label: 'Email',
-        icon: Icons.email,
+        icon: Icons.email_outlined,
         isComplete: user.email != null && user.email!.isNotEmpty,
-        onTap: onEditProfile,
+        onTap: () => onEditProfile?.call('email'),
       ),
       _ProfileField(
         label: 'Negocio',
-        icon: Icons.store,
+        icon: Icons.store_outlined,
         isComplete: biz != null,
-        onTap: onEditBusiness,
+        onTap: () => onEditBusiness?.call('name'),
       ),
       _ProfileField(
         label: 'RUC',
-        icon: Icons.badge,
-        isComplete: biz?.ruc != null && biz!.ruc!.isNotEmpty,
-        onTap: onEditBusiness,
+        icon: Icons.badge_outlined,
+        isComplete: biz?.ruc != null && biz!.ruc!.trim().isNotEmpty,
+        onTap: () => onEditBusiness?.call('ruc'),
       ),
       _ProfileField(
         label: 'Dirección',
-        icon: Icons.location_on,
+        icon: Icons.location_on_outlined,
         isComplete: biz?.address != null && biz!.address!.isNotEmpty,
-        onTap: onEditBusiness,
+        onTap: () => onEditBusiness?.call('address'),
       ),
       _ProfileField(
         label: 'Logo',
-        icon: Icons.image,
+        icon: Icons.image_outlined,
         isComplete: biz?.logoUrl != null && biz!.logoUrl!.isNotEmpty && biz.logoUrl != 'null',
-        onTap: onChangeLogo ?? onEditBusiness,
+        onTap: onChangeLogo ?? (() => onEditBusiness?.call('name')),
       ),
       _ProfileField(
         label: 'Info Pago',
-        icon: Icons.payment,
+        icon: Icons.payment_outlined,
         isComplete: biz?.paymentInfo != null && biz!.paymentInfo!.isNotEmpty,
-        onTap: onEditBusiness,
+        onTap: () => onEditBusiness?.call('payment'),
       ),
       _ProfileField(
         label: 'Ubicación GPS',
-        icon: Icons.gps_fixed,
+        icon: Icons.gps_fixed_rounded,
         isComplete: biz?.latitud != null && biz?.longitud != null,
-        onTap: onEditBusiness,
+        onTap: onConfigureGps ?? (() => onEditBusiness?.call('gps')),
       ),
       _ProfileField(
         label: 'PIN Seguridad',
-        icon: Icons.lock,
+        icon: Icons.lock_outline,
         isComplete: hasPin,
         onTap: onChangePin,
       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/features/smart_quotation/models/whatsapp_config_model.dart';
 import 'package:app_movil/features/smart_quotation/services/whatsapp_preferences_service.dart';
 
@@ -28,6 +29,7 @@ class WaCustomTextsModal extends StatefulWidget {
   }) {
     return showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => WaCustomTextsModal(
@@ -119,7 +121,10 @@ class _WaCustomTextsModalState extends State<WaCustomTextsModal> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+      context,
+      minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+    );
     final cardColor = widget.isDark ? const Color(0xFF1E1E2C) : Colors.white;
     final textColor = widget.isDark ? Colors.white : Colors.black87;
 
@@ -138,17 +143,13 @@ class _WaCustomTextsModalState extends State<WaCustomTextsModal> {
     }
 
     return Container(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: bottomInset > 0 ? bottomInset + 20 : 30,
-      ),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, effectiveBottom),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,6 +298,7 @@ class _WaCustomTextsModalState extends State<WaCustomTextsModal> {
                 ),
               ],
             ),
+            const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
           ],
         ),
       ),

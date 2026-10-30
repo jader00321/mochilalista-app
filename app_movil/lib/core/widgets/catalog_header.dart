@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
-import 'package:app_movil/features/catalog/screens/catalog/widgets/catalog_sort_modal.dart';
 import 'package:app_movil/core/widgets/category_chip.dart';
 
 class CatalogHeader extends StatefulWidget {
@@ -150,44 +149,6 @@ class _CatalogHeaderState extends State<CatalogHeader> {
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 8),
-
-                // Botón Selector de Ordenamiento
-                InkWell(
-                  onTap: widget.onSortTap ?? () => CatalogSortModal.show(context, provider),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF23232F) : const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isDark ? Colors.white12 : Colors.grey.shade300,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          provider.sortOption.icon,
-                          size: 18,
-                          color: isDark ? Colors.blue[300] : Colors.blue[800],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          provider.sortOption.shortLabel,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.blue[300] : Colors.blue[800],
-                          ),
-                        ),
                       ],
                     ),
                   ),

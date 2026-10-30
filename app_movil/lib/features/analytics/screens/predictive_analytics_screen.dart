@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
@@ -24,6 +26,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
   // Simulador state
   double _salesSimulationPct = 0.0; // -50% to +100%
   double _costsSimulationPct = 0.0; // -50% to +50%
+  double _discountPct = 0.0; // 0% to 20% (descuento en precio en liquidación)
 
   // Gráfico patrimonial state
   int _selectedChartTab = 0; // 0: Normalizada %, 1: Valor Inventario, 2: Beneficio y Ventas
@@ -193,19 +196,29 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.auto_graph, color: Colors.white, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text("Proyección a 30 Días", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(12)),
+                      child: const Icon(Icons.auto_graph, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    const Flexible(
+                      child: Text(
+                        "Proyección a 30 Días",
+                        style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               _buildExplainPill(
                 isDark: isDark,
                 onTap: _showProjectionExplainModal,
@@ -357,14 +370,22 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
   // =========================================================================
   Widget _buildSimulator(bool isDark) {
     double baseSales = _data!.predictedNext30DaysSales;
-    double assumedMargin = 0.30; 
+    double assumedMargin = _data!.historicalProfitMargin; 
     double baseCosts = baseSales * (1 - assumedMargin);
     double baseProfit = baseSales - baseCosts;
     
-    double simSales = baseSales * (1 + (_salesSimulationPct / 100.0));
-    double simCosts = baseCosts * (1 + (_costsSimulationPct / 100.0));
+    // Conexión financiera: El costo escala con el volumen vendido (1 + salesSimulationPct)
+    double volumeFactor = 1.0 + (_salesSimulationPct / 100.0);
+    double costFactor = 1.0 + (_costsSimulationPct / 100.0);
+    double priceFactor = 1.0 - (_discountPct / 100.0);
+
+    double simSales = baseSales * volumeFactor * priceFactor;
+    double simCosts = baseCosts * volumeFactor * costFactor;
     double simProfit = simSales - simCosts;
     double diffProfit = simProfit - baseProfit;
+    double simMargin = simSales > 0 ? (simProfit / simSales) * 100.0 : 0.0;
+    // Punto de equilibrio operativo estimado (gastos fijos aprox 15% de ventas base)
+    double breakEven = simMargin > 0 ? ((baseSales * 0.15) / (simMargin / 100.0)) : 0.0;
 
     // Distinción estricta de estados lógicos
     final bool isBaseScenario = diffProfit.abs() < 0.01;
@@ -406,19 +427,29 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), shape: BoxShape.circle),
-                    child: const Icon(Icons.tune, color: Colors.blueAccent, size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text("Simulador de Escenarios", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-                ],
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), shape: BoxShape.circle),
+                      child: const Icon(Icons.tune, color: Colors.blueAccent, size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    const Flexible(
+                      child: Text(
+                        "Simulador de Escenarios",
+                        style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               _buildExplainPill(
                 isDark: isDark,
                 onTap: _showSimulatorExplainModal,
@@ -439,44 +470,66 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
             children: [
               _buildQuickSimulationChip(
                 label: "📈 Campaña (+30% ventas)",
-                isSelected: _salesSimulationPct == 30.0 && _costsSimulationPct == 0.0,
+                isSelected: _salesSimulationPct == 30.0 && _costsSimulationPct == 0.0 && _discountPct == 0.0,
                 onTap: () {
                   setState(() {
-                    _salesSimulationPct = 30.0;
-                    _costsSimulationPct = 0.0;
+                    if (_salesSimulationPct == 30.0 && _costsSimulationPct == 0.0 && _discountPct == 0.0) {
+                      _salesSimulationPct = 0.0;
+                      _costsSimulationPct = 0.0;
+                      _discountPct = 0.0;
+                    } else {
+                      _salesSimulationPct = 30.0;
+                      _costsSimulationPct = 0.0;
+                      _discountPct = 0.0;
+                    }
                   });
                 },
                 isDark: isDark,
               ),
               _buildQuickSimulationChip(
                 label: "🚛 Subida Proveedor (+10% costos)",
-                isSelected: _salesSimulationPct == 0.0 && _costsSimulationPct == 10.0,
+                isSelected: _salesSimulationPct == 0.0 && _costsSimulationPct == 10.0 && _discountPct == 0.0,
                 onTap: () {
                   setState(() {
-                    _salesSimulationPct = 0.0;
-                    _costsSimulationPct = 10.0;
+                    if (_salesSimulationPct == 0.0 && _costsSimulationPct == 10.0 && _discountPct == 0.0) {
+                      _salesSimulationPct = 0.0;
+                      _costsSimulationPct = 0.0;
+                      _discountPct = 0.0;
+                    } else {
+                      _salesSimulationPct = 0.0;
+                      _costsSimulationPct = 10.0;
+                      _discountPct = 0.0;
+                    }
                   });
                 },
                 isDark: isDark,
               ),
               _buildQuickSimulationChip(
-                label: "🏷️ Liquidación (+20% ventas, -5% margen)",
-                isSelected: _salesSimulationPct == 20.0 && _costsSimulationPct == 5.0,
+                label: "🏷️ Liquidación (+20% ventas, -5% dto.)",
+                isSelected: _salesSimulationPct == 20.0 && _costsSimulationPct == 0.0 && _discountPct == 5.0,
                 onTap: () {
                   setState(() {
-                    _salesSimulationPct = 20.0;
-                    _costsSimulationPct = 5.0;
+                    if (_salesSimulationPct == 20.0 && _costsSimulationPct == 0.0 && _discountPct == 5.0) {
+                      _salesSimulationPct = 0.0;
+                      _costsSimulationPct = 0.0;
+                      _discountPct = 0.0;
+                    } else {
+                      _salesSimulationPct = 20.0;
+                      _costsSimulationPct = 0.0;
+                      _discountPct = 5.0;
+                    }
                   });
                 },
                 isDark: isDark,
               ),
               _buildQuickSimulationChip(
                 label: "🔄 Restaurar 0%",
-                isSelected: _salesSimulationPct == 0.0 && _costsSimulationPct == 0.0,
+                isSelected: _salesSimulationPct == 0.0 && _costsSimulationPct == 0.0 && _discountPct == 0.0,
                 onTap: () {
                   setState(() {
                     _salesSimulationPct = 0.0;
                     _costsSimulationPct = 0.0;
+                    _discountPct = 0.0;
                   });
                 },
                 isDark: isDark,
@@ -493,8 +546,8 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Variación en Ventas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text("Proyecta si logras vender más o menos", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  const Text("Variación en Volumen", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text("Proyecta si logras vender más o menos mercadería", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
                 ],
               ),
               Text(
@@ -510,7 +563,10 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
             divisions: 30,
             activeColor: Colors.blueAccent,
             onChanged: (val) {
-              setState(() => _salesSimulationPct = val);
+              setState(() {
+                _salesSimulationPct = val;
+                if (val != 20.0) _discountPct = 0.0;
+              });
             },
           ),
           Padding(
@@ -533,8 +589,8 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Variación en Costos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text("Qué pasa si suben o bajan precios de proveedor", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  const Text("Variación en Costos de Proveedor", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text("Qué pasa si suben o bajan precios de compra", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
                 ],
               ),
               Text(
@@ -550,7 +606,10 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
             divisions: 20,
             activeColor: Colors.redAccent,
             onChanged: (val) {
-              setState(() => _costsSimulationPct = val);
+              setState(() {
+                _costsSimulationPct = val;
+                if (val != 0.0) _discountPct = 0.0;
+              });
             },
           ),
           Padding(
@@ -634,6 +693,21 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                     color: scenarioColor,
                   ),
                 ),
+                if (_discountPct > 0) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      "🏷️ Descuento Comercial: -${_discountPct.toInt()}% en precio de venta",
+                      style: const TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 const Divider(height: 1),
                 const SizedBox(height: 12),
@@ -667,6 +741,50 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                
+                // Métricas financieras adicionales: Margen Neto Resultante y Punto de Equilibrio
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          children: [
+                            const Text("Margen Resultante", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                            const SizedBox(height: 2),
+                            Text(
+                              "${simMargin.toStringAsFixed(1)}%",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold, 
+                                fontSize: 12.5, 
+                                color: simMargin >= 25.0 ? Colors.green : (simMargin >= 15.0 ? Colors.amber : Colors.redAccent),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(width: 1, height: 24, color: Colors.grey.withValues(alpha: 0.2)),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            const Text("Pto. Equilibrio", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                            const SizedBox(height: 2),
+                            Text(
+                              AppCurrency.format(breakEven),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.indigoAccent),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -716,9 +834,12 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
   // 3. DIAGNÓSTICO DEL MOTOR (TARJETA VISUAL ANIMADA, SIN DOBLE ROBOT)
   // =========================================================================
   Widget _buildExplainabilityCard(bool isDark) {
+    bool isInitialPhase = _data!.isInitialPhase;
     double velocity = _data!.salesVelocity;
     bool isPositive = velocity >= 0;
-    double progressValue = (velocity.abs() / 100.0).clamp(0.0, 1.0);
+    double progressValue = isInitialPhase 
+        ? (_data!.totalSnapshots / 30.0).clamp(0.05, 1.0)
+        : (velocity.abs() / 100.0).clamp(0.0, 1.0);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -738,22 +859,32 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.indigoAccent.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.indigoAccent.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.speed_rounded, color: Colors.indigoAccent, size: 20),
                     ),
-                    child: const Icon(Icons.speed_rounded, color: Colors.indigoAccent, size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text("Diagnóstico del Motor", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                ],
+                    const SizedBox(width: 10),
+                    const Flexible(
+                      child: Text(
+                        "Diagnóstico del Motor", 
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16), 
+                        maxLines: 1, 
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               _buildExplainPill(
                 isDark: isDark,
                 onTap: _showDiagnosisExplainModal,
@@ -777,15 +908,15 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "Ritmo Quincenal de Ventas",
+                      isInitialPhase ? "Estado de Calibración del Motor" : "Ritmo Quincenal de Ventas",
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[300] : Colors.grey[700]),
                     ),
                     Text(
-                      "${isPositive ? '+' : ''}${velocity.toStringAsFixed(1)}%",
+                      isInitialPhase ? "🌱 Etapa Inicial" : "${isPositive ? '+' : ''}${velocity.toStringAsFixed(1)}%",
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: isPositive ? Colors.green : Colors.redAccent,
+                        color: isInitialPhase ? Colors.teal : (isPositive ? Colors.green : Colors.redAccent),
                       ),
                     ),
                   ],
@@ -797,7 +928,9 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                     value: progressValue,
                     minHeight: 8,
                     backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
-                    valueColor: AlwaysStoppedAnimation<Color>(isPositive ? Colors.green : Colors.redAccent),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      isInitialPhase ? Colors.teal : (isPositive ? Colors.green : Colors.redAccent),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -842,7 +975,11 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                             const SizedBox(height: 2),
                             Text(
                               AppCurrency.format(_data!.current15Sales),
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isPositive ? Colors.green : Colors.redAccent),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold, 
+                                fontSize: 12, 
+                                color: isInitialPhase ? Colors.teal : (isPositive ? Colors.green : Colors.redAccent),
+                              ),
                             ),
                           ],
                         ),
@@ -931,9 +1068,16 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Evolución Patrimonial", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              const Expanded(
+                child: Text(
+                  "Evolución Patrimonial", 
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               _buildExplainPill(
                 isDark: isDark,
                 onTap: _showPatrimonyExplainModal,
@@ -1001,130 +1145,138 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Gráfico dinámico con etiquetas en Eje Y y X
+          // Gráfico dinámico con etiquetas en Eje Y y X acotado en ClipRRect
           SizedBox(
             height: 220,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: isDark ? Colors.white10 : Colors.grey[200]!,
-                    strokeWidth: 1,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: LineChart(
+                LineChartData(
+                  minY: _selectedChartTab == 0 ? 0.0 : null,
+                  maxY: _selectedChartTab == 0 ? 100.0 : null,
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (value) => FlLine(
+                      color: isDark ? Colors.white10 : Colors.grey[200]!,
+                      strokeWidth: 1,
+                    ),
                   ),
-                ),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: interval,
-                      getTitlesWidget: (value, meta) {
-                        int index = value.toInt();
-                        if (index >= 0 && index < points.length) {
-                          String dateStr = points[index]['date'];
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        interval: interval,
+                        getTitlesWidget: (value, meta) {
+                          int index = value.toInt();
+                          if (index >= 0 && index < points.length) {
+                            String dateStr = points[index]['date'];
+                            List<String> parts = dateStr.split('-');
+                            if (parts.length == 3) {
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text("${parts[2]}/${parts[1]}", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                              );
+                            }
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 46,
+                        getTitlesWidget: (value, meta) {
+                          if (_selectedChartTab == 0) {
+                            return Text("${value.toInt()}%", style: TextStyle(fontSize: 9, color: Colors.grey[500]));
+                          } else {
+                            if (value >= 1000) {
+                              return Text("S/ ${(value / 1000).toStringAsFixed(1)}k", style: TextStyle(fontSize: 9, color: Colors.grey[500]));
+                            }
+                            return Text("S/ ${value.toInt()}", style: TextStyle(fontSize: 9, color: Colors.grey[500]));
+                          }
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: [
+                    if (_selectedChartTab == 0 || _selectedChartTab == 1)
+                      LineChartBarData(
+                        spots: inventorySpots,
+                        isCurved: true,
+                        preventCurveOverShooting: true,
+                        color: Colors.blueAccent,
+                        barWidth: 2.5,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: Colors.blueAccent.withValues(alpha: 0.18),
+                        ),
+                      ),
+                    if (_selectedChartTab == 0 || _selectedChartTab == 2)
+                      LineChartBarData(
+                        spots: profitSpots,
+                        isCurved: true,
+                        preventCurveOverShooting: true,
+                        color: Colors.purpleAccent,
+                        barWidth: 2.5,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: Colors.purpleAccent.withValues(alpha: 0.22),
+                        ),
+                      ),
+                    if (_selectedChartTab == 2)
+                      LineChartBarData(
+                        spots: salesSpots,
+                        isCurved: true,
+                        preventCurveOverShooting: true,
+                        color: Colors.green,
+                        barWidth: 2.0,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: false),
+                      ),
+                  ],
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      tooltipMargin: 16,
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((spot) {
+                          int index = spot.x.toInt();
+                          if (index < 0 || index >= points.length) return null;
+                          var p = points[index];
+                          String dateStr = p['date'];
                           List<String> parts = dateStr.split('-');
-                          if (parts.length == 3) {
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text("${parts[2]}/${parts[1]}", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                            );
-                          }
-                        }
-                        return const SizedBox.shrink();
+                          String dFmt = parts.length == 3 ? "${parts[2]}/${parts[1]}" : dateStr;
+                          
+                          double invVal = (p['inventoryValue'] as num?)?.toDouble() ?? 0.0;
+                          double netProf = (p['netProfit'] as num?)?.toDouble() ?? 0.0;
+                          
+                          return LineTooltipItem(
+                            "$dFmt\nInv: ${AppCurrency.format(invVal)}\nBen: ${AppCurrency.format(netProf)}",
+                            const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          );
+                        }).toList();
                       },
                     ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 46,
-                      getTitlesWidget: (value, meta) {
-                        if (_selectedChartTab == 0) {
-                          return Text("${value.toInt()}%", style: TextStyle(fontSize: 9, color: Colors.grey[500]));
-                        } else {
-                          if (value >= 1000) {
-                            return Text("S/ ${(value / 1000).toStringAsFixed(1)}k", style: TextStyle(fontSize: 9, color: Colors.grey[500]));
-                          }
-                          return Text("S/ ${value.toInt()}", style: TextStyle(fontSize: 9, color: Colors.grey[500]));
-                        }
-                      },
-                    ),
-                  ),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: [
-                  if (_selectedChartTab == 0 || _selectedChartTab == 1)
-                    LineChartBarData(
-                      spots: inventorySpots,
-                      isCurved: true,
-                      color: Colors.blueAccent,
-                      barWidth: 2.5,
-                      isStrokeCapRound: true,
-                      dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        color: Colors.blueAccent.withValues(alpha: 0.18),
-                      ),
-                    ),
-                  if (_selectedChartTab == 0 || _selectedChartTab == 2)
-                    LineChartBarData(
-                      spots: profitSpots,
-                      isCurved: true,
-                      color: Colors.purpleAccent,
-                      barWidth: 2.5,
-                      isStrokeCapRound: true,
-                      dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        color: Colors.purpleAccent.withValues(alpha: 0.22),
-                      ),
-                    ),
-                  if (_selectedChartTab == 2)
-                    LineChartBarData(
-                      spots: salesSpots,
-                      isCurved: true,
-                      color: Colors.green,
-                      barWidth: 2.0,
-                      isStrokeCapRound: true,
-                      dotData: const FlDotData(show: false),
-                    ),
-                ],
-                lineTouchData: LineTouchData(
-                  touchTooltipData: LineTouchTooltipData(
-                    tooltipMargin: 16,
-                    getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((spot) {
-                        int index = spot.x.toInt();
-                        if (index < 0 || index >= points.length) return null;
-                        var p = points[index];
-                        String dateStr = p['date'];
-                        List<String> parts = dateStr.split('-');
-                        String dFmt = parts.length == 3 ? "${parts[2]}/${parts[1]}" : dateStr;
-                        
-                        double invVal = (p['inventoryValue'] as num?)?.toDouble() ?? 0.0;
-                        double netProf = (p['netProfit'] as num?)?.toDouble() ?? 0.0;
-                        
-                        return LineTooltipItem(
-                          "$dFmt\nInv: ${AppCurrency.format(invVal)}\nBen: ${AppCurrency.format(netProf)}",
-                          const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                        );
-                      }).toList();
+                    touchCallback: (FlTouchEvent event, LineTouchResponse? response) {
+                      if (!event.isInterestedForInteractions || response == null || response.lineBarSpots == null || response.lineBarSpots!.isEmpty) {
+                        return;
+                      }
+                      int index = response.lineBarSpots!.first.x.toInt();
+                      if (index >= 0 && index < points.length) {
+                        setState(() {
+                          _selectedPatrimonyPoint = points[index];
+                        });
+                      }
                     },
                   ),
-                  touchCallback: (FlTouchEvent event, LineTouchResponse? response) {
-                    if (!event.isInterestedForInteractions || response == null || response.lineBarSpots == null || response.lineBarSpots!.isEmpty) {
-                      return;
-                    }
-                    int index = response.lineBarSpots!.first.x.toInt();
-                    if (index >= 0 && index < points.length) {
-                      setState(() {
-                        _selectedPatrimonyPoint = points[index];
-                      });
-                    }
-                  },
                 ),
               ),
             ),
@@ -1180,8 +1332,10 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
     String formattedDate = parts.length == 3 ? "${parts[2]}/${parts[1]}/${parts[0]}" : dateStr;
     
     double invValue = (_selectedPatrimonyPoint!['inventoryValue'] as num?)?.toDouble() ?? 0.0;
-    double netProfit = (_selectedPatrimonyPoint!['netProfit'] as num?)?.toDouble() ?? 0.0;
+    double cumulativeProfit = (_selectedPatrimonyPoint!['netProfit'] as num?)?.toDouble() ?? 0.0;
     double dailySales = (_selectedPatrimonyPoint!['dailySales'] as num?)?.toDouble() ?? 0.0;
+    double dailyProfit = (_selectedPatrimonyPoint!['dailyProfit'] as num?)?.toDouble() ?? 
+        math.max(0.0, math.min(dailySales, cumulativeProfit));
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1215,14 +1369,21 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Beneficio", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      const Text("Beneficio del Día", style: TextStyle(fontSize: 10, color: Colors.grey), maxLines: 1),
                       const SizedBox(height: 2),
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          AppCurrency.format(netProfit),
+                          AppCurrency.format(dailyProfit),
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.purpleAccent),
                         ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Acum: ${AppCurrency.format(cumulativeProfit)}",
+                        style: TextStyle(fontSize: 8.5, color: Colors.grey[500]),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -1263,7 +1424,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Ventas", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      const Text("Ventas del Día", style: TextStyle(fontSize: 10, color: Colors.grey)),
                       const SizedBox(height: 2),
                       FittedBox(
                         fit: BoxFit.scaleDown,
@@ -1287,35 +1448,46 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
   // 5. ESTIMACIONES TEÓRICAS Y NIVEL DE CONFIANZA ESTADÍSTICA
   // =========================================================================
   Widget _buildWarningBanner(bool isDark) {
-    String confidence = _data?.confidenceLevel ?? 'Bajo';
-    Color confColor = confidence == 'Alto' ? Colors.green : (confidence == 'Medio' ? Colors.blueAccent : Colors.amber);
+    final confidence = _data?.confidenceDisplayName ?? 'Inicial';
+    final int days = _data?.totalSnapshots ?? 0;
+    Color confColor = Colors.teal;
+    if (confidence == 'Alta') {
+      confColor = Colors.green;
+    } else if (confidence == 'Media') {
+      confColor = Colors.blueAccent;
+    } else {
+      confColor = Colors.amber;
+    }
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: confColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: confColor.withValues(alpha: 0.3)),
+        border: Border.all(color: confColor.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.verified_outlined, color: confColor, size: 22),
-              const SizedBox(width: 10),
-              const Expanded(
+              Icon(Icons.verified_outlined, color: confColor, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
                 child: Text(
                   "Estimaciones Teóricas & Confianza",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
-                  color: confColor.withValues(alpha: 0.2),
+                  color: confColor.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: confColor.withValues(alpha: 0.5)),
+                  border: Border.all(color: confColor.withValues(alpha: 0.4)),
                 ),
                 child: Text(
                   "Confianza $confidence",
@@ -1324,10 +1496,34 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          // Barra de progreso visual del nivel de precisión
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: (days / 30.0).clamp(0.05, 1.0),
+                    minHeight: 6,
+                    backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
+                    valueColor: AlwaysStoppedAnimation<Color>(confColor),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                "$days de 30 días óptimos",
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: confColor),
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           Text(
-            "Estos cálculos se basan en tus ${_data?.totalSnapshots ?? 0} días de snapshots históricos. "
-            "${confidence == 'Alto' ? 'Tu volumen de datos permite proyecciones sumamente confiables.' : 'A medida que registres más ventas diarias en Caja Rápida, la precisión de las proyecciones aumentará automáticamente.'}",
+            "Estos cálculos se basan en tus $days días de snapshots históricos. "
+            "${confidence == 'Alta' 
+                ? 'Tu volumen de datos permite proyecciones sumamente confiables.' 
+                : 'A medida que registres más ventas diarias en Caja Rápida, Cotizaciones y Catálogo, la precisión de las proyecciones aumentará automáticamente.'}",
             style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[300] : Colors.grey[800], height: 1.4),
           ),
         ],
@@ -1336,12 +1532,13 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
   }
 
   // =========================================================================
-  // 6. HELPER PÍLDORA "¿CÓMO SE CALCULA? ⓘ"
+  // 6. HELPER PÍLDORA "¿CÓMO FUNCIONA? ⓘ"
   // =========================================================================
   Widget _buildExplainPill({
     required bool isDark,
     required VoidCallback onTap,
     bool isLightOnGradient = false,
+    String label = "ⓘ ¿Cómo funciona?",
   }) {
     return Material(
       color: Colors.transparent,
@@ -1349,7 +1546,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             color: isLightOnGradient 
                 ? Colors.white.withValues(alpha: 0.18) 
@@ -1361,24 +1558,13 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                   : (isDark ? Colors.white24 : Colors.blueAccent.withValues(alpha: 0.3)),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                "¿Cómo se calcula?",
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: isLightOnGradient ? Colors.white : Colors.blueAccent,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.info_outline,
-                size: 13,
-                color: isLightOnGradient ? Colors.white : Colors.blueAccent,
-              ),
-            ],
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.bold,
+              color: isLightOnGradient ? Colors.white : Colors.blueAccent,
+            ),
           ),
         ),
       ),
@@ -1386,218 +1572,371 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
   }
 
   // =========================================================================
-  // 7. MODALES EXPLICATIVOS PASO A PASO (InteractiveSheetWrapper)
+  // 7. MODALES EXPLICATIVOS PASO A PASO (REDiseño Mobile Awards)
   // =========================================================================
-  void _showProjectionExplainModal() {
-    if (_data == null) return;
+  void _showUnifiedExplainModal({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required Color iconColor,
+    required Widget child,
+  }) {
     InteractiveSheetWrapper.show(
       context: context,
+      enableDrag: false,
       builder: (ctx) => InteractiveSheetWrapper(
-        title: "¿Cómo se calcula la Proyección a 30 Días?",
-        icon: Icons.auto_graph,
-        iconColor: Colors.blueAccent,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildModalMetricHeader(
-                label: "Proyección Base a 30 Días",
-                value: AppCurrency.format(_data!.predictedNext30DaysSales),
-                color: Colors.blueAccent,
-              ),
-              const SizedBox(height: 16),
-              _buildModalStepTile(
-                stepNumber: "1",
-                title: "Recopilación de Historial Real",
-                description: "El motor tomó los últimos ${_data!.totalSnapshots} días de ventas registrados en tu negocio.",
-              ),
-              _buildModalStepTile(
-                stepNumber: "2",
-                title: "Ritmo Diario Promedio",
-                description: "Tus ventas promedio actuales son de ${AppCurrency.format(_data!.dailyAverageSales)} por día.",
-              ),
-              _buildModalStepTile(
-                stepNumber: "3",
-                title: "Suavizado por Media Móvil (7 días)",
-                description: "Se eliminan picos o días atípicos para obtener la tendencia de fondo.",
-              ),
-              _buildModalStepTile(
-                stepNumber: "4",
-                title: "Regresión Lineal y Tendencia",
-                description: "Se aplica la fórmula de tendencia matemática (m = ${_data!.trendSlopeM.toStringAsFixed(2)}, b = ${_data!.interceptB.toStringAsFixed(2)}) para proyectar el próximo mes en 3 escenarios:",
-              ),
-              Container(
-                margin: const EdgeInsets.only(left: 36, top: 4, bottom: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("🛡️ Conservador (80%):", style: TextStyle(fontSize: 12)),
-                        Text(AppCurrency.format(_data!.conservativeEstimate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.amber)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("🎯 Esperado (100%):", style: TextStyle(fontSize: 12)),
-                        Text(AppCurrency.format(_data!.expectedEstimate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.green)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("🚀 Optimista (120%):", style: TextStyle(fontSize: 12)),
-                        Text(AppCurrency.format(_data!.optimisticEstimate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueAccent)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              _buildModalPracticalTip(
-                tip: "💡 ¿Cómo usarlo? Utiliza la proyección para presupuestar tus compras a proveedores sin arriesgar tu liquidez ni sobreendeudarte.",
-              ),
-            ],
+        title: title,
+        titleMaxLines: 2,
+        showCloseButton: true,
+        icon: icon,
+        iconColor: iconColor,
+        enableDragToDismiss: false,
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        bottomAction: SizedBox(
+          width: double.infinity,
+          height: 46,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: iconColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            icon: const Icon(Icons.check_circle_outline, size: 18),
+            label: const Text("Entendido", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(ctx);
+            },
           ),
         ),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimelineStepCard({
+    required String stepNumber,
+    required String title,
+    required String description,
+    required bool isDark,
+    Widget? extraContent,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white10 : Colors.grey[200]!,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blueAccent.withValues(alpha: 0.3),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                stepNumber,
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13.5,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.grey[300] : Colors.grey[700],
+                    height: 1.4,
+                  ),
+                ),
+                if (extraContent != null) ...[
+                  const SizedBox(height: 8),
+                  extraContent,
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showProjectionExplainModal() {
+    if (_data == null) return;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    _showUnifiedExplainModal(
+      context: context,
+      title: "¿Cómo se calcula la Proyección a 30 Días?",
+      icon: Icons.auto_graph,
+      iconColor: Colors.blueAccent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildModalMetricHeader(
+            label: "Proyección Base a 30 Días",
+            value: AppCurrency.format(_data!.predictedNext30DaysSales),
+            color: Colors.blueAccent,
+          ),
+          const SizedBox(height: 16),
+          _buildTimelineStepCard(
+            stepNumber: "1",
+            title: "Recopilación de Historial Real",
+            description: "El motor tomó los ${_data!.totalSnapshots} días de ventas registrados en tu negocio.",
+            isDark: isDark,
+          ),
+          _buildTimelineStepCard(
+            stepNumber: "2",
+            title: "Ritmo Diario Promedio",
+            description: "Tus ventas promedio actuales son de ${AppCurrency.format(_data!.dailyAverageSales)} por día.",
+            isDark: isDark,
+          ),
+          _buildTimelineStepCard(
+            stepNumber: "3",
+            title: "Suavizado y Amortiguación de Tendencia",
+            description: "Se atenúan picos atípicos y se amortigua la pendiente para garantizar proyecciones financieramente coherentes.",
+            isDark: isDark,
+          ),
+          _buildTimelineStepCard(
+            stepNumber: "4",
+            title: "Regresión Amortiguada y 3 Escenarios",
+            description: "Tendencia detectada: ${_data!.trendSlopeM >= 0 ? '+' : ''}${AppCurrency.format(_data!.trendSlopeM)}/día. Se estiman 3 escenarios de cierre de mes:",
+            isDark: isDark,
+            extraContent: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.black26 : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("🛡️ Conservador (80%):", style: TextStyle(fontSize: 11.5)),
+                      Text(AppCurrency.format(_data!.conservativeEstimate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Colors.amber)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("🎯 Esperado (100%):", style: TextStyle(fontSize: 11.5)),
+                      Text(AppCurrency.format(_data!.expectedEstimate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Colors.green)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("🚀 Optimista (120%):", style: TextStyle(fontSize: 11.5)),
+                      Text(AppCurrency.format(_data!.optimisticEstimate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Colors.blueAccent)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildModalPracticalTip(
+            tip: "💡 ¿Cómo usarlo? Utiliza la proyección para presupuestar tus compras a proveedores sin arriesgar tu liquidez ni sobreendeudarte.",
+          ),
+        ],
       ),
     );
   }
 
   void _showSimulatorExplainModal() {
     if (_data == null) return;
-    InteractiveSheetWrapper.show(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    double baseSales = _data!.predictedNext30DaysSales;
+    double baseMargin = _data!.historicalProfitMargin; 
+    double baseCosts = baseSales * (1 - baseMargin);
+    double volumeFactor = 1.0 + (_salesSimulationPct / 100.0);
+    double costFactor = 1.0 + (_costsSimulationPct / 100.0);
+    double priceFactor = 1.0 - (_discountPct / 100.0);
+
+    double simSales = baseSales * volumeFactor * priceFactor;
+    double simCosts = baseCosts * volumeFactor * costFactor;
+    double simProfit = simSales - simCosts;
+    double simMargin = simSales > 0 ? (simProfit / simSales) * 100.0 : 0.0;
+    double breakEven = simMargin > 0 ? ((baseSales * 0.15) / (simMargin / 100.0)) : 0.0;
+
+    _showUnifiedExplainModal(
       context: context,
-      builder: (ctx) => InteractiveSheetWrapper(
-        title: "¿Cómo funciona el Simulador de Escenarios?",
-        icon: Icons.tune,
-        iconColor: Colors.blueAccent,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "El simulador calcula la sensibilidad de tu negocio aplicando variaciones porcentuales a tu proyección base de ventas y costos.",
-                style: TextStyle(fontSize: 13, height: 1.4),
-              ),
-              const SizedBox(height: 16),
-              _buildModalStepTile(
-                stepNumber: "1",
-                title: "Ventas Simuladas = Ventas Base × (1 + % Ventas)",
-                description: "Proyecta el impacto si vendes más unidades o incrementas tus precios de venta.",
-              ),
-              _buildModalStepTile(
-                stepNumber: "2",
-                title: "Costos Simulados = Costos Base × (1 + % Costos)",
-                description: "Calcula qué ocurre si tus proveedores aumentan sus precios o si negocias descuentos por volumen.",
-              ),
-              _buildModalStepTile(
-                stepNumber: "3",
-                title: "Beneficio Neto = Ventas Simuladas - Costos Simulados",
-                description: "El resultado te muestra exactamente cuánto dinero líquido quedará en tu bolsillo.",
-              ),
-              const SizedBox(height: 12),
-              _buildModalPracticalTip(
-                tip: "💡 Consejo Práctico: Usa los chips de 1 toque para simular campañas comerciales antes de lanzar ofertas y verificar si el volumen compensará el descuento.",
-              ),
-            ],
+      title: "¿Cómo funciona el Simulador de Escenarios?",
+      icon: Icons.tune,
+      iconColor: Colors.blueAccent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildModalMetricHeader(
+            label: "Beneficio Neto Simulado Actual",
+            value: AppCurrency.format(simProfit),
+            color: Colors.blueAccent,
           ),
-        ),
+          const SizedBox(height: 16),
+          _buildTimelineStepCard(
+            stepNumber: "1",
+            title: "Ventas Simuladas con Volumen y Descuento",
+            description: "Ventas = Ventas Base × (1 + % Volumen) × (1 - % Descuento). Simula tanto más unidades como promociones.",
+            isDark: isDark,
+          ),
+          _buildTimelineStepCard(
+            stepNumber: "2",
+            title: "Costos Conectados al Volumen y Proveedor",
+            description: "Costos = Costos Base × (1 + % Volumen) × (1 + % Proveedor). Al vender más unidades, el costo de mercadería escala en armonía.",
+            isDark: isDark,
+          ),
+          _buildTimelineStepCard(
+            stepNumber: "3",
+            title: "Beneficio y Margen Resultante",
+            description: "Beneficio = Ventas - Costos. En este escenario tu margen neto es de ${simMargin.toStringAsFixed(1)}%.",
+            isDark: isDark,
+          ),
+          _buildTimelineStepCard(
+            stepNumber: "4",
+            title: "Punto de Equilibrio Operativo",
+            description: "Ventas mínimas estimadas (${AppCurrency.format(breakEven)}) necesarias para cubrir los costos de operación del mes.",
+            isDark: isDark,
+          ),
+          const SizedBox(height: 8),
+          _buildModalPracticalTip(
+            tip: "💡 Consejo Práctico: Usa los chips de 1 toque para simular campañas comerciales antes de lanzar ofertas y verificar si el volumen compensará el descuento.",
+          ),
+        ],
       ),
     );
   }
 
   void _showDiagnosisExplainModal() {
     if (_data == null) return;
-    InteractiveSheetWrapper.show(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    _showUnifiedExplainModal(
       context: context,
-      builder: (ctx) => InteractiveSheetWrapper(
-        title: "¿Cómo se calcula el Diagnóstico del Motor?",
-        icon: Icons.speed_rounded,
-        iconColor: Colors.indigoAccent,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildModalMetricHeader(
-                label: "Variación Quincenal",
-                value: "${_data!.salesVelocity >= 0 ? '+' : ''}${_data!.salesVelocity.toStringAsFixed(1)}%",
-                color: _data!.salesVelocity >= 0 ? Colors.green : Colors.redAccent,
-              ),
-              const SizedBox(height: 16),
-              _buildModalStepTile(
-                stepNumber: "1",
-                title: "Comparación de Quincenas",
-                description: "Compara el volumen vendido en los últimos 15 días (${AppCurrency.format(_data!.current15Sales)}) frente a los 15 días previos (${AppCurrency.format(_data!.previous15Sales)}).",
-              ),
-              _buildModalStepTile(
-                stepNumber: "2",
-                title: "Tasa de Crecimiento Relativo",
-                description: "Fórmula: [(Quincena Actual - Quincena Previa) / Quincena Previa] × 100.",
-              ),
-              _buildModalStepTile(
-                stepNumber: "3",
-                title: "Detección de Impulso Comercial",
-                description: "Si creces más de +10%, el motor proyecta aceleración de ventas y te sugiere asegurar stock. Si cae más de -10%, sugiere activar promociones.",
-              ),
-              const SizedBox(height: 12),
-              _buildModalPracticalTip(
-                tip: "💡 Revisa este indicador cada semana para anticiparte a quiebres de stock o temporadas lentas antes de que termine el mes.",
-              ),
-            ],
+      title: "¿Cómo se calcula el Diagnóstico del Motor?",
+      icon: Icons.speed_rounded,
+      iconColor: Colors.indigoAccent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildModalMetricHeader(
+            label: "Diagnóstico de Quincena",
+            value: _data!.isInitialPhase 
+                ? "🌱 Etapa Inicial" 
+                : "${_data!.salesVelocity >= 0 ? '+' : ''}${_data!.salesVelocity.toStringAsFixed(1)}%",
+            color: _data!.isInitialPhase ? Colors.teal : (_data!.salesVelocity >= 0 ? Colors.green : Colors.redAccent),
           ),
-        ),
+          const SizedBox(height: 16),
+          _buildTimelineStepCard(
+            stepNumber: "1",
+            title: "Comparación de Quincenas",
+            description: "Quincena Actual (${AppCurrency.format(_data!.current15Sales)}) vs Quincena Anterior (${AppCurrency.format(_data!.previous15Sales)}).",
+            isDark: isDark,
+          ),
+          _buildTimelineStepCard(
+            stepNumber: "2",
+            title: "Evaluación de Crecimiento y Madurez",
+            description: _data!.isInitialPhase 
+                ? "Con ${_data!.totalSnapshots} días registrados (< 14 días), el motor evalúa el arranque sin dividir entre cero." 
+                : "Fórmula: [(Quincena Actual - Quincena Previa) / Quincena Previa] × 100.",
+            isDark: isDark,
+          ),
+          _buildTimelineStepCard(
+            stepNumber: "3",
+            title: "Recomendación Comercial",
+            description: _data!.explanationText,
+            isDark: isDark,
+          ),
+          const SizedBox(height: 8),
+          _buildModalPracticalTip(
+            tip: "💡 Revisa este indicador cada semana para anticiparte a quiebres de stock o temporadas lentas antes de que termine el mes.",
+          ),
+        ],
       ),
     );
   }
 
   void _showPatrimonyExplainModal() {
     if (_data == null) return;
-    InteractiveSheetWrapper.show(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    _showUnifiedExplainModal(
       context: context,
-      builder: (ctx) => InteractiveSheetWrapper(
-        title: "¿Qué muestra la Evolución Patrimonial?",
-        icon: Icons.account_balance_rounded,
-        iconColor: Colors.purpleAccent,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildModalMetricHeader(
-                label: "Valor Actual del Inventario",
-                value: AppCurrency.format(_data!.currentInventoryValue),
-                color: Colors.blueAccent,
-              ),
-              const SizedBox(height: 16),
-              _buildModalStepTile(
-                stepNumber: "1",
-                title: "Inventario Valuado al Costo",
-                description: "Es la suma del stock físico multiplicado por su costo unitario de compra a proveedores.",
-              ),
-              _buildModalStepTile(
-                stepNumber: "2",
-                title: "Beneficio Neto Acumulado",
-                description: "Es el margen de ganancia real obtenido tras deducir costos de las ventas registradas.",
-              ),
-              _buildModalStepTile(
-                stepNumber: "3",
-                title: "¿Por qué hay 3 vistas en el gráfico?",
-                description: "Debido a que el inventario (${AppCurrency.format(_data!.currentInventoryValue)}) tiene una escala mucho mayor que el beneficio diario, la vista 'Normalizada' permite comparar su evolución porcentual (0% a 100%) sin que una curva aplaste a la otra.",
-              ),
-              const SizedBox(height: 12),
-              _buildModalPracticalTip(
-                tip: "💡 Un inventario en continuo ascenso con beneficio plano indica sobrecompra de mercadería estancada. Mantén ambas curvas creciendo en armonía.",
-              ),
-            ],
+      title: "¿Qué muestra la Evolución Patrimonial?",
+      icon: Icons.account_balance_rounded,
+      iconColor: Colors.purpleAccent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildModalMetricHeader(
+            label: "Valor Actual del Inventario",
+            value: AppCurrency.format(_data!.currentInventoryValue),
+            color: Colors.blueAccent,
           ),
-        ),
+          const SizedBox(height: 16),
+          _buildTimelineStepCard(
+            stepNumber: "1",
+            title: "Inventario Valuado al Costo",
+            description: "Es la suma del stock físico multiplicado por su costo unitario de compra a proveedores.",
+            isDark: isDark,
+          ),
+          _buildTimelineStepCard(
+            stepNumber: "2",
+            title: "Beneficio Diario vs Acumulado",
+            description: "El detalle diario muestra el beneficio neto estricto de la jornada (siempre menor o igual a las ventas del día) y el acumulado histórico.",
+            isDark: isDark,
+          ),
+          _buildTimelineStepCard(
+            stepNumber: "3",
+            title: "¿Por qué hay 3 vistas en el gráfico?",
+            description: "La vista 'Normalizada' (0% a 100%) permite comparar la curva de inventario y la de beneficios sin que una aplaste a la otra.",
+            isDark: isDark,
+          ),
+          const SizedBox(height: 8),
+          _buildModalPracticalTip(
+            tip: "💡 Un inventario en continuo ascenso con beneficio plano indica sobrecompra de mercadería estancada. Mantén ambas curvas creciendo en armonía.",
+          ),
+        ],
       ),
     );
   }
@@ -1621,47 +1960,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: color),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModalStepTile({
-    required String stepNumber,
-    required String title,
-    required String description,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: const BoxDecoration(
-              color: Colors.blueAccent,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                stepNumber,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 3),
-                Text(description, style: const TextStyle(fontSize: 12, color: Colors.grey, height: 1.35)),
-              ],
-            ),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color),
           ),
         ],
       ),

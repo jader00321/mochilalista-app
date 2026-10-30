@@ -199,15 +199,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   void _openDiscountModal(bool isDark) async {
     final provider = Provider.of<InventoryProvider>(context, listen: false);
-    final bool? result = await showModalBottomSheet(
+    final bool? result = await DiscountIntelligentModal.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => DiscountIntelligentModal(
-        presentation: _selectedPresentation,
-        provider: provider,
-        isDark: isDark,
-      ),
+      presentation: _selectedPresentation,
+      provider: provider,
+      isDark: isDark,
     );
     if (result == true && mounted) {
       _refreshData();

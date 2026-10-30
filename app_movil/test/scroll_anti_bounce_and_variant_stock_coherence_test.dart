@@ -279,7 +279,7 @@ void main() {
       expect(find.byType(ComparativeUpdateModal), findsOneWidget);
 
       // Verificar que Gestión de Stock está visible
-      expect(find.text("📦 Gestión de Stock"), findsOneWidget);
+      expect(find.textContaining("Gestión de Stock"), findsOneWidget);
 
       // Verificar títulos de unidades base
       expect(find.text("En Inventario Actual"), findsOneWidget);

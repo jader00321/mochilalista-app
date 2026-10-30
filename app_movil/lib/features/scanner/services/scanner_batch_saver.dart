@@ -113,15 +113,28 @@ class ScannerBatchSaver {
               'categoria_id': group.categoriaSugeridaId,
               'marca_id': idMarca,
               'estado': 'publico',
+              'modo_stock': group.modoStock,
+              'stock_compartido': group.stockCompartido,
+              'costo_base': group.costoBase,
               'fecha_actualizacion': DateTime.now().toIso8601String(),
             });
-          } else if (hasMarcaUpdate && idProducto != null) {
+          } else if (idProducto != null) {
+            Map<String, dynamic> prodUpdates = {
+              'modo_stock': group.modoStock,
+              'fecha_actualizacion': DateTime.now().toIso8601String(),
+            };
+            if (hasMarcaUpdate) {
+              prodUpdates['marca_id'] = idMarca;
+            }
+            if (group.stockCompartido > 0) {
+              prodUpdates['stock_compartido'] = group.stockCompartido;
+            }
+            if (group.costoBase > 0) {
+              prodUpdates['costo_base'] = group.costoBase;
+            }
             await txn.update(
               'productos',
-              {
-                'marca_id': idMarca,
-                'fecha_actualizacion': DateTime.now().toIso8601String(),
-              },
+              prodUpdates,
               where: 'id = ?',
               whereArgs: [idProducto],
             );
@@ -220,12 +233,48 @@ class ScannerBatchSaver {
                 updateData['codigo_barras'] = v.codigoBarra;
               }
 
+              final bool esCompartido = v.usaStockCompartido || (group.modoStock == 'COMPARTIDO');
+              if (esCompartido) {
+                updateData['usa_stock_compartido'] = 1;
+                if (v.cupoMaximoVariante != null) {
+                  updateData['cupo_maximo_variante'] = v.cupoMaximoVariante;
+                }
+              } else if (group.modoStock == 'INDEPENDIENTE') {
+                updateData['usa_stock_compartido'] = 0;
+              }
+
               await txn.update(
                 'presentaciones_producto',
                 updateData,
                 where: 'id = ?',
                 whereArgs: [idPres],
               );
+
+              // 🔗 Si la presentación usa stock compartido, sincronizar el pool central y hermanos
+              final bool usaCompartido = (oldP.first['usa_stock_compartido'] as int? ?? 0) == 1 || esCompartido;
+              if (usaCompartido && idProducto != null) {
+                final int nuevoStock = updateData['stock_actual'] as int;
+                final factorVenta = (v.effectiveFactorVenta > 0) ? v.effectiveFactorVenta : 1;
+                final Map<String, dynamic> prodUpdates = {
+                  'stock_compartido': nuevoStock,
+                  'fecha_actualizacion': DateTime.now().toIso8601String(),
+                };
+                if (v.updateCosto) {
+                  prodUpdates['costo_base'] = v.costoUnitarioSugerido / factorVenta;
+                }
+                await txn.update(
+                  'productos',
+                  prodUpdates,
+                  where: 'id = ?',
+                  whereArgs: [idProducto],
+                );
+                await txn.update(
+                  'presentaciones_producto',
+                  {'stock_actual': nuevoStock},
+                  where: 'producto_id = ? AND usa_stock_compartido = 1',
+                  whereArgs: [idProducto],
+                );
+              }
 
               // Auditar cambios en descuentos si la factura modificó el precio/oferta
               if (updateData.containsKey('precio_oferta')) {
@@ -303,6 +352,7 @@ class ScannerBatchSaver {
                 limit: 1,
               );
               final int esDefaultValue = existingDefaults.isEmpty ? 1 : 0;
+              final bool esCompartido = v.usaStockCompartido || (group.modoStock == 'COMPARTIDO');
 
               int newPresId = await txn.insert('presentaciones_producto', {
                 'producto_id': idProducto,
@@ -320,7 +370,9 @@ class ScannerBatchSaver {
                 'factor_ganancia_venta': v.factorGananciaVentaSugerido,
                 'costo_unitario_calculado': v.costoUnitarioSugerido,
                 'precio_venta_final': v.precioVentaSugerido,
-                'stock_actual': cantidadSumar,
+                'stock_actual': (esCompartido && group.stockCompartido > 0) ? group.stockCompartido : cantidadSumar,
+                'usa_stock_compartido': esCompartido ? 1 : 0,
+                'cupo_maximo_variante': v.cupoMaximoVariante,
                 'estado': 'publico',
                 'activo': 1,
                 'es_default': esDefaultValue,
@@ -338,6 +390,65 @@ class ScannerBatchSaver {
                   'fecha_registro': DateTime.now().toIso8601String(),
                 });
               }
+            }
+          }
+
+          // Regla 3: Sincronización atómica de todas las variantes hermanas en SQLite dentro de la misma transacción
+          if (idProducto != null && (group.modoStock == 'COMPARTIDO' || group.modoStock == 'MIXTO')) {
+            int poolFinal = group.stockCompartido;
+            double costoBaseFinal = group.costoBase;
+
+            if (poolFinal <= 0) {
+              final currentShared = await txn.rawQuery('''
+                SELECT IFNULL(MAX(stock_actual), 0) as max_shared
+                FROM presentaciones_producto
+                WHERE producto_id = ? AND usa_stock_compartido = 1
+              ''', [idProducto]);
+              if (currentShared.isNotEmpty) {
+                poolFinal = (currentShared.first['max_shared'] as num?)?.toInt() ?? 0;
+              }
+            }
+
+            if (costoBaseFinal <= 0) {
+              final costRow = await txn.rawQuery('''
+                SELECT costo_unitario_calculado, unidades_por_venta
+                FROM presentaciones_producto
+                WHERE producto_id = ? AND usa_stock_compartido = 1
+                ORDER BY unidades_por_venta ASC
+                LIMIT 1
+              ''', [idProducto]);
+              if (costRow.isNotEmpty) {
+                final c = (costRow.first['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
+                final f = (costRow.first['unidades_por_venta'] as int?) ?? 1;
+                if (f > 0) costoBaseFinal = c / f;
+              }
+            }
+
+            // 1. Actualizar producto padre
+            Map<String, dynamic> prodSync = {
+              'modo_stock': group.modoStock,
+              'stock_compartido': poolFinal,
+              'fecha_actualizacion': DateTime.now().toIso8601String(),
+            };
+            if (costoBaseFinal > 0) {
+              prodSync['costo_base'] = costoBaseFinal;
+            }
+            await txn.update('productos', prodSync, where: 'id = ?', whereArgs: [idProducto]);
+
+            // 2. Actualizar stock atómicamente en todas las presentaciones compartidas
+            await txn.rawUpdate('''
+              UPDATE presentaciones_producto
+              SET stock_actual = ?
+              WHERE producto_id = ? AND usa_stock_compartido = 1
+            ''', [poolFinal, idProducto]);
+
+            // 3. Actualizar costo unitario proporcional si costo_base fue actualizado
+            if (costoBaseFinal > 0) {
+              await txn.rawUpdate('''
+                UPDATE presentaciones_producto
+                SET costo_unitario_calculado = ? * unidades_por_venta
+                WHERE producto_id = ? AND usa_stock_compartido = 1
+              ''', [costoBaseFinal, idProducto]);
             }
           }
         }

@@ -23,6 +23,7 @@ import 'package:app_movil/features/catalog/widgets/auto_categorization_modal.dar
 import 'package:app_movil/features/catalog/screens/product_detail_screen.dart';
 import 'package:app_movil/core/widgets/price_update_modal.dart';
 import 'package:app_movil/core/widgets/stock_update_modal.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ProductsTab extends StatefulWidget {
   const ProductsTab({super.key});
@@ -138,23 +139,30 @@ class _ProductsTabState extends State<ProductsTab>
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E28) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 20,
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      builder: (ctx) {
+        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+        return Container(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom + 8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 20,
+              ),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            bottom: true,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 40,
@@ -219,7 +227,9 @@ class _ProductsTabState extends State<ProductsTab>
         ),
       ),
     );
-  }
+  },
+);
+}
 
   Widget _buildSourceOption(
     BuildContext ctx,
@@ -369,103 +379,114 @@ class _ProductsTabState extends State<ProductsTab>
   ) {
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(30),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A1A24) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 20,
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 5,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white24 : Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            const SizedBox(height: 30),
-            Icon(Icons.error_outline_rounded, size: 70, color: Colors.red[400]),
-            const SizedBox(height: 24),
-            Text(
-              "No se pudo procesar",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "La IA no pudo extraer datos legibles de esta imagen. Asegúrate de que la factura esté bien iluminada y nítida.",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _processImage(
-                    source,
-                    isDark,
-                    cachedImage: cachedImage,
-                  ); // REINTENTAR CON LA MISMA IMAGEN
-                },
-                icon: const Icon(Icons.refresh),
-                label: const Text(
-                  "Reintentar con esta foto",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      builder: (ctx) {
+        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+        return SafeArea(
+          top: false,
+          bottom: true,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(30, 30, 30, effectiveBottom + 16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1A1A24) : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 20,
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isDark ? Colors.blue[700] : Colors.blue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+              ],
+            ),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white24 : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _handleInvoiceScan(isDark, false); // VOLVER AL SELECTOR
-                },
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: Text(
-                  "Tomar otra foto",
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[300] : Colors.grey[700],
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                  const SizedBox(height: 30),
+                  Icon(Icons.error_outline_rounded, size: 70, color: Colors.red[400]),
+                  const SizedBox(height: 24),
+                  Text(
+                    "No se pudo procesar",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "La IA no pudo extraer datos legibles de esta imagen. Asegúrate de que la factura esté bien iluminada y nítida.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _processImage(
+                          source,
+                          isDark,
+                          cachedImage: cachedImage,
+                        ); // REINTENTAR CON LA MISMA IMAGEN
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text(
+                        "Reintentar con esta foto",
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark ? Colors.blue[700] : Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _handleInvoiceScan(isDark, false); // VOLVER AL SELECTOR
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: Text(
+                        "Tomar otra foto",
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[300] : Colors.grey[700],
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -545,15 +566,13 @@ class _ProductsTabState extends State<ProductsTab>
   void _openActions(BuildContext context, InventoryWrapper wrapper) {
     // Si bien los invitados pueden ver los detalles, si intentan editar dentro
     // de ProductActionSheet el backend los rebotará automáticamente
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => ProductActionSheet(
-        product: wrapper.product,
-        initialPresentationId: wrapper.presentation.id,
-      ),
-    ).then((_) => setState(() {}));
+    ProductActionSheet.show(
+      context,
+      product: wrapper.product,
+      initialPresentationId: wrapper.presentation.id,
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   void _toggleFab() {

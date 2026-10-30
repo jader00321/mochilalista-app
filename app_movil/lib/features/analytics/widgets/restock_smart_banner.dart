@@ -187,7 +187,7 @@ class _RestockSmartBannerState extends State<RestockSmartBanner>
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  _alertCount == 1 ? "1 Alertas de Stock" : "$_alertCount Alertas de Stock",
+                  _alertCount == 1 ? "1 Alerta de Stock" : "$_alertCount Alertas de Stock",
                   style: TextStyle(
                     color: isDark ? const Color(0xFFFFB74D) : const Color(0xFFE65100),
                     fontSize: 12.5,

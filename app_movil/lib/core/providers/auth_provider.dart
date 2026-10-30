@@ -117,14 +117,29 @@ class AuthProvider with ChangeNotifier {
 
   // 🔥 SOLUCIÓN AL BUG DE NAVEGACIÓN Y CARGA INFINITA
   Future<bool> createProfileAndLogin({
-    required String nombreDueno, required String telefono, required String nombreNegocio,
-    required String direccion, String? logoPath, required String moneda, String? pin, String? paymentInfo
+    required String nombreDueno,
+    required String telefono,
+    required String nombreNegocio,
+    required String direccion,
+    String? logoPath,
+    required String moneda,
+    String? pin,
+    String? paymentInfo,
+    String? ruc,
+    String? email,
   }) async {
     _setLoading(true);
     try {
       final newUser = await _authService.registerLocalProfile(
-        nombreDueno: nombreDueno, telefono: telefono, nombreNegocio: nombreNegocio, 
-        direccion: direccion, logoPath: logoPath, moneda: moneda, informacionPago: paymentInfo
+        nombreDueno: nombreDueno,
+        telefono: telefono,
+        nombreNegocio: nombreNegocio, 
+        direccion: direccion,
+        logoPath: logoPath,
+        moneda: moneda,
+        informacionPago: paymentInfo,
+        ruc: ruc,
+        email: email,
       );
 
       if (pin != null && pin.isNotEmpty) {

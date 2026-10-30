@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/models/product_create_draft.dart';
@@ -13,6 +14,8 @@ import 'package:app_movil/features/catalog/widgets/variants/variant_reorder_moda
 import 'package:app_movil/features/catalog/widgets/variants/variant_section_header.dart';
 import 'package:app_movil/core/widgets/product_optional_info.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/features/catalog/widgets/form/product_stock_strategy_selector.dart';
+import 'package:app_movil/core/widgets/presentation_card/presentation_math_engine.dart';
 
 class ProductCreateScreen extends StatefulWidget {
   final String? initialBarcode;
@@ -28,6 +31,10 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
   final _descCtrl = TextEditingController();
   final _imgUrlCtrl = TextEditingController();
   final _barcodeCtrl = TextEditingController();
+
+  String _modoStock = 'INDEPENDIENTE';
+  final _sharedStockCtrl = TextEditingController(text: '0');
+  final _baseCostCtrl = TextEditingController(text: '0.00');
 
   int? _selectedCategoryId;
   String? _selectedCategoryName;
@@ -50,6 +57,9 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
     _descCtrl.addListener(_syncDraft);
     _imgUrlCtrl.addListener(_syncDraft);
     _barcodeCtrl.addListener(_syncDraft);
+    _sharedStockCtrl.addListener(_syncDraft);
+    _baseCostCtrl.addListener(_syncDraft);
+    _baseCostCtrl.addListener(_onBaseCostChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final invProv = Provider.of<InventoryProvider>(context, listen: false);
@@ -75,11 +85,87 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
           _selectedCategoryName = data.categoryName;
           _generalProviderId = data.generalProviderId;
           _generalProviderName = data.generalProviderName;
+          _modoStock = data.modoStock;
+          _sharedStockCtrl.text = data.stockCompartido.toString();
+          _baseCostCtrl.text = data.costoBase > 0 ? data.costoBase.toStringAsFixed(2) : '0.00';
         });
       } else if (mounted) {
         setState(() {});
       }
+      if (widget.initialBarcode != null && widget.initialBarcode!.trim().isNotEmpty && mounted) {
+        _barcodeCtrl.text = widget.initialBarcode!.trim();
+        if (_controllers.isNotEmpty && _controllers.first['barcode'] is TextEditingController) {
+          (_controllers.first['barcode'] as TextEditingController).text = widget.initialBarcode!.trim();
+        }
+      }
     });
+  }
+
+  void _onBaseCostChanged() {
+    final baseCost = double.tryParse(_baseCostCtrl.text) ?? 0.0;
+    for (var c in _controllers) {
+      c['costoBaseUnitario'] = baseCost;
+      final bool isShared = _modoStock == 'COMPARTIDO' ||
+          (_modoStock == 'MIXTO' && c['usaStockCompartido'] == true);
+      if (isShared) {
+        final factor = int.tryParse((c['unidadesVenta'] as TextEditingController).text) ?? 1;
+        final safeFactor = factor <= 0 ? 1 : factor;
+        final newCost = baseCost * safeFactor;
+        (c['costoPres'] as TextEditingController).text = newCost.toStringAsFixed(2);
+        final margen = double.tryParse((c['margen'] as TextEditingController).text) ?? 1.35;
+        (c['precioVenta'] as TextEditingController).text = (newCost * margen).toStringAsFixed(2);
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _onStrategyChanged(String strategy) {
+    HapticFeedback.selectionClick();
+    final baseCost = double.tryParse(_baseCostCtrl.text) ?? 0.0;
+    PresentationMathEngine.applyGlobalStrategyChange(
+      controllers: _controllers,
+      newStrategy: strategy,
+      baseCost: baseCost,
+      isEditMode: false,
+    );
+    setState(() {
+      _modoStock = strategy;
+      _syncDraft();
+    });
+  }
+
+  void _createUnitVariantAutomatically() {
+    HapticFeedback.mediumImpact();
+    final baseCost = double.tryParse(_baseCostCtrl.text) ?? 0.0;
+    final margen = 1.35;
+    final pVenta = baseCost * margen;
+    final String newId = UniqueKey().toString();
+    final newMap = ProductControllerFactory.createNewControllerMap(
+      id: newId,
+      isEditMode: false,
+      specificName: "Unidad",
+      unidadVenta: "Unidad",
+      unidadesVenta: "1",
+      costoPres: baseCost.toStringAsFixed(2),
+      margen: margen.toStringAsFixed(2),
+      precioVenta: pVenta.toStringAsFixed(2),
+      stockInicial: "0",
+      stockFinal: _sharedStockCtrl.text,
+      usaStockCompartido: true,
+    );
+    newMap['costoBaseUnitario'] = baseCost;
+    setState(() {
+      _controllers.add(newMap);
+      _presentationKeys[newId] = GlobalKey();
+      _syncDraft();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("✨ Variante 'Unidad (x1)' agregada al pool compartido"),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   ProductCreateDraft _buildCurrentDraft() {
@@ -97,6 +183,9 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
       generalState: _generalState,
       controllers: _controllers,
       deferredProviderNames: _deferredProviderNames,
+      modoStock: _modoStock,
+      stockCompartido: int.tryParse(_sharedStockCtrl.text.trim()) ?? 0,
+      costoBase: double.tryParse(_baseCostCtrl.text.trim()) ?? 0.0,
     );
   }
 
@@ -116,6 +205,9 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
 
   @override
   void dispose() {
+    _baseCostCtrl.removeListener(_onBaseCostChanged);
+    _sharedStockCtrl.dispose();
+    _baseCostCtrl.dispose();
     if (!_isSaving) {
       final draft = _buildCurrentDraft();
       final invProv = Provider.of<InventoryProvider>(context, listen: false);
@@ -282,6 +374,9 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
       generalState: _generalState,
       controllers: _controllers,
       deferredProviderNames: _deferredProviderNames,
+      modoStock: _modoStock,
+      stockCompartido: int.tryParse(_sharedStockCtrl.text.trim()) ?? 0,
+      costoBase: double.tryParse(_baseCostCtrl.text.trim()) ?? 0.0,
     );
     if (success && mounted) {
       _isSaving = true;
@@ -385,7 +480,18 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
                   imgCtrl: _imgUrlCtrl,
                   barcodeCtrl: _barcodeCtrl,
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 16),
+                ProductStockStrategySelector(
+                  selectedStrategy: _modoStock,
+                  onStrategyChanged: _onStrategyChanged,
+                  sharedStockController: _sharedStockCtrl,
+                  baseCostController: _baseCostCtrl,
+                  controllers: _controllers,
+                  isDark: isDark,
+                  isEditMode: false,
+                  onAutoCreateUnitVariant: _createUnitVariantAutomatically,
+                ),
+                const SizedBox(height: 20),
                 VariantSectionHeader(
                   isDark: isDark,
                   allExpanded: _allExpanded,
@@ -419,6 +525,9 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
                   isDark: isDark,
                   provider: provider,
                   deferredProviderNames: _deferredProviderNames,
+                  modoStock: _modoStock,
+                  sharedStockCtrl: _sharedStockCtrl,
+                  baseCostCtrl: _baseCostCtrl,
                   onSetDefault: (i) => setState(() => ProductCreateOperations.setDefault(index: i, controllers: _controllers, onSyncDraft: _syncDraft, context: context)),
                   onMoveUp: (i) => setState(() => ProductCreateOperations.moveUp(index: i, controllers: _controllers, onSyncDraft: _syncDraft)),
                   onMoveDown: (i) => setState(() => ProductCreateOperations.moveDown(index: i, controllers: _controllers, onSyncDraft: _syncDraft)),

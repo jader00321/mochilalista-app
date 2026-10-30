@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_view/photo_view.dart';
@@ -25,8 +24,13 @@ import 'package:app_movil/core/screens/home_screen.dart';
 import 'package:app_movil/features/profile/screens/printer_config_screen.dart';
 import 'package:app_movil/features/profile/screens/notifications_screen.dart';
 import 'package:app_movil/features/profile/screens/backup_screen.dart'; 
+import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/utils/hardware_validator.dart';
+import 'package:app_movil/features/profile/screens/map_picker_screen.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/profile/widgets/profile_completion_indicator.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -116,20 +120,21 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       BusinessInfoCard(business: auth.currentBusiness), 
                       // 🔧 TAREA 3.2: Indicador de completitud del perfil
                       ProfileCompletionIndicator(
-                          user: user,
-                          hasPin: auth.hasPinCache,
-                          isDark: isDark,
-                          onEditProfile: () => _showEditProfile(context),
-                          onEditBusiness: () => _showEditBusiness(context),
-                          onChangeLogo: () {
-                            if (auth.currentBusiness == null) {
-                              _showEditBusiness(context);
-                            } else {
-                              _showPhotoOptions(context, auth, validLogoPath);
-                            }
-                          },
-                          onChangePin: () => _showChangePassword(context),
-                        ),
+                        user: user,
+                        hasPin: auth.hasPinCache,
+                        isDark: isDark,
+                        onEditProfile: (field) => _showEditProfile(context, initialFocusField: field),
+                        onEditBusiness: (field) => _showEditBusiness(context, initialFocusField: field),
+                        onChangeLogo: () {
+                          if (auth.currentBusiness == null) {
+                            _showEditBusiness(context);
+                          } else {
+                            _showPhotoOptions(context, auth, validLogoPath);
+                          }
+                        },
+                        onChangePin: () => _showChangePassword(context),
+                        onConfigureGps: () => _openDirectGpsPicker(context, auth),
+                      ),
                       const SizedBox(height: 35),
 
                       _buildSectionHeader("Configuración General", textColor),
@@ -320,9 +325,12 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                               child: OutlinedButton.icon(
                                 onPressed: () => _showDeleteBusinessModal(context, auth, isDark),
                                 icon: const Icon(Icons.delete_forever_outlined, size: 18),
-                                label: const Text(
-                                  "Eliminar este Perfil de Negocio...",
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                label: const FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    "Eliminar este perfil de negocio",
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
                                 ),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: isDark ? Colors.red[300] : Colors.red[700],
@@ -442,7 +450,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final int draftsCount = workbench.inProcessList.length;
     
     final double salesDouble = salesProv.todaySalesTotal;
-    final String salesTotal = salesDouble == 0 ? "Sin ventas" : NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ').format(salesDouble);
+    final String salesTotal = salesDouble == 0 ? "Sin ventas" : AppCurrency.format(salesDouble);
 
     return Container(
       width: double.infinity,
@@ -546,56 +554,65 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF23232F) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 15),
-              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10))),
-              const SizedBox(height: 20),
-              
-              if (validLogoPath != null && !validLogoPath.startsWith('http'))
-                _buildModalOption(icon: Icons.fullscreen, text: "Ver foto en pantalla completa", color: Colors.blue, isDark: isDark, onTap: () {
-                  Navigator.pop(ctx);
-                  _openFullScreenImage(validLogoPath);
-                }),
-              
-              _buildModalOption(icon: Icons.camera_alt, text: "Tomar foto con la cámara", color: Colors.blue, isDark: isDark, onTap: () {
-                Navigator.pop(ctx);
-                _pickImage(context, auth, source: ImageSource.camera);
-              }),
-
-              _buildModalOption(icon: Icons.image_search, text: "Elegir foto de la galería", color: Colors.green, isDark: isDark, onTap: () {
-                Navigator.pop(ctx);
-                _pickImage(context, auth, source: ImageSource.gallery);
-              }),
-              
-              if (validLogoPath != null)
-                _buildModalOption(icon: Icons.delete_outline, text: "Eliminar foto actual", color: Colors.red, isDark: isDark, isDestructive: true, onTap: () async {
-                  Navigator.pop(ctx);
-                  final biz = auth.currentBusiness!;
-                  bool success = await auth.updateBusinessProfile(biz.commercialName, biz.ruc ?? "", biz.address ?? "", biz.paymentInfo ?? "", biz.latitud, biz.longitud, true, true, clearLogo: true);
-                  if (context.mounted) {
-                    if (success) {
-                      CustomSnackBar.show(context, message: "La foto ha sido eliminada.", isError: false);
-                    } else {
-                      CustomSnackBar.show(context, message: auth.errorMessage, isError: true);
-                    }
-                  }
-                }),
-                
-              const SizedBox(height: 15),
-            ],
+      builder: (ctx) {
+        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+        return Container(
+          margin: EdgeInsets.fromLTRB(16, 16, 16, effectiveBottom + 8),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF23232F) : Colors.white,
+            borderRadius: BorderRadius.circular(24),
           ),
-        ),
-      ),
+          child: SafeArea(
+            top: false,
+            bottom: true,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 15),
+                  Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10))),
+                  const SizedBox(height: 20),
+                  
+                  if (validLogoPath != null && !validLogoPath.startsWith('http'))
+                    _buildModalOption(icon: Icons.fullscreen, text: "Ver foto en pantalla completa", color: Colors.blue, isDark: isDark, onTap: () {
+                      Navigator.pop(ctx);
+                      _openFullScreenImage(validLogoPath);
+                    }),
+                  
+                  _buildModalOption(icon: Icons.camera_alt, text: "Tomar foto con la cámara", color: Colors.blue, isDark: isDark, onTap: () {
+                    Navigator.pop(ctx);
+                    _pickImage(context, auth, source: ImageSource.camera);
+                  }),
+
+                  _buildModalOption(icon: Icons.image_search, text: "Elegir foto de la galería", color: Colors.green, isDark: isDark, onTap: () {
+                    Navigator.pop(ctx);
+                    _pickImage(context, auth, source: ImageSource.gallery);
+                  }),
+                  
+                  if (validLogoPath != null)
+                    _buildModalOption(icon: Icons.delete_outline, text: "Eliminar foto actual", color: Colors.red, isDark: isDark, isDestructive: true, onTap: () async {
+                      Navigator.pop(ctx);
+                      final biz = auth.currentBusiness!;
+                      bool success = await auth.updateBusinessProfile(biz.commercialName, biz.ruc ?? "", biz.address ?? "", biz.paymentInfo ?? "", biz.latitud, biz.longitud, true, true, clearLogo: true);
+                      if (context.mounted) {
+                        if (success) {
+                          CustomSnackBar.show(context, message: "La foto ha sido eliminada.", isError: false);
+                        } else {
+                          CustomSnackBar.show(context, message: auth.errorMessage, isError: true);
+                        }
+                      }
+                    }),
+                    
+                  const SizedBox(height: 15),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -653,9 +670,85 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     }
   }
 
-  void _showEditProfile(BuildContext context) => showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (ctx) => const EditProfileModal());
-  void _showEditBusiness(BuildContext context) => showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (ctx) => const EditBusinessModal());
-  void _showChangePassword(BuildContext context) => showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (ctx) => const ChangePasswordModal());
+  Future<void> _showEditProfile(BuildContext context, {String? initialFocusField}) async {
+    await showModalBottomSheet(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => EditProfileModal(initialFocusField: initialFocusField),
+    );
+    if (context.mounted) {
+      await Provider.of<AuthProvider>(context, listen: false).refreshActiveUser();
+    }
+  }
+
+  Future<void> _showEditBusiness(BuildContext context, {String? initialFocusField}) async {
+    await showModalBottomSheet(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => EditBusinessModal(initialFocusField: initialFocusField),
+    );
+    if (context.mounted) {
+      await Provider.of<AuthProvider>(context, listen: false).refreshActiveUser();
+    }
+  }
+
+  Future<void> _showChangePassword(BuildContext context) async {
+    await showModalBottomSheet(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => const ChangePasswordModal(),
+    );
+    if (context.mounted) {
+      await Provider.of<AuthProvider>(context, listen: false).refreshActiveUser();
+    }
+  }
+
+  Future<void> _openDirectGpsPicker(BuildContext context, AuthProvider auth) async {
+    final isGpsReady = await HardwareValidator.checkGPS(context);
+    if (!isGpsReady) return;
+    if (!context.mounted) return;
+
+    final biz = auth.currentBusiness;
+    final LatLng? result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapPickerScreen(
+          initialLat: biz?.latitud,
+          initialLng: biz?.longitud,
+        ),
+      ),
+    );
+
+    if (result != null && biz != null) {
+      bool success = await auth.updateBusinessProfile(
+        biz.commercialName,
+        biz.ruc ?? '',
+        biz.address ?? '',
+        biz.paymentInfo,
+        result.latitude,
+        result.longitude,
+        biz.printerConfig != null && biz.printerConfig!.contains('"show_address":false') ? false : true,
+        biz.printerConfig != null && biz.printerConfig!.contains('"show_ruc":false') ? false : true,
+      );
+      if (!context.mounted) return;
+      if (success) {
+        await auth.refreshActiveUser();
+        if (context.mounted) {
+          CustomSnackBar.show(context, message: "Ubicación GPS actualizada", isError: false);
+        }
+      } else {
+        if (context.mounted) {
+          CustomSnackBar.show(context, message: auth.errorMessage, isError: true);
+        }
+      }
+    }
+  }
 
   void _confirmLogout(BuildContext context, AuthProvider auth, bool isDark) {
     showDialog(

@@ -36,10 +36,11 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
 
   final List<String> _categories = [
     'Todas',
-    'Clima y Rutas',
     'Mi Región',
+    'Clima y Rutas',
     'Leyes y SUNAT',
-    'Campañas',
+    'Proveedores y Abastecimiento',
+    'Fechas y Campañas',
   ];
 
   static const String _prefRegionKey = 'commercial_radar_selected_region';
@@ -152,6 +153,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
@@ -198,6 +200,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
                   child: ListView(
                     shrinkWrap: true,
                     physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: InteractiveSheetWrapper.kModalScrollBottomClearance),
                     children: [
                       ..._predefinedRegions.map((reg) {
                         final isSelected = reg == _selectedRegion;
@@ -318,59 +321,96 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
   }
 
   IconData _getCategoryIcon(String category) {
-    switch (category) {
-      case 'Clima y Rutas':
-        return Icons.cloud_outlined;
-      case 'Leyes y SUNAT':
-        return Icons.gavel_rounded;
-      case 'Campañas':
-        return Icons.campaign_rounded;
-      case 'Mi Región':
-      default:
-        return Icons.location_on_outlined;
+    final cat = category.toLowerCase();
+    if (cat.contains('clima') || cat.contains('ruta')) {
+      return Icons.wb_cloudy_outlined;
+    } else if (cat.contains('ley') || cat.contains('sunat')) {
+      return Icons.gavel_rounded;
+    } else if (cat.contains('proveedor') || cat.contains('abastecimiento')) {
+      return Icons.local_shipping_outlined;
+    } else if (cat.contains('campaña') || cat.contains('campana') || cat.contains('fecha')) {
+      return Icons.event_available_outlined;
+    } else {
+      return Icons.location_on_outlined;
     }
   }
 
   LinearGradient _getBannerGradient(String category) {
-    switch (category) {
-      case 'Clima y Rutas':
-        return const LinearGradient(
-          colors: [Color(0xFF0284C7), Color(0xFF0369A1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        );
-      case 'Leyes y SUNAT':
-        return const LinearGradient(
-          colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        );
-      case 'Campañas':
-        return const LinearGradient(
-          colors: [Color(0xFFD97706), Color(0xFFB45309)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        );
-      case 'Mi Región':
-      default:
-        return const LinearGradient(
-          colors: [Color(0xFF0D9488), Color(0xFF0F766E)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        );
+    final cat = category.toLowerCase();
+    if (cat.contains('clima') || cat.contains('ruta')) {
+      return const LinearGradient(
+        colors: [Color(0xFF0284C7), Color(0xFF0369A1)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    } else if (cat.contains('ley') || cat.contains('sunat')) {
+      return const LinearGradient(
+        colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    } else if (cat.contains('proveedor') || cat.contains('abastecimiento')) {
+      return const LinearGradient(
+        colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    } else if (cat.contains('campaña') || cat.contains('campana') || cat.contains('fecha')) {
+      return const LinearGradient(
+        colors: [Color(0xFFD97706), Color(0xFFB45309)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    } else {
+      return const LinearGradient(
+        colors: [Color(0xFF0D9488), Color(0xFF0F766E)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
     }
   }
 
   List<CommercialNewsItem> get _filteredItems {
     if (_selectedCategory == 'Todas') return _newsItems;
-    return _newsItems.where((item) => item.category == _selectedCategory).toList();
+    final catLower = _selectedCategory.toLowerCase();
+    return _newsItems.where((item) {
+      final iCat = item.category.toLowerCase();
+      if (catLower.contains('clima') && (iCat.contains('clima') || iCat.contains('ruta'))) return true;
+      if (catLower.contains('region') && (iCat.contains('region') || iCat.contains('región'))) return true;
+      if (catLower.contains('sunat') && (iCat.contains('sunat') || iCat.contains('ley'))) return true;
+      if (catLower.contains('proveedor') && (iCat.contains('proveedor') || iCat.contains('abastecimiento'))) return true;
+      if (catLower.contains('campaña') && (iCat.contains('campaña') || iCat.contains('campana') || iCat.contains('fecha'))) return true;
+      return item.category == _selectedCategory;
+    }).toList();
+  }
+
+  int _rotationOffset = 0;
+
+  void _rotateSignals() {
+    final items = _filteredItems;
+    if (items.isEmpty) return;
+    setState(() {
+      _rotationOffset = (_rotationOffset + 3) % items.length;
+    });
+  }
+
+  List<CommercialNewsItem> _getRotatedPreview(List<CommercialNewsItem> items, int count) {
+    if (items.isEmpty) return [];
+    if (items.length <= count) return items;
+    final result = <CommercialNewsItem>[];
+    for (int i = 0; i < count; i++) {
+      result.add(items[(_rotationOffset + i) % items.length]);
+    }
+    return result;
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final filtered = _filteredItems;
-    final previewItems = filtered.take(2).toList();
+    // Priorizar distintas categorías y rotar dinámicamente
+    final diversified = CommercialRadarService.interleaveCategories(filtered);
+    final previewItems = _getRotatedPreview(diversified, 3);
 
     return GlassCard(
       isDark: widget.isDark,
@@ -446,6 +486,11 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.shuffle_rounded, size: 20),
+                tooltip: "Alternar señales",
+                onPressed: filtered.length > 1 ? _rotateSignals : null,
               ),
               IconButton(
                 icon: const Icon(Icons.refresh, size: 20),
@@ -694,37 +739,44 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: (widget.isDark ? Colors.blue[400]! : Colors.blue[700]!).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        item.sourceName,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          color: widget.isDark ? Colors.blue[300] : Colors.blue[800],
+                    const SizedBox(width: 6),
+                    Flexible(
+                      flex: 2,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: (widget.isDark ? Colors.blue[400]! : Colors.blue[700]!).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          item.sourceName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                            color: widget.isDark ? Colors.blue[300] : Colors.blue[800],
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Expanded(
+                      flex: 2,
                       child: Text(
                         item.formattedDateWithTimeAgo,
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10.5,
                           color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 2),
                     Icon(
                       Icons.open_in_new, 
-                      size: 14, 
+                      size: 13, 
                       color: widget.isDark ? Colors.white38 : Colors.grey[400],
                     ),
                   ],
@@ -861,7 +913,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
                       ),
                       icon: const Icon(Icons.arrow_outward, size: 14),
                       label: Text(
-                        "Leer en ${item.sourceName} ↗",
+                        "Leer en ${item.sourceName}",
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                       onPressed: () => _launchSourceUrl(item.sourceUrl),

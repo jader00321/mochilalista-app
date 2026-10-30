@@ -7,8 +7,9 @@ class ProductQueries {
     pr.codigo_barras AS pres_cb, pr.proveedor_id AS pres_prov, pr.ump_compra, pr.precio_ump_proveedor,
     pr.cantidad_ump_comprada, pr.total_pago_lote, pr.unidades_por_lote, pr.factura_carga_id,
     pr.unidad_venta, pr.unidades_por_venta, pr.costo_unitario_calculado, pr.factor_ganancia_venta,
-    pr.precio_venta_final, pr.stock_actual, pr.stock_alerta, pr.es_default, pr.precio_oferta,
-    pr.tipo_descuento, pr.valor_descuento, pr.estado AS pres_estado, pr.activo AS pres_activo
+    pr.precio_venta_final, pr.stock_actual, pr.stock_alerta, pr.es_default, pr.orden, pr.precio_oferta,
+    pr.tipo_descuento, pr.valor_descuento, pr.estado AS pres_estado, pr.activo AS pres_activo,
+    pr.usa_stock_compartido, pr.cupo_maximo_variante
     FROM presentaciones_producto pr
     INNER JOIN productos p ON pr.producto_id = p.id
     LEFT JOIN marcas m ON p.marca_id = m.id
@@ -29,9 +30,11 @@ class ProductQueries {
       'unidad_venta': row['unidad_venta'], 'unidades_por_venta': row['unidades_por_venta'],
       'costo_unitario_calculado': row['costo_unitario_calculado'], 'factor_ganancia_venta': row['factor_ganancia_venta'],
       'precio_venta_final': row['precio_venta_final'], 'stock_actual': row['stock_actual'],
-      'stock_alerta': row['stock_alerta'], 'es_default': row['es_default'], 'precio_oferta': row['precio_oferta'],
+      'stock_alerta': row['stock_alerta'], 'es_default': row['es_default'], 'orden': row['orden'], 'precio_oferta': row['precio_oferta'],
       'tipo_descuento': row['tipo_descuento'], 'valor_descuento': row['valor_descuento'],
       'estado': row['pres_estado'], 'activo': row['pres_activo'],
+      'usa_stock_compartido': row['usa_stock_compartido'],
+      'cupo_maximo_variante': row['cupo_maximo_variante'],
     };
     return InventoryWrapper(
       product: Product.fromJson(productJson), 

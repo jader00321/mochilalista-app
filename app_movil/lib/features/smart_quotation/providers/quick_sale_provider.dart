@@ -8,6 +8,7 @@ import 'package:app_movil/features/promotions/models/bundle_model.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart'; 
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/features/catalog/models/product_model.dart';
 
 class QuickSaleState {
   final List<MatchedProduct> cart = [];
@@ -172,6 +173,128 @@ class QuickSaleProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// 🔗 Valida la demanda acumulada en vivo para ítems que comparten pool de stock.
+  /// Cumple estrictamente con la Regla 2: Aísla variantes compartidas (item.productId == prodId && item.usaStockCompartido)
+  /// de variantes independientes en modo MIXTO o INDEPENDIENTE.
+  /// 🔗 Calcula el stock base restante del pool compartido descontando la demanda de todas las variantes del carrito
+  int getRemainingPoolStock(int productId, int initialPool) {
+    if (productId <= 0) return initialPool;
+    int currentDemand = 0;
+    for (final item in _currentState.cart) {
+      if (item.productId == productId && item.usaStockCompartido) {
+        final qty = _currentState.quantities[item.presentationId] ?? 0;
+        final f = item.conversionFactor > 0 ? item.conversionFactor : 1;
+        currentDemand += qty * f;
+      }
+    }
+    final remaining = initialPool - currentDemand;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  /// 🔗 Calcula cuántas unidades vendibles quedan disponibles para agregar al carrito en vivo
+  int getRemainingVendibleStock(InventoryWrapper item) {
+    if (item.hasSharedStock) {
+      final pool = item.product.stockCompartido > 0
+          ? item.product.stockCompartido
+          : item.presentation.stockActual;
+      final remainingPool = getRemainingPoolStock(item.product.id, pool);
+      final factor = item.presentation.unidadesPorVenta > 0
+          ? item.presentation.unidadesPorVenta
+          : 1;
+      final physical = remainingPool ~/ factor;
+      if (item.presentation.cupoMaximoVariante != null) {
+        final inCart = _currentState.quantities[item.presentation.id] ?? 0;
+        final effectiveQuota = item.presentation.cupoMaximoVariante! - inCart;
+        final quotaRemaining = effectiveQuota > 0 ? effectiveQuota : 0;
+        return physical < quotaRemaining ? physical : quotaRemaining;
+      }
+      return physical;
+    } else {
+      final inCart = _currentState.quantities[item.presentation.id] ?? 0;
+      final available = item.displayStock - inCart;
+      return available > 0 ? available : 0;
+    }
+  }
+
+  /// 🔗 Calcula cuántas unidades vendibles quedan de una presentación específica (usado en modales de detalle)
+  int getRemainingAvailableForPresentation({
+    required int productId,
+    required ProductPresentation presentation,
+    int? sharedStockPool,
+    int? excludePresentationId,
+  }) {
+    final factor = presentation.unidadesPorVenta > 0 ? presentation.unidadesPorVenta : 1;
+    if (presentation.usaStockCompartido) {
+      int pool = sharedStockPool ?? presentation.stockActual;
+      int currentDemand = 0;
+      for (final item in _currentState.cart) {
+        if (item.productId == productId &&
+            item.usaStockCompartido &&
+            item.presentationId != excludePresentationId) {
+          final qty = _currentState.quantities[item.presentationId] ?? 0;
+          final f = item.conversionFactor > 0 ? item.conversionFactor : 1;
+          currentDemand += qty * f;
+        }
+      }
+      final remainingPool = pool - currentDemand;
+      final physical = remainingPool > 0 ? (remainingPool ~/ factor) : 0;
+      if (presentation.cupoMaximoVariante != null) {
+        int inCart = 0;
+        if (presentation.id != excludePresentationId) {
+          inCart = _currentState.quantities[presentation.id] ?? 0;
+        }
+        final quotaRemaining = (presentation.cupoMaximoVariante! - inCart).clamp(0, presentation.cupoMaximoVariante!);
+        return physical < quotaRemaining ? physical : quotaRemaining;
+      }
+      return physical;
+    } else {
+      int inCart = 0;
+      if (presentation.id != excludePresentationId) {
+        inCart = _currentState.quantities[presentation.id] ?? 0;
+      }
+      final available = (presentation.stockActual ~/ factor) - inCart;
+      return available > 0 ? available : 0;
+    }
+  }
+
+  String? _validateSharedStockDemand({
+    required int productId,
+    required int presentationId,
+    required bool usaStockCompartido,
+    required int sharedStockPool,
+    required int factor,
+    required int targetQty,
+    required String unitName,
+    int? cupoMaximoVariante,
+  }) {
+    if (!usaStockCompartido || productId <= 0) return null;
+
+    if (cupoMaximoVariante != null && targetQty > cupoMaximoVariante) {
+      return "El cupo asignado para esta variante es de $cupoMaximoVariante $unitName.";
+    }
+
+    int currentDemand = 0;
+    for (final item in _currentState.cart) {
+      if (item.productId == productId && item.usaStockCompartido && item.presentationId != presentationId) {
+        final qty = _currentState.quantities[item.presentationId] ?? 0;
+        final f = item.conversionFactor > 0 ? item.conversionFactor : 1;
+        currentDemand += qty * f;
+      }
+    }
+
+    final int safeFactor = factor > 0 ? factor : 1;
+    final int newDemandForThisItem = targetQty * safeFactor;
+    final int totalDemand = currentDemand + newDemandForThisItem;
+
+    if (totalDemand > sharedStockPool) {
+      final int remainingUnits = sharedStockPool - currentDemand;
+      final int maxAvailableForThis = remainingUnits > 0 ? (remainingUnits ~/ safeFactor) : 0;
+      return "Stock compartido insuficiente. Quedan $remainingUnits und. base disponibles (= $maxAvailableForThis $unitName).";
+    }
+
+    return null;
+  }
+
   String? addToCart(InventoryWrapper itemWrapper) {
     final presId = itemWrapper.presentation.id!;
 
@@ -179,8 +302,28 @@ class QuickSaleProvider with ChangeNotifier {
       return "El producto '${itemWrapper.displayNameDetail}' se encuentra agotado.";
     }
 
+    final bool isShared = itemWrapper.hasSharedStock;
+    final int pool = itemWrapper.product.stockCompartido > 0
+        ? itemWrapper.product.stockCompartido
+        : itemWrapper.presentation.stockActual;
+
     if (_currentState.cart.any((p) => p.presentationId == presId)) {
       return updateQuantity(presId, (_currentState.quantities[presId] ?? 1) + 1, itemWrapper.displayStockForValidation);
+    }
+
+    // Validar demanda compartida inicial para cantidad = 1
+    if (isShared) {
+      final sharedWarning = _validateSharedStockDemand(
+        productId: itemWrapper.product.id,
+        presentationId: presId,
+        usaStockCompartido: isShared,
+        sharedStockPool: pool,
+        factor: itemWrapper.presentation.unidadesPorVenta,
+        targetQty: 1,
+        unitName: itemWrapper.presentation.unidadVenta ?? "Unidad",
+        cupoMaximoVariante: itemWrapper.presentation.cupoMaximoVariante,
+      );
+      if (sharedWarning != null) return sharedWarning;
     }
 
     // 🔧 Costo de presentación para cálculo de margen en tiempo real
@@ -205,6 +348,9 @@ class QuickSaleProvider with ChangeNotifier {
       unit: itemWrapper.presentation.unidadVenta ?? "Unidad", 
       conversionFactor: itemWrapper.presentation.unidadesPorVenta,
       cost: calculatedCost,
+      usaStockCompartido: isShared,
+      sharedStockPool: pool,
+      cupoMaximoVariante: itemWrapper.presentation.cupoMaximoVariante,
     );
 
     _currentState.cart.add(matched);
@@ -288,7 +434,19 @@ class QuickSaleProvider with ChangeNotifier {
         _currentState.overridePrices.remove(oldPresentationId);
       }
 
-      if (newQty > product.stock) {
+      if (product.usaStockCompartido) {
+        final sharedWarning = _validateSharedStockDemand(
+          productId: product.productId,
+          presentationId: product.presentationId,
+          usaStockCompartido: true,
+          sharedStockPool: product.sharedStockPool,
+          factor: product.conversionFactor,
+          targetQty: newQty,
+          unitName: product.unit,
+          cupoMaximoVariante: product.cupoMaximoVariante,
+        );
+        if (sharedWarning != null) return sharedWarning;
+      } else if (newQty > product.stock) {
         return "Solo hay ${product.stock} unidades disponibles en stock.";
       }
 
@@ -311,18 +469,23 @@ class QuickSaleProvider with ChangeNotifier {
     double? newOfferPrice,
     bool clearOffer = false,
     int? newStock,
+    int? newCupoMaximoVariante,
+    bool clearCupo = false,
   }) {
     final index = _currentState.cart.indexWhere((p) => p.presentationId == presentationId);
     if (index != -1) {
       final current = _currentState.cart[index];
       final double updatedPrice = newPrice ?? current.price;
       final double? updatedOffer = clearOffer ? null : (newOfferPrice ?? current.offerPrice);
+      final int? updatedCupo = clearCupo ? null : (newCupoMaximoVariante ?? current.cupoMaximoVariante);
 
       final updated = current.copyWith(
         price: updatedPrice,
         offerPrice: updatedOffer,
         clearOfferPrice: clearOffer,
         stock: newStock ?? current.stock,
+        cupoMaximoVariante: updatedCupo,
+        clearCupo: clearCupo,
       );
       _currentState.cart[index] = updated;
 
@@ -335,9 +498,12 @@ class QuickSaleProvider with ChangeNotifier {
         }
       }
 
-      // Si la cantidad en el carrito supera el nuevo stock, ajustarla al máximo disponible
+      // Si la cantidad en el carrito supera el nuevo stock o cupo, ajustarla al máximo disponible
       final currentQty = _currentState.quantities[presentationId] ?? 1;
-      if (newStock != null && newStock > 0 && currentQty > newStock) {
+      final effectiveMax = updated.effectiveVendibleStock;
+      if (effectiveMax > 0 && currentQty > effectiveMax) {
+        _currentState.quantities[presentationId] = effectiveMax;
+      } else if (newStock != null && newStock > 0 && currentQty > newStock) {
         _currentState.quantities[presentationId] = newStock;
       }
       notifyListeners();
@@ -348,13 +514,33 @@ class QuickSaleProvider with ChangeNotifier {
     if (newQty <= 0) {
       removeItem(presentationId);
       return null;
+    }
+
+    final itemIndex = _currentState.cart.indexWhere((p) => p.presentationId == presentationId);
+    if (itemIndex != -1) {
+      final item = _currentState.cart[itemIndex];
+      if (item.usaStockCompartido) {
+        final sharedWarning = _validateSharedStockDemand(
+          productId: item.productId,
+          presentationId: presentationId,
+          usaStockCompartido: true,
+          sharedStockPool: item.sharedStockPool,
+          factor: item.conversionFactor,
+          targetQty: newQty,
+          unitName: item.unit,
+          cupoMaximoVariante: item.cupoMaximoVariante,
+        );
+        if (sharedWarning != null) return sharedWarning;
+      } else if (newQty > maxStock) {
+        return "Solo dispones de $maxStock unidades en stock.";
+      }
     } else if (newQty > maxStock) {
       return "Solo dispones de $maxStock unidades en stock.";
-    } else {
-      _currentState.quantities[presentationId] = newQty;
-      notifyListeners();
-      return null;
     }
+
+    _currentState.quantities[presentationId] = newQty;
+    notifyListeners();
+    return null;
   }
 
   void removeItem(int presentationId) {

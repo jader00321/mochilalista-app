@@ -7,11 +7,17 @@ import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/profile/screens/map_picker_screen.dart'; 
 import 'package:app_movil/core/utils/hardware_validator.dart';
 import 'package:flutter_map/flutter_map.dart'; 
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart'; 
 
 class EditBusinessModal extends StatefulWidget {
   final bool isMandatory; 
+  final String? initialFocusField;
 
-  const EditBusinessModal({super.key, this.isMandatory = false});
+  const EditBusinessModal({
+    super.key, 
+    this.isMandatory = false,
+    this.initialFocusField,
+  });
 
   @override
   State<EditBusinessModal> createState() => _EditBusinessModalState();
@@ -23,6 +29,11 @@ class _EditBusinessModalState extends State<EditBusinessModal> with TickerProvid
   late TextEditingController _rucCtrl;
   late TextEditingController _addressCtrl;
   late TextEditingController _paymentCtrl;
+
+  final FocusNode _nameFocus = FocusNode();
+  final FocusNode _rucFocus = FocusNode();
+  final FocusNode _addressFocus = FocusNode();
+  final FocusNode _paymentFocus = FocusNode();
   
   double? _lat;
   double? _lng;
@@ -60,10 +71,27 @@ class _EditBusinessModalState extends State<EditBusinessModal> with TickerProvid
     _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
     _animCtrl.forward();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.initialFocusField == 'ruc') {
+        _rucFocus.requestFocus();
+      } else if (widget.initialFocusField == 'name') {
+        _nameFocus.requestFocus();
+      } else if (widget.initialFocusField == 'address') {
+        _addressFocus.requestFocus();
+      } else if (widget.initialFocusField == 'payment') {
+        _paymentFocus.requestFocus();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _nameFocus.dispose();
+    _rucFocus.dispose();
+    _addressFocus.dispose();
+    _paymentFocus.dispose();
     _nameCtrl.dispose();
     _rucCtrl.dispose();
     _addressCtrl.dispose();
@@ -80,7 +108,7 @@ class _EditBusinessModalState extends State<EditBusinessModal> with TickerProvid
     final LatLng? result = await Navigator.push(context, MaterialPageRoute(builder: (_) => MapPickerScreen(initialLat: _lat, initialLng: _lng)));
     if (result != null) {
       setState(() { _lat = result.latitude; _lng = result.longitude; });
-      if (mounted) CustomSnackBar.show(context, message: "📍 Ubicación registrada", isError: false);
+      if (mounted) CustomSnackBar.show(context, message: "Ubicación registrada", isError: false);
     }
   }
 
@@ -151,24 +179,36 @@ class _EditBusinessModalState extends State<EditBusinessModal> with TickerProvid
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark; 
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final textStyle = TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16);
 
     return Container(
-      padding: EdgeInsets.fromLTRB(24, 12, 24, bottomInset + 24),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       decoration: BoxDecoration(color: isDark ? const Color(0xFF23232F) : Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      child: SafeArea(
+        top: false,
+        bottom: true,
+        maintainBottomViewPadding: true,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            child: Builder(
+              builder: (bCtx) {
+                final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+                  bCtx,
+                  minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+                );
+                return Padding(
+                  padding: EdgeInsets.only(bottom: effectiveBottom),
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    child: FadeTransition(
+                      opacity: _fadeAnim,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                   Center(
                     child: Container(
                       width: 40,
@@ -206,9 +246,9 @@ class _EditBusinessModalState extends State<EditBusinessModal> with TickerProvid
                    ),
                 const SizedBox(height: 25),
                 
-                TextFormField(controller: _nameCtrl, style: textStyle, decoration: _deco("Nombre Comercial", Icons.store, isDark), validator: (v) => v!.isEmpty ? "Requerido" : null),
+                TextFormField(controller: _nameCtrl, focusNode: _nameFocus, style: textStyle, decoration: _deco("Nombre Comercial", Icons.store, isDark), validator: (v) => v!.isEmpty ? "Requerido" : null),
                 const SizedBox(height: 16),
-                TextFormField(controller: _rucCtrl, style: textStyle, decoration: _deco("RUC (Opcional)", Icons.badge, isDark), keyboardType: TextInputType.number),
+                TextFormField(controller: _rucCtrl, focusNode: _rucFocus, style: textStyle, decoration: _deco("RUC (Opcional)", Icons.badge, isDark), keyboardType: TextInputType.number),
                 const SizedBox(height: 16),
                 
                 Text("Ubicación en el Mapa", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.grey[300] : Colors.grey[700])),
@@ -220,9 +260,9 @@ class _EditBusinessModalState extends State<EditBusinessModal> with TickerProvid
                 ),
                 
                 const SizedBox(height: 16),
-                TextFormField(controller: _addressCtrl, style: textStyle, decoration: _deco("Referencia Escrita (Ej: Frente al parque)", Icons.location_city, isDark)),
+                TextFormField(controller: _addressCtrl, focusNode: _addressFocus, style: textStyle, decoration: _deco("Referencia Escrita (Ej: Frente al parque)", Icons.location_city, isDark)),
                 const SizedBox(height: 16),
-                TextFormField(controller: _paymentCtrl, style: textStyle, decoration: _deco("Cuentas de Pago (Para WhatsApp)", Icons.account_balance_wallet, isDark), maxLines: 2),
+                TextFormField(controller: _paymentCtrl, focusNode: _paymentFocus, style: textStyle, decoration: _deco("Cuentas de Pago (Para WhatsApp)", Icons.account_balance_wallet, isDark), maxLines: 2),
                 
                 const SizedBox(height: 24),
                 
@@ -329,15 +369,20 @@ class _EditBusinessModalState extends State<EditBusinessModal> with TickerProvid
                       ? const SizedBox(width: 150, child: LinearProgressIndicator(color: Colors.white, backgroundColor: Colors.white24)) 
                       : Text(widget.isMandatory ? "CREAR NEGOCIO Y EMPEZAR" : "GUARDAR CAMBIOS", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
                   ),
-                )
-              ],
-            ),
-            ),
+                ),
+                const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildEmptyMapButton(bool isDark) {
     return OutlinedButton.icon(

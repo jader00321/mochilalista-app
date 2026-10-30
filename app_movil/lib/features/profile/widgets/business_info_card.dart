@@ -1,16 +1,30 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_map/flutter_map.dart'; 
 import 'package:latlong2/latlong.dart';        
 import 'package:url_launcher/url_launcher.dart';
 import 'package:app_movil/core/models/user_model.dart';
-import 'package:app_movil/core/utils/hardware_validator.dart'; // 🔥 IMPORT DE SEGURIDAD
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/utils/hardware_validator.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/features/profile/widgets/edit_business_modal.dart';
 
 class BusinessInfoCard extends StatefulWidget {
   final BusinessModel? business;
   final bool isCommunityClient; 
 
   const BusinessInfoCard({super.key, this.business, this.isCommunityClient = false});
+
+  static String sanitizePaymentInfo(String raw) {
+    if (raw.isEmpty) return raw;
+    final emojiRegex = RegExp(
+      r'[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1FA00}-\u{1FAFF}]',
+      unicode: true,
+    );
+    return raw.replaceAll(emojiRegex, '').trim();
+  }
 
   @override
   State<BusinessInfoCard> createState() => _BusinessInfoCardState();
@@ -105,12 +119,7 @@ class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepA
                 const Icon(Icons.storefront, color: Colors.white, size: 24),
                 const SizedBox(width: 10),
                 Expanded(child: Text(widget.business!.commercialName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18), overflow: TextOverflow.ellipsis)),
-                if (canSeeRuc)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
-                    child: Text("RUC: ${widget.business!.ruc ?? '---'}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                  )
+                if (canSeeRuc) _buildRucBadge(context),
               ],
             ),
           ),
@@ -251,9 +260,77 @@ class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepA
     );
   }
 
-  // 🔧 TAREA 3.3: Sección de información de pago mejorada
+  Widget _buildRucBadge(BuildContext context) {
+    final ruc = widget.business!.ruc?.trim();
+    final bool hasRuc = ruc != null && ruc.isNotEmpty;
+
+    if (!hasRuc) {
+      return Material(
+        color: Colors.white.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: () async {
+            await showModalBottomSheet(
+              context: context,
+              useSafeArea: true,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (ctx) => const EditBusinessModal(initialFocusField: 'ruc'),
+            );
+            if (context.mounted) {
+              await Provider.of<AuthProvider>(context, listen: false).refreshActiveUser();
+            }
+          },
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 13),
+                SizedBox(width: 4),
+                Text(
+                  "Sin RUC • + Agregar",
+                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      color: Colors.white.withValues(alpha: 0.2),
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: ruc));
+          CustomSnackBar.show(context, message: "RUC copiado al portapapeles", isError: false);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "RUC: $ruc",
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.copy_rounded, color: Colors.white, size: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🔧 TAREA 3.3: Sección de información de pago mejorada (con sanitización de emojis)
   Widget _buildPaymentSection(bool isDark) {
-    final paymentInfo = widget.business!.paymentInfo;
+    final rawPaymentInfo = widget.business!.paymentInfo;
+    final paymentInfo = rawPaymentInfo != null ? BusinessInfoCard.sanitizePaymentInfo(rawPaymentInfo) : null;
     
     if (paymentInfo == null || paymentInfo.isEmpty) {
       return Row(

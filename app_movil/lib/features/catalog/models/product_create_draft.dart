@@ -14,6 +14,9 @@ class ProductCreateDraft {
   final String barcode;
 
   final List<Map<String, dynamic>> presentations;
+  final String modoStock;
+  final int stockCompartido;
+  final double costoBase;
   final DateTime lastUpdated;
 
   ProductCreateDraft({
@@ -29,12 +32,18 @@ class ProductCreateDraft {
     this.imageUrl = "",
     this.barcode = "",
     required this.presentations,
+    this.modoStock = 'INDEPENDIENTE',
+    this.stockCompartido = 0,
+    this.costoBase = 0.0,
     DateTime? lastUpdated,
   }) : lastUpdated = lastUpdated ?? DateTime.now();
 
   /// Determina si el borrador tiene datos significativos para mostrar indicadores
   bool get hasMeaningfulData {
     if (name.trim().isNotEmpty) return true;
+    if (modoStock != 'INDEPENDIENTE') return true;
+    if (stockCompartido > 0) return true;
+    if (costoBase > 0) return true;
     if (brandId != null && brandId != 0) return true;
     if (deferredBrandName != null && deferredBrandName!.trim().isNotEmpty) {
       return true;
@@ -89,7 +98,8 @@ class ProductCreateDraft {
           cantCompraVal > 0.0 ||
           totalPagoVal > 0.0 ||
           p0['activeRoundingTarget'] != null ||
-          p0['preRoundedPrice'] != null) {
+          p0['preRoundedPrice'] != null ||
+          p0['cupoMaximoVariante'] != null) {
         return true;
       }
     }

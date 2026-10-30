@@ -22,6 +22,8 @@ class ProductCreatePresentationList extends StatelessWidget {
   final Function(String, int, double) onCreateLeftover;
   final Function(String) onInvalidateLeftover;
   final VoidCallback onSyncDraft;
+  final String modoStock;
+  final TextEditingController? sharedStockCtrl;
 
   const ProductCreatePresentationList({
     super.key,
@@ -39,7 +41,12 @@ class ProductCreatePresentationList extends StatelessWidget {
     required this.onCreateLeftover,
     required this.onInvalidateLeftover,
     required this.onSyncDraft,
+    this.modoStock = 'INDEPENDIENTE',
+    this.sharedStockCtrl,
+    this.baseCostCtrl,
   });
+
+  final TextEditingController? baseCostCtrl;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +61,9 @@ class ProductCreatePresentationList extends StatelessWidget {
               controllerMap: controllers[i],
               presentationIndex: i,
               totalPresentations: controllers.length,
+              modoStock: modoStock,
+              sharedStockCtrl: sharedStockCtrl,
+              baseCostCtrl: baseCostCtrl,
               onSetDefault: () => onSetDefault(i),
               onMoveUp: i > 0 ? () => onMoveUp(i) : null,
               onMoveDown: i < controllers.length - 1 ? () => onMoveDown(i) : null,

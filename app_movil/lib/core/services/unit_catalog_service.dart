@@ -27,6 +27,14 @@ class StockValidationResult {
     required this.costoBaseSobrante,
   });
 
+  factory StockValidationResult.empty() => StockValidationResult(
+        fullUnits: 0,
+        leftover: 0,
+        deficit: 0,
+        status: StockValidationStatus.empty,
+        costoBaseSobrante: 0.0,
+      );
+
   String userMessage(String unitName, int factor) {
     if (status == StockValidationStatus.deficit) {
       return "Faltan $deficit unidades para completar 1 $unitName.\nTienes ${factor - deficit} unidades, pero se necesitan mínimo $factor para 1 $unitName.\nCambia a Unidad (x1) o ajusta la cantidad.";

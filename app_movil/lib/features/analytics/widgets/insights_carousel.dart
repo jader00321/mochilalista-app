@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:app_movil/features/analytics/providers/analytics_provider.dart';
 import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
 import 'package:app_movil/features/promotions/screens/bundle_builder_screen.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class InsightsCarousel extends StatefulWidget {
   final AnalyticsData data;
@@ -87,6 +88,7 @@ class _InsightsCarouselState extends State<InsightsCarousel> with SingleTickerPr
   void _showInsightDetail(BuildContext context, BusinessInsight insight, Color bgColor, Color iconColor) {
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       transitionAnimationController: _modalAnimationController,
@@ -98,7 +100,9 @@ class _InsightsCarouselState extends State<InsightsCarousel> with SingleTickerPr
           expand: false,
           builder: (_, controller) {
             return SafeArea(
+              top: false,
               bottom: true,
+              minimum: const EdgeInsets.only(bottom: InteractiveSheetWrapper.kMinDefensiveBottomClearance),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 decoration: BoxDecoration(
@@ -107,6 +111,7 @@ class _InsightsCarouselState extends State<InsightsCarousel> with SingleTickerPr
                 ),
                 child: ListView(
                   controller: controller,
+                  physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                   children: [
                     Center(
                       child: Container(
@@ -203,6 +208,7 @@ class _InsightsCarouselState extends State<InsightsCarousel> with SingleTickerPr
                         ),
                       ),
                     ],
+                    const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
                   ],
                 ),
               ),

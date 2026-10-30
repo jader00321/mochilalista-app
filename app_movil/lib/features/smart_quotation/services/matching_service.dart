@@ -185,6 +185,10 @@ class MatchingService {
   }
 
   Future<int> saveQuotation(Map<String, dynamic> quotationData, int negocioId, int usuarioId) async {
+    final items = quotationData['items'] as List<dynamic>? ?? [];
+    if (items.isEmpty) {
+      throw ArgumentError("No se puede guardar una cotización sin productos");
+    }
     try {
       final db = await dbHelper.database;
       int quoteId = 0;

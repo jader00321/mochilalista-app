@@ -89,7 +89,7 @@ class ScannerMatchingEngine {
           }
 
           prodQuery = await db.rawQuery('''
-            SELECT p.id, p.nombre, p.marca_id, p.categoria_id,
+            SELECT p.id, p.nombre, p.marca_id, p.categoria_id, p.modo_stock, p.stock_compartido, p.costo_base,
                    m.nombre as marca_nombre, c.nombre as categoria_nombre,
                    IFNULL(SUM(pp.stock_actual), 0) as stock_total
             FROM productos p
@@ -166,6 +166,8 @@ class ScannerMatchingEngine {
                 "cantidad_ump_comprada": p['cantidad_ump_comprada'],
                 "total_pago_lote": p['total_pago_lote'],
                 "unidades_por_lote": p['unidades_por_lote'],
+                "usa_stock_compartido": p['usa_stock_compartido'] == 1 || p['usa_stock_compartido'] == true,
+                "cupo_maximo_variante": p['cupo_maximo_variante'],
               };
             }).toList();
 
@@ -255,6 +257,9 @@ class ScannerMatchingEngine {
                 marcaNombre: bestCandidate['marca_nombre'] as String?,
                 categoriaNombre: bestCandidate['categoria_nombre'] as String?,
                 availablePresentations: bestSiblings,
+                modoStock: bestCandidate['modo_stock'] as String? ?? 'INDEPENDIENTE',
+                stockCompartido: (bestCandidate['stock_compartido'] as num?)?.toInt() ?? 0,
+                costoBase: (bestCandidate['costo_base'] as num?)?.toDouble() ?? 0.0,
               ),
             );
 
@@ -286,6 +291,8 @@ class ScannerMatchingEngine {
                       bestSiblingOfBestCandidate['ump_compra'] as String? ??
                       "UND",
                   availablePresentations: bestSiblings,
+                  usaStockCompartido: bestSiblingOfBestCandidate['usa_stock_compartido'] == true,
+                  cupoMaximoVariante: bestSiblingOfBestCandidate['cupo_maximo_variante'] as int?,
                 ),
               );
             } else {
@@ -353,6 +360,10 @@ class ScannerMatchingEngine {
           cleanedVariante = "General";
         }
 
+        final modoStockGrupo = prodMatch.datos?.modoStock ?? 'INDEPENDIENTE';
+        final stockCompartidoGrupo = prodMatch.datos?.stockCompartido ?? 0;
+        final costoBaseGrupo = prodMatch.datos?.costoBase ?? 0.0;
+
         grupos.add(
           StagingProductGroup(
             nombrePadre: cleanedNombrePadre,
@@ -361,6 +372,9 @@ class ScannerMatchingEngine {
             marcaTexto: item.marcaDetectada ?? "",
             matchProducto: prodMatch,
             matchMarca: marcaMatch,
+            modoStock: modoStockGrupo,
+            stockCompartido: stockCompartidoGrupo,
+            costoBase: costoBaseGrupo,
             variantes: [
               StagingVariant(
                 nombreEspecifico: cleanedVariante,
@@ -377,7 +391,8 @@ class ScannerMatchingEngine {
                 factorGananciaVentaSugerido: margenSugerido,
                 precioVentaSugerido: precioSugerido,
                 matchPresentacion: presMatch,
-              ),
+              )..usaStockCompartido = presMatch.datos?.usaStockCompartido ?? (modoStockGrupo == 'COMPARTIDO')
+               ..cupoMaximoVariante = presMatch.datos?.cupoMaximoVariante,
             ],
           ),
         );

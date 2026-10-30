@@ -6,6 +6,7 @@ import 'package:app_movil/features/scanner/screens/barcode_scanner_screen.dart';
 import 'package:app_movil/core/widgets/smart_unit_selector.dart';
 import 'package:app_movil/core/services/unit_catalog_service.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 part 'ui/modal_purchase_section.dart';
 part 'ui/modal_sale_section.dart';
 part 'ui/modal_stock_section.dart';
@@ -33,7 +34,7 @@ class ComparativeUpdateModal extends StatefulWidget {
     required this.onConfirm,
   });
 
-  static Future<void> show(
+  static Future<T?> show<T>(
     BuildContext context, {
     required StagingVariant variant,
     required StagingProductGroup group,
@@ -43,9 +44,10 @@ class ComparativeUpdateModal extends StatefulWidget {
     required VoidCallback onConfirm,
   }) {
     variant.takeSnapshot();
-    return showModalBottomSheet(
+    return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       enableDrag: false, // 🛡️ Precisión técnica 3: Desactiva el arrastre del sheet para 60fps de scroll limpio
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -62,6 +64,10 @@ class ComparativeUpdateModal extends StatefulWidget {
 
   static String formatUnitLabelForTest(int count, String unit) => 
       _ComparativeUpdateModalState._formatUnitLabel(count, unit);
+
+  static String formatAccumulationBadgeText(int completas, String unidad, int sobrante) {
+    return "$completas × $unidad disponible hoy (+$sobrante unid. base acumuladas en almacén)";
+  }
 
   @override
   State<ComparativeUpdateModal> createState() => _ComparativeUpdateModalState();
@@ -239,6 +245,16 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     final unit = rawUnit.trim().isEmpty ? 'Unidad' : rawUnit.trim();
     final lower = unit.toLowerCase();
 
+    // Si ya viene con número al inicio (ej. "1 Par", "2 Pares"), extraer el número y la palabra
+    final numMatch = RegExp(r'^(\d+)\s+(.+)$').firstMatch(unit);
+    if (numMatch != null) {
+      final existingCount = int.tryParse(numMatch.group(1)!);
+      if (existingCount == count) {
+        return unit;
+      }
+      return _formatUnitLabel(count, numMatch.group(2)!);
+    }
+
     if (lower == 'par') {
       return count == 1 ? '1 Par' : '$count Pares';
     }
@@ -253,6 +269,9 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     }
     if (lower == 'paquete' || lower == 'paq') {
       return count == 1 ? '1 Paquete' : '$count Paquetes';
+    }
+    if (lower == 'pack') {
+      return count == 1 ? '1 Pack' : '$count Packs';
     }
     if (lower == 'ciento') {
       return count == 1 ? '1 Ciento' : '$count Cientos';
@@ -289,14 +308,33 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
       return '1 $unit';
     }
 
+    // Si contiene paréntesis (ej. Pack (x4)), pluralizar la palabra antes del paréntesis
+    if (unit.contains('(')) {
+      final match = RegExp(r'^([^(]+)(\(.*\))$').firstMatch(unit);
+      if (match != null) {
+        String base = match.group(1)!.trim();
+        String suffix = match.group(2)!.trim();
+        String pluralBase = _pluralizeWord(base);
+        return '$count $pluralBase $suffix';
+      }
+    }
+
+    return '$count ${_pluralizeWord(unit)}';
+  }
+
+  static String _pluralizeWord(String word) {
+    final lower = word.toLowerCase();
+    if (lower == 'pack') return 'Packs';
+    if (lower == 'set') return 'Sets';
+    if (lower == 'kit') return 'Kits';
     if (lower.endsWith('s') || lower.endsWith('x')) {
-      return '$count $unit';
+      return word;
     }
     final vowels = ['a', 'e', 'i', 'o', 'u', 'á', 'é', 'í', 'ó', 'ú'];
     if (vowels.any((v) => lower.endsWith(v))) {
-      return '$count ${unit}s';
+      return '${word}s';
     }
-    return '$count ${unit}es';
+    return '${word}es';
   }
 
   // ============================================================================
@@ -484,7 +522,7 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     updateState(() {});
   }
 
-  void _applyChanges() {
+  void _saveModalDataToVariant() {
     if (widget.variant.updateNombre) widget.variant.nombreEspecifico = _nomCtrl.text;
     if (widget.variant.updateCodigoBarra) widget.variant.codigoBarra = _codigoBarraCtrl.text.isEmpty ? null : _codigoBarraCtrl.text;
     if (widget.variant.updateMarca) widget.variant.editedMarca = _marcaCtrl.text;
@@ -535,9 +573,19 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
     if (widget.variant.hasSnapshotBeenModified) {
       widget.variant.takeSnapshot(); // Actualizar el snapshot con los nuevos valores guardados
     }
+  }
 
+  void _applyChanges() {
+    _saveModalDataToVariant();
     _wasConfirmed = true;
     widget.onConfirm();
+    Navigator.pop(context);
+  }
+
+  bool get _hasDeficit {
+    int factor = _activeFactorVenta;
+    int totalBase = _calculatedTotalUnitsBase;
+    return factor > 1 && totalBase < factor;
   }
 
   int get _calculatedTotalUnitsBase {
@@ -601,17 +649,34 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
   void _crearVarianteSobrante() {
     int sobrante = _leftoverSuelto;
     if (sobrante > 0) {
-      widget.provider.createLeftoverVariant(widget.variant.uuidTemporal, sobrante);
-      
-      int adjustedStock = widget.variant.stockIngresanteOverride ?? (widget.variant.stockIngresanteBase - sobrante);
-      _applyStockAdjustmentInLive(adjustedStock);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("✅ Variante unitaria creada con $sobrante unidades", style: const TextStyle(fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ));
+      // 1. Guardar primero todos los cambios del modal en la variante actual
+      _saveModalDataToVariant();
+
+      // 2. Ajustar el stock ingresante de esta variante restando el sobrante
+      int currentIngreso = int.tryParse(_stockIngresanteCtrl.text) ?? widget.variant.stockIngresanteBase;
+      int adjustedStock = currentIngreso - sobrante;
+      widget.variant.stockIngresanteOverride = adjustedStock;
+      widget.variant.allowLeftoverInReserve = false;
+
+      // Recalcular costo de presentación según el nuevo stock ingresante
+      double costoUnitBase = widget.variant.originalCostoUnitario > 0 
+          ? widget.variant.originalCostoUnitario 
+          : ((double.tryParse(_pagoTotalCtrl.text) ?? 0.0) / (adjustedStock > 0 ? adjustedStock : 1));
+      int factorVenta = _activeFactorVenta;
+      widget.variant.costoUnitarioSugerido = costoUnitBase * factorVenta;
+
+      // 3. Crear la nueva variante con cálculo proporcional de compra
+      final newVariantUuid = widget.provider.createLeftoverVariant(widget.variant.uuidTemporal, sobrante);
+
+      _wasConfirmed = true;
+      widget.onConfirm();
+
+      // 4. Cerrar el modal retornando el UUID de la nueva variante
+      Navigator.pop(context, newVariantUuid);
+
+      // 5. Scroll suave y resalte
+      if (newVariantUuid != null) {
+        widget.provider.scrollToAndHighlightVariant(newVariantUuid);
       }
     }
   }
@@ -687,13 +752,20 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
         width: double.infinity,
         height: 52,
         child: ElevatedButton(
-          onPressed: _applyChanges,
+          onPressed: _hasDeficit ? null : _applyChanges,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue[800],
+            backgroundColor: _hasDeficit 
+                ? (widget.isDark ? Colors.grey[800] : Colors.grey[400]) 
+                : Colors.blue[800],
             foregroundColor: Colors.white,
+            disabledBackgroundColor: widget.isDark ? Colors.grey[850] : Colors.grey[300],
+            disabledForegroundColor: widget.isDark ? Colors.grey[500] : Colors.grey[600],
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
-          child: const Text("GUARDAR DECISIÓN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          child: Text(
+            _hasDeficit ? "SOLUCIONA EL STOCK FALTANTE" : "GUARDAR DECISIÓN", 
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
         ),
       ),
       child: Scrollbar(
@@ -706,7 +778,7 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
             left: 16,
             right: 16,
             top: 4,
-            bottom: MediaQuery.viewInsetsOf(context).bottom + 24, // 🛡️ Margen seguro reactivo a teclado
+            bottom: MediaQuery.viewInsetsOf(context).bottom + InteractiveSheetWrapper.kModalScrollBottomClearance, // 🛡️ Margen seguro ergonómico reactivo a teclado y barra fantasma
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

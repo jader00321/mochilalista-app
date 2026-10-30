@@ -264,8 +264,6 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
     final categories = catProv.categories;
     final brands = catProv.brands;
     final liveCount = _sqliteCount ?? _calculateLiveCount(catProv);
-    final effectiveBottom =
-        InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 16);
 
     final cardBg = isDark ? const Color(0xFF1E1E28) : Colors.white;
     final borderColor = isDark ? Colors.white12 : Colors.grey.shade200;
@@ -342,7 +340,7 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
           // 2. CONTENIDO SCROLLABLE CON ACORDEONES Y CARDS
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, InteractiveSheetWrapper.kModalScrollBottomClearance),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -793,50 +791,58 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
           ),
 
           // 3. BOTÓN FLOTANTE INFERIOR CON CONTEO EN VIVO A 0MS
-          Container(
-            padding: EdgeInsets.fromLTRB(20, 12, 20, effectiveBottom),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E1E28) : Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: isDark ? Colors.black45 : Colors.black12,
-                  blurRadius: 10,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _applyFilters,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[800],
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 2,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.check_rounded, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      liveCount > 0
-                          ? 'Mostrar $liveCount ${_onlyDefaults ? (liveCount == 1 ? "Producto" : "Productos") : (liveCount == 1 ? "Variante" : "Variantes")}'
-                          : 'Aplicar Filtros',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
+          Builder(
+            builder: (bCtx) {
+              final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+                bCtx,
+                minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+              );
+              return Container(
+                padding: EdgeInsets.fromLTRB(20, 12, 20, effectiveBottom),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark ? Colors.black45 : Colors.black12,
+                      blurRadius: 10,
+                      offset: const Offset(0, -2),
                     ),
                   ],
                 ),
-              ),
-            ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _applyFilters,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[800],
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.check_rounded, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          liveCount > 0
+                              ? 'Mostrar $liveCount ${_onlyDefaults ? (liveCount == 1 ? "Producto" : "Productos") : (liveCount == 1 ? "Variante" : "Variantes")}'
+                              : 'Aplicar Filtros',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),

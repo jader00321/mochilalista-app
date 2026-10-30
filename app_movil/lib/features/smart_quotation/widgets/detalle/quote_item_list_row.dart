@@ -149,6 +149,31 @@ class QuoteItemListRow extends StatelessWidget {
                 ),
                 
                 const SizedBox(height: 10),
+                if (hasStockIssue && stockError != null && stockError!.message.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: isDark ? Colors.red.withValues(alpha: 0.3) : Colors.red.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.warning_amber_rounded, size: 14, color: isDark ? Colors.red[300] : Colors.red[800]),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              stockError!.message,
+                              style: TextStyle(fontSize: 11, color: isDark ? Colors.red[200] : Colors.red[900], fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 
                 // 🔥 PRECIOS
                 if (hasPriceIssue)

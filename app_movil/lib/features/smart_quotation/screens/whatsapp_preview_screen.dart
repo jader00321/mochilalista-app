@@ -901,6 +901,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       enableDrag: false, // 🛡️ Blindaje total contra intercepción de gestos verticales del scroll
       backgroundColor: Colors.transparent,
       builder: (ctx) => WaFinalPreviewModal(

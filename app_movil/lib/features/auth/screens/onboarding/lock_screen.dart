@@ -385,6 +385,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                 onPressed: () {
                   showModalBottomSheet(
                     context: context,
+                    useSafeArea: true,
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
                     builder: (ctx) => ForgotPinRecoveryModal(

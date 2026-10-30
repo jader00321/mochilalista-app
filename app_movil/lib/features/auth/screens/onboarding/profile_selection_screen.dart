@@ -44,6 +44,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
 
   // --- Orden persistido de perfiles ---
   List<int> _profileOrder = [];
+  int? _lastActiveUserId;
+  final Set<int> _pinProfileIds = {};
+  final Set<String> _duplicateNames = {};
 
   @override
   void initState() {
@@ -66,6 +69,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     );
     _animController.forward();
     _loadProfileOrder();
+    _loadProfileMetadata();
   }
 
   @override
@@ -91,6 +95,38 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   Future<void> _saveProfileOrder() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('profile_order', jsonEncode(_profileOrder));
+  }
+
+  Future<void> _loadProfileMetadata() async {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final prefs = await SharedPreferences.getInstance();
+      final lastId = prefs.getInt('last_active_user_id');
+
+      final pinSet = <int>{};
+      for (var p in auth.localProfiles) {
+        if (await auth.profileHasPin(p.id)) {
+          pinSet.add(p.id);
+        }
+      }
+
+      final counts = <String, int>{};
+      for (var p in auth.localProfiles) {
+        final name = p.business?.commercialName.trim().toLowerCase() ?? '';
+        if (name.isNotEmpty) {
+          counts[name] = (counts[name] ?? 0) + 1;
+        }
+      }
+      final duplicates = counts.entries.where((e) => e.value > 1).map((e) => e.key).toSet();
+
+      if (mounted) {
+        setState(() {
+          _lastActiveUserId = lastId;
+          _pinProfileIds.addAll(pinSet);
+          _duplicateNames.addAll(duplicates);
+        });
+      }
+    } catch (_) {}
   }
 
   List<UserModel> _getOrderedProfiles(List<UserModel> profiles) {
@@ -362,28 +398,31 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
             opacity: _fadeAnim.value,
             child: Column(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
+                Hero(
+                  tag: 'app_brand_logo',
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 15,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      width: 55,
+                      height: 55,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => const Icon(
+                        Icons.storefront,
+                        size: 55,
+                        color: Color(0xFF1565C0),
                       ),
-                    ],
-                  ),
-                  child: Image.asset(
-                    'assets/logo.png',
-                    width: 55,
-                    height: 55,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.storefront,
-                      size: 55,
-                      color: Color(0xFF1565C0),
                     ),
                   ),
                 ),
@@ -522,6 +561,31 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                 onPressed: () => showProfileRestoreBottomSheet(context),
                 child: Text("¿Tienes un backup? Restaurar aquí", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], decoration: TextDecoration.underline, fontWeight: FontWeight.w600)),
               ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                icon: Icon(Icons.explore_outlined, size: 18, color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
+                label: Text(
+                  "Explorar la app sin registrarse (Modo Demo)",
+                  style: TextStyle(
+                    color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HomeScreen()),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(
+                    color: (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)).withValues(alpha: 0.35),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
             ],
           ),
         ),
@@ -604,6 +668,11 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
       onReorder: (oldIndex, newIndex) => _onReorder(oldIndex, newIndex, profiles),
       itemBuilder: (context, index) {
         final p = profiles[index];
+        final isLastActive = p.id == _lastActiveUserId;
+        final hasPin = _pinProfileIds.contains(p.id);
+        final bName = p.business?.commercialName.trim().toLowerCase() ?? '';
+        final isDuplicate = _duplicateNames.contains(bName);
+
         return AnimatedProfileCard(
           key: ValueKey(p.id),
           controller: _animController,
@@ -614,6 +683,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
             isDark: isDark,
             isSelectionMode: false,
             screenMode: _screenMode,
+            isLastActive: isLastActive,
+            hasPin: hasPin,
+            isDuplicateName: isDuplicate,
           ),
         );
       },
@@ -627,6 +699,11 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
       itemBuilder: (context, index) {
         final p = profiles[index];
         final isSelected = _selectedProfileId == p.id;
+        final isLastActive = p.id == _lastActiveUserId;
+        final hasPin = _pinProfileIds.contains(p.id);
+        final bName = p.business?.commercialName.trim().toLowerCase() ?? '';
+        final isDuplicate = _duplicateNames.contains(bName);
+
         return AnimatedProfileCard(
           key: ValueKey(p.id),
           controller: _animController,
@@ -638,6 +715,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
             isSelectionMode: true,
             isSelected: isSelected,
             screenMode: _screenMode,
+            isLastActive: isLastActive,
+            hasPin: hasPin,
+            isDuplicateName: isDuplicate,
           ),
         );
       },
@@ -666,7 +746,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
       },
       child: Column(
         children: [
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
           PrimaryButton(
             text: "CREAR NUEVO NEGOCIO",
             icon: Icons.add_business_rounded,
@@ -677,10 +757,50 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
               ));
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           TextButton(
             onPressed: () => showProfileRestoreBottomSheet(context),
-            child: Text("¿Tienes un backup? Restaurar aquí", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], decoration: TextDecoration.underline, fontWeight: FontWeight.w600)),
+            child: Text(
+              "¿Tienes un backup? Restaurar aquí",
+              style: TextStyle(
+                color: isDark ? Colors.blue[300] : Colors.blue[700],
+                decoration: TextDecoration.underline,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Botón discreto y elegante para Modo Explorador (CERO emojis Unicode)
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const HomeScreen()),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.explore_outlined,
+                    size: 17,
+                    color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    "Explorar la app sin registrarse (Modo Demo)",
+                    style: TextStyle(
+                      color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ManualQuoteSaveModal extends StatelessWidget {
   final bool isEditing;
@@ -18,16 +19,23 @@ class ManualQuoteSaveModal extends StatelessWidget {
     final surfaceColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
+    final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
+      context,
+      minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+    );
+
     return Container(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom + 24),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom),
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
           const SizedBox(height: 20),
           Text("Opciones de Guardado", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor), textAlign: TextAlign.center),
@@ -98,8 +106,10 @@ class ManualQuoteSaveModal extends StatelessWidget {
               isDark: isDark,
               onTap: () => onSave('PENDING', 'pack'),
             ),
+            const SizedBox(height: InteractiveSheetWrapper.kModalScrollBottomClearance),
           ]
         ],
+      ),
       ),
     );
   }

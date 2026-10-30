@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 /// Modal interactivo tipo Bottom Sheet para reordenar variantes mediante
 /// arrastrar y soltar (ReorderableListView).
@@ -13,6 +14,7 @@ class VariantReorderModal {
     FocusManager.instance.primaryFocus?.unfocus();
     await showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: isDark ? const Color(0xFF1E1E2A) : Colors.white,
       shape: const RoundedRectangleBorder(
@@ -21,10 +23,14 @@ class VariantReorderModal {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (modalContext, setModalState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+            final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(modalContext, minPadding: kMinDefensiveBottomClearance);
+            return SafeArea(
+              top: false,
+              bottom: true,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, effectiveBottom + 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Center(
@@ -186,9 +192,10 @@ class VariantReorderModal {
                   ),
                 ],
               ),
-            );
-          },
-        );
+            ),
+          );
+        },
+      );
       },
     ).whenComplete(() {
       FocusManager.instance.primaryFocus?.unfocus();

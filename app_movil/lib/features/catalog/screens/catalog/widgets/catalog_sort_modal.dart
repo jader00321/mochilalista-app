@@ -86,9 +86,22 @@ class CatalogSortModal extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            Text(
-                              option.emoji,
-                              style: const TextStyle(fontSize: 18),
+                            Container(
+                              padding: const EdgeInsets.all(7),
+                              decoration: BoxDecoration(
+                                color: (isSelected
+                                        ? (isDark ? Colors.blue[400]! : Colors.blue[700]!)
+                                        : (isDark ? Colors.grey[400]! : Colors.grey[700]!))
+                                    .withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                option.icon,
+                                size: 18,
+                                color: isSelected
+                                    ? (isDark ? Colors.blue[300] : Colors.blue[700])
+                                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
