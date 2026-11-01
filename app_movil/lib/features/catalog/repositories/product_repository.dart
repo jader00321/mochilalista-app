@@ -444,31 +444,29 @@ class ProductRepository {
     int presId = await db.insert('presentaciones_producto', data);
 
     int stock = (data['stock_actual'] as num?)?.toInt() ?? 0;
-    if (stock > 0) {
-      int prodId = (data['producto_id'] as num?)?.toInt() ?? 0;
-      int negocioId = 0;
-      if (prodId > 0) {
-        final pRows = await db.query(
-          'productos',
-          columns: ['negocio_id'],
-          where: 'id = ?',
-          whereArgs: [prodId],
-        );
-        if (pRows.isNotEmpty) {
-          negocioId = (pRows.first['negocio_id'] as num?)?.toInt() ?? 0;
-        }
+    int prodId = (data['producto_id'] as num?)?.toInt() ?? 0;
+    int negocioId = 0;
+    if (prodId > 0) {
+      final pRows = await db.query(
+        'productos',
+        columns: ['negocio_id'],
+        where: 'id = ?',
+        whereArgs: [prodId],
+      );
+      if (pRows.isNotEmpty) {
+        negocioId = (pRows.first['negocio_id'] as num?)?.toInt() ?? 0;
       }
-
-      await db.insert('stock_ledger', {
-        'presentation_id': presId,
-        'negocio_id': negocioId,
-        'tipo_transaccion': 'INVENTARIO_INICIAL',
-        'cantidad': stock,
-        'costo_unitario': (data['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0,
-        'precio_venta': (data['precio_venta_final'] as num?)?.toDouble() ?? 0.0,
-        'fecha_registro': DateTime.now().toIso8601String(),
-      });
     }
+
+    await db.insert('stock_ledger', {
+      'presentation_id': presId,
+      'negocio_id': negocioId,
+      'tipo_transaccion': 'INVENTARIO_INICIAL',
+      'cantidad': stock,
+      'costo_unitario': (data['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0,
+      'precio_venta': (data['precio_venta_final'] as num?)?.toDouble() ?? 0.0,
+      'fecha_registro': DateTime.now().toIso8601String(),
+    });
 
     // Registrar descuento inicial si la presentación nace con oferta activa
     await _recordInitialDiscountTxn(db, presId, data);
@@ -572,6 +570,29 @@ class ProductRepository {
             'UPDATE presentaciones_producto SET stock_actual = ? WHERE producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
             [newStock, prodId, id],
           );
+
+          // Acotar cupos de variantes compartidas que superen el nuevo máximo físico
+          final sharedVars = await txn.query(
+            'presentaciones_producto',
+            columns: ['id', 'unidades_por_venta', 'cupo_maximo_variante'],
+            where: 'producto_id = ? AND usa_stock_compartido = 1',
+            whereArgs: [prodId],
+          );
+          for (var sv in sharedVars) {
+            int svId = sv['id'] as int;
+            int svFactor = (sv['unidades_por_venta'] as int?) ?? 1;
+            if (svFactor <= 0) svFactor = 1;
+            int svMaxFisico = newStock ~/ svFactor;
+            int? svCupo = sv['cupo_maximo_variante'] as int?;
+            if (svCupo != null && svCupo > svMaxFisico) {
+              await txn.update(
+                'presentaciones_producto',
+                {'cupo_maximo_variante': svMaxFisico},
+                where: 'id = ?',
+                whereArgs: [svId],
+              );
+            }
+          }
         }
 
         await txn.insert('stock_ledger', {
@@ -926,7 +947,7 @@ class ProductRepository {
         int newPresId = await txn.insert('presentaciones_producto', pres);
 
         // Si es stock compartido, solo registrar el INVENTARIO_INICIAL una sola vez en el ledger para el pool
-        bool shouldRecordLedger = stock > 0 && (!isShared || !sharedLedgerRecorded);
+        bool shouldRecordLedger = (!isShared || !sharedLedgerRecorded);
         if (shouldRecordLedger) {
           if (isShared) sharedLedgerRecorded = true;
           await txn.insert('stock_ledger', {
@@ -1139,6 +1160,7 @@ class ProductRepository {
       }
 
       // 8. Whitelist e inserción de nuevas presentaciones
+      bool sharedLedgerRecorded = false;
       for (var pres in presentationsToInsert) {
         pres['producto_id'] = productId;
         pres.remove('id');
@@ -1150,7 +1172,10 @@ class ProductRepository {
         pres.removeWhere((key, _) => !_kPresentacionColumns.contains(key));
         int newPresId = await txn.insert('presentaciones_producto', pres);
 
-        if (stock > 0) {
+        bool isShared = pres['usa_stock_compartido'] == 1 || pres['usa_stock_compartido'] == true;
+        bool shouldRecordLedger = (!isShared || !sharedLedgerRecorded);
+        if (shouldRecordLedger) {
+          if (isShared) sharedLedgerRecorded = true;
           await txn.insert('stock_ledger', {
             'presentation_id': newPresId,
             'negocio_id': negocioId,

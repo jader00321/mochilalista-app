@@ -101,6 +101,24 @@ class SalesService {
                 int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
                 bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
                 if (factor <= 0) factor = 1;
+
+                if (prodId > 0) {
+                  final prodRows = await txn.query(
+                    'productos',
+                    columns: ['modo_stock', 'stock_compartido'],
+                    where: 'id = ?',
+                    whereArgs: [prodId],
+                  );
+                  if (prodRows.isNotEmpty) {
+                    final modoStock = prodRows.first['modo_stock'] as String?;
+                    if (modoStock == 'COMPARTIDO') {
+                      usaCompartido = true;
+                    }
+                    if (usaCompartido) {
+                      currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                    }
+                  }
+                }
                 
                 int baseUnitsToDeduct = totalDeduct * factor;
                 if (currentStock < baseUnitsToDeduct) throw Exception("Stock insuficiente para un componente del paquete.");
@@ -185,6 +203,24 @@ class SalesService {
             bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
             int? cupo = presCheck.first['cupo_maximo_variante'] as int?;
             if (factor <= 0) factor = 1;
+
+            if (prodId > 0) {
+              final prodRows = await txn.query(
+                'productos',
+                columns: ['modo_stock', 'stock_compartido'],
+                where: 'id = ?',
+                whereArgs: [prodId],
+              );
+              if (prodRows.isNotEmpty) {
+                final modoStock = prodRows.first['modo_stock'] as String?;
+                if (modoStock == 'COMPARTIDO') {
+                  usaCompartido = true;
+                }
+                if (usaCompartido) {
+                  currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                }
+              }
+            }
             
             // 🛡️ Regla 1: Validar que no supere el cupo asignado si está configurado
             if (usaCompartido && cupo != null && quantity > cupo) {
@@ -517,6 +553,24 @@ class SalesService {
                 int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
                 bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
                 if (factor <= 0) factor = 1;
+
+                if (prodId > 0) {
+                  final prodRows = await txn.query(
+                    'productos',
+                    columns: ['modo_stock', 'stock_compartido'],
+                    where: 'id = ?',
+                    whereArgs: [prodId],
+                  );
+                  if (prodRows.isNotEmpty) {
+                    final modoStock = prodRows.first['modo_stock'] as String?;
+                    if (modoStock == 'COMPARTIDO') {
+                      usaCompartido = true;
+                    }
+                    if (usaCompartido) {
+                      currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                    }
+                  }
+                }
                 int baseUnitsToRestore = totalDeduct * factor;
 
                 if (usaCompartido && prodId > 0) {
@@ -572,6 +626,24 @@ class SalesService {
               int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
               bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
               if (factor <= 0) factor = 1;
+
+              if (prodId > 0) {
+                final prodRows = await txn.query(
+                  'productos',
+                  columns: ['modo_stock', 'stock_compartido'],
+                  where: 'id = ?',
+                  whereArgs: [prodId],
+                );
+                if (prodRows.isNotEmpty) {
+                  final modoStock = prodRows.first['modo_stock'] as String?;
+                  if (modoStock == 'COMPARTIDO') {
+                    usaCompartido = true;
+                  }
+                  if (usaCompartido) {
+                    currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                  }
+                }
+              }
               int baseUnitsToRestore = quantity * factor;
 
               if (usaCompartido && prodId > 0) {
@@ -699,11 +771,20 @@ class SalesService {
               int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
               int totalDeduct = qtyReq * quantity;
               
-              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
+              final presCheck = await txn.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'unidades_por_venta', 'usa_stock_compartido'], where: 'id = ?', whereArgs: [presId]);
               if (presCheck.isNotEmpty) {
+                 int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
                  int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
                  int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+                 bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
                  if (factor <= 0) factor = 1;
+                 if (prodId > 0) {
+                   final prodRows = await txn.query('productos', columns: ['modo_stock', 'stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
+                   if (prodRows.isNotEmpty) {
+                     if (prodRows.first['modo_stock'] == 'COMPARTIDO') usaCompartido = true;
+                     if (usaCompartido) currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                   }
+                 }
                  if (currentStock < (totalDeduct * factor)) throw Exception("Stock insuficiente para restaurar el paquete.");
               } else {
                  throw Exception("Componente de paquete no encontrado.");
@@ -711,11 +792,24 @@ class SalesService {
             }
           } else if (item['presentation_id'] != null) {
             int presId = item['presentation_id'] as int;
-            final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
+            final presCheck = await txn.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'], where: 'id = ?', whereArgs: [presId]);
             if (presCheck.isNotEmpty) {
+               int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
                int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
                int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+               bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
+               int? cupo = presCheck.first['cupo_maximo_variante'] as int?;
                if (factor <= 0) factor = 1;
+               if (prodId > 0) {
+                 final prodRows = await txn.query('productos', columns: ['modo_stock', 'stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
+                 if (prodRows.isNotEmpty) {
+                   if (prodRows.first['modo_stock'] == 'COMPARTIDO') usaCompartido = true;
+                   if (usaCompartido) currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                 }
+               }
+               if (usaCompartido && cupo != null && quantity > cupo) {
+                 throw Exception("La cantidad solicitada ($quantity) supera el cupo asignado para esta variante ($cupo).");
+               }
                if (currentStock < (quantity * factor)) throw Exception("Stock insuficiente para restaurar el producto.");
             } else {
                throw Exception("Producto no encontrado.");
@@ -736,14 +830,68 @@ class SalesService {
               int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
               int totalDeduct = qtyReq * quantity;
 
-              final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
+              final presCheck = await txn.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'], where: 'id = ?', whereArgs: [presId]);
               if (presCheck.isNotEmpty) {
+                int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
                 int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
                 int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+                bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
                 if (factor <= 0) factor = 1;
+                if (prodId > 0) {
+                  final prodRows = await txn.query('productos', columns: ['modo_stock', 'stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
+                  if (prodRows.isNotEmpty) {
+                    if (prodRows.first['modo_stock'] == 'COMPARTIDO') usaCompartido = true;
+                    if (usaCompartido) currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                  }
+                }
                 int baseUnitsToDeduct = totalDeduct * factor;
 
-                await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - baseUnitsToDeduct, presId]);
+                if (usaCompartido && prodId > 0) {
+                  int newPool = currentStock - baseUnitsToDeduct;
+                  await txn.rawUpdate(
+                    'UPDATE productos SET stock_compartido = ? WHERE id = ?',
+                    [newPool, prodId],
+                  );
+                  await txn.rawUpdate(
+                    'UPDATE presentaciones_producto SET stock_actual = ? WHERE producto_id = ? AND usa_stock_compartido = 1',
+                    [newPool, prodId],
+                  );
+
+                  int? bCupo = presCheck.first['cupo_maximo_variante'] as int?;
+                  if (bCupo != null) {
+                    int newBCupo = (bCupo - totalDeduct).clamp(0, newPool ~/ factor);
+                    await txn.update(
+                      'presentaciones_producto',
+                      {'cupo_maximo_variante': newBCupo},
+                      where: 'id = ?',
+                      whereArgs: [presId],
+                    );
+                  }
+
+                  final siblings = await txn.query(
+                    'presentaciones_producto',
+                    columns: ['id', 'unidades_por_venta', 'cupo_maximo_variante'],
+                    where: 'producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
+                    whereArgs: [prodId, presId],
+                  );
+                  for (var sib in siblings) {
+                    int sId = sib['id'] as int;
+                    int sFactor = (sib['unidades_por_venta'] as int?) ?? 1;
+                    if (sFactor <= 0) sFactor = 1;
+                    int sMaxFisico = newPool ~/ sFactor;
+                    int? sCupo = sib['cupo_maximo_variante'] as int?;
+                    if (sCupo != null && sCupo > sMaxFisico) {
+                      await txn.update(
+                        'presentaciones_producto',
+                        {'cupo_maximo_variante': sMaxFisico},
+                        where: 'id = ?',
+                        whereArgs: [sId],
+                      );
+                    }
+                  }
+                } else {
+                  await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - baseUnitsToDeduct, presId]);
+                }
                 
                 // Trazabilidad
                 await txn.insert('stock_ledger', {
@@ -760,15 +908,70 @@ class SalesService {
             }
           } else if (item['presentation_id'] != null) {
             int presId = item['presentation_id'] as int;
-            final presCheck = await txn.query('presentaciones_producto', columns: ['stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta'], where: 'id = ?', whereArgs: [presId]);
+            final presCheck = await txn.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'], where: 'id = ?', whereArgs: [presId]);
             
             if (presCheck.isNotEmpty) {
+              int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
               int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
               int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+              bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
+              int? cupo = presCheck.first['cupo_maximo_variante'] as int?;
               if (factor <= 0) factor = 1;
+
+              if (prodId > 0) {
+                final prodRows = await txn.query('productos', columns: ['modo_stock', 'stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
+                if (prodRows.isNotEmpty) {
+                  if (prodRows.first['modo_stock'] == 'COMPARTIDO') usaCompartido = true;
+                  if (usaCompartido) currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                }
+              }
               int baseUnitsToDeduct = quantity * factor;
 
-              await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - baseUnitsToDeduct, presId]);
+              if (usaCompartido && prodId > 0) {
+                int newStock = currentStock - baseUnitsToDeduct;
+                await txn.rawUpdate(
+                  'UPDATE productos SET stock_compartido = ? WHERE id = ?',
+                  [newStock, prodId],
+                );
+                await txn.rawUpdate(
+                  'UPDATE presentaciones_producto SET stock_actual = ? WHERE producto_id = ? AND usa_stock_compartido = 1',
+                  [newStock, prodId],
+                );
+
+                if (cupo != null) {
+                  int newCupo = (cupo - quantity).clamp(0, newStock ~/ factor);
+                  await txn.update(
+                    'presentaciones_producto',
+                    {'cupo_maximo_variante': newCupo},
+                    where: 'id = ?',
+                    whereArgs: [presId],
+                  );
+                }
+
+                final siblings = await txn.query(
+                  'presentaciones_producto',
+                  columns: ['id', 'unidades_por_venta', 'cupo_maximo_variante'],
+                  where: 'producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
+                  whereArgs: [prodId, presId],
+                );
+                for (var sib in siblings) {
+                  int sId = sib['id'] as int;
+                  int sFactor = (sib['unidades_por_venta'] as int?) ?? 1;
+                  if (sFactor <= 0) sFactor = 1;
+                  int sMaxFisico = newStock ~/ sFactor;
+                  int? sCupo = sib['cupo_maximo_variante'] as int?;
+                  if (sCupo != null && sCupo > sMaxFisico) {
+                    await txn.update(
+                      'presentaciones_producto',
+                      {'cupo_maximo_variante': sMaxFisico},
+                      where: 'id = ?',
+                      whereArgs: [sId],
+                    );
+                  }
+                }
+              } else {
+                await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - baseUnitsToDeduct, presId]);
+              }
               
               // Trazabilidad
               await txn.insert('stock_ledger', {

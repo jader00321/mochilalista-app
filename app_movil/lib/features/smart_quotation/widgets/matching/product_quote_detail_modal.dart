@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
@@ -7,7 +9,6 @@ import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
-import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/promotions/models/bundle_model.dart';
 import 'package:app_movil/features/promotions/models/bundle_item_model.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
@@ -88,7 +89,8 @@ class ProductQuoteDetailModal extends StatefulWidget {
       _ProductQuoteDetailModalState();
 }
 
-class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
+class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal>
+    with SingleTickerProviderStateMixin {
   Product? _fullProduct;
   bool _isLoading = true;
   String _currentCategoryName = "";
@@ -104,19 +106,16 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
   _PricingMode _pricingMode = _PricingMode.normal;
   bool _isSyncing = false;
 
+  AnimationController? _maxStockBannerAnim;
+  Timer? _maxStockBannerTimer;
+  bool _showMaxStockBanner = false;
+
   int _getRealStock(ProductPresentation pres) {
-    if (pres.usaStockCompartido &&
-        _fullProduct != null &&
-        _fullProduct!.hasSharedStock) {
-      final pool = _fullProduct!.stockCompartido;
-      final factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
-      final physical = pool ~/ factor;
-      if (pres.cupoMaximoVariante != null) {
-        return pres.cupoMaximoVariante! < physical
-            ? pres.cupoMaximoVariante!
-            : physical;
-      }
-      return physical;
+    final bool isShared = (_fullProduct?.modoStock == 'COMPARTIDO')
+        ? true
+        : pres.usaStockCompartido;
+    if (isShared) {
+      return pres.unidadesVendiblesDisponibles;
     }
     int factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
     return pres.stockActual ~/ factor;
@@ -125,6 +124,10 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
   @override
   void initState() {
     super.initState();
+    _maxStockBannerAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
     _selectedPresentation = widget.wrapper.presentation;
 
     final authProv = Provider.of<AuthProvider>(context, listen: false);
@@ -181,10 +184,32 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
 
   @override
   void dispose() {
+    _maxStockBannerTimer?.cancel();
+    _maxStockBannerAnim?.dispose();
     _qtyCtrl.dispose();
     _priceCtrl.dispose();
     _discountCtrl.dispose();
     super.dispose();
+  }
+
+  void _triggerMaxStockReached(int maxStock, String unitName) {
+    HapticFeedback.lightImpact();
+    _maxStockBannerTimer?.cancel();
+    setState(() {
+      _showMaxStockBanner = true;
+    });
+    _maxStockBannerAnim?.forward(from: 0.0);
+    _maxStockBannerTimer = Timer(const Duration(milliseconds: 2800), () {
+      if (mounted) {
+        _maxStockBannerAnim?.reverse().orCancel.then((_) {
+          if (mounted) {
+            setState(() {
+              _showMaxStockBanner = false;
+            });
+          }
+        }).catchError((_) {});
+      }
+    });
   }
 
   Future<void> _loadFullProductDetails() async {
@@ -288,17 +313,17 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
   void _qtyAction(int delta, bool isClient) {
     int current = int.tryParse(_qtyCtrl.text) ?? 0;
     int newQty = current + delta;
+    final realStock = _getRealStock(_selectedPresentation);
+    final unitName = _selectedPresentation.unidadVenta ?? 'Und';
+
+    if (delta > 0 && realStock > 0 && newQty > realStock) {
+      _qtyCtrl.text = realStock.toString();
+      _triggerMaxStockReached(realStock, unitName);
+      setState(() => _quantity = realStock);
+      return;
+    }
 
     if (newQty > 0) {
-      final realStock = _getRealStock(_selectedPresentation);
-      if (isClient && newQty > realStock) {
-        CustomSnackBar.show(
-          context,
-          message: "Límite de stock alcanzado ($realStock disp.)",
-          isError: true,
-        );
-        return;
-      }
       _qtyCtrl.text = newQty.toString();
       setState(() => _quantity = newQty);
     }
@@ -1132,14 +1157,17 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                                   : Colors.blue[800],
                             ),
                             const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                "Seleccionar Variante / Presentación",
-                                style: textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: textColor,
+                            Expanded(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  "Seleccionar Variante / Presentación",
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
+                                  ),
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1247,7 +1275,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  "Pool Base: $pool und. (= máx. $maxPhysical ${_selectedPresentation.unidadVenta ?? 'Und'}$cupoStr) · $modoStr",
+                                  "Inventario base compartido: $pool und. (= máx. $maxPhysical ${_selectedPresentation.unidadVenta ?? 'Und'}$cupoStr) · $modoStr",
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
@@ -1301,7 +1329,7 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  "📦 Stock Propio disponible: $ownStock ${_selectedPresentation.unidadVenta ?? 'Und'} · Mixto",
+                                  "Stock Propio disponible: $ownStock ${_selectedPresentation.unidadVenta ?? 'Und'} · Mixto",
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
@@ -1525,19 +1553,24 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                                   isDense: true,
                                 ),
                                 onChanged: (v) {
-                                  if (isClient) {
-                                    int parsed = int.tryParse(v) ?? 1;
-                                    final realStock = _getRealStock(
-                                      _selectedPresentation,
-                                    );
-                                    if (parsed > realStock) {
-                                      _qtyCtrl.text = realStock.toString();
-                                      CustomSnackBar.show(
-                                        context,
-                                        message: "Límite de stock alcanzado",
-                                        isError: true,
-                                      );
-                                    }
+                                  int? parsed = int.tryParse(v);
+                                  final realStock = _getRealStock(
+                                    _selectedPresentation,
+                                  );
+                                  final unitName =
+                                      _selectedPresentation.unidadVenta ?? 'Und';
+
+                                  if (parsed != null &&
+                                      realStock > 0 &&
+                                      parsed > realStock) {
+                                    _qtyCtrl.text = realStock.toString();
+                                    _qtyCtrl.selection =
+                                        TextSelection.fromPosition(
+                                          TextPosition(
+                                            offset: _qtyCtrl.text.length,
+                                          ),
+                                        );
+                                    _triggerMaxStockReached(realStock, unitName);
                                   }
                                   setState(
                                     () => _quantity =
@@ -1600,6 +1633,64 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal> {
                 ),
               ],
             ),
+
+            if (_showMaxStockBanner && _maxStockBannerAnim != null)
+              SizeTransition(
+                sizeFactor: CurvedAnimation(
+                  parent: _maxStockBannerAnim!,
+                  curve: Curves.easeOutCubic,
+                ),
+                axisAlignment: -1.0,
+                child: FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: _maxStockBannerAnim!,
+                    curve: Curves.easeIn,
+                  ),
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.amber.shade900.withValues(alpha: 0.25)
+                          : const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.amber.shade700
+                            : const Color(0xFFF59E0B),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: 16,
+                          color: isDark
+                              ? Colors.amber.shade300
+                              : const Color(0xFFB45309),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Stock máximo alcanzado: solo hay ${_getRealStock(_selectedPresentation)} ${_selectedPresentation.unidadVenta ?? 'Und'} disponibles para vender",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.amber.shade200
+                                  : const Color(0xFF92400E),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
             if (isStockEmpty)
               Padding(

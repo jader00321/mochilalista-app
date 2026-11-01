@@ -36,8 +36,17 @@ class _RestockAlertsCardState extends State<RestockAlertsCard> {
             children: [
               const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
               const SizedBox(width: 8),
-              const Text("Riesgo de Quiebre de Stock", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const Spacer(),
+              const Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Riesgo de Quiebre de Stock",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
@@ -72,7 +81,11 @@ class _RestockAlertsCardState extends State<RestockAlertsCard> {
             double pct = alerta > 0 ? (actual / alerta) : 0;
             if (pct > 1) pct = 1.0;
             
-            bool isSelected = index == _selectedProductIndex;
+            bool isShared = (p['usa_stock_compartido'] as num?)?.toInt() == 1 || p['modo_stock'] == 'COMPARTIDO';
+            int poolStock = (p['stock_compartido'] as num?)?.toInt() ?? 0;
+            int? cupo = (p['cupo_maximo_variante'] as num?)?.toInt();
+            bool isCupoLimited = isShared && cupo != null && cupo <= alerta && poolStock > alerta;
+            final bool isSelected = _selectedProductIndex == index;
 
             return GestureDetector(
               onTap: () {
@@ -102,20 +115,43 @@ class _RestockAlertsCardState extends State<RestockAlertsCard> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text("$actual / $alerta", style: TextStyle(fontWeight: FontWeight.bold, color: actual == 0 ? Colors.red : Colors.orange)),
+                        Text(
+                          "$actual / $alerta", 
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold, 
+                            color: actual == 0 ? Colors.red : (isCupoLimited ? Colors.blueAccent : Colors.orange),
+                          ),
+                        ),
                       ],
                     ),
+                    if (isCupoLimited) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.blueAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          "Cupo en $cupo • Hay $poolStock u. base",
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     LinearProgressIndicator(
                       value: pct,
                       backgroundColor: widget.isDark ? Colors.white10 : Colors.grey[200],
-                      valueColor: AlwaysStoppedAnimation<Color>(actual == 0 ? Colors.red : Colors.orange),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        actual == 0 ? Colors.red : (isCupoLimited ? Colors.blueAccent : Colors.orange),
+                      ),
                       borderRadius: BorderRadius.circular(4),
                       minHeight: 6,
                     ),
                     if (isSelected) ...[
                       const SizedBox(height: 16),
-                      _buildDetailPanel(p, actual, alerta),
+                      _buildDetailPanel(p, actual, alerta, isCupoLimited, poolStock, cupo),
                     ]
                   ],
                 ),
@@ -127,16 +163,19 @@ class _RestockAlertsCardState extends State<RestockAlertsCard> {
     );
   }
 
-  Widget _buildDetailPanel(Map<String, dynamic> p, int actual, int alerta) {
+  Widget _buildDetailPanel(Map<String, dynamic> p, int actual, int alerta, bool isCupoLimited, int poolStock, int? cupo) {
     String name = p['nombre']?.toString() ?? 'Producto';
+    bool isShared = (p['usa_stock_compartido'] as num?)?.toInt() == 1 || p['modo_stock'] == 'COMPARTIDO';
     
     String insightText;
-    if (actual == 0) {
-      insightText = "⛔ $name se agotó completamente. Cada día sin stock es una venta perdida. Contacta a tu proveedor HOY.";
+    if (isCupoLimited) {
+      insightText = "La variante tiene su cupo asignado en $cupo, pero el producto cuenta con $poolStock u. base en su pozo compartido. Aumenta su cupo para reanudar ventas inmediatamente.";
+    } else if (actual == 0) {
+      insightText = "$name se agotó completamente. Cada día sin stock es una venta perdida. Contacta a tu proveedor HOY.";
     } else if (actual <= 2) {
-      insightText = "🔴 $name tiene solo $actual unidad(es). Nivel CRÍTICO. Al cruzar el umbral de seguridad ($alerta), el riesgo de quiebre es inminente. Actúa ya.";
+      insightText = "$name tiene solo $actual unidad(es). Nivel CRÍTICO. Al cruzar el umbral de seguridad ($alerta), el riesgo de quiebre es inminente. Actúa ya.";
     } else {
-      insightText = "⚠️ $name: $actual de $alerta unidades de seguridad. Programa tu reabastecimiento antes de que baje a nivel crítico.";
+      insightText = "$name: $actual de $alerta unidades de seguridad. Programa tu reabastecimiento antes de que baje a nivel crítico.";
     }
 
     return Container(
@@ -194,21 +233,21 @@ class _RestockAlertsCardState extends State<RestockAlertsCard> {
                         .where((pr) => pr.id == presId)
                         .firstOrNull;
                     if (targetPres != null && mounted) {
-                      await StockUpdateModal.show(
+                      final res = await StockUpdateModal.show(
                         context: context,
                         presentation: targetPres,
                         provider: invProv,
                         isDark: widget.isDark,
                       );
-                      if (mounted) {
+                      if (res == true && mounted) {
                         analytics.runStaggeredAnalysis();
                       }
                     }
                   },
                   icon: const Icon(Icons.edit_note, size: 16),
-                  label: const Text(
-                    "Ajustar Stock",
-                    style: TextStyle(
+                  label: Text(
+                    isShared ? "Ajustar Cupo / Stock" : "Ajustar Stock",
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),

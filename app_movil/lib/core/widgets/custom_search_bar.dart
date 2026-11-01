@@ -102,11 +102,14 @@ class _CustomSearchBarState extends State<CustomSearchBar> {
                     style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87),
                     textAlignVertical: TextAlignVertical.center,
                     decoration: InputDecoration(
-                      hintText: "Buscar producto, marca, código...",
-                      hintStyle: TextStyle(color: isDark ? Colors.grey[500] : const Color.fromARGB(255, 165, 165, 165), fontSize: 15),
+                      hintText: "Buscar producto, marca...",
+                      hintStyle: TextStyle(
+                        color: isDark ? Colors.grey[500] : const Color.fromARGB(255, 165, 165, 165),
+                        fontSize: 13.5,
+                      ),
                       border: InputBorder.none,
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                       
                       suffixIcon: Row(
                         mainAxisSize: MainAxisSize.min,

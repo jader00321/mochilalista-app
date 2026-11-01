@@ -552,15 +552,18 @@ class _ProductsTabState extends State<ProductsTab>
     );
   }
 
-  void _openStockModal(BuildContext context, InventoryWrapper wrapper, bool isDark) {
+  void _openStockModal(BuildContext context, InventoryWrapper wrapper, bool isDark) async {
     HapticFeedback.lightImpact();
     final provider = Provider.of<InventoryProvider>(context, listen: false);
-    StockUpdateModal.show(
+    final res = await StockUpdateModal.show(
       context: context,
       presentation: wrapper.presentation,
       provider: provider,
       isDark: isDark,
     );
+    if (res == true && mounted) {
+      setState(() {});
+    }
   }
 
   void _openActions(BuildContext context, InventoryWrapper wrapper) {

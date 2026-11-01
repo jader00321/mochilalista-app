@@ -33,6 +33,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
   int _currentStock = 0;
   double _currentCost = 0.0;
   double _currentPrice = 0.0;
+  int _stockInicialBase = 0;
   int _totalEntradas = 0;
   int _totalSalidas = 0;
 
@@ -157,18 +158,42 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       // Obtener el Audit Trail exacto para la variante activa o pool consolidado (-1)
       final data = await _biService.getAuditTrail(_activePresentationId, widget.productId);
 
-      int entradas = 0;
+      int entradasBrutas = 0;
       int salidas = 0;
       for (var item in data) {
         if (item['source_type'] == 'STOCK_OP') {
           int q = (item['cantidad'] as num?)?.toInt() ?? 0;
           if (q > 0) {
-            entradas += q;
+            entradasBrutas += q;
           } else {
             salidas += q.abs();
           }
         }
       }
+
+      int basePreLedger = stock - (entradasBrutas - salidas);
+
+      int dotacionInicialLedger = 0;
+      final initialInvItems = data.where(
+        (i) => i['source_type'] == 'STOCK_OP' && i['accion'] == 'INVENTARIO_INICIAL',
+      ).toList();
+
+      if (initialInvItems.isNotEmpty) {
+        dotacionInicialLedger = (initialInvItems.last['cantidad'] as num?)?.toInt() ?? 0;
+      } else if (basePreLedger == 0) {
+        final positiveOps = data.where(
+          (i) => i['source_type'] == 'STOCK_OP' && ((i['cantidad'] as num?)?.toInt() ?? 0) > 0,
+        ).toList();
+        if (positiveOps.isNotEmpty) {
+          dotacionInicialLedger = (positiveOps.last['cantidad'] as num?)?.toInt() ?? 0;
+        }
+      } else {
+        dotacionInicialLedger = 0;
+      }
+
+      int stockInicialBase = basePreLedger + dotacionInicialLedger;
+      int entradasPosteriores = entradasBrutas - dotacionInicialLedger;
+      if (entradasPosteriores < 0) entradasPosteriores = 0;
 
       if (mounted) {
         setState(() {
@@ -178,7 +203,8 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           _currentStock = stock;
           _currentCost = cost;
           _currentPrice = price;
-          _totalEntradas = entradas;
+          _stockInicialBase = stockInicialBase;
+          _totalEntradas = entradasPosteriores;
           _totalSalidas = salidas;
           _activeIsShared = isShared;
           _activeFactor = factor;
@@ -497,10 +523,12 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                       const Icon(Icons.arrow_downward, size: 13, color: Colors.greenAccent),
                       const SizedBox(width: 5),
                       Flexible(
-                        child: Text(
-                          "Entradas: +$_totalEntradas und. base",
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                          overflow: TextOverflow.ellipsis,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            "Entradas: +$_totalEntradas und. base",
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
                         ),
                       ),
                     ],
@@ -522,10 +550,12 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                       const Icon(Icons.arrow_upward, size: 13, color: Colors.redAccent),
                       const SizedBox(width: 5),
                       Flexible(
-                        child: Text(
-                          "Salidas: -$_totalSalidas und. base",
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                          overflow: TextOverflow.ellipsis,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            "Salidas: -$_totalSalidas und. base",
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
                         ),
                       ),
                     ],
@@ -548,14 +578,14 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.flag_outlined, size: 13, color: Colors.white70),
+                    const Icon(Icons.outlined_flag_rounded, size: 14, color: Colors.white70),
                     const SizedBox(width: 6),
                     Expanded(
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          "Stock Inicial Base: ${_currentStock - (_totalEntradas - _totalSalidas)} und. base",
+                          "Stock Inicial Base: $_stockInicialBase und. base",
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -569,14 +599,14 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.calculate_outlined, size: 13, color: Colors.cyanAccent),
+                    const Icon(Icons.calculate_outlined, size: 14, color: Colors.cyanAccent),
                     const SizedBox(width: 6),
                     Expanded(
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          "Saldo Auditoría: ${_currentStock - (_totalEntradas - _totalSalidas)} + $_totalEntradas - $_totalSalidas = $_currentStock und. base${_activeIsShared && _activeFactor > 1 ? ' ($_variantEquivString)' : ''}",
+                          "Saldo Auditoría: $_stockInicialBase + $_totalEntradas - $_totalSalidas = $_currentStock und. base${_activeIsShared && _activeFactor > 1 ? ' ($_variantEquivString)' : ''}",
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,

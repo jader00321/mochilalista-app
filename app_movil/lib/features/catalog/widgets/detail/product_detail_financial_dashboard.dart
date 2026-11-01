@@ -52,11 +52,7 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
         : 0.0;
     final int margenPorcentaje = margenPorcentajeCalc.round();
 
-    final double factorVenta =
-        selectedPresentation.unidadesPorVenta.toDouble();
-    final int stockVisual = factorVenta > 0
-        ? (selectedPresentation.stockActual ~/ factorVenta)
-        : selectedPresentation.stockActual;
+    final int stockVisual = selectedPresentation.unidadesVendiblesDisponibles;
 
     return MorphingAccordion(
       title:
@@ -407,9 +403,9 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
                                 const SizedBox(width: 3),
                               ],
                               Text(
-                                selectedPresentation.usaStockCompartido ? "POOL DISP." : "STOCK DISP.",
+                                "STOCK DISPONIBLE",
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10.5,
                                   fontWeight: FontWeight.bold,
                                   color: selectedPresentation.usaStockCompartido
                                       ? (isDark ? Colors.blue[300] : const Color(0xFF1E40AF))
@@ -437,15 +433,6 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
                                   : (isDark ? Colors.red[300] : Colors.red),
                             ),
                           ),
-                          if (selectedPresentation.usaStockCompartido)
-                            Text(
-                              "(${selectedPresentation.stockActual} base)",
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.blue[200] : const Color(0xFF1E40AF),
-                              ),
-                            ),
                         ],
                       ),
                     ),
@@ -454,8 +441,56 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
               ),
             ],
           ),
+
+          // Franja Informativa Unificada para Variantes Compartidas
+          if (selectedPresentation.usaStockCompartido) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E3A8A).withValues(alpha: 0.2) : const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark ? Colors.blue.shade800 : const Color(0xFFBFDBFE),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.hub_rounded,
+                    size: 15,
+                    color: isDark ? Colors.blue[300] : const Color(0xFF1E40AF),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _buildSharedStockInfoText(selectedPresentation),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.blue[200] : const Color(0xFF1E40AF),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  String _buildSharedStockInfoText(ProductPresentation p) {
+    final int factor = p.unidadesPorVenta > 0 ? p.unidadesPorVenta : 1;
+    final int base = p.stockActual;
+    final int maxFisico = base ~/ factor;
+    final String uVenta = p.unidadVenta ?? 'Unidad';
+    final int? cupo = p.cupoMaximoVariante;
+    if (cupo != null && cupo < maxFisico) {
+      return "Inventario base compartido: $base und. base · Máximo formable: $maxFisico $uVenta · Cupo asignado: $cupo $uVenta";
+    }
+    return "Inventario base compartido: $base und. base · Máximo formable: $maxFisico $uVenta";
   }
 }

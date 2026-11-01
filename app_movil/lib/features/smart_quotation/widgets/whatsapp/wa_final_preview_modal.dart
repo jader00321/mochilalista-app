@@ -254,6 +254,7 @@ class _WaFinalPreviewModalState extends State<WaFinalPreviewModal> {
                             expands: false,
                             maxLines: null,
                             keyboardType: TextInputType.multiline,
+                            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                             style: TextStyle(
                               fontSize: 14.5,
                               height: 1.45,

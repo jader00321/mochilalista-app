@@ -17,6 +17,7 @@ import 'package:app_movil/features/smart_quotation/screens/manual_quotation_scre
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
 import 'package:app_movil/core/widgets/floating_dock_session_state.dart';
+import 'package:app_movil/core/services/lifecycle_resume_coordinator.dart';
 
 /// Modelo ligero para representar un proceso de trabajo activo en el Dock.
 class WorkTask {
@@ -86,6 +87,7 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
+    LifecycleResumeCoordinator.instance.registerController(_pulseController);
   }
 
   void _syncSessionState() {
@@ -98,6 +100,7 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
 
   @override
   void dispose() {
+    LifecycleResumeCoordinator.instance.unregisterController(_pulseController);
     _pulseController.dispose();
     super.dispose();
   }

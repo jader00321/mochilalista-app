@@ -2,10 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:app_movil/features/analytics/models/commercial_radar_model.dart';
 import 'package:app_movil/features/analytics/services/commercial_radar_service.dart';
 import 'package:app_movil/features/analytics/widgets/dashboard/glass_card.dart';
 import 'package:app_movil/features/analytics/screens/commercial_radar_screen.dart';
+import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/workbench_screen.dart';
+import 'package:app_movil/features/catalog/screens/inventory_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class CommercialRadarCard extends StatefulWidget {
@@ -450,35 +455,41 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        const Text(
-                          "Radar Comercial",
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.blueAccent.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.4)),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          const Text(
+                            "Radar Comercial",
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
-                          child: const Text(
-                            "IA EN VIVO",
-                            style: TextStyle(
-                              fontSize: 9, 
-                              fontWeight: FontWeight.bold, 
-                              color: Colors.blueAccent,
-                              letterSpacing: 0.5,
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.blueAccent.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.4)),
+                            ),
+                            child: const Text(
+                              "IA EN VIVO",
+                              style: TextStyle(
+                                fontSize: 9, 
+                                fontWeight: FontWeight.bold, 
+                                color: Colors.blueAccent,
+                                letterSpacing: 0.5,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       "Alertas estratégicas para comerciantes en Perú",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12, 
                         color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
@@ -502,7 +513,10 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
           const SizedBox(height: 16),
 
           // Region Switcher Pill
-          Row(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               Text(
                 "Enfoque Geográfico:",
@@ -512,7 +526,6 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
                   color: widget.isDark ? Colors.grey[400] : Colors.grey[700],
                 ),
               ),
-              const SizedBox(width: 8),
               GestureDetector(
                 onTap: _openRegionPicker,
                 child: Container(
@@ -539,7 +552,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
                         _selectedRegion,
                         style: const TextStyle(
                           fontSize: 12, 
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.bold, 
                           color: Colors.blueAccent,
                         ),
                       ),
@@ -653,7 +666,7 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
         ),
         icon: const Icon(Icons.newspaper_rounded, size: 20),
         label: const Text(
-          "📰 Explorar más noticias y alertas comerciales (Abrir Radar IA)",
+          "Explorar más noticias y alertas comerciales (Abrir Radar IA)",
           style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
@@ -714,8 +727,11 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Category + Editorial Verificada + Fecha Relativa
-                Row(
+                // Metadata: Categoría + Distintivo de Credibilidad + Medio + Fecha
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -728,56 +744,78 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
                         children: [
                           Icon(catIcon, size: 12, color: catColor),
                           const SizedBox(width: 4),
-                          Text(
-                            item.category,
-                            style: TextStyle(
-                              fontSize: 10, 
-                              fontWeight: FontWeight.bold, 
-                              color: catColor,
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 160),
+                            child: Text(
+                              item.category,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10, 
+                                fontWeight: FontWeight.bold, 
+                                color: catColor,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      flex: 2,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: (widget.isDark ? Colors.blue[400]! : Colors.blue[700]!).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          item.sourceName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.bold,
-                            color: widget.isDark ? Colors.blue[300] : Colors.blue[800],
-                          ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: item.isLive 
+                            ? const Color(0xFF059669).withValues(alpha: 0.15) 
+                            : Colors.indigo.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: item.isLive 
+                              ? const Color(0xFF059669).withValues(alpha: 0.35) 
+                              : Colors.indigo.withValues(alpha: 0.35),
                         ),
                       ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            item.isLive ? Icons.sensors_rounded : Icons.verified_user_outlined,
+                            size: 11,
+                            color: item.isLive ? const Color(0xFF059669) : Colors.indigoAccent,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            item.isLive ? "En Vivo Verificada" : "Guía Verificada",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: item.isLive 
+                                  ? (widget.isDark ? const Color(0xFF34D399) : const Color(0xFF065F46))
+                                  : (widget.isDark ? Colors.indigo[200] : Colors.indigo[800]),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      flex: 2,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: (widget.isDark ? Colors.blue[400]! : Colors.blue[700]!).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                       child: Text(
-                        item.formattedDateWithTimeAgo,
+                        item.sourceName,
                         style: TextStyle(
                           fontSize: 10.5,
-                          color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                          fontWeight: FontWeight.bold,
+                          color: widget.isDark ? Colors.blue[300] : Colors.blue[800],
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 2),
-                    Icon(
-                      Icons.open_in_new, 
-                      size: 13, 
-                      color: widget.isDark ? Colors.white38 : Colors.grey[400],
+                    Text(
+                      item.compactTimeAgo,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
                     ),
                   ],
                 ),
@@ -899,26 +937,67 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
+
+                // Botones de Acción Directa en 1 Toque (Iconos Vectoriales Nativos Cero Emojis)
+                Builder(
+                  builder: (context) {
+                    final action = item.resolvedAction;
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: action.color,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              visualDensity: VisualDensity.compact,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
+                            ),
+                            icon: Icon(action.icon, size: 15),
+                            label: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                action.label,
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            onPressed: () => _executeRadarAction(context, action.type),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.green.withValues(alpha: 0.15),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          icon: const Icon(Icons.share_outlined, color: Colors.green, size: 18),
+                          tooltip: "Compartir Alerta por WhatsApp",
+                          onPressed: () => _shareAlert(item),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 6),
 
                 // Leer fuente oficial button
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton.icon(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        visualDensity: VisualDensity.compact,
-                        foregroundColor: Colors.blueAccent,
-                      ),
-                      icon: const Icon(Icons.arrow_outward, size: 14),
-                      label: Text(
-                        "Leer en ${item.sourceName}",
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: () => _launchSourceUrl(item.sourceUrl),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: Colors.blueAccent,
                     ),
-                  ],
+                    icon: const Icon(Icons.arrow_outward, size: 14),
+                    label: Text(
+                      "Leer en ${item.sourceName} ↗",
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () => _launchSourceUrl(item.sourceUrl),
+                  ),
                 ),
               ],
             ),
@@ -935,46 +1014,57 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
       decoration: BoxDecoration(
         gradient: _getBannerGradient(item.category),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(catIcon, color: Colors.white, size: 24),
                 ),
-                child: Icon(catIcon, color: Colors.white, size: 24),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.category.toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white70,
-                      letterSpacing: 1.0,
-                    ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          item.category.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white70,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        item.region,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    item.region,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -986,5 +1076,54 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
         ],
       ),
     );
+  }
+
+  void _executeRadarAction(BuildContext context, RadarActionType type) {
+    switch (type) {
+      case RadarActionType.workbench:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WorkbenchScreen()),
+        );
+        break;
+      case RadarActionType.restock:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SmartRestockScreen()),
+        );
+        break;
+      case RadarActionType.promotions:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const InventoryScreen(initialTabIndex: 1),
+          ),
+        );
+        break;
+      case RadarActionType.quickSale:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const QuickSaleScreen()),
+        );
+        break;
+    }
+  }
+
+  void _shareAlert(CommercialNewsItem item) {
+    final text = '''
+ALERTA RADAR COMERCIAL - MOCHILALISTA
+Zona: $_selectedRegion
+${item.cleanTitle}
+
+Impacto en tu Negocio / Ruta:
+${item.impactAnalysis.isNotEmpty ? item.impactAnalysis : item.summary}
+
+Medidas y Recomendaciones Clave:
+${item.actionableAdvice}
+
+Fuente: ${item.sourceName} (${item.sourceUrl})
+''';
+    // ignore: deprecated_member_use
+    Share.share(text.trim());
   }
 }

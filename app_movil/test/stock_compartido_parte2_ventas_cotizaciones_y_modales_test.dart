@@ -725,11 +725,11 @@ void main() {
         // Pestañas normales ("Sumar Compra" / "Fijar Stock Total") deben estar ocultas
         expect(find.text('Sumar Compra'), findsNothing);
         expect(find.text('Fijar Stock Total'), findsNothing);
-        // Botón "Restaurar al máximo (24)" debe estar presente
-        expect(find.textContaining('Restaurar al máximo (24)'), findsOneWidget);
+        // Botón "Usar máximo (24)" debe estar presente
+        expect(find.textContaining('Usar máximo (24)'), findsOneWidget);
 
-        // 2. Tocar chip rápido "+50" para intentar superar el máximo (20 + 50 = 70 > 24)
-        await tester.tap(find.text('+50'));
+        // 2. Tocar chip rápido "+10" para intentar superar el máximo (20 + 10 = 30 > 24)
+        await tester.tap(find.text('+10'));
         await tester.pump();
 
         // El valor debe bloquearse estrictamente en 24
@@ -813,7 +813,7 @@ void main() {
         await tester.pump();
         expect(textField.controller?.text, equals('19'));
 
-        await tester.tap(find.textContaining('Restaurar al máximo (24)'));
+        await tester.tap(find.textContaining('Usar máximo (24)'));
         await tester.pump();
         expect(textField.controller?.text, equals('24'));
       },
@@ -1103,8 +1103,8 @@ void main() {
         await tester.tap(find.text('Ver otras'));
         await tester.pumpAndSettle();
 
-        // Verificar que el banner reactivo muestra "Pool Base" para la variante compartida
-        expect(find.textContaining('Pool Base: 48 und.'), findsOneWidget);
+        // Verificar que el banner reactivo muestra "Inventario base compartido" para la variante compartida
+        expect(find.textContaining('Inventario base compartido: 48 und.'), findsOneWidget);
 
         // Verificar que los precios usan el formato de AppCurrency (S/ 12.50, S/ 10.00, etc.)
         expect(

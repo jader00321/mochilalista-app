@@ -85,7 +85,26 @@ class InventoryIntelligenceService {
     double velocity30 = data30['velocity'];
     double velocity7 = data7['velocity'];
 
-    if (totalSold30 == 0) return 0.0;
+    if (totalSold30 == 0) {
+      final allTimeResult = await db.rawQuery('''
+        SELECT 
+          IFNULL(SUM(CASE WHEN tipo_transaccion = 'VENTA' THEN ABS(cantidad) ELSE 0 END), 0) - 
+          IFNULL(SUM(CASE WHEN tipo_transaccion = 'ANULACION' THEN ABS(cantidad) ELSE 0 END), 0) as total_sold, 
+          MIN(CASE WHEN tipo_transaccion = 'VENTA' THEN fecha_registro ELSE NULL END) as first_sale
+        FROM stock_ledger
+        WHERE presentation_id = ? AND tipo_transaccion IN ('VENTA', 'ANULACION')
+      ''', [presentationId]);
+      
+      int allTimeSold = (allTimeResult.first['total_sold'] as num?)?.toInt() ?? 0;
+      String? allTimeFirstSale = allTimeResult.first['first_sale'] as String?;
+      if (allTimeSold > 0 && allTimeFirstSale != null) {
+        DateTime firstSale = DateTime.parse(allTimeFirstSale);
+        int activeDays = DateTime.now().difference(firstSale).inDays;
+        activeDays = math.max(1, activeDays);
+        return allTimeSold / activeDays;
+      }
+      return 0.0;
+    }
     
     // Ponderación: 70% corto plazo, 30% largo plazo
     return (velocity7 * 0.7) + (velocity30 * 0.3);
@@ -249,7 +268,27 @@ class InventoryIntelligenceService {
     double velocity30 = data30['velocity'];
     double velocity7 = data7['velocity'];
 
-    if (totalSold30 == 0) return 0.0;
+    if (totalSold30 == 0) {
+      final allTimeResult = await db.rawQuery('''
+        SELECT 
+          IFNULL(SUM(CASE WHEN sl.tipo_transaccion = 'VENTA' THEN ABS(sl.cantidad) ELSE 0 END), 0) - 
+          IFNULL(SUM(CASE WHEN sl.tipo_transaccion = 'ANULACION' THEN ABS(sl.cantidad) ELSE 0 END), 0) as total_sold, 
+          MIN(CASE WHEN sl.tipo_transaccion = 'VENTA' THEN sl.fecha_registro ELSE NULL END) as first_sale
+        FROM stock_ledger sl
+        JOIN presentaciones_producto pp ON sl.presentation_id = pp.id
+        WHERE pp.producto_id = ? AND pp.usa_stock_compartido = 1 AND sl.tipo_transaccion IN ('VENTA', 'ANULACION')
+      ''', [productId]);
+      
+      int allTimeSold = (allTimeResult.first['total_sold'] as num?)?.toInt() ?? 0;
+      String? allTimeFirstSale = allTimeResult.first['first_sale'] as String?;
+      if (allTimeSold > 0 && allTimeFirstSale != null) {
+        DateTime firstSale = DateTime.parse(allTimeFirstSale);
+        int activeDays = DateTime.now().difference(firstSale).inDays;
+        activeDays = math.max(1, activeDays);
+        return allTimeSold / activeDays;
+      }
+      return 0.0;
+    }
 
     return (velocity7 * 0.7) + (velocity30 * 0.3);
   }
@@ -366,7 +405,7 @@ class InventoryIntelligenceService {
 
   /// Recupera la línea de tiempo (Audit Trail) de un producto/presentación
   /// con resolución relacional de IDs y filtro de ruido por redondeo flotante.
-  Future<List<Map<String, dynamic>>> getAuditTrail(int presentationId, int productId, {int limit = 50, int offset = 0}) async {
+  Future<List<Map<String, dynamic>>> getAuditTrail(int presentationId, int productId, {int limit = 500, int offset = 0}) async {
     final db = await _dbHelper.database;
 
     // Obtener catálogo de categorías y marcas para resolución de nombres

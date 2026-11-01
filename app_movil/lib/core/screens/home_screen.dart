@@ -1,8 +1,6 @@
-import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/notification_provider.dart';
@@ -16,7 +14,6 @@ import 'package:app_movil/features/smart_quotation/screens/client_orders_screen.
 import 'package:app_movil/features/scanner/screens/scan_screen.dart'; 
 import 'package:app_movil/features/scanner/screens/barcode_scanner_screen.dart'; 
 import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
-import 'package:app_movil/features/auth/screens/onboarding/lock_screen.dart';
 import 'package:app_movil/features/profile/screens/profile_screen.dart';
 
 import 'package:app_movil/core/widgets/home/dashboard_header.dart';
@@ -30,6 +27,8 @@ import 'package:app_movil/core/widgets/persistent_work_dock.dart';
 import 'package:app_movil/core/widgets/omni_search_bar.dart';
 import 'package:app_movil/core/widgets/explorer_conversion_dock.dart';
 
+import 'package:app_movil/core/services/lifecycle_resume_coordinator.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -39,12 +38,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
-  DateTime? _pausedTime;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 🛡️ Precargar configuración de PIN en RAM para 0ms de latencia en resumed
+    LifecycleResumeCoordinator.instance.prefetchPinConfig();
   }
 
   @override
@@ -55,51 +55,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
-      _pausedTime = DateTime.now();
-      _checkImmediateLock();
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      LifecycleResumeCoordinator.instance.onAppPaused(context);
     } else if (state == AppLifecycleState.resumed) {
-      if (_pausedTime != null) {
-        _checkPinDelay();
-      }
+      LifecycleResumeCoordinator.instance.onAppResumed(
+        context,
+        onPostTransitionSync: () {
+          // 🛡️ Sincronización diferida a 450ms solo si pasaron >= 30s en background
+          if (mounted && _currentIndex == 0) {
+            final auth = Provider.of<AuthProvider>(context, listen: false);
+            if (auth.hasActiveContext) {
+              Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+              Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
+              if (!auth.isCommunityClient) {
+                Provider.of<SaleProvider>(context, listen: false).silentRefresh();
+              }
+            }
+          }
+        },
+      );
     }
-  }
-
-  Future<void> _checkImmediateLock() async {
-    final prefs = await SharedPreferences.getInstance();
-    final delayMinutes = prefs.getInt('pin_delay_minutes') ?? 1;
-    
-    if (delayMinutes == 0 && mounted) {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      if (auth.hasPinCache && auth.user != null) {
-        _pausedTime = null; // Limpiar para evitar doble push en resumed
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => LockScreen(userId: auth.user!.id)),
-          (route) => false,
-        );
-      }
-    }
-  }
-
-  Future<void> _checkPinDelay() async {
-    final prefs = await SharedPreferences.getInstance();
-    final delayMinutes = prefs.getInt('pin_delay_minutes') ?? 1;
-
-    if (!mounted) return;
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final difference = DateTime.now().difference(_pausedTime!);
-    
-    if (difference.inMinutes >= delayMinutes && auth.hasPinCache && auth.user != null) {
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => LockScreen(userId: auth.user!.id)),
-          (route) => false,
-        );
-      }
-    }
-    _pausedTime = null;
   }
 
   @override
@@ -205,10 +180,12 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
       vsync: this,
       duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
+    LifecycleResumeCoordinator.instance.registerController(_bgAnimController);
   }
 
   @override
   void dispose() {
+    LifecycleResumeCoordinator.instance.unregisterController(_bgAnimController);
     _bgAnimController.dispose();
     super.dispose();
   }
@@ -238,65 +215,66 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           children: [
-            const DashboardHeader(),
-            Transform.translate(
-              offset: const Offset(0, -40),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    OmniSearchBar(
-                      onBarcodeTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const BarcodeScannerScreen(
-                              isFromHomeGlobalSearch: true,
-                            ),
+            const RepaintBoundary(child: DashboardHeader()),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20.0, 14.0, 20.0, 0.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  OmniSearchBar(
+                    onBarcodeTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const BarcodeScannerScreen(
+                            isFromHomeGlobalSearch: true,
                           ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
-                      const RestockSmartBanner(),
-                      // 🔧 Recordatorio amigable de PIN de seguridad con snooze inteligente de 7 días
-                      if (!auth.hasPinCache && !auth.isPinReminderSnoozed) ...[
-                        _buildSecurityPinBanner(context, isDark, auth),
-                        const SizedBox(height: 16),
-                      ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
+                    const RepaintBoundary(child: RestockSmartBanner()),
+                    // 🔧 Recordatorio amigable de PIN de seguridad con snooze inteligente de 7 días
+                    if (!auth.hasPinCache && !auth.isPinReminderSnoozed) ...[
+                      _buildSecurityPinBanner(context, isDark, auth),
+                      const SizedBox(height: 16),
                     ],
-                    if (isGuest) ...[
-                      const ExplorerConversionDock(),
-                      const SizedBox(height: 12),
-                      _buildGuestBanner(context, isDark),
-                    ]
-                    else if (auth.isOwner || auth.isWorker) ...[
-                      const WeeklySalesChart(),
-                      const SizedBox(height: 20),
-                      QuotationBanner(
+                  ],
+                  if (isGuest) ...[
+                    const ExplorerConversionDock(),
+                    const SizedBox(height: 12),
+                    _buildGuestBanner(context, isDark),
+                  ]
+                  else if (auth.isOwner || auth.isWorker) ...[
+                    const RepaintBoundary(child: WeeklySalesChart()),
+                    const SizedBox(height: 20),
+                    RepaintBoundary(
+                      child: QuotationBanner(
                         onGoToWorkbench: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkbenchScreen())),
-                      )
-                    ] else 
-                      QuotationBanner(
+                      ),
+                    )
+                  ] else 
+                    RepaintBoundary(
+                      child: QuotationBanner(
                         title: "Cotiza tu Lista Escolar",
                         subtitle: "Sube una foto de tu lista escolar y nuestra Inteligencia Artificial detectará los productos automáticamente.",
                         buttonText: "Escanear Lista con IA",
                         onGoToWorkbench: () {},
                       ),
+                    ),
 
-                    const SizedBox(height: 24),
-                    const SmartActionGrid(),
-                    if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
-                      const SizedBox(height: 32),
-                      const RecentActivityList(),
-                    ],
-                    SizedBox(
-                      height: _hasActiveTasks ? (_isDockBubble ? 40 : 150) : 30,
-                    ), 
+                  const SizedBox(height: 24),
+                  const RepaintBoundary(child: SmartActionGrid()),
+                  if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
+                    const SizedBox(height: 32),
+                    const RepaintBoundary(child: RecentActivityList()),
                   ],
-                ),
+                  SizedBox(
+                    height: _hasActiveTasks ? (_isDockBubble ? 40 : 150) : 30,
+                  ), 
+                ],
               ),
             ),
           ],
@@ -306,59 +284,70 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
 
     return Stack(
       children: [
-        // Fondo monocromático dinámico (Glassmorphism)
+        // Fondo monocromático dinámico con gradientes radiales suaves (0% sobrecosto GPU, cero BackdropFilter)
         Positioned.fill(
-          child: Stack(
-            children: [
-              AnimatedBuilder(
-                animation: _bgAnimController,
-                builder: (context, child) {
-                  return Stack(
-                    children: [
-                      // Orbe gris claro / oscuro inferior izquierdo
-                      Positioned(
-                        bottom: -100 + math.sin(_bgAnimController.value * math.pi * 2) * 40,
-                        left: -100 + math.cos(_bgAnimController.value * math.pi * 2) * 30,
-                        child: Container(
-                          width: 400, height: 400,
-                          decoration: BoxDecoration(shape: BoxShape.circle, color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03)),
+          child: RepaintBoundary(
+            child: Stack(
+              children: [
+                AnimatedBuilder(
+                  animation: _bgAnimController,
+                  builder: (context, child) {
+                    return Stack(
+                      children: [
+                        // Orbe gris claro / oscuro inferior izquierdo
+                        Positioned(
+                          bottom: -100 + math.sin(_bgAnimController.value * math.pi * 2) * 40,
+                          left: -100 + math.cos(_bgAnimController.value * math.pi * 2) * 30,
+                          child: Container(
+                            width: 400, height: 400,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      // Orbe gris inferior derecho
-                      Positioned(
-                        bottom: 100 + math.cos(_bgAnimController.value * math.pi * 2) * 50,
-                        right: -150 + math.sin(_bgAnimController.value * math.pi * 2) * 40,
-                        child: Container(
-                          width: 500, height: 500,
-                          decoration: BoxDecoration(shape: BoxShape.circle, color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.02)),
+                        // Orbe gris inferior derecho
+                        Positioned(
+                          bottom: 100 + math.cos(_bgAnimController.value * math.pi * 2) * 50,
+                          right: -150 + math.sin(_bgAnimController.value * math.pi * 2) * 40,
+                          child: Container(
+                            width: 500, height: 500,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              Positioned.fill(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-                  child: const SizedBox(),
+                      ],
+                    );
+                  },
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-        SafeArea(
-          top: true,
-          bottom: false,
-          child: mainContent,
-        ),
-        PersistentWorkDock(
-          isFloating: true,
-          onBubbleModeChanged: (isBubble) {
-            if (mounted) setState(() => _isDockBubble = isBubble);
-          },
-          onTasksChanged: (hasTasks) {
-            if (mounted) setState(() => _hasActiveTasks = hasTasks);
-          },
+        // Contenido principal directamente anclado (DashboardHeader gobierna el padding.top estable)
+        mainContent,
+        RepaintBoundary(
+          child: PersistentWorkDock(
+            isFloating: true,
+            onBubbleModeChanged: (isBubble) {
+              if (mounted) setState(() => _isDockBubble = isBubble);
+            },
+            onTasksChanged: (hasTasks) {
+              if (mounted) setState(() => _hasActiveTasks = hasTasks);
+            },
+          ),
         ),
       ],
     );

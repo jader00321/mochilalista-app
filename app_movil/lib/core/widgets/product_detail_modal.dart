@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -52,28 +53,53 @@ class ProductDetailModal extends StatefulWidget {
   State<ProductDetailModal> createState() => _ProductDetailModalState();
 }
 
-class _ProductDetailModalState extends State<ProductDetailModal> {
+class _ProductDetailModalState extends State<ProductDetailModal>
+    with SingleTickerProviderStateMixin {
   int _quantity = 1;
   late ProductPresentation _currentPres;
   late int _maxStock;
   bool _showVariantSelector = false;
 
+  AnimationController? _maxStockBannerAnim;
+  Timer? _maxStockBannerTimer;
+
   int _computeMaxStock(ProductPresentation pres) {
-    final int factor = pres.unidadesPorVenta <= 0 ? 1 : pres.unidadesPorVenta;
-    final int physical = pres.stockActual ~/ factor;
-    if (pres.usaStockCompartido && pres.cupoMaximoVariante != null) {
-      return pres.cupoMaximoVariante! < physical
-          ? pres.cupoMaximoVariante!
-          : physical;
+    final bool isShared = widget.item.product.modoStock == 'COMPARTIDO' ||
+        pres.usaStockCompartido;
+    if (isShared) {
+      return pres.unidadesVendiblesDisponibles;
     }
-    return physical;
+    final int factor = pres.unidadesPorVenta <= 0 ? 1 : pres.unidadesPorVenta;
+    return pres.stockActual ~/ factor;
   }
 
   @override
   void initState() {
     super.initState();
+    _maxStockBannerAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
     _currentPres = widget.item.presentation;
     _maxStock = _computeMaxStock(_currentPres);
+  }
+
+  @override
+  void dispose() {
+    _maxStockBannerTimer?.cancel();
+    _maxStockBannerAnim?.dispose();
+    super.dispose();
+  }
+
+  void _triggerMaxStockReached(int maxStock, String unitName) {
+    HapticFeedback.lightImpact();
+    _maxStockBannerTimer?.cancel();
+    _maxStockBannerAnim?.forward();
+    _maxStockBannerTimer = Timer(const Duration(milliseconds: 2800), () {
+      if (mounted) {
+        _maxStockBannerAnim?.reverse();
+      }
+    });
   }
 
   void _selectPresentation(ProductPresentation pres) {
@@ -91,16 +117,9 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
     if (_quantity < _maxStock) {
       setState(() => _quantity++);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Stock máximo disponible: $_maxStock",
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          backgroundColor: Colors.orange[800],
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      _quantity = _maxStock;
+      _triggerMaxStockReached(_maxStock, _currentPres.unidadVenta ?? 'Unidad');
+      setState(() {});
     }
   }
 
@@ -498,18 +517,20 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                                       ? Colors.blue[300]
                                       : Colors.blue[800],
                                 ),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  child: Text(
-                                    "Seleccionar Variante / Presentación",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13.5,
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.black87,
+                                Expanded(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      "Seleccionar Variante / Presentación",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13.5,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black87,
+                                      ),
                                     ),
-                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -620,7 +641,7 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      "Pool Base: $pool und. (= máx. $maxPhysical ${_currentPres.unidadVenta ?? 'Und'}$cupoStr) · $modoStr",
+                                      "Inventario base compartido: $pool und. (= máx. $maxPhysical ${_currentPres.unidadVenta ?? 'Und'}$cupoStr) · $modoStr",
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
@@ -671,7 +692,7 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      "📦 Stock Propio disponible: $ownStock ${_currentPres.unidadVenta ?? 'Und'} · Mixto",
+                                      "Stock Propio disponible: $ownStock ${_currentPres.unidadVenta ?? 'Und'} · Mixto",
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
@@ -815,45 +836,6 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                   ],
                 ],
 
-                // 3. FILA BENTO SIMÉTRICA (3 COLUMNAS: EMPAQUE, PRESENTACIÓN, STOCK)
-                Row(
-                  children: [
-                    Expanded(
-                      child: _DetailPill(
-                        icon: Icons.inventory_2_outlined,
-                        label: "Empaque",
-                        value: "$factorVenta u.",
-                        color: Colors.blue,
-                        isDark: isDark,
-                        textTheme: textTheme,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _DetailPill(
-                        icon: Icons.scale_outlined,
-                        label: "Presentación",
-                        value: variantDisplay,
-                        color: Colors.purple,
-                        isDark: isDark,
-                        textTheme: textTheme,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _DetailPill(
-                        icon: isOutOfStock
-                            ? Icons.cancel_outlined
-                            : Icons.check_circle_outline,
-                        label: "Stock",
-                        value: isOutOfStock ? "0" : "$_maxStock",
-                        color: isOutOfStock ? Colors.grey : Colors.green,
-                        isDark: isDark,
-                        textTheme: textTheme,
-                      ),
-                    ),
-                  ],
-                ),
 
                 // 4. BANDA FINANCIERA FACTOR-AWARE (SOLO MODO VENDEDOR)
                 AnimatedSize(
@@ -1252,9 +1234,7 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                               ),
                             ),
                             IconButton(
-                              onPressed: _quantity < _maxStock
-                                  ? _increment
-                                  : null,
+                              onPressed: _maxStock > 0 ? _increment : null,
                               icon: const Icon(Icons.add, size: 24),
                               color: isDark
                                   ? Colors.green[400]
@@ -1361,6 +1341,63 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                       ],
                     ),
                   ),
+                  if (_maxStockBannerAnim != null)
+                    SizeTransition(
+                      sizeFactor: CurvedAnimation(
+                        parent: _maxStockBannerAnim!,
+                        curve: Curves.easeOutCubic,
+                      ),
+                      axisAlignment: -1.0,
+                      child: FadeTransition(
+                        opacity: CurvedAnimation(
+                          parent: _maxStockBannerAnim!,
+                          curve: Curves.easeIn,
+                        ),
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.amber.shade900.withValues(alpha: 0.25)
+                                : const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.amber.shade700
+                                  : const Color(0xFFF59E0B),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline_rounded,
+                                size: 16,
+                                color: isDark
+                                    ? Colors.amber.shade300
+                                    : const Color(0xFFB45309),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Stock máximo alcanzado: solo hay $_maxStock ${_currentPres.unidadVenta ?? 'Und'} disponibles para vender",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark
+                                        ? Colors.amber.shade200
+                                        : const Color(0xFF92400E),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ] else ...[
                   Container(
                     width: double.infinity,
@@ -1420,79 +1457,6 @@ class _ProductDetailModalState extends State<ProductDetailModal> {
                     size: 22,
                   ),
                 ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final MaterialColor color;
-  final bool isDark;
-  final TextTheme textTheme;
-
-  const _DetailPill({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.isDark,
-    required this.textTheme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? color.withValues(alpha: 0.15) : color[50],
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark
-              ? color.withValues(alpha: 0.3)
-              : color.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 14, color: isDark ? color[300] : color[700]),
-              const SizedBox(width: 4),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? color[200] : color[700],
-                      letterSpacing: 0.1,
-                    ),
-                    maxLines: 1,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w900,
-                color: isDark ? Colors.white : color[900],
               ),
             ),
           ),

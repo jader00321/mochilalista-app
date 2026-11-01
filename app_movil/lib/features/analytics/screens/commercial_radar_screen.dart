@@ -7,6 +7,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:app_movil/features/analytics/models/commercial_radar_model.dart';
 import 'package:app_movil/features/analytics/services/commercial_radar_service.dart';
 import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/workbench_screen.dart';
+import 'package:app_movil/features/catalog/screens/inventory_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
@@ -605,29 +608,37 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    const Text(
-                                      "IA EN VIVO",
-                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      width: 6,
-                                      height: 6,
-                                      decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.greenAccent),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      "${filtered.length} alertas detectadas",
-                                      style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                                    ),
-                                  ],
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    children: [
+                                      const Text(
+                                        "IA EN VIVO",
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.greenAccent),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        "${filtered.length} alertas detectadas",
+                                        style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                                 const SizedBox(height: 2),
-                                const Text(
-                                  "Monitoreo Logístico y Comercial",
-                                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold),
+                                const FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    "Monitoreo Logístico y Comercial",
+                                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold),
+                                  ),
                                 ),
                               ],
                             ),
@@ -752,30 +763,33 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   alignment: Alignment.center,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.radar_rounded,
-                                        size: 15,
-                                        color: _activeTab == RadarTab.noticiasDelDia
-                                            ? Colors.white
-                                            : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        "Noticias del Día",
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: _activeTab == RadarTab.noticiasDelDia
-                                              ? FontWeight.bold
-                                              : FontWeight.w500,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.radar_rounded,
+                                          size: 15,
                                           color: _activeTab == RadarTab.noticiasDelDia
                                               ? Colors.white
                                               : (isDark ? Colors.grey[400] : Colors.grey[700]),
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          "Noticias del Día",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: _activeTab == RadarTab.noticiasDelDia
+                                                ? FontWeight.bold
+                                                : FontWeight.w500,
+                                            color: _activeTab == RadarTab.noticiasDelDia
+                                                ? Colors.white
+                                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -794,30 +808,33 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   alignment: Alignment.center,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.bookmarks_rounded,
-                                        size: 15,
-                                        color: _activeTab == RadarTab.guardadas
-                                            ? Colors.white
-                                            : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        "Guardadas (${_savedNewsMap.length})",
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: _activeTab == RadarTab.guardadas
-                                              ? FontWeight.bold
-                                              : FontWeight.w500,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.bookmarks_rounded,
+                                          size: 15,
                                           color: _activeTab == RadarTab.guardadas
                                               ? Colors.white
                                               : (isDark ? Colors.grey[400] : Colors.grey[700]),
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          "Guardadas (${_savedNewsMap.length})",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: _activeTab == RadarTab.guardadas
+                                                ? FontWeight.bold
+                                                : FontWeight.w500,
+                                            color: _activeTab == RadarTab.guardadas
+                                                ? Colors.white
+                                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1069,10 +1086,6 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
     final catColor = _getCategoryColor(item.category);
     final catIcon = _getCategoryIcon(item.category);
     final isBookmarked = _savedNewsMap.containsKey(item.id);
-    final bool isLogisticsOrSupply = item.category.toLowerCase().contains('proveedor') ||
-        item.category.toLowerCase().contains('abastecimiento') ||
-        item.category.toLowerCase().contains('clima') ||
-        item.category.toLowerCase().contains('ruta');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1094,7 +1107,7 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Banner Clicable con degradado temático + Acciones Rápidas
+          // Banner Clicable con degradado temático + Acciones Rápidas (Blindado con FittedBox Anti-Overflow)
           Container(
             height: 50,
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1110,33 +1123,36 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                 Icon(catIcon, color: Colors.white, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    item.category.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11.5,
-                      letterSpacing: 0.4,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      item.category.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11.5,
+                        letterSpacing: 0.3,
+                      ),
+                      maxLines: 1,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                   icon: Icon(
                     isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                     color: Colors.white,
-                    size: 20,
+                    size: 19,
                   ),
                   tooltip: isBookmarked ? "Quitar de Guardadas" : "Guardar en Favoritos",
                   onPressed: () => _toggleBookmark(item),
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  icon: const Icon(Icons.open_in_new, color: Colors.white70, size: 18),
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  icon: const Icon(Icons.open_in_new, color: Colors.white70, size: 17),
                   tooltip: "Abrir enlace original",
                   onPressed: () => _launchUrl(item.sourceUrl),
                 ),
@@ -1149,42 +1165,69 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Metadata: Medio Verificado + Fecha y Antigüedad
-                Row(
+                // Metadata: Medio Verificado + Distintivo de Credibilidad + Antigüedad (Cero Emojis)
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: (isDark ? Colors.blue[400]! : Colors.blue[700]!).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          item.sourceName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.blue[300] : Colors.blue[800],
-                          ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (isDark ? Colors.blue[400]! : Colors.blue[700]!).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        item.sourceName,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.blue[300] : Colors.blue[800],
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          item.compactTimeAgo,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: item.isLive 
+                            ? const Color(0xFF059669).withValues(alpha: 0.15) 
+                            : Colors.indigo.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: item.isLive 
+                              ? const Color(0xFF059669).withValues(alpha: 0.4) 
+                              : Colors.indigo.withValues(alpha: 0.35),
+                          width: 0.8,
                         ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            item.isLive ? Icons.sensors_rounded : Icons.verified_user_outlined,
+                            size: 11,
+                            color: item.isLive ? const Color(0xFF059669) : Colors.indigoAccent,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            item.isLive ? "En Vivo Verificada" : "Guía Verificada",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: item.isLive 
+                                  ? (isDark ? const Color(0xFF34D399) : const Color(0xFF065F46))
+                                  : (isDark ? Colors.indigo[200] : Colors.indigo[800]),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      item.compactTimeAgo,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -1303,58 +1346,45 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                 const SizedBox(height: 14),
 
                 // Botones de Acción Directa en 1 Toque (Iconos Vectoriales Nativos Cero Emojis)
-                Row(
-                  children: [
-                    if (isLogisticsOrSupply)
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blueAccent,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            visualDensity: VisualDensity.compact,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 0,
+                Builder(
+                  builder: (context) {
+                    final action = item.resolvedAction;
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: action.color,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              visualDensity: VisualDensity.compact,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
+                            ),
+                            icon: Icon(action.icon, size: 15),
+                            label: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                action.label,
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            onPressed: () => _executeRadarAction(context, action.type),
                           ),
-                          icon: const Icon(Icons.inventory_2_outlined, size: 15),
-                          label: const Text(
-                            "Revisar Stock Crítico",
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                          ),
-                          onPressed: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const SmartRestockScreen()));
-                          },
                         ),
-                      )
-                    else
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            visualDensity: VisualDensity.compact,
+                        const SizedBox(width: 8),
+                        IconButton(
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.green.withValues(alpha: 0.15),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          icon: const Icon(Icons.checklist_rounded, size: 15),
-                          label: const Text(
-                            "Ir a Mesa de Trabajo",
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                          ),
-                          onPressed: () {
-                            CustomSnackBar.show(context, message: "Aperturando mesa de trabajo comercial...");
-                          },
+                          icon: const Icon(Icons.share_outlined, color: Colors.green, size: 18),
+                          tooltip: "Compartir Alerta por WhatsApp",
+                          onPressed: () => _shareAlert(item),
                         ),
-                      ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.green.withValues(alpha: 0.15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      icon: const Icon(Icons.share_outlined, color: Colors.green, size: 18),
-                      tooltip: "Compartir Alerta por WhatsApp",
-                      onPressed: () => _shareAlert(item),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
 
@@ -1377,6 +1407,37 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
         ],
       ),
     );
+  }
+
+  void _executeRadarAction(BuildContext context, RadarActionType type) {
+    switch (type) {
+      case RadarActionType.workbench:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WorkbenchScreen()),
+        );
+        break;
+      case RadarActionType.restock:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SmartRestockScreen()),
+        );
+        break;
+      case RadarActionType.promotions:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const InventoryScreen(initialTabIndex: 1),
+          ),
+        );
+        break;
+      case RadarActionType.quickSale:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const QuickSaleScreen()),
+        );
+        break;
+    }
   }
 
   Color _getCategoryColor(String category) {

@@ -18,6 +18,8 @@ class StockValidationResult {
   final int deficit;
   final StockValidationStatus status;
   final double costoBaseSobrante;
+  final int factor;
+  final int totalUnitsBase;
 
   StockValidationResult({
     required this.fullUnits,
@@ -25,6 +27,8 @@ class StockValidationResult {
     required this.deficit,
     required this.status,
     required this.costoBaseSobrante,
+    this.factor = 1,
+    this.totalUnitsBase = 0,
   });
 
   factory StockValidationResult.empty() => StockValidationResult(
@@ -33,7 +37,15 @@ class StockValidationResult {
         deficit: 0,
         status: StockValidationStatus.empty,
         costoBaseSobrante: 0.0,
+        factor: 1,
+        totalUnitsBase: 0,
       );
+
+  int get exactLowerBaseUnits => fullUnits * (factor > 0 ? factor : 1);
+  int get exactUpperBaseUnits => (fullUnits + 1) * (factor > 0 ? factor : 1);
+  int get exactLowerPackages => fullUnits;
+  int get exactUpperPackages => fullUnits + 1;
+  int get exactOnePackageBaseUnits => factor > 0 ? factor : 1;
 
   String userMessage(String unitName, int factor) {
     if (status == StockValidationStatus.deficit) {
@@ -175,7 +187,15 @@ class UnitCatalogService {
     required String unitName,
   }) {
     if (totalUnitsBase == 0 || presentationFactor == 0) {
-      return StockValidationResult(fullUnits: 0, leftover: 0, deficit: 0, status: StockValidationStatus.empty, costoBaseSobrante: baseUnitCost);
+      return StockValidationResult(
+        fullUnits: 0,
+        leftover: 0,
+        deficit: 0,
+        status: StockValidationStatus.empty,
+        costoBaseSobrante: baseUnitCost,
+        factor: presentationFactor > 0 ? presentationFactor : 1,
+        totalUnitsBase: totalUnitsBase,
+      );
     }
 
     int fullUnits = totalUnitsBase ~/ presentationFactor;
@@ -197,6 +217,8 @@ class UnitCatalogService {
       deficit: deficit,
       status: status,
       costoBaseSobrante: baseUnitCost,
+      factor: presentationFactor > 0 ? presentationFactor : 1,
+      totalUnitsBase: totalUnitsBase,
     );
   }
 

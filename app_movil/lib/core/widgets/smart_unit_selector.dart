@@ -134,14 +134,18 @@ class _SmartUnitSelectorState extends State<SmartUnitSelector> {
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.info_outline, size: 14, color: widget.isDark ? Colors.purple[300] : Colors.purple[700]),
-            const SizedBox(width: 4),
-            Text("Ver unidades disponibles", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.purple[300] : Colors.purple[700], fontWeight: FontWeight.bold)),
-            Icon(_isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 14, color: widget.isDark ? Colors.purple[300] : Colors.purple[700]),
-          ],
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.info_outline, size: 14, color: widget.isDark ? Colors.purple[300] : Colors.purple[700]),
+              const SizedBox(width: 4),
+              Text("Ver unidades disponibles", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.purple[300] : Colors.purple[700], fontWeight: FontWeight.bold)),
+              Icon(_isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 14, color: widget.isDark ? Colors.purple[300] : Colors.purple[700]),
+            ],
+          ),
         ),
       ),
     );

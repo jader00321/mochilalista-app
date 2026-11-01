@@ -87,6 +87,12 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
             ? pres.precioVentaFinal / pres.factorGananciaVenta!
             : null);
 
+    final bool isShared = prod.modoStock == 'COMPARTIDO' || pres.usaStockCompartido;
+    final int factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+    final int effectiveStock = isShared
+        ? pres.unidadesVendiblesDisponibles
+        : (pres.stockActual ~/ factor);
+
     final matched = MatchedProduct(
       productId: prod.id,
       presentationId: pres.id ?? 0, 
@@ -96,11 +102,14 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
       brand: brandName,
       price: pres.precioVentaFinal, 
       offerPrice: pres.hasOffer ? pres.effectivePrice : null,
-      stock: pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1),
+      stock: effectiveStock,
       imageUrl: pres.imagenUrl ?? prod.imagenUrl,
       unit: pres.unidadVenta ?? "Unidad", 
       conversionFactor: pres.unidadesPorVenta, 
       cost: calculatedCost,
+      usaStockCompartido: isShared,
+      sharedStockPool: prod.stockCompartido,
+      cupoMaximoVariante: pres.cupoMaximoVariante,
     );
 
     final provider = Provider.of<ManualQuoteProvider>(context, listen: false);
@@ -138,6 +147,12 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
             ? pres.precioVentaFinal / pres.factorGananciaVenta!
             : null);
 
+    final bool isShared = prod.modoStock == 'COMPARTIDO' || pres.usaStockCompartido;
+    final int factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+    final int effectiveStock = isShared
+        ? pres.unidadesVendiblesDisponibles
+        : (pres.stockActual ~/ factor);
+
     final matched = MatchedProduct(
       productId: prod.id,
       presentationId: pres.id ?? 0, 
@@ -147,11 +162,14 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
       brand: brandName,
       price: pres.precioVentaFinal, 
       offerPrice: pres.hasOffer ? pres.effectivePrice : null,
-      stock: pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1),
+      stock: effectiveStock,
       imageUrl: pres.imagenUrl ?? prod.imagenUrl,
       unit: pres.unidadVenta ?? "Unidad", 
       conversionFactor: pres.unidadesPorVenta, 
       cost: calculatedCost,
+      usaStockCompartido: isShared,
+      sharedStockPool: prod.stockCompartido,
+      cupoMaximoVariante: pres.cupoMaximoVariante,
     );
 
     widget.onAddProduct(matched, 1, matched.offerPrice ?? matched.price, matched.fullName);
@@ -377,9 +395,12 @@ class _CatalogSearchModalState extends State<CatalogSearchModal> {
                     final brandName = provider.getBrandName(prod.marcaId);
                     final catName = provider.getCategoryName(prod.categoriaId); 
                     
+                    final bool isShared = prod.modoStock == 'COMPARTIDO' || pres.usaStockCompartido;
                     Color stockColor = isDark ? Colors.green[400]! : Colors.green;
                     int factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
-                    int realStock = pres.stockActual ~/ factor;
+                    int realStock = isShared
+                        ? pres.unidadesVendiblesDisponibles
+                        : (pres.stockActual ~/ factor);
                     String stockText = "$realStock disp.";
                     bool isOutOfStock = false;
                     

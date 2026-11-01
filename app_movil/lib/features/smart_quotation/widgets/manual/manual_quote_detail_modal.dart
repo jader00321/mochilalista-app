@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
@@ -113,7 +115,8 @@ class ManualQuoteDetailModal extends StatefulWidget {
   State<ManualQuoteDetailModal> createState() => _ManualQuoteDetailModalState();
 }
 
-class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
+class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal>
+    with SingleTickerProviderStateMixin {
   Product? _fullProduct;
   bool _isLoadingVariants = true;
   bool _showVariantSelector = false;
@@ -133,9 +136,17 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
 
   final Map<int, VariantDetailState> _variantDrafts = {};
 
+  AnimationController? _maxStockBannerAnim;
+  Timer? _maxStockBannerTimer;
+  bool _showMaxStockBanner = false;
+
   @override
   void initState() {
     super.initState();
+    _maxStockBannerAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
     _currentSelection = widget.product;
     _systemPrice = widget.product.price;
     _qtyCtrl.text = widget.initialQty.toString();
@@ -198,11 +209,33 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
 
   @override
   void dispose() {
+    _maxStockBannerTimer?.cancel();
+    _maxStockBannerAnim?.dispose();
     _qtyCtrl.dispose();
     _priceCtrl.dispose();
     _discountCtrl.dispose();
     _discountFocusNode.dispose();
     super.dispose();
+  }
+
+  void _triggerMaxStockReached(int maxStock, String unitName) {
+    HapticFeedback.lightImpact();
+    _maxStockBannerTimer?.cancel();
+    setState(() {
+      _showMaxStockBanner = true;
+    });
+    _maxStockBannerAnim?.forward(from: 0.0);
+    _maxStockBannerTimer = Timer(const Duration(milliseconds: 2800), () {
+      if (mounted) {
+        _maxStockBannerAnim?.reverse().orCancel.then((_) {
+          if (mounted) {
+            setState(() {
+              _showMaxStockBanner = false;
+            });
+          }
+        }).catchError((_) {});
+      }
+    });
   }
 
   Future<void> _loadVariants() async {
@@ -300,16 +333,14 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
   void _qtyAction(int delta, bool isClient) {
     int current = int.tryParse(_qtyCtrl.text) ?? 0;
     int newQty = current + delta;
+    final maxStock = _currentSelection.effectiveVendibleStock;
+    if (delta > 0 && maxStock > 0 && newQty > maxStock) {
+      _qtyCtrl.text = maxStock.toString();
+      _triggerMaxStockReached(maxStock, _currentSelection.unit);
+      setState(() {});
+      return;
+    }
     if (newQty > 0) {
-      if (isClient && newQty > _currentSelection.stock) {
-        CustomSnackBar.show(
-          context,
-          message:
-              "Límite de stock alcanzado (${_currentSelection.stock} disp.)",
-          isError: true,
-        );
-        return;
-      }
       _qtyCtrl.text = newQty.toString();
       setState(() {});
     }
@@ -355,8 +386,17 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                 ? pres.precioVentaFinal / pres.factorGananciaVenta!
                 : null);
 
+      final bool isVariantShared = (_fullProduct?.modoStock == 'COMPARTIDO')
+          ? true
+          : pres.usaStockCompartido;
+
       final pool =
           _fullProduct?.stockCompartido ?? widget.product.sharedStockPool;
+
+      final factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+      final int calculatedStock = isVariantShared
+          ? pres.unidadesVendiblesDisponibles
+          : (pres.stockActual ~/ factor);
 
       _currentSelection = MatchedProduct(
         productId: _currentSelection.productId,
@@ -367,15 +407,14 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
         brand: _fullProduct!.marcaNombre ?? _currentSelection.brand,
         price: pres.precioVentaFinal,
         offerPrice: newOffer,
-        stock:
-            pres.stockActual ~/
-            (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1),
+        stock: calculatedStock,
         imageUrl: pres.imagenUrl ?? _fullProduct!.imagenUrl,
         unit: pres.unidadVenta ?? "Unidad",
         conversionFactor: pres.unidadesPorVenta,
         cost: calculatedCost,
-        usaStockCompartido: pres.usaStockCompartido,
+        usaStockCompartido: isVariantShared,
         sharedStockPool: pool,
+        cupoMaximoVariante: pres.cupoMaximoVariante,
       );
 
       _systemPrice = _currentSelection.price;
@@ -976,13 +1015,13 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                               }
                               if (!context.mounted) return;
                               if (targetPres != null) {
-                                await StockUpdateModal.show(
+                                final res = await StockUpdateModal.show(
                                   context: context,
                                   presentation: targetPres,
                                   provider: invProv,
                                   isDark: isDark,
                                 );
-                                if (!context.mounted) return;
+                                if (res != true || !context.mounted) return;
                                 await _loadVariants();
                                 ProductPresentation? updatedPres;
                                 if (_fullProduct != null) {
@@ -1032,7 +1071,11 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                                         price: finalPres.precioVentaFinal,
                                         offerPrice: newOfferPrice,
                                         clearOfferPrice: !finalPres.hasOffer,
-                                        stock: finalPres.stockActual ~/ factor,
+                                        stock: ((_fullProduct?.modoStock == 'COMPARTIDO') || finalPres.usaStockCompartido)
+                                            ? finalPres.unidadesVendiblesDisponibles
+                                            : (finalPres.stockActual ~/ factor),
+                                        usaStockCompartido: ((_fullProduct?.modoStock == 'COMPARTIDO') || finalPres.usaStockCompartido),
+                                        sharedStockPool: _fullProduct?.stockCompartido ?? widget.product.sharedStockPool,
                                         cost: calculatedCost,
                                         cupoMaximoVariante:
                                             finalPres.cupoMaximoVariante,
@@ -1167,14 +1210,17 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                                   : Colors.blue[800],
                             ),
                             const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                "Seleccionar Variante / Presentación",
-                                style: textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: textColor,
+                            Expanded(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  "Seleccionar Variante / Presentación",
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
+                                  ),
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1276,7 +1322,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                "Pool Base: $pool und. (= máx. $maxPhysical ${_currentSelection.unit}$cupoStr)",
+                                "Inventario base compartido: $pool und. (= máx. $maxPhysical ${_currentSelection.unit}$cupoStr)",
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
@@ -1315,7 +1361,7 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            "📦 Stock Propio disponible: ${_currentSelection.stock} ${_currentSelection.unit}",
+                            "Stock Propio disponible: ${_currentSelection.stock} ${_currentSelection.unit}",
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -1690,19 +1736,14 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                                 isDense: true,
                               ),
                               onChanged: (v) {
-                                // 🔥 BLOQUEO DE STOCK AL CLIENTE AL ESCRIBIR
-                                if (isClient) {
-                                  int parsed = int.tryParse(v) ?? 1;
-                                  final maxLim =
-                                      _currentSelection.effectiveVendibleStock;
-                                  if (parsed > maxLim) {
-                                    _qtyCtrl.text = maxLim.toString();
-                                    CustomSnackBar.show(
-                                      context,
-                                      message: "Límite de stock alcanzado",
-                                      isError: true,
-                                    );
-                                  }
+                                int? parsed = int.tryParse(v);
+                                final maxLim = _currentSelection.effectiveVendibleStock;
+                                if (parsed != null && maxLim > 0 && parsed > maxLim) {
+                                  _qtyCtrl.text = maxLim.toString();
+                                  _qtyCtrl.selection = TextSelection.fromPosition(
+                                    TextPosition(offset: _qtyCtrl.text.length),
+                                  );
+                                  _triggerMaxStockReached(maxLim, _currentSelection.unit);
                                 }
                                 setState(() {});
                               },
@@ -1760,6 +1801,64 @@ class _ManualQuoteDetailModalState extends State<ManualQuoteDetailModal> {
                 ),
               ],
             ),
+
+            if (_showMaxStockBanner && _maxStockBannerAnim != null)
+              SizeTransition(
+                sizeFactor: CurvedAnimation(
+                  parent: _maxStockBannerAnim!,
+                  curve: Curves.easeOutCubic,
+                ),
+                axisAlignment: -1.0,
+                child: FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: _maxStockBannerAnim!,
+                    curve: Curves.easeIn,
+                  ),
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.amber.shade900.withValues(alpha: 0.25)
+                          : const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.amber.shade700
+                            : const Color(0xFFF59E0B),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: 16,
+                          color: isDark
+                              ? Colors.amber.shade300
+                              : const Color(0xFFB45309),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Stock máximo alcanzado: solo hay ${_currentSelection.effectiveVendibleStock} ${_currentSelection.unit} disponibles para vender",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.amber.shade200
+                                  : const Color(0xFF92400E),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
             if (isStockEmpty)
               Padding(

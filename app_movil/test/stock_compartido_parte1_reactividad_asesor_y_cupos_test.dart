@@ -379,7 +379,7 @@ void main() {
 
       expect(controllerMap['cupoMaximoVariante'], equals(6));
       expect(find.text('= 6 Sixpack disp.'), findsOneWidget);
-      expect(find.text('Cupo Limitado'), findsOneWidget);
+      expect(find.text('Cupo acotado'), findsOneWidget);
       expect(find.text('6 de 8 Sixpack máx.'), findsOneWidget);
 
       // Usuario intenta ingresar 12 (mayor a 8 disponibles físicamente)
@@ -395,7 +395,9 @@ void main() {
     // TEST 7: Resumen en Vivo y Asesor Inteligente con Autocreación Unitaria
     // -------------------------------------------------------------------------
     testWidgets('7. Asesor Inteligente detecta sobrante pool y botón autogenera variante por Unidad (Factor 1)', (tester) async {
-      final sharedStockCtrl = TextEditingController(text: '50');
+      // 51 unidades base: Sixpack x6 deja 3 sueltas (51%6=3), Par x2 deja 1 suelta (51%2=1)
+      // Como todas las variantes compartidas dejan sobrante, el Asesor aparece en modo recomendación
+      final sharedStockCtrl = TextEditingController(text: '51');
       final baseCostCtrl = TextEditingController(text: '2.00');
 
       // Variantes compartidas solo en Sixpack (x6) y Par (x2)
@@ -451,7 +453,7 @@ void main() {
                         'costoPres': TextEditingController(text: '2.00'),
                         'margen': TextEditingController(text: '1.35'),
                         'precioVenta': TextEditingController(text: '2.70'),
-                        'stockFinal': TextEditingController(text: '50'),
+                        'stockFinal': TextEditingController(text: '51'),
                         'usaStockCompartido': true,
                       });
                       setState(() {});
@@ -472,16 +474,16 @@ void main() {
 
       // Asesor Inteligente recomienda crear variante por Unidad
       expect(find.text('Asesor de Stock: Evita unidades sobrantes'), findsOneWidget);
-      expect(find.text('✨ Crear variante por Unidad automáticamente'), findsOneWidget);
+      expect(find.text('Crear variante por Unidad automáticamente'), findsOneWidget);
 
       // Tocar botón de autocreación
-      await tester.tap(find.text('✨ Crear variante por Unidad automáticamente'));
+      await tester.tap(find.text('Crear variante por Unidad automáticamente'));
       await tester.pumpAndSettle();
 
       expect(autoCreated, isTrue);
       // Ahora existe la variante Unidad en el resumen y el asesor ya no recomienda crearla
-      expect(find.textContaining('Unidad (Unidad x1): 50 disp.'), findsOneWidget);
-      expect(find.text('✨ Crear variante por Unidad automáticamente'), findsNothing);
+      expect(find.textContaining('Unidad (Unidad x1): 51 disp.'), findsOneWidget);
+      expect(find.text('Crear variante por Unidad automáticamente'), findsNothing);
     });
 
     // -------------------------------------------------------------------------

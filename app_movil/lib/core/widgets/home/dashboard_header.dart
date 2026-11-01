@@ -1,6 +1,5 @@
 import 'dart:io'; // 🔥 IMPORTANTE: Necesario para leer archivos locales de SQLite
 import 'dart:async';
-import 'dart:ui'; // Para ImageFilter
 import 'dart:math' as math; // Para trigonometría
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -21,6 +20,8 @@ import 'package:app_movil/core/widgets/shimmer_box.dart';
 import 'package:app_movil/core/widgets/marquee_text.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 
+import 'package:app_movil/core/services/lifecycle_resume_coordinator.dart';
+
 class DashboardHeader extends StatefulWidget {
   const DashboardHeader({super.key});
 
@@ -35,6 +36,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
   int _kpiIndex = 0;
   Timer? _carouselTimer;
   late AnimationController _bgAnimController; // Para fondo animado
+  double? _stableTopInset; // 🛡️ Memorización de inset superior para 0.0px de rebote
 
   @override
   void initState() {
@@ -46,6 +48,9 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
+
+    // Registrar en el coordinador de ciclo de vida para pausar en background
+    LifecycleResumeCoordinator.instance.registerController(_bgAnimController);
 
     _startCarouselTimer();
 
@@ -67,6 +72,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
   @override
   void dispose() {
     _carouselTimer?.cancel();
+    LifecycleResumeCoordinator.instance.unregisterController(_bgAnimController);
     _bgAnimController.dispose();
     super.dispose();
   }
@@ -139,7 +145,7 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
     final userName = auth.userName; 
     
     // 🔥 CORRECCIÓN: Mostrar solo etiqueta de invitado si aplica
-    final String displayRole = "MODO INVITADO";
+    final String displayRole = "INVITADO";
 
     // 🔥 LOGO OFFLINE: Leemos la ruta local guardada en SQLite
     final String? rawLogoUrl = auth.currentBusiness?.logoUrl;
@@ -147,10 +153,17 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                               
     final int unreadCount = isGuest ? 0 : notifProv.unreadCount; 
 
+    // 🛡️ Memorización estable de ViewPaddingOf para 0.0px de rebote al conmutar multitarea
+    final viewPaddingTop = MediaQuery.viewPaddingOf(context).top;
+    if (viewPaddingTop > 0) {
+      _stableTopInset = viewPaddingTop;
+    }
+    final effectiveTopInset = _stableTopInset ?? (viewPaddingTop > 0 ? viewPaddingTop : 28.0);
+
     final Widget mainContent = Padding(
       padding: EdgeInsets.only(
-        top: math.max(MediaQuery.of(context).padding.top, 24.0) + 16,
-        bottom: 65, 
+        top: effectiveTopInset + 16,
+        bottom: 52, 
         left: 24,
         right: 24
       ),
@@ -199,17 +212,17 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                                     ),
                                   ),
                                   if (isGuest) ...[
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: Colors.orange.withValues(alpha: 0.8),
-                                        borderRadius: BorderRadius.circular(8),
+                                        borderRadius: BorderRadius.circular(6),
                                         border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                                       ),
                                       child: Text(
                                         displayRole, 
-                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                                       ),
                                     ),
                                   ],
@@ -336,67 +349,78 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
       ),
     );
 
-    return AnimatedBuilder(
-      animation: _bgAnimController,
-      child: mainContent,
-      builder: (context, child) {
-        return Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isDark 
-                ? [const Color(0xFF0A2E5C), const Color(0xFF001229)] 
-                : [const Color(0xFF1976D2), const Color(0xFF0D47A1)], 
-              begin: Alignment.lerp(Alignment.topLeft, Alignment.topRight, _bgAnimController.value)!,
-              end: Alignment.lerp(Alignment.bottomRight, Alignment.bottomLeft, _bgAnimController.value)!,
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _bgAnimController,
+        child: mainContent,
+        builder: (context, child) {
+          return Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark 
+                  ? [const Color(0xFF0A2E5C), const Color(0xFF001229)] 
+                  : [const Color(0xFF1976D2), const Color(0xFF0D47A1)], 
+                begin: Alignment.lerp(Alignment.topLeft, Alignment.topRight, _bgAnimController.value)!,
+                end: Alignment.lerp(Alignment.bottomRight, Alignment.bottomLeft, _bgAnimController.value)!,
+              ),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(50),
+                bottomRight: Radius.circular(50),
+              ),
+              boxShadow: [
+                if (!isDark) BoxShadow(color: Colors.blue.shade900.withValues(alpha: 0.3), blurRadius: 25, offset: const Offset(0, 10))
+              ]
             ),
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(50),
-              bottomRight: Radius.circular(50),
-            ),
-            boxShadow: [
-              if (!isDark) BoxShadow(color: Colors.blue.shade900.withValues(alpha: 0.3), blurRadius: 25, offset: const Offset(0, 10))
-            ]
-          ),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(50),
-              bottomRight: Radius.circular(50),
-            ),
-            child: Stack(
-              children: [
-                // Orbe superior izquierdo (Cian)
-                Positioned(
-                  top: -50 + math.sin(_bgAnimController.value * math.pi * 2) * 20,
-                  left: -50 + math.cos(_bgAnimController.value * math.pi * 2) * 20,
-                  child: Container(
-                    width: 250, height: 250,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.cyanAccent.withValues(alpha: isDark ? 0.1 : 0.15)),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(50),
+                bottomRight: Radius.circular(50),
+              ),
+              child: Stack(
+                children: [
+                  // Orbe superior izquierdo (Cian) con gradiente radial suave (cero costo GPU)
+                  Positioned(
+                    top: -50 + math.sin(_bgAnimController.value * math.pi * 2) * 20,
+                    left: -50 + math.cos(_bgAnimController.value * math.pi * 2) * 20,
+                    child: Container(
+                      width: 250, height: 250,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            Colors.cyanAccent.withValues(alpha: isDark ? 0.14 : 0.20),
+                            Colors.cyanAccent.withValues(alpha: 0.0),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                // Orbe inferior derecho (Azul vibrante)
-                Positioned(
-                  bottom: -80 + math.cos(_bgAnimController.value * math.pi * 2) * 30,
-                  right: -50 + math.sin(_bgAnimController.value * math.pi * 2) * 30,
-                  child: Container(
-                    width: 300, height: 300,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.blueAccent.withValues(alpha: isDark ? 0.15 : 0.2)),
+                  // Orbe inferior derecho (Azul vibrante) con gradiente radial suave
+                  Positioned(
+                    bottom: -80 + math.cos(_bgAnimController.value * math.pi * 2) * 30,
+                    right: -50 + math.sin(_bgAnimController.value * math.pi * 2) * 30,
+                    child: Container(
+                      width: 300, height: 300,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            Colors.blueAccent.withValues(alpha: isDark ? 0.18 : 0.24),
+                            Colors.blueAccent.withValues(alpha: 0.0),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                // Filtro de desenfoque para efecto aurora / glass
-                Positioned.fill(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-                    child: const SizedBox(),
-                  ),
-                ),
-                // Contenido Principal
-                if (child != null) child,
-              ],
+                  // Contenido Principal
+                  if (child != null) child,
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

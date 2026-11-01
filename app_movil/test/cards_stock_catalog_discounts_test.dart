@@ -304,8 +304,8 @@ void main() {
 
       // Debe mostrar advertencia de 1 u. base suelta(s)
       expect(find.textContaining("1 u. base suelta(s) que no completan un Docena (x12)"), findsOneWidget);
-      expect(find.text("🛠️ Ir a Editar"), findsOneWidget);
-      expect(find.text("⚡ Cuadrar aquí"), findsOneWidget);
+      expect(find.text("Ir a Editar"), findsOneWidget);
+      expect(find.text("Cuadrar aquí"), findsOneWidget);
 
       // Cambiar a Modo 0 (Sumar Compra) para verificar verdad contable preservando residuo
       await tester.tap(find.text("Sumar Compra"));
@@ -317,8 +317,8 @@ void main() {
 
       expect(find.text("Resultado: 3 Docena (+ 1 u. base suelta) = 37 unidades base"), findsOneWidget);
 
-      // Si el usuario pulsa "⚡ Cuadrar aquí" con consentimiento explícito:
-      await tester.tap(find.text("⚡ Cuadrar aquí"));
+      // Si el usuario pulsa "Cuadrar aquí" con consentimiento explícito:
+      await tester.tap(find.text("Cuadrar aquí"));
       await tester.pumpAndSettle();
 
       // Ya no hay residuo: banner desaparece y resultado muestra múltiplos exactos

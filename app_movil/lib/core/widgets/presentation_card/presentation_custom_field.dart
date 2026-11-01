@@ -9,7 +9,10 @@ class MiniInput extends StatelessWidget {
   final String? hint;
   final bool isBold;
   final bool isDark;
+  final bool readOnly;
   final VoidCallback? onChanged;
+  final VoidCallback? onEditingComplete;
+  final void Function(PointerDownEvent)? onTapOutside;
 
   const MiniInput({
     super.key,
@@ -19,7 +22,10 @@ class MiniInput extends StatelessWidget {
     this.hint,
     this.isBold = false,
     required this.isDark,
+    this.readOnly = false,
     this.onChanged,
+    this.onEditingComplete,
+    this.onTapOutside,
   });
 
   @override
@@ -44,16 +50,21 @@ class MiniInput extends StatelessWidget {
           height: 42,
           child: TextField(
             controller: ctrl,
+            readOnly: readOnly,
+            enableInteractiveSelection: !readOnly,
             keyboardType: isNum
                 ? const TextInputType.numberWithOptions(decimal: true)
                 : TextInputType.text,
             style: TextStyle(
               fontSize: 15,
-              color: isDark ? Colors.white : Colors.black87,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              color: readOnly
+                  ? (isDark ? Colors.grey[400] : Colors.grey[700])
+                  : (isDark ? Colors.white : Colors.black87),
+              fontWeight: (isBold || readOnly) ? FontWeight.bold : FontWeight.normal,
             ),
             onChanged: (_) => onChanged?.call(),
-            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            onEditingComplete: onEditingComplete,
+            onTapOutside: onTapOutside ?? (_) => FocusManager.instance.primaryFocus?.unfocus(),
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(
@@ -84,7 +95,9 @@ class MiniInput extends StatelessWidget {
                 ),
               ),
               filled: true,
-              fillColor: isDark ? const Color(0xFF14141C) : Colors.white,
+              fillColor: readOnly
+                  ? (isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.shade200)
+                  : (isDark ? const Color(0xFF14141C) : Colors.white),
             ),
           ),
         ),

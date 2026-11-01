@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/features/analytics/services/inventory_intelligence_service.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
@@ -342,13 +343,19 @@ class AnalyticsProvider with ChangeNotifier {
         final gananciaQuery = await db.rawQuery('''
           SELECT SUM(
             CASE 
+              WHEN COALESCE(NULLIF(vi.subtotal, 0), vi.cantidad * vi.precio_unitario, 0.0) <= 0 THEN 0.0
               WHEN pp.costo_unitario_calculado IS NOT NULL AND pp.costo_unitario_calculado > 0 
-              THEN (vi.precio_unitario - pp.costo_unitario_calculado) * vi.cantidad
-              ELSE (vi.precio_unitario * vi.cantidad) * 0.30
+                AND (pp.costo_unitario_calculado * vi.cantidad) < COALESCE(NULLIF(vi.subtotal, 0), vi.cantidad * vi.precio_unitario)
+              THEN COALESCE(NULLIF(vi.subtotal, 0), vi.cantidad * vi.precio_unitario) - (pp.costo_unitario_calculado * vi.cantidad)
+              WHEN p.costo_base IS NOT NULL AND p.costo_base > 0 
+                AND (p.costo_base * COALESCE(pp.unidades_por_venta, 1) * vi.cantidad) < COALESCE(NULLIF(vi.subtotal, 0), vi.cantidad * vi.precio_unitario)
+              THEN COALESCE(NULLIF(vi.subtotal, 0), vi.cantidad * vi.precio_unitario) - (p.costo_base * COALESCE(pp.unidades_por_venta, 1) * vi.cantidad)
+              ELSE COALESCE(NULLIF(vi.subtotal, 0), vi.cantidad * vi.precio_unitario, 0.0) * 0.30
             END
           ) as ganancia_neta
           FROM venta_items vi
           LEFT JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
+          LEFT JOIN productos p ON pp.producto_id = p.id
           WHERE vi.venta_id IN ($ventaIdsIn)
         ''');
 
@@ -405,17 +412,25 @@ class AnalyticsProvider with ChangeNotifier {
       double recoveredLiquidity = 0.0;
 
       if (periodVentas.isNotEmpty) {
-        // Top Productos
+        // Top Productos (con resolución exacta de unidad y monto real > 0)
         topProductsQuery = await db.rawQuery('''
-          SELECT p.nombre, m.nombre as marca_nombre, pp.nombre_especifico as presentacion_nombre, 
+          SELECT p.id as producto_id, p.nombre, m.nombre as marca_nombre, 
+                 pp.id as presentacion_id, pp.nombre_especifico as presentacion_nombre,
+                 pp.unidad_venta, pp.unidades_por_venta, p.modo_stock,
                  SUM(vi.cantidad) as total_vendido, 
-                 SUM(vi.cantidad * vi.precio_unitario) as monto_vendido
+                 SUM(
+                   CASE 
+                     WHEN COALESCE(NULLIF(vi.subtotal, 0), vi.cantidad * vi.precio_unitario, 0.0) > 0 
+                     THEN COALESCE(NULLIF(vi.subtotal, 0), vi.cantidad * vi.precio_unitario)
+                     ELSE vi.cantidad * COALESCE(pp.precio_venta_final, 0.0)
+                   END
+                 ) as monto_vendido
           FROM venta_items vi
           JOIN presentaciones_producto pp ON vi.presentation_id = pp.id
           JOIN productos p ON pp.producto_id = p.id
           LEFT JOIN marcas m ON p.marca_id = m.id
           WHERE vi.venta_id IN ($ventaIdsIn)
-          GROUP BY p.id
+          GROUP BY pp.id
           ORDER BY total_vendido DESC
           LIMIT 5
         ''');
@@ -458,46 +473,75 @@ class AnalyticsProvider with ChangeNotifier {
         }
       }
 
-      // Valor del inventario actual (Fase 7 - Regla Obligatoria 1: 'COMPARTIDO' + 'MIXTO' + 'INDEPENDIENTE')
-      // 1. Productos con stock compartido (se contabiliza 1 sola vez por producto usando el precio base de la variante compartida principal)
-      final sharedInvQuery = await db.rawQuery('''
-        SELECT IFNULL(SUM(p.stock_compartido * (
-          SELECT (pr_def.precio_venta_final / CASE WHEN pr_def.unidades_por_venta > 0 THEN pr_def.unidades_por_venta ELSE 1 END)
-          FROM presentaciones_producto pr_def 
-          WHERE pr_def.producto_id = p.id AND pr_def.activo = 1 
-          ORDER BY pr_def.usa_stock_compartido DESC, pr_def.es_default DESC, pr_def.orden ASC LIMIT 1
-        )), 0.0) as valor_compartido
+      // 🛡️ REGLA CONTABLE UNIVERSAL: VALOR DEL INVENTARIO AL COSTO EXACTO EN LOS 3 MODOS DE STOCK
+      // 1. Productos con stock compartido (COMPARTIDO o MIXTO): Se computa UNA SOLA VEZ por producto padre
+      final sharedInvRows = await db.rawQuery('''
+        SELECT p.id, p.stock_compartido, p.costo_base, p.modo_stock,
+               pr.costo_unitario_calculado, pr.unidades_por_venta, pr.precio_ump_proveedor, pr.unidades_por_lote, pr.precio_venta_final
         FROM productos p
+        LEFT JOIN presentaciones_producto pr ON pr.producto_id = p.id AND pr.activo = 1 AND pr.usa_stock_compartido = 1
         WHERE p.negocio_id = ? AND p.modo_stock IN ('COMPARTIDO', 'MIXTO') AND p.stock_compartido > 0
+        ORDER BY pr.es_default DESC, pr.orden ASC
       ''', [_negocioId]);
 
-      // 2. Variantes con stock independiente
-      final independentInvQuery = await db.rawQuery('''
-        SELECT IFNULL(SUM(
-          (pp.stock_actual / CASE WHEN pp.unidades_por_venta > 0 THEN pp.unidades_por_venta ELSE 1 END) * pp.precio_venta_final
-        ), 0.0) as valor_independiente
+      double valorCompartido = 0.0;
+      final Set<int> processedSharedInvProductIds = {};
+      for (var row in sharedInvRows) {
+        int pId = (row['id'] as num).toInt();
+        if (processedSharedInvProductIds.contains(pId)) continue;
+        processedSharedInvProductIds.add(pId);
+
+        int poolStock = (row['stock_compartido'] as num?)?.toInt() ?? 0;
+        double baseCost = _computeBaseUnitCost(row);
+        valorCompartido += poolStock * baseCost;
+      }
+
+      // 2. Variantes con stock independiente (INDEPENDIENTE o usa_stock_compartido=0 en MIXTO)
+      final independentInvRows = await db.rawQuery('''
+        SELECT pp.id, pp.producto_id, pp.stock_actual, pp.costo_unitario_calculado, pp.unidades_por_venta,
+               pp.precio_ump_proveedor, pp.unidades_por_lote, pp.precio_venta_final, p.modo_stock, p.costo_base
         FROM presentaciones_producto pp
         JOIN productos p ON pp.producto_id = p.id
-        WHERE p.negocio_id = ? AND pp.activo = 1 AND (pp.usa_stock_compartido = 0 OR p.modo_stock = 'INDEPENDIENTE') AND pp.stock_actual > 0
+        WHERE p.negocio_id = ? AND pp.activo = 1 
+          AND (pp.usa_stock_compartido = 0 OR p.modo_stock = 'INDEPENDIENTE') 
+          AND pp.stock_actual > 0
       ''', [_negocioId]);
 
-      double valorCompartido = (sharedInvQuery.first['valor_compartido'] as num?)?.toDouble() ?? 0.0;
-      double valorIndependiente = (independentInvQuery.first['valor_independiente'] as num?)?.toDouble() ?? 0.0;
+      double valorIndependiente = 0.0;
+      for (var row in independentInvRows) {
+        int stockActual = (row['stock_actual'] as num?)?.toInt() ?? 0;
+        double baseCost = _computeBaseUnitCost(row);
+        valorIndependiente += stockActual * baseCost;
+      }
+
       double invValue = valorCompartido + valorIndependiente;
 
-      // Inventario Muerto y Capital Inmovilizado (sin duplicar pool compartido)
+      // 🛡️ Inventario Muerto y Capital Inmovilizado (sin duplicar pool compartido)
+      // Para variantes compartidas, ultima_venta considera la venta de CUALQUIER variante hermana que descuente de ese pool
       final deadStockQuery = await db.rawQuery('''
         SELECT pp.id, p.id as producto_id, pp.nombre_especifico, p.nombre as producto_nombre, m.nombre as marca_nombre, 
                pp.stock_actual, pp.costo_unitario_calculado, pp.unidades_por_venta, pp.usa_stock_compartido,
-               p.modo_stock, p.stock_compartido, p.costo_base,
-               MAX(IFNULL(v.fecha_venta, '1900-01-01')) as ultima_venta,
+               p.modo_stock, p.stock_compartido, p.costo_base, pp.precio_ump_proveedor, pp.unidades_por_lote, pp.precio_venta_final,
+               CASE 
+                 WHEN pp.usa_stock_compartido = 1 THEN (
+                   SELECT MAX(IFNULL(v2.fecha_venta, '1900-01-01'))
+                   FROM venta_items vi2
+                   JOIN ventas v2 ON vi2.venta_id = v2.id AND IFNULL(v2.origen_venta, '') != 'prestamo_personal'
+                   JOIN presentaciones_producto pp2 ON vi2.presentation_id = pp2.id
+                   WHERE pp2.producto_id = p.id AND pp2.usa_stock_compartido = 1
+                 )
+                 ELSE (
+                   SELECT MAX(IFNULL(v3.fecha_venta, '1900-01-01'))
+                   FROM venta_items vi3
+                   JOIN ventas v3 ON vi3.venta_id = v3.id AND IFNULL(v3.origen_venta, '') != 'prestamo_personal'
+                   WHERE vi3.presentation_id = pp.id
+                 )
+               END as ultima_venta,
                (SELECT MIN(fecha_cambio) FROM product_history WHERE entidad_tipo='producto' AND entidad_id=p.id) as fecha_creacion_historial,
                p.fecha_actualizacion
         FROM presentaciones_producto pp
         JOIN productos p ON pp.producto_id = p.id
         LEFT JOIN marcas m ON p.marca_id = m.id
-        LEFT JOIN venta_items vi ON vi.presentation_id = pp.id
-        LEFT JOIN ventas v ON vi.venta_id = v.id AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
         WHERE p.negocio_id = ? AND pp.stock_actual > 0 AND pp.activo = 1
         GROUP BY pp.id
       ''', [_negocioId]);
@@ -507,7 +551,7 @@ class AnalyticsProvider with ChangeNotifier {
       final Set<int> processedSharedProductIds = {};
 
       for (var row in deadStockQuery) {
-        String lastSaleStr = row['ultima_venta'] as String;
+        String lastSaleStr = row['ultima_venta']?.toString() ?? '1900-01-01';
         String? historyCreationStr = row['fecha_creacion_historial'] as String?;
         String? updateStr = row['fecha_actualizacion'] as String?;
 
@@ -526,8 +570,7 @@ class AnalyticsProvider with ChangeNotifier {
         if (daysDormant > _deadStockThresholdDays) {
           bool isShared = (row['usa_stock_compartido'] as int? ?? 0) == 1 || (row['modo_stock'] == 'COMPARTIDO');
           int prodId = (row['producto_id'] as num?)?.toInt() ?? 0;
-          int factor = (row['unidades_por_venta'] as num?)?.toInt() ?? 1;
-          if (factor <= 0) factor = 1;
+          double baseCost = _computeBaseUnitCost(row);
 
           if (isShared && prodId > 0) {
             if (processedSharedProductIds.contains(prodId)) {
@@ -537,8 +580,6 @@ class AnalyticsProvider with ChangeNotifier {
             processedSharedProductIds.add(prodId);
 
             int poolStock = (row['stock_compartido'] as num?)?.toInt() ?? ((row['stock_actual'] as num?)?.toInt() ?? 0);
-            double baseCost = (row['costo_base'] as num?)?.toDouble() ?? 
-                (((row['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0) / factor);
 
             Map<String, dynamic> item = Map<String, dynamic>.from(row);
             item['dias_estancado'] = daysDormant;
@@ -551,11 +592,11 @@ class AnalyticsProvider with ChangeNotifier {
           } else {
             Map<String, dynamic> item = Map<String, dynamic>.from(row);
             item['dias_estancado'] = daysDormant;
+            item['costo_unitario_calculado'] = baseCost;
             deadStockList.add(item);
 
             int stock = (row['stock_actual'] as num?)?.toInt() ?? 0;
-            double cost = (row['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
-            immobilizedCapital += (stock / factor) * cost;
+            immobilizedCapital += stock * baseCost;
           }
         }
       }
@@ -563,7 +604,7 @@ class AnalyticsProvider with ChangeNotifier {
       deadStockList.sort((a, b) => (a['dias_estancado'] as int).compareTo(b['dias_estancado'] as int));
       int deadStockCount = deadStockList.length;
 
-      // Índice de Rotación
+      // Índice de Rotación (con COGS y Valor Stock real)
       double inventoryTurnoverRatio = 0.0;
       if (totalVentas > 0 && invValue > 0) {
         double cogs = totalVentas - totalGananciaNeta;
@@ -578,16 +619,24 @@ class AnalyticsProvider with ChangeNotifier {
       _statusMessage = "Generando recomendaciones e insights...";
       notifyListeners();
 
-      // Alertas de Stock Crítico (consolidadas para pool compartido)
+      // Alertas de Stock Crítico (consolidadas para pool compartido con distinción de cupo vs físico)
       final lowStockQuery = await db.rawQuery('''
         SELECT pp.id as presentacion_id, p.id as producto_id, p.nombre, m.nombre as marca_nombre, 
-               CASE WHEN pp.usa_stock_compartido = 1 THEN 'Pool Compartido' ELSE pp.nombre_especifico END as presentacion_nombre, 
-               pp.stock_actual, IFNULL(pp.stock_alerta, 5) as stock_alerta
+               pp.nombre_especifico as presentacion_nombre, 
+               pp.stock_actual, IFNULL(pp.stock_alerta, 5) as stock_alerta,
+               pp.usa_stock_compartido, pp.cupo_maximo_variante, pp.unidades_por_venta,
+               p.modo_stock, p.stock_compartido
         FROM presentaciones_producto pp
         JOIN productos p ON pp.producto_id = p.id
         LEFT JOIN marcas m ON p.marca_id = m.id
-        WHERE p.negocio_id = ? AND pp.activo = 1 AND pp.stock_actual <= IFNULL(pp.stock_alerta, 5)
-        GROUP BY CASE WHEN pp.usa_stock_compartido = 1 THEN p.id ELSE pp.id END
+        WHERE p.negocio_id = ? AND pp.activo = 1 
+          AND (
+            (pp.usa_stock_compartido = 1 AND (
+               (pp.cupo_maximo_variante IS NOT NULL AND pp.cupo_maximo_variante <= IFNULL(pp.stock_alerta, 5))
+               OR p.stock_compartido <= IFNULL(pp.stock_alerta, 5)
+            ))
+            OR (pp.usa_stock_compartido = 0 AND pp.stock_actual <= IFNULL(pp.stock_alerta, 5))
+          )
         ORDER BY pp.stock_actual ASC
         LIMIT 10
       ''', [_negocioId]);
@@ -852,8 +901,10 @@ class AnalyticsProvider with ChangeNotifier {
             'deadStockCount': deadStockCount,
           };
           await dbHelper.saveSnapshot(_negocioId!, todayStr, jsonEncode(metrics));
+          // Saneamiento retroactivo de snapshots antiguos para limpiar picos desfasados
+          await _sanitizeHistoricalSnapshots(db, _negocioId!, invValue);
         } catch (e) {
-          debugPrint("Error guardando snapshot: $e");
+          debugPrint("Error guardando snapshot o saneando historial: $e");
         }
       }
 
@@ -868,6 +919,88 @@ class AnalyticsProvider with ChangeNotifier {
 
       _statusMessage = "Ocurrió un error al procesar los datos.";
       notifyListeners();
+    }
+  }
+
+  /// Calcula el costo exacto por unidad base de un producto o presentación
+  /// de forma 100% consistente con la arquitectura contable de MochilaLista.
+  static double _computeBaseUnitCost(Map<String, dynamic> row) {
+    final int usaShared = (row['usa_stock_compartido'] as num?)?.toInt() ?? 
+        (row['modo_stock'] == 'COMPARTIDO' ? 1 : 0);
+
+    final double costoCalc = (row['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
+    final int uPorVenta = (row['unidades_por_venta'] as num?)?.toInt() ?? 1;
+    final int factorVenta = uPorVenta <= 0 ? 1 : uPorVenta;
+
+    // 1. Si es variante con stock independiente y tiene costo_unitario_calculado específico > 0
+    if (usaShared == 0 && costoCalc > 0) {
+      return costoCalc / factorVenta;
+    }
+
+    // 2. Si el producto padre tiene costo_base directo registrado (> 0) (e.g. pool compartido)
+    final double costoBase = (row['costo_base'] as num?)?.toDouble() ?? 0.0;
+    if (costoBase > 0) return costoBase;
+
+    // 3. Si la presentación tiene costo_unitario_calculado > 0
+    if (costoCalc > 0) {
+      return costoCalc / factorVenta;
+    }
+
+    // 4. Si tiene precio_ump_proveedor > 0 y unidades_por_lote > 0:
+    final double precioUmp = (row['precio_ump_proveedor'] as num?)?.toDouble() ?? 0.0;
+    final int uPorLote = (row['unidades_por_lote'] as num?)?.toInt() ?? 1;
+    final int factorLote = uPorLote <= 0 ? 1 : uPorLote;
+    if (precioUmp > 0) {
+      return precioUmp / factorLote;
+    }
+
+    // 5. Fallback prudencial: estimar costo al 70% del precio de venta base
+    final double precioVenta = (row['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
+    if (precioVenta > 0) {
+      return (precioVenta / factorVenta) * 0.70;
+    }
+
+    return 0.0;
+  }
+
+  /// Rutina automática de saneamiento y recalibración de business_snapshots en SQLite
+  /// Corrige cualquier snapshot antiguo inflado (ej. pico de S/ 42,629.75) con el valor real al costo.
+  static Future<void> _sanitizeHistoricalSnapshots(Database db, int negocioId, double currentRealInvValue) async {
+    try {
+      final rows = await db.query(
+        'business_snapshots',
+        where: 'negocio_id = ?',
+        whereArgs: [negocioId],
+      );
+
+      for (var row in rows) {
+        int id = (row['id'] as num).toInt();
+        String? jsonStr = row['metrics_json'] as String?;
+        if (jsonStr == null || jsonStr.isEmpty) continue;
+
+        try {
+          Map<String, dynamic> metrics = jsonDecode(jsonStr);
+          double storedInv = (metrics['inventoryValue'] as num?)?.toDouble() ?? 0.0;
+
+          // Si el valor guardado es sospechosamente gigante (ej. el pico histórico de 42,629.75)
+          // o supera por mucho el inventario real actual (más de 2.5x y > S/ 5,000)
+          bool isInflated = (storedInv > 20000.0 && currentRealInvValue < 15000.0) ||
+              (currentRealInvValue > 0 && storedInv > (currentRealInvValue * 2.5) && storedInv > 5000.0);
+
+          if (isInflated) {
+            metrics['inventoryValue'] = currentRealInvValue;
+            String updatedJson = jsonEncode(metrics);
+            await db.update(
+              'business_snapshots',
+              {'metrics_json': updatedJson},
+              where: 'id = ?',
+              whereArgs: [id],
+            );
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint("Error saneando snapshots históricos: $e");
     }
   }
 }

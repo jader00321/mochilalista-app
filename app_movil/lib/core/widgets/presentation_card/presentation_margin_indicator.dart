@@ -46,22 +46,22 @@ class PresentationMarginIndicator extends StatelessWidget {
     } else if (margenPct < 0) {
       semaforoColor = Colors.red;
       semaforoTexto =
-          "🔴 ¡Pérdida! (${margenPct.toStringAsFixed(1)}%) - Bajo el costo";
+          "¡Pérdida! (${margenPct.toStringAsFixed(1)}%) - Bajo el costo";
       semaforoIcon = Icons.error_outline;
     } else if (margenPct < 15) {
       semaforoColor = Colors.red;
       semaforoTexto =
-          "🔴 Margen Crítico (${margenPct.toStringAsFixed(1)}%) - Rentabilidad baja";
+          "Margen Crítico (${margenPct.toStringAsFixed(1)}%) - Rentabilidad baja";
       semaforoIcon = Icons.warning_amber_rounded;
     } else if (margenPct <= 30) {
       semaforoColor = Colors.orange;
       semaforoTexto =
-          "🟡 Margen Medio (${margenPct.toStringAsFixed(1)}%) - Ganancia moderada";
+          "Margen Medio (${margenPct.toStringAsFixed(1)}%) - Ganancia moderada";
       semaforoIcon = Icons.trending_up;
     } else {
       semaforoColor = Colors.green;
       semaforoTexto =
-          "🟢 Margen Óptimo (${margenPct.toStringAsFixed(1)}%) - Excelente margen";
+          "Margen Óptimo (${margenPct.toStringAsFixed(1)}%) - Excelente margen";
       semaforoIcon = Icons.check_circle_outline;
     }
 

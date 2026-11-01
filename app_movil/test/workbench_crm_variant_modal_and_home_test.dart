@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/notification_provider.dart';
@@ -40,6 +41,8 @@ class MockTrackingProviderForTest extends TrackingProvider {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});

@@ -1,23 +1,39 @@
-import 'dart:math' as math;
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/services/app_launch_manager.dart';
+import 'package:app_movil/core/services/splash_rotation_manager.dart';
+import 'package:app_movil/core/services/splash_prewarm_coordinator.dart';
+import 'package:app_movil/core/widgets/brand/mochila_brand_medallion.dart';
+import 'package:app_movil/core/screens/splash/painters/radar_painters.dart';
+import 'package:app_movil/core/screens/splash/painters/vault_painters.dart';
+import 'package:app_movil/core/screens/splash/painters/logistics_painters.dart';
+import 'package:app_movil/core/screens/splash/painters/vision_ai_painters.dart';
+import 'package:app_movil/core/screens/splash/painters/finance_painters.dart';
+import 'package:app_movil/core/screens/splash/painters/ecosystem_painters.dart';
 import 'package:app_movil/core/screens/home_screen.dart';
 import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
 import 'package:app_movil/features/auth/screens/onboarding/lock_screen.dart';
 
-/// Experiencia de apertura en frío (Cold-Start Launch Experience) de nivel Mobile Awards.
+/// 🚀 ColdStartSplashScreen - Mobile Awards Standard
 /// 
-/// Cuenta con 3 variantes dinámicas de coreografía rotativa ejecutadas con [CustomPainter]
-/// nativos a 60/120 fps, garantizando limpieza absoluta de recursos en [dispose] y
-/// transición continua mediante [Hero] hacia la pantalla de destino.
+/// Experiencia cinemática de apertura en frío a 60/120 FPS con:
+/// 1. Motor gráfico de 6 Arquetipos Base x 3 Variaciones (18 experiencias visuales únicas).
+/// 2. Medallón central Squircle Glassmorphism con isotipo vectorial puro (cero recuadros blancos).
+/// 3. Algoritmo "Shuffle-Bag" persistente en SharedPreferences con garantía de cobertura 100%.
+/// 4. Píldora dinámica en tiempo real conectada a la operativa real del negocio (cero emojis).
+/// 5. Hidratación y precalentamiento de SQLite en paralelo para entrada al Home a 0ms.
 class ColdStartSplashScreen extends StatefulWidget {
   final int? forcedVariant;
+  final String? forcedToken;
   final VoidCallback? onCompleted;
 
-  const ColdStartSplashScreen({super.key, this.forcedVariant, this.onCompleted});
+  const ColdStartSplashScreen({
+    super.key,
+    this.forcedVariant,
+    this.forcedToken,
+    this.onCompleted,
+  });
 
   @override
   State<ColdStartSplashScreen> createState() => _ColdStartSplashScreenState();
@@ -27,7 +43,6 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
     with TickerProviderStateMixin {
   late final AnimationController _mainController;
   late final AnimationController _loopController;
-  late final int _variant;
 
   // Animaciones globales
   late final Animation<double> _fadeInAnim;
@@ -35,20 +50,26 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
   late final Animation<double> _glowAnim;
   late final Animation<double> _textSlideAnim;
 
-  // Mensajes rotativos para la variante 2 (Sincronización de Módulos)
-  final List<String> _moduleMessages = const [
-    "Sincronizando inventario local...",
-    "Calibrando escáner de visión IA...",
-    "Sintonizando radar comercial...",
-    "MochilaLista está lista para ti",
-  ];
-  int _activeMessageIndex = 0;
+  SplashVariantConfig? _config;
 
   @override
   void initState() {
     super.initState();
-    _variant = widget.forcedVariant ?? AppLaunchManager.getNextAnimationVariant();
 
+    // 1. Configuración por defecto inmediata para el frame 0
+    final defaultToken = widget.forcedToken ??
+        (widget.forcedVariant != null ? "${widget.forcedVariant! + 1}A" : "1A");
+    _config = SplashVariantConfig(
+      token: defaultToken,
+      archetypeIndex: int.tryParse(defaultToken[0]) ?? 1,
+      variationLetter: defaultToken.length > 1 ? defaultToken[1] : "A",
+      archetypeTitle: "Radar Comercial",
+      capsuleText: "Sintonizando radar comercial y demanda local",
+      capsuleIcon: Icons.radar_rounded,
+      accentColor: const Color(0xFF38BDF8),
+    );
+
+    // 2. Controladores cinemáticos a 60/120 FPS
     _mainController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2100),
@@ -93,16 +114,31 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
       }
     });
 
-    _loopController.addListener(() {
-      if (_variant == 2 && mounted) {
-        final newIndex = ((_loopController.value * _moduleMessages.length).floor()) % _moduleMessages.length;
-        if (newIndex != _activeMessageIndex) {
-          setState(() => _activeMessageIndex = newIndex);
-        }
-      }
-    });
+    // 3. Disparar rotación Shuffle-Bag y precalentamiento de SQLite en paralelo
+    _initializeVariantAndPrewarm();
 
     _mainController.forward();
+  }
+
+  Future<void> _initializeVariantAndPrewarm() async {
+    // Precarga asíncrona no bloqueante
+    final prewarmSnapshot = await SplashPrewarmCoordinator.instance.prewarmData();
+
+    String? tokenToRequest = widget.forcedToken;
+    if (tokenToRequest == null && widget.forcedVariant != null) {
+      tokenToRequest = "${widget.forcedVariant! + 1}A";
+    }
+
+    final resolvedConfig = await SplashRotationManager.instance.selectNextVariant(
+      forcedToken: tokenToRequest,
+      snapshot: prewarmSnapshot,
+    );
+
+    if (mounted) {
+      setState(() {
+        _config = resolvedConfig;
+      });
+    }
   }
 
   @override
@@ -150,11 +186,12 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final size = MediaQuery.of(context).size;
+    final size = MediaQuery.sizeOf(context);
+    final config = _config!;
 
     final bgColors = isDark
         ? [const Color(0xFF0B0F19), const Color(0xFF111827), const Color(0xFF0F172A)]
-        : [const Color(0xFFF0F4F8), const Color(0xFFE2E8F0), const Color(0xFFF8FAFC)];
+        : [const Color(0xFFF8FAFC), const Color(0xFFE2E8F0), const Color(0xFFF1F5F9)];
 
     return Scaffold(
       backgroundColor: bgColors.first,
@@ -172,7 +209,7 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
             ),
           ),
 
-          // Coreografía visual específica según la variante
+          // Coreografía visual específica de una de las 18 variantes con CustomPainter puro
           AnimatedBuilder(
             animation: Listenable.merge([_mainController, _loopController]),
             builder: (context, child) {
@@ -183,7 +220,7 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
             },
           ),
 
-          // Isotipo y Marca Central con Hero Transition
+          // Isotipo y Marca Central con Medallón Squircle Glassmorphism de Alta Gama
           Center(
             child: AnimatedBuilder(
               animation: _mainController,
@@ -199,46 +236,20 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Logo Hero Emblem
+                  // Logo Hero Emblem con Medallón Vectorial Puro (Cero Parche Blanco)
                   Hero(
                     tag: 'app_brand_logo',
-                    child: Container(
-                      width: 104,
-                      height: 104,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: isDark
-                                ? const Color(0xFF38BDF8).withValues(alpha: 0.25 * _glowAnim.value)
-                                : const Color(0xFF0284C7).withValues(alpha: 0.20 * _glowAnim.value),
-                            blurRadius: 36,
-                            spreadRadius: 4 * _glowAnim.value,
-                          ),
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.08),
-                            blurRadius: 18,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Image.asset(
-                        'assets/logo.png',
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => const Icon(
-                          Icons.storefront_rounded,
-                          size: 56,
-                          color: Color(0xFF0284C7),
-                        ),
-                      ),
+                    child: MochilaBrandMedallion(
+                      size: 104,
+                      accentColor: config.accentColor,
+                      pulseValue: _glowAnim.value,
+                      isDark: isDark,
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 22),
 
-                  // Título Tipográfico
+                  // Título Tipográfico y Píldora Dinámica con Propósito Real
                   Transform.translate(
                     offset: Offset(0, _textSlideAnim.value),
                     child: Column(
@@ -253,8 +264,19 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
                             color: isDark ? Colors.white : const Color(0xFF0F172A),
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        _buildSubheaderText(isDark),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Gestión comercial inteligente para tu negocio",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.1,
+                            color: isDark ? Colors.white.withValues(alpha: 0.7) : const Color(0xFF64748B),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildRealTimePill(config, isDark),
                       ],
                     ),
                   ),
@@ -284,9 +306,7 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
                           backgroundColor: isDark
                               ? Colors.white.withValues(alpha: 0.08)
                               : Colors.black.withValues(alpha: 0.06),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
-                          ),
+                          valueColor: AlwaysStoppedAnimation<Color>(config.accentColor),
                         ),
                       ),
                     ),
@@ -300,269 +320,110 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
     );
   }
 
-  Widget _buildSubheaderText(bool isDark) {
-    if (_variant == 2) {
-      return AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: Text(
-          _moduleMessages[_activeMessageIndex],
-          key: ValueKey(_activeMessageIndex),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-          ),
+  Widget _buildRealTimePill(SplashVariantConfig config, bool isDark) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 340),
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF1E293B).withValues(alpha: 0.85)
+            : Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: config.accentColor.withValues(alpha: isDark ? 0.35 : 0.25),
+          width: 1.0,
         ),
-      );
-    }
-
-    final subtitle = _variant == 0
-        ? "Gestión comercial inteligente para tu negocio"
-        : "Cotizaciones, inventario y ventas en tus manos";
-
-    return Text(
-      subtitle,
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          )
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            config.capsuleIcon,
+            size: 15,
+            color: config.accentColor,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              config.capsuleText,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   CustomPainter _buildPainter(bool isDark) {
-    switch (_variant) {
-      case 0:
-        return _OrbitalPulsePainter(
-          progress: _mainController.value,
-          loop: _loopController.value,
-          isDark: isDark,
-        );
-      case 1:
-        return _GeometricWavePainter(
-          progress: _mainController.value,
-          loop: _loopController.value,
-          isDark: isDark,
-        );
-      case 2:
+    final token = _config?.token ?? "1A";
+    final p = _mainController.value;
+    final l = _loopController.value;
+
+    switch (token) {
+      // Arquetipo 1: Radar Comercial & Nodos de Mercado
+      case "1A":
+        return RadarAuroraPainter(progress: p, loop: l, isDark: isDark);
+      case "1B":
+        return RadarSolarPulsePainter(progress: p, loop: l, isDark: isDark);
+      case "1C":
+        return RadarNeuralConstellationPainter(progress: p, loop: l, isDark: isDark);
+
+      // Arquetipo 2: Ondas Armónicas & Bóveda Local-First
+      case "2A":
+        return VaultSonicResonancePainter(progress: p, loop: l, isDark: isDark);
+      case "2B":
+        return VaultHexShieldPainter(progress: p, loop: l, isDark: isDark);
+      case "2C":
+        return VaultGyroscopePainter(progress: p, loop: l, isDark: isDark);
+
+      // Arquetipo 3: Matriz Logística & Flujo de Stock
+      case "3A":
+        return LogisticsCrosshairPainter(progress: p, loop: l, isDark: isDark);
+      case "3B":
+        return LogisticsGridPainter(progress: p, loop: l, isDark: isDark);
+      case "3C":
+        return LogisticsDualFlowPainter(progress: p, loop: l, isDark: isDark);
+
+      // Arquetipo 4: Escáner Láser IA & Visión Computacional
+      case "4A":
+        return VisionHolographicScanPainter(progress: p, loop: l, isDark: isDark);
+      case "4B":
+        return VisionOpticalReticlePainter(progress: p, loop: l, isDark: isDark);
+      case "4C":
+        return VisionPrismExtractionPainter(progress: p, loop: l, isDark: isDark);
+
+      // Arquetipo 5: Impulso Financiero & Crecimiento Patrimonial
+      case "5A":
+        return FinanceGrowthCurvePainter(progress: p, loop: l, isDark: isDark);
+      case "5B":
+        return FinanceVortexPainter(progress: p, loop: l, isDark: isDark);
+      case "5C":
+        return FinanceClockworkPainter(progress: p, loop: l, isDark: isDark);
+
+      // Arquetipo 6: Ecosistema Conectado & Mesa de Trabajo
+      case "6A":
+        return EcosystemBridgesPainter(progress: p, loop: l, isDark: isDark);
+      case "6B":
+        return EcosystemCrystalAssemblyPainter(progress: p, loop: l, isDark: isDark);
+      case "6C":
+        return EcosystemCrownCampaignPainter(progress: p, loop: l, isDark: isDark);
+
       default:
-        return _ModuleSyncPainter(
-          progress: _mainController.value,
-          loop: _loopController.value,
-          isDark: isDark,
-        );
+        return RadarAuroraPainter(progress: p, loop: l, isDark: isDark);
     }
   }
-}
-
-// =========================================================================
-// VARIANTE 0: PULSO ORBITAL EJECUTIVO
-// =========================================================================
-class _OrbitalPulsePainter extends CustomPainter {
-  final double progress;
-  final double loop;
-  final bool isDark;
-
-  _OrbitalPulsePainter({
-    required this.progress,
-    required this.loop,
-    required this.isDark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2 - 40);
-    final baseRadius = 80.0 * (0.85 + progress * 0.15);
-
-    final ringPaint1 = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..shader = ui.Gradient.sweep(
-        center,
-        [
-          const Color(0xFF0284C7).withValues(alpha: 0.0),
-          const Color(0xFF38BDF8).withValues(alpha: 0.65 * progress),
-          const Color(0xFF0284C7).withValues(alpha: 0.0),
-        ],
-        [0.0, 0.5, 1.0],
-        TileMode.clamp,
-        loop * math.pi * 2,
-        (loop + 1.0) * math.pi * 2,
-      );
-
-    final ringPaint2 = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..shader = ui.Gradient.sweep(
-        center,
-        [
-          const Color(0xFF10B981).withValues(alpha: 0.0),
-          const Color(0xFF34D399).withValues(alpha: 0.55 * progress),
-          const Color(0xFF10B981).withValues(alpha: 0.0),
-        ],
-        [0.0, 0.5, 1.0],
-        TileMode.clamp,
-        -loop * math.pi * 2,
-        (-loop + 1.0) * math.pi * 2,
-      );
-
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(0.35);
-    canvas.scale(1.25, 0.82);
-    canvas.drawCircle(Offset.zero, baseRadius * 1.15, ringPaint1);
-    canvas.restore();
-
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(-0.55);
-    canvas.scale(1.35, 0.72);
-    canvas.drawCircle(Offset.zero, baseRadius * 1.45, ringPaint2);
-    canvas.restore();
-
-    // Orbe de partículas de luz pulsante
-    final haloPaint = Paint()
-      ..shader = ui.Gradient.radial(
-        center,
-        baseRadius * 1.6,
-        [
-          (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7))
-              .withValues(alpha: 0.18 * progress),
-          Colors.transparent,
-        ],
-      );
-    canvas.drawCircle(center, baseRadius * 1.6, haloPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _OrbitalPulsePainter oldDelegate) => true;
-}
-
-// =========================================================================
-// VARIANTE 1: DESPLIEGUE GEOMÉTRICO Y ONDA DE LUZ
-// =========================================================================
-class _GeometricWavePainter extends CustomPainter {
-  final double progress;
-  final double loop;
-  final bool isDark;
-
-  _GeometricWavePainter({
-    required this.progress,
-    required this.loop,
-    required this.isDark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2 - 40);
-
-    // Ondas expansivas concéntricas de cristal
-    for (int i = 1; i <= 3; i++) {
-      final waveProgress = (loop + i * 0.33) % 1.0;
-      final radius = 60.0 + waveProgress * 150.0;
-      final alpha = (1.0 - waveProgress) * 0.35 * progress;
-
-      final wavePaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
-            .withValues(alpha: alpha);
-
-      canvas.drawCircle(center, radius, wavePaint);
-    }
-
-    // Polígono sutil facetado
-    final polyPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..color = (isDark ? Colors.white : Colors.black)
-          .withValues(alpha: 0.08 * progress);
-
-    final sides = 6;
-    final polyRadius = 120.0 * progress;
-    final path = Path();
-    for (int i = 0; i < sides; i++) {
-      final angle = (i * 2 * math.pi / sides) + (loop * 0.3);
-      final pt = Offset(
-        center.dx + polyRadius * math.cos(angle),
-        center.dy + polyRadius * math.sin(angle),
-      );
-      if (i == 0) {
-        path.moveTo(pt.dx, pt.dy);
-      } else {
-        path.lineTo(pt.dx, pt.dy);
-      }
-    }
-    path.close();
-    canvas.drawPath(path, polyPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _GeometricWavePainter oldDelegate) => true;
-}
-
-// =========================================================================
-// VARIANTE 2: SINCRONIZACIÓN INTELIGENTE DE MÓDULOS
-// =========================================================================
-class _ModuleSyncPainter extends CustomPainter {
-  final double progress;
-  final double loop;
-  final bool isDark;
-
-  _ModuleSyncPainter({
-    required this.progress,
-    required this.loop,
-    required this.isDark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2 - 40);
-
-    // 4 nodos convergiendo hacia el núcleo
-    final nodeColors = const [
-      Color(0xFF0284C7), // Inventario (Azul)
-      Color(0xFF10B981), // IA Escáner (Esmeralda)
-      Color(0xFF8B5CF6), // Cotizaciones (Púrpura)
-      Color(0xFFF59E0B), // Radar (Ámbar)
-    ];
-
-    final orbitRadius = 130.0 * (1.0 - progress * 0.25);
-
-    for (int i = 0; i < 4; i++) {
-      final angle = (i * math.pi / 2) + (loop * math.pi * 2);
-      final nodePos = Offset(
-        center.dx + orbitRadius * math.cos(angle),
-        center.dy + orbitRadius * math.sin(angle) * 0.8,
-      );
-
-      // Línea conectora hacia el centro
-      final linePaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0
-        ..color = nodeColors[i].withValues(alpha: 0.25 * progress);
-
-      canvas.drawLine(center, nodePos, linePaint);
-
-      // Orbe de módulo
-      final nodePaint = Paint()
-        ..style = PaintingStyle.fill
-        ..color = nodeColors[i].withValues(alpha: 0.85 * progress);
-
-      canvas.drawCircle(nodePos, 6.0, nodePaint);
-
-      // Aura del nodo
-      final auraPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = nodeColors[i].withValues(alpha: 0.35 * progress);
-
-      canvas.drawCircle(nodePos, 12.0, auraPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ModuleSyncPainter oldDelegate) => true;
 }

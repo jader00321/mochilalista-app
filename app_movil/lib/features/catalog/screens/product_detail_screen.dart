@@ -289,11 +289,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final double finalPrice = _selectedPresentation.effectivePrice;
     final bool isPublic = _selectedPresentation.estado == 'publico';
 
-    final double factorVenta =
-        _selectedPresentation.unidadesPorVenta.toDouble();
-    final int stockVisual = factorVenta > 0
-        ? (_selectedPresentation.stockActual ~/ factorVenta)
-        : _selectedPresentation.stockActual;
+    final int stockVisual = _selectedPresentation.unidadesVendiblesDisponibles;
 
     final heroTag = widget.heroTag ??
         'inv_${_currentProduct.id}_${_selectedPresentation.id}';
@@ -368,11 +364,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                         const SizedBox(height: 10),
 
-                        // Alerta de stock bajo con CTA Abastecer
+                        // Alerta inteligente de stock
                         ProductDetailStockAlert(
                           stockVisual: stockVisual,
+                          presentation: _selectedPresentation,
                           isDark: isDark,
                           onRestock: _openRestockModal,
+                          onEditProduct: _navigateToEdit,
                         ),
 
                         // Grid 2x2 y descripción detallada

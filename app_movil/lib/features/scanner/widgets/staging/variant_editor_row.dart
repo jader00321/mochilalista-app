@@ -321,6 +321,9 @@ class VariantEditorRowState extends State<VariantEditorRow> {
       widget.variant.factorGananciaVentaSugerido = margen;
       widget.variant.precioVentaSugerido = pVenta;
       widget.variant.resetStockAuthorizationFlags();
+      if (widget.group.modoStock == 'COMPARTIDO' || widget.variant.usaStockCompartido) {
+        widget.provider.syncGroupSharedPurchaseFromMasterVariant(widget.group.uuidTemporal);
+      }
     });
   }
 
@@ -526,7 +529,23 @@ class VariantEditorRowState extends State<VariantEditorRow> {
     );
   }
 
+  List<int> _calculateExactDivisors(int totalBase, int currentFactor) {
+    if (totalBase <= 0 || currentFactor <= 1) return [];
+    List<int> divisors = [];
+    for (int d = currentFactor - 1; d >= 1; d--) {
+      if (totalBase % d == 0) {
+        divisors.add(d);
+      }
+    }
+    return divisors;
+  }
+
   Widget _buildStockAlertBlock({required bool isVariantMatch}) {
+    // Si la variante usa stock compartido, no se evalúan alertas de empaque individual
+    if (widget.group.modoStock == 'COMPARTIDO' || widget.variant.usaStockCompartido) {
+      return const SizedBox.shrink();
+    }
+
     final int stockBD = isVariantMatch ? (widget.variant.matchPresentacion.datos?.stockActual ?? 0) : 0;
     final int totalBase = widget.variant.calculateTotalUnitsBase(stockActualBD: stockBD);
     final int factor = widget.variant.effectiveFactorVenta;
@@ -566,40 +585,9 @@ class VariantEditorRowState extends State<VariantEditorRow> {
 
     // Caso 2: Déficit Real (completas == 0 && totalBase > 0)
     if (completas == 0) {
-      if (widget.variant.allowDeficitApproved) {
-        return Container(
-          margin: const EdgeInsets.only(top: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: widget.isDark ? Colors.amber.withValues(alpha: 0.12) : Colors.amber.shade50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: widget.isDark ? Colors.amber.withValues(alpha: 0.3) : Colors.amber.shade300),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, size: 15, color: Colors.amber[800]),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  "0 $unidad ($totalBase unid. base - Déficit autorizado)",
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber[900]),
-                ),
-              ),
-              InkWell(
-                onTap: () {
-                  setState(() {
-                    widget.variant.allowDeficitApproved = false;
-                  });
-                  widget.provider.notifyUIUpdate();
-                },
-                child: Text("Modificar", style: TextStyle(fontSize: 11, color: Colors.blue[700], decoration: TextDecoration.underline)),
-              ),
-            ],
-          ),
-        );
-      }
-
       final int faltan = factor - totalBase;
+      final List<int> divisores = _calculateExactDivisors(totalBase, factor);
+
       return Container(
         margin: const EdgeInsets.only(top: 6),
         padding: const EdgeInsets.all(10),
@@ -648,7 +636,7 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                     _initControllers();
                   },
                   icon: const Icon(Icons.edit, size: 14),
-                  label: Text("Completar a 1 $unidad", style: const TextStyle(fontSize: 11)),
+                  label: Text("Completar a 1 $unidad (+$faltan)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: widget.isDark ? Colors.red[200] : Colors.red[800],
                     side: BorderSide(color: widget.isDark ? Colors.red[300]! : Colors.red.shade300),
@@ -657,45 +645,42 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                   ),
                 ),
               ],
-            )
+            ),
+            if (divisores.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                "Divisores sugeridos para vender sin residuo:",
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: divisores.map((d) {
+                  final uName = UnitCatalogService.resolveFromFactor(d) ?? "Paquete (x$d)";
+                  return ActionChip(
+                    label: Text("Vender como $uName (x$d)", style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    avatar: const Icon(Icons.sync_alt, size: 12),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () {
+                      widget.provider.adaptVariantUnit(widget.variant.uuidTemporal, uName, d);
+                      _initControllers();
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
           ],
         ),
       );
     }
 
     // Caso 3: Sobrante (completas >= 1 && sobrante > 0)
-    if (widget.variant.allowLeftoverInReserve) {
-      return Container(
-        margin: const EdgeInsets.only(top: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: widget.isDark ? Colors.teal.withValues(alpha: 0.12) : Colors.teal.shade50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: widget.isDark ? Colors.teal.withValues(alpha: 0.3) : Colors.teal.shade200),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.inventory_2_outlined, size: 15, color: widget.isDark ? Colors.teal[300] : Colors.teal[800]),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                ComparativeUpdateModal.formatAccumulationBadgeText(completas, unidad, sobrante),
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.teal[200] : Colors.teal[900]),
-              ),
-            ),
-            InkWell(
-              onTap: () {
-                setState(() {
-                  widget.variant.allowLeftoverInReserve = false;
-                });
-                widget.provider.notifyUIUpdate();
-              },
-              child: Text("Modificar", style: TextStyle(fontSize: 11, color: Colors.blue[700], decoration: TextDecoration.underline)),
-            ),
-          ],
-        ),
-      );
-    }
+    final int currentIngreso = widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote).toInt();
+    final int isSumar = widget.variant.stockOperation == 'sumar' ? 1 : 0;
+    final int targetInferior = (completas * factor) - (isSumar * stockBD);
+    final int targetSuperior = ((completas + 1) * factor) - (isSumar * stockBD);
+    final List<int> divisoresSobrante = _calculateExactDivisors(totalBase, factor);
 
     return Container(
       margin: const EdgeInsets.only(top: 6),
@@ -742,36 +727,68 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                   minimumSize: const Size(0, 30),
                 ),
               ),
-              OutlinedButton.icon(
-                onPressed: () {
-                  widget.provider.activateSharedStockForGroup(widget.group.uuidTemporal, widget.variant.uuidTemporal);
-                  _initControllers();
-                },
-                icon: const Icon(Icons.all_inclusive_rounded, size: 14),
-                label: const Text("Activar Stock Compartido (Pool único)", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: widget.isDark ? Colors.tealAccent : Colors.teal.shade800,
-                  side: BorderSide(color: widget.isDark ? Colors.tealAccent : Colors.teal.shade400),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  minimumSize: const Size(0, 30),
+              if (targetInferior > 0 && targetInferior != currentIngreso)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      widget.variant.stockIngresanteOverride = targetInferior;
+                      _initControllers();
+                    });
+                    widget.provider.notifyUIUpdate();
+                  },
+                  icon: const Icon(Icons.remove_circle_outline, size: 14),
+                  label: Text("Ajustar ingreso a $targetInferior unid. ($completas $unidad)", style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: widget.isDark ? Colors.orange[200] : Colors.orange[900],
+                    side: BorderSide(color: widget.isDark ? Colors.orange[300]! : Colors.orange.shade300),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: const Size(0, 30),
+                  ),
                 ),
-              ),
-              OutlinedButton.icon(
-                onPressed: () {
-                  widget.provider.authorizeLeftoverInReserve(widget.variant.uuidTemporal);
-                  _initControllers();
-                },
-                icon: const Icon(Icons.inventory_2_outlined, size: 14),
-                label: Text("Acumular las $sobrante unid. para tu próxima compra", style: const TextStyle(fontSize: 11)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: widget.isDark ? Colors.orange[200] : Colors.orange[900],
-                  side: BorderSide(color: widget.isDark ? Colors.orange[300]! : Colors.orange.shade300),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  minimumSize: const Size(0, 30),
+              if (targetSuperior > currentIngreso)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      widget.variant.stockIngresanteOverride = targetSuperior;
+                      _initControllers();
+                    });
+                    widget.provider.notifyUIUpdate();
+                  },
+                  icon: const Icon(Icons.add_circle_outline, size: 14),
+                  label: Text("Completar ingreso a $targetSuperior unid. (${completas + 1} $unidad)", style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: widget.isDark ? Colors.orange[200] : Colors.orange[900],
+                    side: BorderSide(color: widget.isDark ? Colors.orange[300]! : Colors.orange.shade300),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: const Size(0, 30),
+                  ),
                 ),
-              ),
             ],
           ),
+          if (divisoresSobrante.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              "Divisores sugeridos para vender todo sin residuo:",
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: widget.isDark ? Colors.grey[400] : Colors.grey[700]),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: divisoresSobrante.map((d) {
+                final uName = UnitCatalogService.resolveFromFactor(d) ?? "Paquete (x$d)";
+                return ActionChip(
+                  label: Text("Vender como $uName (x$d)", style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                  avatar: const Icon(Icons.sync_alt, size: 12),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    widget.provider.adaptVariantUnit(widget.variant.uuidTemporal, uName, d);
+                    _initControllers();
+                  },
+                );
+              }).toList(),
+            ),
+          ],
         ],
       ),
     );
@@ -848,6 +865,11 @@ class VariantEditorRowState extends State<VariantEditorRow> {
             ),
             const SizedBox(height: 10),
             
+            if (widget.group.modoStock == 'MIXTO') ...[
+              _buildMixtoVariantToggle(),
+              const SizedBox(height: 8),
+            ],
+
             if (widget.group.matchProducto.estado.contains("MATCH"))
               _buildVariantCards(),
 
@@ -1021,9 +1043,12 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                       children: [
                         Icon(_showCodigo ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 18, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
                         const SizedBox(width: 4),
-                        Text(
-                          _showCodigo ? "Ocultar código de barras" : "Ver código de barras", 
-                          style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)
+                        Expanded(
+                          child: Text(
+                            _showCodigo ? "Ocultar código de barras" : "Ver código de barras", 
+                            style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         if (!_showCodigo && _codigoBarraCtrl.text.isNotEmpty) ...[
                           const SizedBox(width: 8),
@@ -1099,153 +1124,383 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                 
                   Divider(height: 16, color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
                   
-                  Row(
-                    children: [
-                      Icon(Icons.receipt_long_outlined, size: 15, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
-                      const SizedBox(width: 6),
-                      Text("Datos de Compra (Factura)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Expanded(child: MiniInput(ctrl: _umpCompraCtrl, label: "Empaque Prov.", hint: "Ejem: Caja, Ud, Docena...", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromEmpaque: true))),
-                    const SizedBox(width: 8),
-                    Expanded(child: MiniInput(ctrl: _unidadesLoteCtrl, label: "Unid x Empaque", isNum: true, hint: "1000", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromUnidEmpaque: true))),
-                  ]),
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (widget.variant.cantidadUmpComprada != widget.variant.originalCantidadUmpComprada)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 2),
-                                child: Text("Orig.: ${_formatSmartDecimal(widget.variant.originalCantidadUmpComprada)}", style: TextStyle(fontSize: 11.5, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)),
-                              ),
-                            MiniInput(ctrl: _cantCompraCtrl, label: "Compró", isNum: true, hint: "0.25", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged()),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (widget.variant.totalPagoLote != widget.variant.originalTotalPagoLote)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 2),
-                                child: Text("Orig.: S/ ${_formatSmartDecimal(widget.variant.originalTotalPagoLote)}", style: TextStyle(fontSize: 11.5, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)),
-                              ),
-                            MiniInput(ctrl: _totalPagoCtrl, label: "P. Total (S/)", isNum: true, hint: "0.0", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromTotal: true)),
-                          ],
-                        ),
-                      ),
-                    ]
-                  ),
-                  
-                  const SizedBox(height: 12),
-                  
-                  InkWell(
-                    onTap: () => setState(() => _showAdvanced = !_showAdvanced),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Icon(_showAdvanced ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 18, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
-                          const SizedBox(width: 4),
-                          Text(_showAdvanced ? "▾ Ocultar detalles avanzados" : "▸ Costo Unit.: S/ ${_costoUnitarioCtrl.text} | Stock: ${_stockBaseCtrl.text} uds", style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  
-                  if (_showAdvanced) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: widget.isDark ? Colors.black26 : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade300)
-                      ),
-                      child: Row(children: [
-                        Expanded(
-                          flex: 1, 
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text("Costo Unit. Orig.: S/ ${_formatSmartDecimal(widget.variant.originalCostoUnitario)}", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], fontStyle: FontStyle.italic)),
-                              const SizedBox(height: 4),
-                              MiniInput(ctrl: _costoUnitarioCtrl, label: "Costo Unit. (S/)", isNum: true, hint: "0.0", isDark: widget.isDark, isBold: true, onChanged: () => _onPurchaseDataChanged(fromCosto: true)),
-                            ]
-                          )
-                        ),
-                        if ((int.tryParse(_unidadesVentaCtrl.text) != null && int.parse(_unidadesVentaCtrl.text) > 1) || widget.variant.sourceVariantUuid != null) ...[
-                          const SizedBox(width: 8),
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                 Text("Stock Final: ${int.tryParse(_stockBaseCtrl.text) != null ? int.parse(_stockBaseCtrl.text) ~/ int.parse(_unidadesVentaCtrl.text) : 0} ${_unidadVentaCtrl.text}", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold)),
-                                 const SizedBox(height: 4),
-                                 MiniInput(ctrl: _stockBaseCtrl, label: "Stock Unidades Base", isNum: true, hint: "0", isDark: widget.isDark, isBold: true, onChanged: () => _onPurchaseDataChanged(fromStock: true)),
-                              ]
-                            )
-                          ),
-                        ]
-                      ]),
-                    ),
-                  ],
-                  Divider(height: 16, color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
+                  Builder(builder: (ctx) {
+                    final bool isSharedMode = widget.group.modoStock == 'COMPARTIDO' || widget.variant.usaStockCompartido;
+                    final StagingVariant? firstShared = widget.group.variantes.where((v) => widget.group.modoStock == 'COMPARTIDO' || v.usaStockCompartido).firstOrNull;
+                    final bool isMasterPurchase = isSharedMode ? (firstShared == widget.variant) : true;
+                    final int factorVenta = widget.variant.effectiveFactorVenta;
+                    final int maxFormable = factorVenta > 0 ? (widget.group.stockCompartido ~/ factorVenta) : 0;
 
-                  Row(
-                    children: [
-                      Icon(Icons.sell_outlined, size: 15, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
-                      const SizedBox(width: 6),
-                      Text("Venta y Precio", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // FASE 11: SmartUnitSelector movido aquí desde Identificación
-                  SmartUnitSelector(
-                    unitCtrl: _unidadVentaCtrl,
-                    factorCtrl: _unidadesVentaCtrl,
-                    isDark: widget.isDark,
-                    isMini: true,
-                    onChanged: (unit, factor, isAuto) => _onPurchaseDataChanged(),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Expanded(flex: 3, child: MiniInput(ctrl: _margenCtrl, label: "Margen (X)", isNum: true, hint: "1.35", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromMargen: true))),
-                    const SizedBox(width: 8),
-                    Expanded(flex: 4, child: MiniInput(ctrl: _precioVentaCtrl, label: "P. Venta Final", isNum: true, hint: "0.0", isBold: true, isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromVenta: true))),
-                  ]),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // TAGS DE RESUMEN
-                  Wrap(
-                    spacing: 8, runSpacing: 8,
-                    children: [
-                      ResumenTag(icon: Icons.inventory, text: "Ingreso: +${((widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote)) / widget.variant.unidadesPorVenta).toInt()} ${_unidadVentaCtrl.text}", color: Colors.blue, isDark: widget.isDark),
-                      ResumenTag(icon: Icons.sell, text: "Se vende por: ${_unidadVentaCtrl.text.isEmpty ? 'Unid' : _unidadVentaCtrl.text} (x${_unidadesVentaCtrl.text.isEmpty ? '1' : _unidadesVentaCtrl.text})", color: Colors.purple, isDark: widget.isDark),
-                      ResumenTag(icon: Icons.monetization_on, text: "Precio Venta: S/${_formatSmartDecimal(widget.variant.precioVentaSugerido)}", color: Colors.orange, isDark: widget.isDark),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // ALERTAS DE STOCK (Phase 3 & 4: Matemática exacta y 1 toque)
-                  _buildStockAlertBlock(isVariantMatch: false),
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isSharedMode && !isMasterPurchase) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: widget.isDark ? Colors.teal.withValues(alpha: 0.12) : Colors.teal.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: widget.isDark ? Colors.teal.withValues(alpha: 0.3) : Colors.teal.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.hub_rounded, size: 16, color: widget.isDark ? Colors.tealAccent : Colors.teal.shade800),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "Conectada al Stock Base Compartido",
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.tealAccent : Colors.teal.shade900),
+                                      ),
+                                      Text(
+                                        "Pool: ${widget.group.stockCompartido} unid. base • Costo Base: ${AppCurrency.format(widget.group.costoBase)}",
+                                        style: TextStyle(fontSize: 10.5, color: widget.isDark ? Colors.grey[300] : Colors.grey[700]),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else ...[
+                          Row(
+                            children: [
+                              Icon(Icons.receipt_long_outlined, size: 15, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  isSharedMode ? "Datos de Compra (Pool Compartido)" : "Datos de Compra (Factura)",
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            Expanded(child: MiniInput(ctrl: _umpCompraCtrl, label: "Empaque Prov.", hint: "Ejem: Caja, Ud, Docena...", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromEmpaque: true))),
+                            const SizedBox(width: 8),
+                            Expanded(child: MiniInput(ctrl: _unidadesLoteCtrl, label: "Unid x Empaque", isNum: true, hint: "1000", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromUnidEmpaque: true))),
+                          ]),
+                          const SizedBox(height: 8),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (widget.variant.cantidadUmpComprada != widget.variant.originalCantidadUmpComprada)
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 2),
+                                        child: Text("Orig.: ${_formatSmartDecimal(widget.variant.originalCantidadUmpComprada)}", style: TextStyle(fontSize: 11.5, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)),
+                                      ),
+                                    MiniInput(ctrl: _cantCompraCtrl, label: "Compró", isNum: true, hint: "0.25", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged()),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (widget.variant.totalPagoLote != widget.variant.originalTotalPagoLote)
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 2),
+                                        child: Text("Orig.: S/ ${_formatSmartDecimal(widget.variant.originalTotalPagoLote)}", style: TextStyle(fontSize: 11.5, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)),
+                                      ),
+                                    MiniInput(ctrl: _totalPagoCtrl, label: "P. Total (S/)", isNum: true, hint: "0.0", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromTotal: true)),
+                                  ],
+                                ),
+                              ),
+                            ]
+                          ),
+                          const SizedBox(height: 12),
+                          InkWell(
+                            onTap: () => setState(() => _showAdvanced = !_showAdvanced),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Icon(_showAdvanced ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 18, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      _showAdvanced ? "Ocultar detalles avanzados" : "Costo Unit.: S/ ${_costoUnitarioCtrl.text} | Stock: ${_stockBaseCtrl.text} uds",
+                                      style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (_showAdvanced) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: widget.isDark ? Colors.black26 : Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade300)
+                              ),
+                              child: Row(children: [
+                                Expanded(
+                                  flex: 1, 
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text("Costo Unit. Orig.: S/ ${_formatSmartDecimal(widget.variant.originalCostoUnitario)}", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[300] : Colors.grey[800], fontStyle: FontStyle.italic)),
+                                      const SizedBox(height: 4),
+                                      MiniInput(ctrl: _costoUnitarioCtrl, label: "Costo Unit. (S/)", isNum: true, hint: "0.0", isDark: widget.isDark, isBold: true, onChanged: () => _onPurchaseDataChanged(fromCosto: true)),
+                                    ]
+                                  )
+                                ),
+                                if ((int.tryParse(_unidadesVentaCtrl.text) != null && int.parse(_unidadesVentaCtrl.text) > 1) || widget.variant.sourceVariantUuid != null) ...[
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    flex: 1,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                         Text("Stock Final: ${int.tryParse(_stockBaseCtrl.text) != null ? int.parse(_stockBaseCtrl.text) ~/ int.parse(_unidadesVentaCtrl.text) : 0} ${_unidadVentaCtrl.text}", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.blue[300] : Colors.blue[800], fontWeight: FontWeight.bold)),
+                                         const SizedBox(height: 4),
+                                         MiniInput(ctrl: _stockBaseCtrl, label: "Stock Unidades Base", isNum: true, hint: "0", isDark: widget.isDark, isBold: true, onChanged: () => _onPurchaseDataChanged(fromStock: true)),
+                                      ]
+                                    )
+                                  ),
+                                ]
+                              ]),
+                            ),
+                          ],
+                        ],
+
+                        Divider(height: 16, color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
+
+                        Row(
+                          children: [
+                            Icon(Icons.sell_outlined, size: 15, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
+                            const SizedBox(width: 6),
+                            Text("Venta y Precio", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        SmartUnitSelector(
+                          unitCtrl: _unidadVentaCtrl,
+                          factorCtrl: _unidadesVentaCtrl,
+                          isDark: widget.isDark,
+                          isMini: true,
+                          onChanged: (unit, factor, isAuto) => _onPurchaseDataChanged(),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          Expanded(flex: 3, child: MiniInput(ctrl: _margenCtrl, label: "Margen (X)", isNum: true, hint: "1.35", isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromMargen: true))),
+                          const SizedBox(width: 8),
+                          Expanded(flex: 4, child: MiniInput(ctrl: _precioVentaCtrl, label: "P. Venta Final", isNum: true, hint: "0.0", isBold: true, isDark: widget.isDark, onChanged: () => _onPurchaseDataChanged(fromVenta: true))),
+                        ]),
+                        
+                        if (isSharedMode) ...[
+                          const SizedBox(height: 12),
+                          _buildSharedCupoSection(maxFormable: maxFormable),
+                        ],
+
+                        const SizedBox(height: 16),
+                        
+                        // TAGS DE RESUMEN
+                        Wrap(
+                          spacing: 8, runSpacing: 8,
+                          children: [
+                            if (isSharedMode)
+                              ResumenTag(
+                                icon: Icons.hub_rounded,
+                                text: "Cupo: ${widget.variant.cupoMaximoVariante ?? maxFormable} / $maxFormable ${_unidadVentaCtrl.text}",
+                                color: Colors.teal,
+                                isDark: widget.isDark,
+                              )
+                            else
+                              ResumenTag(
+                                icon: Icons.inventory,
+                                text: "Ingreso: +${((widget.variant.stockIngresanteOverride ?? (widget.variant.cantidadUmpComprada * widget.variant.unidadesPorLote)) / widget.variant.unidadesPorVenta).toInt()} ${_unidadVentaCtrl.text}",
+                                color: Colors.blue,
+                                isDark: widget.isDark,
+                              ),
+                            ResumenTag(icon: Icons.sell, text: "Se vende por: ${_unidadVentaCtrl.text.isEmpty ? 'Unid' : _unidadVentaCtrl.text} (x${_unidadesVentaCtrl.text.isEmpty ? '1' : _unidadesVentaCtrl.text})", color: Colors.purple, isDark: widget.isDark),
+                            ResumenTag(icon: Icons.monetization_on, text: "Precio Venta: ${AppCurrency.format(widget.variant.precioVentaSugerido)}", color: Colors.orange, isDark: widget.isDark),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        // ALERTAS DE STOCK (Phase 3 & 4: Matemática exacta y 1 toque)
+                        _buildStockAlertBlock(isVariantMatch: false),
+                      ],
+                    );
+                  }),
                 ],
               ),
             ),
-          ]
+          ],
         ],
       ),
     )));
+  }
+
+  Widget _buildMixtoVariantToggle() {
+    final bool isShared = widget.variant.usaStockCompartido;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: widget.isDark ? const Color(0xFF1F1F2B) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () {
+                if (!isShared) {
+                  widget.provider.toggleVariantSharedStock(widget.variant.uuidTemporal);
+                  _initControllers();
+                }
+              },
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: isShared ? (widget.isDark ? Colors.teal[800] : Colors.teal[600]) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.hub_rounded, size: 14, color: isShared ? Colors.white : (widget.isDark ? Colors.grey[400] : Colors.grey[600])),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Compartido",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isShared ? FontWeight.bold : FontWeight.normal,
+                        color: isShared ? Colors.white : (widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: () {
+                if (isShared) {
+                  widget.provider.toggleVariantSharedStock(widget.variant.uuidTemporal);
+                  _initControllers();
+                }
+              },
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: !isShared ? (widget.isDark ? Colors.blueGrey[800] : Colors.blueGrey[600]) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.inventory_2_outlined, size: 14, color: !isShared ? Colors.white : (widget.isDark ? Colors.grey[400] : Colors.grey[600])),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Stock Propio",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: !isShared ? FontWeight.bold : FontWeight.normal,
+                        color: !isShared ? Colors.white : (widget.isDark ? Colors.grey[400] : Colors.grey[600]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSharedCupoSection({required int maxFormable}) {
+    final int currentCupo = widget.variant.cupoMaximoVariante ?? maxFormable;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: widget.isDark ? Colors.teal.withValues(alpha: 0.08) : Colors.teal.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: widget.isDark ? Colors.teal.withValues(alpha: 0.25) : Colors.teal.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.tune_rounded, size: 16, color: widget.isDark ? Colors.tealAccent : Colors.teal.shade800),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  "Gestión de Cupo (Stock Vendible)",
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.tealAccent : Colors.teal.shade900),
+                ),
+              ),
+              Text(
+                "Máx. Formable: $maxFormable ${_unidadVentaCtrl.text}",
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.teal[200] : Colors.teal[800]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  "Stock disponible para vender (máximo $maxFormable):",
+                  style: TextStyle(fontSize: 10.5, color: widget.isDark ? Colors.grey[300] : Colors.grey[700]),
+                ),
+              ),
+              SizedBox(
+                width: 75,
+                height: 30,
+                child: TextFormField(
+                  key: ValueKey('cupo_${widget.variant.uuidTemporal}_$maxFormable'),
+                  initialValue: currentCupo.toString(),
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.white : Colors.black87),
+                  decoration: InputDecoration(
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                    filled: true,
+                    fillColor: widget.isDark ? const Color(0xFF14141C) : Colors.white,
+                  ),
+                  onChanged: (text) {
+                    int? val = int.tryParse(text);
+                    if (val != null) {
+                      if (val > maxFormable) val = maxFormable;
+                      if (val < 0) val = 0;
+                      widget.variant.cupoMaximoVariante = val;
+                    } else {
+                      widget.variant.cupoMaximoVariante = null;
+                    }
+                    widget.provider.notifyUIUpdate();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildVariantCards() {

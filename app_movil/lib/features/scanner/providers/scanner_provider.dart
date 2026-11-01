@@ -165,36 +165,40 @@ class ScannerProvider with ChangeNotifier {
     if (_currentState.stagingData == null) return 0;
     int count = 0;
     for (var group in _currentState.stagingData!.productosAgrupados) {
-      for (var v in group.variantes) {
-        if (!v.isConfirmed) continue;
+      if (group.modoStock == 'COMPARTIDO') {
+        // En modo compartido evaluamos el pozo contra las presentaciones según el Asesor de Stock
+        int pool = group.stockCompartido;
+        if (pool <= 0) {
+          pool = group.variantes.fold<int>(0, (sum, v) => sum + v.stockIngresanteBase);
+        }
+        final sharedVariants = group.variantes.where((v) => v.isConfirmed).toList();
+        if (sharedVariants.isNotEmpty && pool > 0) {
+          // Caso C: En TODAS las variantes compartidas pool < factor (déficit total)
+          bool allZeroFormable = sharedVariants.every((v) => pool < v.effectiveFactorVenta);
+          if (allZeroFormable) {
+            count++;
+          }
+        }
+      } else {
+        // En modo INDEPENDIENTE o MIXTO (variantes que no usan stock compartido)
+        for (var v in group.variantes) {
+          if (!v.isConfirmed) continue;
+          if (group.modoStock == 'MIXTO' && v.usaStockCompartido) continue;
 
-        int stockBD = v.matchPresentacion.datos?.stockActual ?? 0;
-        int totalUnitsBase = v.calculateTotalUnitsBase(stockActualBD: stockBD);
-        int factor = v.effectiveFactorVenta;
+          int stockBD = v.matchPresentacion.datos?.stockActual ?? 0;
+          int totalUnitsBase = v.calculateTotalUnitsBase(stockActualBD: stockBD);
+          int factor = v.effectiveFactorVenta;
 
-        if (factor > 1 && totalUnitsBase > 0) {
-          int completas = totalUnitsBase ~/ factor;
-          int sobrante = totalUnitsBase % factor;
+          if (factor > 1 && totalUnitsBase > 0) {
+            int completas = totalUnitsBase ~/ factor;
+            int sobrante = totalUnitsBase % factor;
 
-          if (completas == 0) {
-            // DÉFICIT REAL: no alcanza para 1 paquete
-            if (!v.allowDeficitApproved) {
+            if (completas == 0) {
+              // DÉFICIT REAL: no alcanza para formar siquiera 1 paquete
               count++;
-            }
-          } else if (sobrante > 0) {
-            // SOBRANTE: unidades sueltas que exceden los paquetes completos
-            if (!v.allowLeftoverInReserve) {
-              int assignedLeftovers = 0;
-              for (var other in group.variantes) {
-                if (other != v &&
-                    other.cantidadUmpComprada == 0 &&
-                    other.stockIngresanteOverride != null) {
-                  assignedLeftovers += other.stockIngresanteOverride!;
-                }
-              }
-              if (assignedLeftovers < sobrante) {
-                count++;
-              }
+            } else if (sobrante > 0) {
+              // SOBRANTE: unidades sueltas que no forman paquetes completos
+              count++;
             }
           }
         }
@@ -814,6 +818,71 @@ class ScannerProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Genera un nombre determinista único para evitar colisiones en presentaciones del mismo grupo
+  /// conservando siempre el nombre específico extraído de la factura como raíz.
+  String generateUniqueVariantName(StagingProductGroup group, {required bool isShared}) {
+    String baseName = "";
+    if (group.nombreOriginalFactura != null && group.nombreOriginalFactura!.trim().isNotEmpty) {
+      baseName = group.nombreOriginalFactura!.trim();
+    } else if (group.variantes.isNotEmpty && group.variantes.first.nombreEspecifico.trim().isNotEmpty) {
+      baseName = group.variantes.first.nombreEspecifico.trim();
+    } else if (group.nombrePadre.trim().isNotEmpty) {
+      baseName = group.nombrePadre.trim();
+    } else {
+      baseName = "Presentación";
+    }
+
+    // Limpiar sufijos generados previamente para evitar acumulación
+    baseName = baseName.replaceAll(RegExp(r'\s*\((?:[0-9]+)\)$'), '').trim();
+    baseName = baseName.replaceAll(RegExp(r'\s*-\s*(?:Comp\.|Propio)(?:\s+[0-9]+)?$'), '').trim();
+    if (baseName.isEmpty) baseName = "Presentación";
+
+    final existingNames = group.variantes.map((v) => v.nombreEspecifico.trim().toLowerCase()).toSet();
+
+    // 1. Si no hay variantes aún en el grupo, conserva exactamente el nombre extraído
+    if (group.variantes.isEmpty) {
+      return baseName;
+    }
+
+    // Determinar si hay convivencia de modos (Mixto o conviven variantes con distinto modo)
+    final bool hasMixedModes = group.modoStock == 'MIXTO' ||
+        group.variantes.any((v) => v.usaStockCompartido != isShared);
+
+    String candidate;
+    if (hasMixedModes) {
+      final String tag = isShared ? "Comp." : "Propio";
+      final String baseTag = "$baseName - $tag";
+      if (!existingNames.contains(baseTag.toLowerCase())) {
+        candidate = baseTag;
+      } else {
+        int counter = 2;
+        candidate = "$baseName - $tag $counter";
+        while (existingNames.contains(candidate.toLowerCase())) {
+          counter++;
+          candidate = "$baseName - $tag $counter";
+        }
+      }
+    } else {
+      // Modo puramente Independiente o Compartido: sufijo secuencial (2), (3)...
+      int counter = 2;
+      candidate = "$baseName ($counter)";
+      while (existingNames.contains(candidate.toLowerCase())) {
+        counter++;
+        candidate = "$baseName ($counter)";
+      }
+    }
+
+    // Verificación final estricta anti-colisión
+    int safetyCounter = 2;
+    String finalCandidate = candidate;
+    while (existingNames.contains(finalCandidate.toLowerCase())) {
+      finalCandidate = "$candidate ($safetyCounter)";
+      safetyCounter++;
+    }
+
+    return finalCandidate;
+  }
+
   String? createLeftoverVariant(String sourceVariantUuid, int leftoverAmount) {
     if (_currentState.stagingData == null) return null;
     StagingVariant? sourceVariant;
@@ -831,19 +900,32 @@ class ScannerProvider with ChangeNotifier {
     if (sourceVariant == null || parentGroup == null) return null;
 
     int factor = sourceVariant.effectiveFactorVenta;
-    int currentIngresoBase = sourceVariant.stockIngresanteOverride ??
+    final int stockBD = sourceVariant.matchPresentacion.datos?.stockActual ?? 0;
+    final int totalBaseActual = sourceVariant.calculateTotalUnitsBase(stockActualBD: stockBD);
+    final int totalSinSobrante = max(0, totalBaseActual - leftoverAmount);
+
+    final bool isExisting = sourceVariant.matchPresentacion.estado.contains("MATCH");
+    final int prevOverride = sourceVariant.stockIngresanteOverride ??
         (sourceVariant.cantidadUmpComprada * sourceVariant.unidadesPorLote).toInt();
 
-    // Precisión Técnica: El nuevo ingreso base de la madre disminuye exactamente en leftoverAmount
-    int nuevoIngresoPrincipal = max(0, currentIngresoBase - leftoverAmount);
+    // Blindaje Matemático: Si en producto vinculado sumar el sobrante excede el ingreso de la factura,
+    // el ajuste de ingreso efectivo en la madre debe ser (totalSinSobrante - stockBD) para que el
+    // nuevo total quede exactamente en (completas * factor) con 0 errores de stock.
+    int nuevoIngresoPrincipal;
+    if (isExisting && sourceVariant.stockOperation == 'sumar') {
+      nuevoIngresoPrincipal = totalSinSobrante - stockBD;
+    } else {
+      nuevoIngresoPrincipal = totalSinSobrante;
+    }
+
     sourceVariant.stockIngresanteOverride = nuevoIngresoPrincipal;
     sourceVariant.allowLeftoverInReserve = false;
     sourceVariant.allowDeficitApproved = false;
 
     // Calcular costo unitario base del lote actual
     double costoBase = 0.0;
-    if (currentIngresoBase > 0) {
-      costoBase = sourceVariant.totalPagoLote / currentIngresoBase;
+    if (prevOverride > 0) {
+      costoBase = sourceVariant.totalPagoLote / prevOverride;
     } else if (sourceVariant.costoUnitarioSugerido > 0) {
       costoBase = sourceVariant.costoUnitarioSugerido / max(1, factor);
     }
@@ -855,7 +937,7 @@ class ScannerProvider with ChangeNotifier {
 
     // Descontar proporcionalmente el pago del lote de la madre para mantener la ecuación total
     sourceVariant.totalPagoLote = max(0.0, sourceVariant.totalPagoLote - totalPagoSobrante);
-    if (sourceVariant.unidadesPorLote > 0) {
+    if (sourceVariant.unidadesPorLote > 0 && nuevoIngresoPrincipal >= 0) {
       sourceVariant.cantidadUmpComprada = nuevoIngresoPrincipal / sourceVariant.unidadesPorLote;
     }
     if (nuevoIngresoPrincipal > 0) {
@@ -884,11 +966,12 @@ class ScannerProvider with ChangeNotifier {
 
     if (existingUnitVariant != null) {
       // Sumar al ingreso de la variante unitaria existente
-      int prevOverride = existingUnitVariant.stockIngresanteOverride ??
+      int prevUnitOverride = existingUnitVariant.stockIngresanteOverride ??
           (existingUnitVariant.cantidadUmpComprada * existingUnitVariant.unidadesPorLote).toInt();
-      existingUnitVariant.stockIngresanteOverride = prevOverride + leftoverAmount;
+      existingUnitVariant.stockIngresanteOverride = prevUnitOverride + leftoverAmount;
       existingUnitVariant.allocatedBaseUnits = (existingUnitVariant.allocatedBaseUnits ?? 0) + leftoverAmount;
       existingUnitVariant.allocatedPurchaseCost = (existingUnitVariant.allocatedPurchaseCost ?? 0.0) + totalPagoSobrante;
+      existingUnitVariant.originalMotherIngresoOverride = prevOverride;
       existingUnitVariant.cantidadUmpComprada = existingUnitVariant.cantidadUmpComprada + leftoverAmount.toDouble();
       existingUnitVariant.totalPagoLote = existingUnitVariant.totalPagoLote + totalPagoSobrante;
       existingUnitVariant.precioUmpProveedor = costoBase;
@@ -899,11 +982,18 @@ class ScannerProvider with ChangeNotifier {
       existingUnitVariant.updateUnidadVenta = true;
       resultingUuid = existingUnitVariant.uuidTemporal;
     } else {
-      // Crear nueva variante 'Unidad (x1)'
+      // Crear nueva variante 'Unidad (x1)' con nombre determinista garantizado sin colisión
       String nombreHeredado = sourceVariant.nombreEspecifico.trim();
-      String newName = (nombreHeredado.isNotEmpty && nombreHeredado != "General")
+      String baseName = (nombreHeredado.isNotEmpty && nombreHeredado != "General")
           ? "$nombreHeredado - Unidad"
           : "Unidad (x1)";
+      final existingNames = parentGroup.variantes.map((v) => v.nombreEspecifico.trim().toLowerCase()).toSet();
+      String newName = baseName;
+      int counter = 2;
+      while (existingNames.contains(newName.toLowerCase())) {
+        newName = "$baseName #$counter";
+        counter++;
+      }
 
       StagingVariant leftoverVariant = StagingVariant(
         nombreEspecifico: newName,
@@ -933,6 +1023,7 @@ class ScannerProvider with ChangeNotifier {
       leftoverVariant.sourceVariantUuid = sourceVariantUuid;
       leftoverVariant.allocatedBaseUnits = leftoverAmount;
       leftoverVariant.allocatedPurchaseCost = totalPagoSobrante;
+      leftoverVariant.originalMotherIngresoOverride = prevOverride;
       leftoverVariant.updateUnidadVenta = true;
       leftoverVariant.updateCosto = true;
       leftoverVariant.updatePrecio = true;
@@ -961,15 +1052,20 @@ class ScannerProvider with ChangeNotifier {
             final int unitsToRestore = child.allocatedBaseUnits ?? child.stockIngresanteBase;
             final double costToRestore = child.allocatedPurchaseCost ?? child.totalPagoLote;
 
-            final int motherIngresoActual = mother.stockIngresanteOverride ?? mother.stockIngresanteBase;
-            final int motherNewIngreso = motherIngresoActual + unitsToRestore;
-            mother.stockIngresanteOverride = motherNewIngreso;
-            mother.totalPagoLote = mother.totalPagoLote + costToRestore;
-            if (mother.unidadesPorLote > 0) {
-              mother.cantidadUmpComprada = motherNewIngreso / mother.unidadesPorLote;
+            if (child.originalMotherIngresoOverride != null) {
+              mother.stockIngresanteOverride = child.originalMotherIngresoOverride;
+            } else {
+              final int motherIngresoActual = mother.stockIngresanteOverride ?? mother.stockIngresanteBase;
+              mother.stockIngresanteOverride = motherIngresoActual + unitsToRestore;
             }
-            if (motherNewIngreso > 0) {
-              double unitCost = mother.totalPagoLote / motherNewIngreso;
+
+            mother.totalPagoLote = mother.totalPagoLote + costToRestore;
+            final int newIngreso = mother.stockIngresanteOverride ?? mother.stockIngresanteBase;
+            if (mother.unidadesPorLote > 0 && newIngreso >= 0) {
+              mother.cantidadUmpComprada = newIngreso / mother.unidadesPorLote;
+            }
+            if (newIngreso > 0) {
+              double unitCost = mother.totalPagoLote / newIngreso;
               mother.costoUnitarioSugerido = unitCost * mother.effectiveFactorVenta;
               mother.precioVentaSugerido = ScannerCostEngine.suggestSalePrice(
                 presentationCost: mother.costoUnitarioSugerido,
@@ -988,91 +1084,103 @@ class ScannerProvider with ChangeNotifier {
     return false;
   }
 
-  /// Activa la estrategia de Stock Compartido (Pool único) para el grupo
-  void activateSharedStockForGroup(String groupUuid, [String? variantUuid]) {
+  /// Sincroniza el Stock Base Compartido y Costo Base Unitario del grupo
+  /// a partir de los datos de compra de la variante maestra/compartida (a 0ms).
+  void syncGroupSharedPurchaseFromMasterVariant(String groupUuid) {
+    var group = _findGroup(groupUuid);
+    if (group == null || group.variantes.isEmpty) return;
+
+    final master = group.variantes.where((v) => v.usaStockCompartido).firstOrNull ?? group.variantes.first;
+    int masterBase = master.stockIngresanteOverride ?? (master.cantidadUmpComprada * master.unidadesPorLote).toInt();
+    double masterTotal = master.totalPagoLote;
+    if (masterTotal == 0.0 && master.precioUmpProveedor > 0 && master.cantidadUmpComprada > 0) {
+      masterTotal = master.cantidadUmpComprada * master.precioUmpProveedor;
+    }
+
+    int totalPool = masterBase;
+    if (group.matchProducto.estado.contains("MATCH")) {
+      totalPool += group.matchProducto.datos?.stockActual ?? 0;
+    }
+    group.stockCompartido = totalPool;
+    group.costoBase = masterBase > 0 ? (masterTotal / masterBase) : 0.0;
+
+    // Recalcular costos y cupos de las variantes que comparten este stock
+    for (var v in group.variantes) {
+      if (group.modoStock == 'COMPARTIDO' || v.usaStockCompartido) {
+        v.costoUnitarioSugerido = group.costoBase * v.effectiveFactorVenta;
+        v.precioVentaSugerido = ScannerCostEngine.suggestSalePrice(
+          presentationCost: v.costoUnitarioSugerido,
+          marginFactor: v.factorGananciaVentaSugerido,
+        );
+        int maxFormable = v.effectiveFactorVenta > 0 ? (group.stockCompartido ~/ v.effectiveFactorVenta) : 0;
+        if (v.cupoMaximoVariante != null && v.cupoMaximoVariante! > maxFormable) {
+          v.cupoMaximoVariante = maxFormable;
+        }
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Añade una presentación 'Unidad (x1)' al pool compartido desde el Asesor de Stock
+  void addUnitVariantToSharedGroup(String groupUuid) {
     var group = _findGroup(groupUuid);
     if (group == null) return;
+    if (group.variantes.any((v) => v.effectiveFactorVenta == 1)) return;
 
-    // 1. Cambiar el grupo a modo COMPARTIDO
-    group.modoStock = 'COMPARTIDO';
+    double baseCost = group.costoBase;
+    double margen = group.variantes.isNotEmpty ? group.variantes.first.factorGananciaVentaSugerido : 1.35;
+    double pVenta = ScannerCostEngine.suggestSalePrice(presentationCost: baseCost, marginFactor: margen);
 
-    // 2. Marcar todas las variantes del grupo con usaStockCompartido = true
-    for (var v in group.variantes) {
-      v.usaStockCompartido = true;
-    }
+    final available = group.matchProducto.datos?.availablePresentations ?? [];
+    var dbUnit = available
+        .where((p) => (p['factor_conversion'] == 1 || p['factor_conversion'] == null))
+        .firstOrNull;
 
-    // 3. Calcular unidades totales del pool en unidades base sin descontar nada
-    int totalPoolUnits = 0;
-    double totalPoolCost = 0.0;
-    for (var v in group.variantes) {
-      int baseUnits = v.stockIngresanteOverride ?? (v.cantidadUmpComprada * v.unidadesPorLote).toInt();
-      totalPoolUnits += baseUnits;
-      totalPoolCost += v.totalPagoLote;
-    }
-    if (group.matchProducto.estado.contains("MATCH")) {
-      totalPoolUnits += group.matchProducto.datos?.stockActual ?? 0;
-    }
-    group.stockCompartido = totalPoolUnits;
-    if (totalPoolUnits > 0) {
-      group.costoBase = totalPoolCost / totalPoolUnits;
-    }
-
-    // 4. Regla 2: Verificar si el producto ya tiene variante con Factor = 1 ('Unidad')
-    bool hasUnitVariant = group.variantes.any((v) => v.effectiveFactorVenta == 1);
-    if (!hasUnitVariant) {
-      final available = group.matchProducto.datos?.availablePresentations ?? [];
-      var dbUnit = available
-          .where((p) => (p['factor_conversion'] == 1 || p['factor_conversion'] == null))
-          .firstOrNull;
-
-      double baseCost = group.costoBase > 0 ? group.costoBase :
-        (group.variantes.isNotEmpty && group.variantes.first.effectiveFactorVenta > 0
-          ? group.variantes.first.costoUnitarioSugerido / group.variantes.first.effectiveFactorVenta
-          : 0.0);
-      double margen = group.variantes.isNotEmpty ? group.variantes.first.factorGananciaVentaSugerido : 1.35;
-      double pVenta = ScannerCostEngine.suggestSalePrice(presentationCost: baseCost, marginFactor: margen);
-
-      StagingVariant unitVariant = StagingVariant(
-        nombreEspecifico: dbUnit != null ? (dbUnit['nombre_especifico'] ?? 'Unidad (x1)') : 'Unidad (x1)',
-        umpCompra: 'UND',
-        cantidadUmpComprada: 0,
-        precioUmpProveedor: baseCost,
-        totalPagoLote: 0.0,
-        unidadesPorLote: 1,
-        unidadVenta: dbUnit != null ? (dbUnit['unidad'] ?? 'Unidad') : 'Unidad',
-        unidadesPorVenta: 1,
-        costoUnitarioSugerido: baseCost,
-        factorGananciaVentaSugerido: margen,
-        precioVentaSugerido: dbUnit != null && dbUnit['precio_venta'] != null
-            ? (dbUnit['precio_venta'] as num).toDouble()
-            : pVenta,
-        matchPresentacion: dbUnit != null
-            ? MatchResult(
-                estado: "MATCH_SUGERIDO",
-                confianza: 95,
-                datos: MatchData(
-                  id: dbUnit['id'] as int,
-                  nombre: dbUnit['nombre_especifico'] as String? ?? 'Unidad (x1)',
-                  stockActual: dbUnit['stock_actual'] as int? ?? totalPoolUnits,
-                  precioVentaFinal: (dbUnit['precio_venta'] as num?)?.toDouble() ?? pVenta,
-                  costoUnitarioCalculado: (dbUnit['precio_costo'] as num?)?.toDouble() ?? baseCost,
-                  unidadVenta: dbUnit['unidad'] as String? ?? 'Unidad',
-                  unidadesPorVenta: 1,
-                  availablePresentations: available,
-                  usaStockCompartido: true,
-                ),
-              )
-            : MatchResult(
-                estado: group.matchProducto.estado.contains("MATCH") ? "NUEVO_EN_PADRE" : "NUEVO",
-                confianza: 0,
-                datos: MatchData(id: -1, nombre: 'Unidad (x1)', availablePresentations: available, usaStockCompartido: true),
+    StagingVariant unitVariant = StagingVariant(
+      nombreEspecifico: dbUnit != null ? (dbUnit['nombre_especifico'] ?? 'Unidad (x1)') : 'Unidad (x1)',
+      umpCompra: 'UND',
+      cantidadUmpComprada: 0,
+      precioUmpProveedor: baseCost,
+      totalPagoLote: 0.0,
+      unidadesPorLote: 1,
+      unidadVenta: dbUnit != null ? (dbUnit['unidad'] ?? 'Unidad') : 'Unidad',
+      unidadesPorVenta: 1,
+      costoUnitarioSugerido: baseCost,
+      factorGananciaVentaSugerido: margen,
+      precioVentaSugerido: dbUnit != null && dbUnit['precio_venta'] != null
+          ? (dbUnit['precio_venta'] as num).toDouble()
+          : pVenta,
+      matchPresentacion: dbUnit != null
+          ? MatchResult(
+              estado: "MATCH_SUGERIDO",
+              confianza: 95,
+              datos: MatchData(
+                id: dbUnit['id'] as int,
+                nombre: dbUnit['nombre_especifico'] as String? ?? 'Unidad (x1)',
+                stockActual: dbUnit['stock_actual'] as int? ?? group.stockCompartido,
+                precioVentaFinal: (dbUnit['precio_venta'] as num?)?.toDouble() ?? pVenta,
+                costoUnitarioCalculado: (dbUnit['precio_costo'] as num?)?.toDouble() ?? baseCost,
+                unidadVenta: dbUnit['unidad'] as String? ?? 'Unidad',
+                unidadesPorVenta: 1,
+                availablePresentations: available,
+                usaStockCompartido: true,
               ),
-      )..usaStockCompartido = true;
+            )
+          : MatchResult(
+              estado: group.matchProducto.estado.contains("MATCH") ? "NUEVO_EN_PADRE" : "NUEVO",
+              confianza: 0,
+              datos: MatchData(id: -1, nombre: 'Unidad (x1)', availablePresentations: available, usaStockCompartido: true),
+            ),
+    )..usaStockCompartido = true;
 
-      group.variantes.add(unitVariant);
-    }
-
+    group.variantes.add(unitVariant);
     notifyListeners();
+  }
+
+  /// Activa la estrategia de Stock Compartido (Pool único) para el grupo
+  void activateSharedStockForGroup(String groupUuid, [String? variantUuid]) {
+    setGroupStockStrategy(groupUuid, 'COMPARTIDO');
+    addUnitVariantToSharedGroup(groupUuid);
   }
 
   /// Cambia la estrategia de stock del grupo ('COMPARTIDO', 'INDEPENDIENTE', 'MIXTO')
@@ -1080,14 +1188,22 @@ class ScannerProvider with ChangeNotifier {
     var group = _findGroup(groupUuid);
     if (group == null) return;
     group.modoStock = modoStock;
+
     if (modoStock == 'COMPARTIDO') {
       for (var v in group.variantes) {
         v.usaStockCompartido = true;
       }
+      syncGroupSharedPurchaseFromMasterVariant(groupUuid);
     } else if (modoStock == 'INDEPENDIENTE') {
       for (var v in group.variantes) {
         v.usaStockCompartido = false;
+        v.cupoMaximoVariante = null;
       }
+    } else if (modoStock == 'MIXTO') {
+      if (group.variantes.isNotEmpty) {
+        group.variantes.first.usaStockCompartido = true;
+      }
+      syncGroupSharedPurchaseFromMasterVariant(groupUuid);
     }
     notifyListeners();
   }
@@ -1097,35 +1213,15 @@ class ScannerProvider with ChangeNotifier {
     var variant = _findVariant(variantUuid);
     if (variant == null) return;
     variant.usaStockCompartido = !variant.usaStockCompartido;
+    if (_currentState.stagingData != null) {
+      for (var group in _currentState.stagingData!.productosAgrupados) {
+        if (group.variantes.any((v) => v.uuidTemporal == variantUuid)) {
+          syncGroupSharedPurchaseFromMasterVariant(group.uuidTemporal);
+          break;
+        }
+      }
+    }
     notifyListeners();
-  }
-
-  /// Autoriza conservar el sobrante en la reserva base de la variante
-  void authorizeLeftoverInReserve(String variantUuid) {
-    if (_currentState.stagingData == null) return;
-    for (var group in _currentState.stagingData!.productosAgrupados) {
-      for (var v in group.variantes) {
-        if (v.uuidTemporal == variantUuid) {
-          v.allowLeftoverInReserve = true;
-          notifyListeners();
-          return;
-        }
-      }
-    }
-  }
-
-  /// Autoriza registrar la presentación en 0 disponibles (acumulación)
-  void authorizeDeficitRegistration(String variantUuid) {
-    if (_currentState.stagingData == null) return;
-    for (var group in _currentState.stagingData!.productosAgrupados) {
-      for (var v in group.variantes) {
-        if (v.uuidTemporal == variantUuid) {
-          v.allowDeficitApproved = true;
-          notifyListeners();
-          return;
-        }
-      }
-    }
   }
 
   /// Adapta la unidad de venta y factor de una variante en 1 toque
@@ -1254,30 +1350,54 @@ class ScannerProvider with ChangeNotifier {
       siblings =
           group.variantes.first.matchPresentacion.datos?.availablePresentations;
     }
-    group.variantes.add(
-      StagingVariant(
-        nombreEspecifico: "Nueva presentación",
-        umpCompra: "UND",
-        cantidadUmpComprada: 1.0,
-        precioUmpProveedor: 0.0,
-        totalPagoLote: 0.0,
-        unidadesPorLote: 1,
-        unidadVenta: "Unidad",
-        unidadesPorVenta: 1,
-        costoUnitarioSugerido: 0.0,
-        factorGananciaVentaSugerido: 1.35,
-        precioVentaSugerido: 0.0,
-        matchPresentacion: MatchResult(
-          estado: group.matchProducto.estado.contains("MATCH")
-              ? "NUEVO_EN_PADRE"
-              : "NUEVO",
-          confianza: 0,
-          datos: siblings != null
-              ? MatchData(id: -1, nombre: "", availablePresentations: siblings)
-              : null,
-        ),
-      ),
+
+    final bool isShared = group.modoStock == 'COMPARTIDO';
+    final String uniqueName = generateUniqueVariantName(group, isShared: isShared);
+
+    // Herencia estricta de datos de factura extraídos de la variante principal (NUNCA CEROS)
+    final master = group.variantes.isNotEmpty ? group.variantes.first : null;
+
+    final String umpCompra = master?.umpCompra ?? "UND";
+    final double cantidadUmp = master?.cantidadUmpComprada ?? 1.0;
+    final double precioUmp = master?.precioUmpProveedor ?? 0.0;
+    final double totalPago = master?.totalPagoLote ?? 0.0;
+    final int unidadesLote = master?.unidadesPorLote ?? 1;
+
+    final String unidadVenta = master?.unidadVenta ?? "Unidad";
+    final int unidadesVenta = master?.unidadesPorVenta ?? 1;
+    final double costoSugerido = isShared 
+        ? (group.costoBase * unidadesVenta)
+        : (master?.costoUnitarioSugerido ?? 0.0);
+    final double margen = master?.factorGananciaVentaSugerido ?? 1.35;
+    final double precioSugerido = ScannerCostEngine.suggestSalePrice(
+      presentationCost: costoSugerido,
+      marginFactor: margen,
     );
+
+    final newVariant = StagingVariant(
+      nombreEspecifico: uniqueName,
+      umpCompra: umpCompra,
+      cantidadUmpComprada: cantidadUmp,
+      precioUmpProveedor: precioUmp,
+      totalPagoLote: totalPago,
+      unidadesPorLote: unidadesLote,
+      unidadVenta: unidadVenta,
+      unidadesPorVenta: unidadesVenta,
+      costoUnitarioSugerido: costoSugerido,
+      factorGananciaVentaSugerido: margen,
+      precioVentaSugerido: precioSugerido,
+      matchPresentacion: MatchResult(
+        estado: group.matchProducto.estado.contains("MATCH")
+            ? "NUEVO_EN_PADRE"
+            : "NUEVO",
+        confianza: 0,
+        datos: siblings != null
+            ? MatchData(id: -1, nombre: uniqueName, availablePresentations: siblings)
+            : null,
+      ),
+    )..usaStockCompartido = isShared;
+
+    group.variantes.add(newVariant);
     notifyListeners();
   }
 

@@ -84,13 +84,16 @@ class InventoryItemTile extends StatelessWidget {
     
     final int stock = item.displayStock;
     final int threshold = presentation.stockAlerta ?? 5;
-    final bool isOutOfStock = stock <= 0;
+    final bool hasQuotaExhaustedWithBase = item.hasQuotaExhaustedWithBaseStock;
+    final bool isTrulyOutOfStock = item.isOutOfStock;
     final bool isCritical = stock > 0 && stock <= threshold;
-    final Color stockColor = isOutOfStock
-        ? (isDark ? Colors.red[400]! : Colors.red)
-        : (isCritical
-            ? (isDark ? Colors.orange[400]! : Colors.orange.shade800)
-            : (isDark ? Colors.teal[300]! : Colors.teal[700]!));
+    final Color stockColor = hasQuotaExhaustedWithBase
+        ? (isDark ? Colors.amber[400]! : Colors.amber.shade800)
+        : (isTrulyOutOfStock
+            ? (isDark ? Colors.red[400]! : Colors.red)
+            : (isCritical
+                ? (isDark ? Colors.orange[400]! : Colors.orange.shade800)
+                : (isDark ? Colors.teal[300]! : Colors.teal[700]!)));
 
     final bool hasOffer = item.hasOffer;
     final double finalPrice = item.effectivePrice;
@@ -142,7 +145,7 @@ class InventoryItemTile extends StatelessWidget {
                               fit: BoxFit.cover,
                             ),
                           ),
-                          if (isOutOfStock)
+                          if (isTrulyOutOfStock)
                             Container(
                               color: isDark ? Colors.black.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.7),
                               child: Center(child: Icon(Icons.block, color: isDark ? Colors.red[400] : Colors.red, size: 36))
@@ -302,32 +305,34 @@ class InventoryItemTile extends StatelessWidget {
                           onTap: onTapStock ?? onTap,
                           borderRadius: BorderRadius.circular(10),
                           child: PulsingStockBadge(
-                            isPulsing: isOutOfStock || isCritical,
+                            isPulsing: isTrulyOutOfStock || isCritical || hasQuotaExhaustedWithBase,
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: item.hasLooseUnits
+                                color: (hasQuotaExhaustedWithBase || item.hasLooseUnits)
                                     ? (isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50)
                                     : stockColor.withValues(alpha: 0.15), 
                                 borderRadius: BorderRadius.circular(10), 
                                 border: Border.all(
-                                  color: item.hasLooseUnits
+                                  color: (hasQuotaExhaustedWithBase || item.hasLooseUnits)
                                       ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
-                                      : stockColor.withValues(alpha: (isOutOfStock || isCritical) ? 0.7 : 0.4),
-                                  width: (isOutOfStock || isCritical || item.hasLooseUnits) ? 1.5 : 1.0,
+                                      : stockColor.withValues(alpha: (isTrulyOutOfStock || isCritical) ? 0.7 : 0.4),
+                                  width: (isTrulyOutOfStock || isCritical || item.hasLooseUnits || hasQuotaExhaustedWithBase) ? 1.5 : 1.0,
                                 ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    isOutOfStock
-                                        ? Icons.error_outline_rounded
-                                        : (isCritical
-                                            ? Icons.warning_amber_rounded
-                                            : (item.hasLooseUnits ? Icons.tune_rounded : Icons.inventory_2_rounded)),
+                                    hasQuotaExhaustedWithBase
+                                        ? Icons.tune_rounded
+                                        : (isTrulyOutOfStock
+                                            ? Icons.error_outline_rounded
+                                            : (isCritical
+                                                ? Icons.warning_amber_rounded
+                                                : (item.hasLooseUnits ? Icons.tune_rounded : Icons.inventory_2_rounded))),
                                     size: 15,
-                                    color: item.hasLooseUnits
+                                    color: (hasQuotaExhaustedWithBase || item.hasLooseUnits)
                                         ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
                                         : stockColor,
                                   ),
@@ -337,7 +342,7 @@ class InventoryItemTile extends StatelessWidget {
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
-                                      color: item.hasLooseUnits
+                                      color: (hasQuotaExhaustedWithBase || item.hasLooseUnits)
                                           ? (isDark ? Colors.amber[300]! : Colors.amber[900]!)
                                           : stockColor,
                                     ),
@@ -346,7 +351,7 @@ class InventoryItemTile extends StatelessWidget {
                                   Icon(
                                     Icons.edit_note_rounded,
                                     size: 14,
-                                    color: (item.hasLooseUnits
+                                    color: ((hasQuotaExhaustedWithBase || item.hasLooseUnits)
                                             ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
                                             : stockColor)
                                         .withValues(alpha: 0.7),

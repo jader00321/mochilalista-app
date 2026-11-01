@@ -401,33 +401,9 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
     }
 
     // Caso 3: SOBRANTE (completas >= 1 y sobrante > 0)
-    if (widget.variant.allowLeftoverInReserve) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: widget.isDark ? Colors.green.withValues(alpha: 0.1) : Colors.green.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: widget.isDark ? Colors.green.withValues(alpha: 0.3) : Colors.green.shade200),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.inventory_2_outlined, color: widget.isDark ? Colors.teal[300] : Colors.teal[700], size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                ComparativeUpdateModal.formatAccumulationBadgeText(completas, unidadActiva, sobrante),
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.teal[200] : Colors.teal[900]),
-              ),
-            ),
-            TextButton(
-              onPressed: () => updateState(() => widget.variant.allowLeftoverInReserve = false),
-              child: const Text("Modificar", style: TextStyle(fontSize: 11)),
-            ),
-          ],
-        ),
-      );
-    }
+    final bool isSumar = widget.variant.stockOperation == 'sumar';
+    final int targetInferior = (completas * factor) - (isSumar ? stockBD : 0);
+    final int targetSuperior = ((completas + 1) * factor) - (isSumar ? stockBD : 0);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -479,55 +455,51 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
 
           const SizedBox(height: 8),
 
-          // Botón 2: Activar Stock Compartido (Pool único)
-          SizedBox(
-            width: double.infinity,
-            height: 36,
-            child: OutlinedButton.icon(
-              onPressed: () {
-                _saveModalDataToVariant();
-                widget.provider.activateSharedStockForGroup(widget.group.uuidTemporal, widget.variant.uuidTemporal);
-                _wasConfirmed = true;
-                widget.onConfirm();
-                Navigator.of(context).pop();
-              },
-              icon: const Icon(Icons.all_inclusive_rounded, size: 16),
-              label: const Text(
-                "Activar Stock Compartido (Pool único)",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: widget.isDark ? Colors.tealAccent : Colors.teal.shade800,
-                side: BorderSide(color: widget.isDark ? Colors.tealAccent : Colors.teal.shade400),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          // Botones rápidos de ajuste al múltiplo exacto
+          if (targetInferior > 0 && targetInferior != nuevoIngreso) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 34,
+              child: OutlinedButton.icon(
+                onPressed: () => _applyStockAdjustmentInLive(targetInferior),
+                icon: const Icon(Icons.remove_circle_outline, size: 15),
+                label: Text(
+                  "Ajustar ingreso a $targetInferior unid. (exacto $completas $unidadActiva)",
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[200] : Colors.orange[900]),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: widget.isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
               ),
             ),
-          ),
+            const SizedBox(height: 6),
+          ],
+
+          if (targetSuperior > nuevoIngreso) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 34,
+              child: OutlinedButton.icon(
+                onPressed: () => _applyStockAdjustmentInLive(targetSuperior),
+                icon: const Icon(Icons.add_circle_outline, size: 15),
+                label: Text(
+                  "Completar ingreso a $targetSuperior unid. (armar ${completas + 1} $unidadActiva)",
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[200] : Colors.orange[900]),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: widget.isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
 
           _buildExactDivisorsChips(
             totalBase: totalBase,
             currentFactor: factor,
             accentColor: widget.isDark ? Colors.orange[300]! : Colors.orange[700]!,
-          ),
-
-          const SizedBox(height: 8),
-
-          // Botón 3: Acumular para próxima compra
-          SizedBox(
-            width: double.infinity,
-            height: 34,
-            child: OutlinedButton.icon(
-              onPressed: () => updateState(() => widget.variant.allowLeftoverInReserve = true),
-              icon: Icon(Icons.inventory_2_outlined, size: 15, color: widget.isDark ? Colors.orange[300] : Colors.orange[800]),
-              label: Text(
-                "Acumular las $sobrante unid. para tu próxima compra",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.orange[300] : Colors.orange[800]),
-              ),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: widget.isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
           ),
         ],
       ),

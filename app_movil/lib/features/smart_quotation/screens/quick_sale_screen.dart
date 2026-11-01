@@ -180,14 +180,14 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final searchProv = Provider.of<QuickSearchProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    await StockUpdateModal.show(
+    final res = await StockUpdateModal.show(
       context: context,
       presentation: item.presentation,
       provider: invProv,
       isDark: isDark,
     );
 
-    if (!mounted) return;
+    if (res != true || !mounted) return;
     final fullProd = await invProv.getFullProductWithFallback(item.product.id);
     if (!mounted) return;
     final updatedPres = fullProd?.presentaciones

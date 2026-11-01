@@ -262,7 +262,7 @@ void main() {
       expect(provider.unresolvedStockErrorsCount, equals(0));
     });
 
-    test('Conservar en reserva: allowLeftoverInReserve desbloquea el guardado conservando las 8 unid.', () {
+    test('Resolución de sobrante mediante creación de variante unitaria (x1)', () {
       final provider = ScannerProvider();
 
       final principal = StagingVariant(
@@ -307,15 +307,16 @@ void main() {
       provider.setStagingDataForTesting(staging);
       expect(provider.hasUnresolvedStock, isTrue);
 
-      // Acción de 1 toque: Conservar en reserva base
-      provider.authorizeLeftoverInReserve("var-principal");
+      // Acción de 1 toque: Enviar las 2 unidades sueltas a variante 'Unidad (x1)'
+      provider.createLeftoverVariant("var-principal", 2);
 
-      expect(principal.allowLeftoverInReserve, isTrue);
+      expect(principal.stockIngresanteOverride, equals(2)); // 4 - 2 = 2
+      expect(group.variantes.length, equals(2));
       expect(provider.hasUnresolvedStock, isFalse);
       expect(provider.unresolvedStockErrorsCount, equals(0));
     });
 
-    test('Déficit real: Adaptar a Unidad (x1) y Autorizar 0 resuelven el conflicto', () {
+    test('Déficit real: Adaptar a Unidad (x1) resuelve el conflicto', () {
       final provider = ScannerProvider();
 
       final deficitVar = StagingVariant(
@@ -356,16 +357,7 @@ void main() {
       provider.setStagingDataForTesting(staging);
       expect(provider.hasUnresolvedStock, isTrue);
 
-      // 1. Autorizar registro en 0
-      provider.authorizeDeficitRegistration("var-deficit");
-      expect(deficitVar.allowDeficitApproved, isTrue);
-      expect(provider.hasUnresolvedStock, isFalse);
-
-      // Deshacer autorización
-      deficitVar.allowDeficitApproved = false;
-      expect(provider.hasUnresolvedStock, isTrue);
-
-      // 2. Adaptar a Unidad (x1)
+      // Adaptar a Unidad (x1)
       provider.adaptVariantUnit("var-deficit");
       expect(deficitVar.effectiveUnidadVenta, equals("Unidad"));
       expect(deficitVar.effectiveFactorVenta, equals(1));

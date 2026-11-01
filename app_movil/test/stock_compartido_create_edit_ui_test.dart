@@ -46,7 +46,7 @@ void main() {
       expect(currentStrategy, equals('COMPARTIDO'));
       expect(find.text('Stock Base Total *'), findsOneWidget);
       expect(find.text('Costo Base Unitario'), findsOneWidget);
-      expect(find.textContaining('Pool Único'), findsOneWidget);
+      expect(find.textContaining('Inventario base compartido'), findsOneWidget);
 
       // Probar chip rápido +100 und
       await tester.tap(find.text('+100 und'));
@@ -57,7 +57,7 @@ void main() {
       await tester.tap(find.text('Mixto'));
       await tester.pumpAndSettle();
       expect(currentStrategy, equals('MIXTO'));
-      expect(find.textContaining('Pool Mixto'), findsOneWidget);
+      expect(find.textContaining('Stock Mixto'), findsOneWidget);
     });
 
     testWidgets('Caso 1: Hojas A4 (COMPARTIDO) muestra unidades vendibles y vinculación al pool', (tester) async {
@@ -95,9 +95,9 @@ void main() {
         ),
       );
 
-      expect(find.text('Stock del Pool Central'), findsOneWidget);
+      expect(find.text('Stock Compartido'), findsOneWidget);
       expect(find.text('= 100 Unidad disp.'), findsOneWidget);
-      expect(find.textContaining('Pool Central: 100 unidades base totales.'), findsOneWidget);
+      expect(find.textContaining('Inventario base compartido: 100 und.'), findsOneWidget);
 
       // 2. Paquete x3 (factor 3 -> 33 disponibles, 1 suelta)
       final unidadVentaCtrl2 = TextEditingController(text: 'Paquete x3');

@@ -96,8 +96,9 @@ class PresentationMathEngine {
       double visualCost = double.tryParse(costoPresCtrl.text) ?? 0.0;
 
       originalFactor = factorVenta;
-      originalBaseStock =
-          controllerMap['stockActualBase'] ?? (visualStock * factorVenta);
+      originalBaseStock = controllerMap['originalBaseStock'] ??
+          controllerMap['stockActualBase'] ??
+          (visualStock * factorVenta);
       trueOriginalBaseStock = originalBaseStock;
       originalBaseCost =
           controllerMap['costoBaseOriginal'] ?? (visualCost / factorVenta);
@@ -178,12 +179,29 @@ class PresentationMathEngine {
   }
 
   void matematicaSimpleEdicion() {
+    if (controllerMap['usaStockCompartido'] == true) {
+      // En modo stock compartido, stockFinalCtrl representa el cupo vendible en paquetes
+      // y no debe sobrescribirse con la matemática de inventario independiente.
+      onStateUpdate();
+      return;
+    }
+
     int factorVenta = int.tryParse(unidadesVentaCtrl.text) ?? 1;
     if (factorVenta <= 0) factorVenta = 1;
 
-    int inicial = int.tryParse(stockInicialCtrl.text) ?? 0;
+    // Asegurar que Stock Sistema muestre siempre los paquetes en base de datos
+    final int systemPackages = originalBaseStock ~/ factorVenta;
+    stockInicialCtrl.text = systemPackages.toString();
+
+    int inicial = systemPackages;
     int ingreso = int.tryParse(nuevoIngresoCtrl.text) ?? 0;
     int descuento = int.tryParse(stockDescuentoCtrl.text) ?? 0;
+
+    // Validar que el descuento por ventas previas jamás deje el stock final por debajo de 0
+    if (descuento > inicial + ingreso) {
+      descuento = inicial + ingreso;
+      stockDescuentoCtrl.text = descuento.toString();
+    }
 
     int finalVisual = inicial + ingreso - descuento;
     if (finalVisual < 0) finalVisual = 0;
@@ -193,12 +211,17 @@ class PresentationMathEngine {
         ? 0
         : (originalBaseStock % factorVenta);
 
+    int totalUnitsBase = (finalVisual * factorVenta) + residuoOriginal;
+
     stockValidation = UnitCatalogService.validateStockForUnit(
-      totalUnitsBase: (finalVisual * factorVenta) + residuoOriginal,
+      totalUnitsBase: totalUnitsBase,
       presentationFactor: factorVenta,
       baseUnitCost: costoBaseParaSobrante,
       unitName: unidadVentaCtrl.text,
     );
+    controllerMap['stockValidation'] = stockValidation;
+    controllerMap['mathEngine'] = this;
+    controllerMap['originalBaseStock'] = originalBaseStock;
     verifyLeftoverInvalidation();
     onStateUpdate();
   }
@@ -222,6 +245,11 @@ class PresentationMathEngine {
   }
 
   void calcularStockFinal() {
+    if (controllerMap['usaStockCompartido'] == true) {
+      // En modo compartido, el stock final se gestiona mediante el cupo vendible
+      return;
+    }
+
     int factorVenta = int.tryParse(unidadesVentaCtrl.text) ?? 1;
     if (factorVenta <= 0) factorVenta = 1;
 
@@ -241,7 +269,10 @@ class PresentationMathEngine {
       baseUnitCost: costoBaseParaSobrante,
       unitName: unidadVentaCtrl.text,
     );
+    controllerMap['stockValidation'] = stockValidation;
+    controllerMap['mathEngine'] = this;
     verifyLeftoverInvalidation();
+    onStateUpdate();
   }
 
   void recalcularDesdeCompra() {
@@ -277,6 +308,8 @@ class PresentationMathEngine {
         status: StockValidationStatus.empty,
         costoBaseSobrante: 0.0,
       );
+      controllerMap['stockValidation'] = stockValidation;
+      controllerMap['mathEngine'] = this;
     }
 
     verifyLeftoverInvalidation();
@@ -317,6 +350,7 @@ class PresentationMathEngine {
       } else {
         originalBaseStock = nuevaBase;
       }
+      controllerMap['originalBaseStock'] = originalBaseStock;
       stockInicialCtrl.text = (originalBaseStock ~/ factorVenta).toString();
       nuevoIngresoCtrl.text = "";
       stockDescuentoCtrl.text = "";

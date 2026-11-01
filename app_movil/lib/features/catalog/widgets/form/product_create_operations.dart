@@ -5,6 +5,7 @@ import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/models/product_create_draft.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/core/services/unit_catalog_service.dart';
+import 'package:app_movil/core/widgets/presentation_card/presentation_math_engine.dart';
 import 'package:app_movil/features/catalog/widgets/form/product_controller_factory.dart';
 import 'package:app_movil/features/catalog/widgets/form/product_clear_form_dialog.dart';
 import 'package:app_movil/features/catalog/widgets/product_save_success_dialog.dart';
@@ -328,60 +329,25 @@ class ProductCreateOperations {
     String newChildId = UniqueKey().toString();
     sourceMap['childId'] = newChildId;
 
-    final spec = TextEditingController(
-      text: sourceMap['specific'].text.isNotEmpty
-          ? "${sourceMap['specific'].text} - Suelta"
-          : "Suelta",
+    final newChild = ProductControllerFactory.createLeftoverControllerMap(
+      parentMap: sourceMap,
+      newChildId: newChildId,
+      leftoverUnits: leftoverUnits,
+      costoBaseIndividual: costoBaseIndividual,
     );
-    final pVenta = TextEditingController(
-      text: (costoBaseIndividual * 1.35).toStringAsFixed(2),
-    );
-    final costo = TextEditingController(
-      text: costoBaseIndividual.toStringAsFixed(2),
-    );
-    final img = TextEditingController();
-    final bar = TextEditingController();
-    final stockFinal = TextEditingController(text: leftoverUnits.toString());
 
-    spec.addListener(onSyncDraft);
-    pVenta.addListener(onSyncDraft);
-    costo.addListener(onSyncDraft);
-    img.addListener(onSyncDraft);
-    bar.addListener(onSyncDraft);
-    stockFinal.addListener(onSyncDraft);
+    (newChild['specific'] as TextEditingController).addListener(onSyncDraft);
+    (newChild['precioVenta'] as TextEditingController).addListener(onSyncDraft);
+    (newChild['costoPres'] as TextEditingController).addListener(onSyncDraft);
+    (newChild['image'] as TextEditingController).addListener(onSyncDraft);
+    (newChild['barcode'] as TextEditingController).addListener(onSyncDraft);
+    (newChild['stockFinal'] as TextEditingController).addListener(onSyncDraft);
 
     keys[newChildId] = GlobalKey();
-    controllers.insert(parentIndex + 1, {
-      'id': newChildId,
-      'childId': null,
-      'isEditMode': false,
-      'isExpanded': true,
-      'leftoverCreated': false,
-      'specific': spec,
-      'unidadVenta': TextEditingController(text: "Unidad"),
-      'unidadesVenta': TextEditingController(text: "1"),
-      'costoPres': costo,
-      'margen': TextEditingController(text: "1.35"),
-      'precioVenta': pVenta,
-      'descuentoActivo': false,
-      'tipoDescuento': 'porcentaje',
-      'valorDescuento': TextEditingController(text: ""),
-      'stockInicial': TextEditingController(text: leftoverUnits.toString()),
-      'nuevoIngreso': TextEditingController(text: "0"),
-      'stockDescuento': TextEditingController(text: "0"),
-      'stockFinal': stockFinal,
-      'umpCompra': TextEditingController(text: ""),
-      'unidadesLote': TextEditingController(text: ""),
-      'cantCompra': TextEditingController(text: ""),
-      'totalPago': TextEditingController(text: ""),
-      'barcode': bar,
-      'desc': TextEditingController(),
-      'image': img,
-      'ajusteBase': TextEditingController(),
-      'providerId': sourceMap['providerId'],
-      'isDefault': false,
-      'estado': sourceMap['estado'],
-    });
+    controllers.insert(parentIndex + 1, newChild);
+
+    final parentEngine = sourceMap['mathEngine'] as PresentationMathEngine?;
+    parentEngine?.syncLeftoverState(false, true);
 
     onSyncDraft();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -410,6 +376,8 @@ class ProductCreateOperations {
       }
       controllers[parentIndex]['childId'] = null;
       controllers[parentIndex]['leftoverCreated'] = false;
+      final parentEngine = controllers[parentIndex]['mathEngine'] as PresentationMathEngine?;
+      parentEngine?.syncLeftoverState(true, false);
       onSyncDraft();
     }
   }
@@ -429,14 +397,33 @@ class ProductCreateOperations {
       return;
     }
 
-    final bool wasDefault = controllers[index]['isDefault'] == true;
-    String idToDelete = controllers[index]['id'];
-    String? childId = controllers[index]['childId'];
+    final item = controllers[index];
+    final bool wasDefault = item['isDefault'] == true;
+    String idToDelete = item['id'];
+    String? childId = item['childId'];
+    String? sourceParentId = item['sourceParentId'] as String?;
+    final int transferred = (item['transferredBaseUnits'] as int?) ?? 0;
 
+    // Reintegrar automáticamente a la variante padre si esta era su variante unitaria
     for (var c in controllers) {
-      if (c['childId'] == idToDelete) {
+      if (c['id'] == sourceParentId || c['childId'] == idToDelete) {
         c['childId'] = null;
         c['leftoverCreated'] = false;
+        final parentEngine = c['mathEngine'] as PresentationMathEngine?;
+        if (parentEngine != null) {
+          if (transferred > 0) {
+            parentEngine.originalBaseStock = parentEngine.originalBaseStock + transferred;
+            parentEngine.trueOriginalBaseStock = parentEngine.originalBaseStock;
+          }
+          c['originalBaseStock'] = parentEngine.originalBaseStock;
+          parentEngine.syncLeftoverState(true, false);
+          parentEngine.calcularStockFinal();
+        } else {
+          if (transferred > 0) {
+            c['originalBaseStock'] =
+                ((c['originalBaseStock'] as int?) ?? 0) + transferred;
+          }
+        }
       }
     }
 
@@ -478,7 +465,7 @@ class ProductCreateOperations {
     HapticFeedback.mediumImpact();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text("⭐ Presentación Principal actualizada"),
+        content: Text("Presentación Principal actualizada"),
         backgroundColor: Colors.teal,
         duration: Duration(seconds: 2),
       ),
@@ -545,7 +532,7 @@ class ProductCreateOperations {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text("✨ Formulario limpiado por completo"),
+        content: Text("Formulario limpiado por completo"),
         backgroundColor: Colors.blueGrey,
         duration: Duration(seconds: 2),
       ),
@@ -572,6 +559,7 @@ class ProductCreateOperations {
     String modoStock = 'INDEPENDIENTE',
     int stockCompartido = 0,
     double costoBase = 0.0,
+    Map<String, GlobalKey>? keys,
   }) async {
     if (!formKey.currentState!.validate()) return false;
     if (nameCtrl.text.trim().isEmpty) {
@@ -582,6 +570,33 @@ class ProductCreateOperations {
         ),
       );
       return false;
+    }
+
+    // Validación preventiva de Caso C (Stock Base insuficiente para formar paquetes en variantes compartidas)
+    if (modoStock == 'COMPARTIDO' || modoStock == 'MIXTO') {
+      final sharedControllers = controllers.where((c) {
+        if (modoStock == 'COMPARTIDO') return true;
+        return c['usaStockCompartido'] == true;
+      }).toList();
+
+      if (sharedControllers.isNotEmpty && stockCompartido > 0) {
+        final allZeroFormable = sharedControllers.every((c) {
+          final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+          final safeFactor = factor <= 0 ? 1 : factor;
+          return stockCompartido < safeFactor;
+        });
+
+        if (allZeroFormable) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("El stock compartido no alcanza para formar ningún paquete. Agrega una variante por Unidad o ajusta el inventario."),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return false;
+        }
+      }
     }
 
     final String pDesc = descCtrl.text.trim();
@@ -615,25 +630,53 @@ class ProductCreateOperations {
 
         if (factorVenta > 1 && !isShared) {
           StockValidationResult? validation = c['stockValidation'] as StockValidationResult?;
-          if (validation != null) {
-            if (validation.status == StockValidationStatus.deficit) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text("❌ '$specific': ${validation.userMessage(uVenta, factorVenta)}"),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return false;
+          if (validation == null) {
+            int baseUnits = 0;
+            if (ajusteText.isNotEmpty) {
+              baseUnits = int.tryParse(ajusteText) ?? 0;
+            } else {
+              baseUnits = int.tryParse((c['stockInicial'] as TextEditingController).text) ?? 0;
+              final cant = double.tryParse((c['cantCompra'] as TextEditingController).text) ?? 0.0;
+              final lote = int.tryParse((c['unidadesLote'] as TextEditingController).text) ?? 1;
+              if (baseUnits == 0 && cant > 0 && lote > 0) {
+                baseUnits = (cant * lote).toInt();
+              }
             }
-            if (validation.status == StockValidationStatus.hasLeftover && c['leftoverCreated'] != true) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text("⚠️ '$specific' tiene unidades sueltas sin asignar. Crea su variante."),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-              return false;
+            validation = UnitCatalogService.validateStockForUnit(
+              totalUnitsBase: baseUnits,
+              presentationFactor: factorVenta,
+              baseUnitCost: 0.0,
+              unitName: uVenta,
+            );
+          }
+
+          if (validation.status == StockValidationStatus.deficit) {
+            final key = keys?[c['id']];
+            if (key?.currentContext != null) {
+              Scrollable.ensureVisible(key!.currentContext!, duration: const Duration(milliseconds: 300));
             }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("❌ '${specific.isNotEmpty ? specific : uVenta}': ${validation.userMessage(uVenta, factorVenta)}"),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+            return false;
+          }
+          if (validation.status == StockValidationStatus.hasLeftover && c['leftoverCreated'] != true) {
+            final key = keys?[c['id']];
+            if (key?.currentContext != null) {
+              Scrollable.ensureVisible(key!.currentContext!, duration: const Duration(milliseconds: 300));
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("⚠️ '${specific.isNotEmpty ? specific : uVenta}': ${validation.userMessage(uVenta, factorVenta)}"),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+            return false;
           }
         }
 

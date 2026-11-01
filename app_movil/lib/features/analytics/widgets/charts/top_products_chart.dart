@@ -91,15 +91,29 @@ class _TopProductsChartState extends State<TopProductsChart> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(
-                              "${totalVendido.toInt()} unid.",
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            Builder(
+                              builder: (context) {
+                                String unitStr = (p['unidad_venta'] as String?)?.trim().isNotEmpty == true
+                                    ? p['unidad_venta'].toString().trim()
+                                    : 'unid.';
+                                return Text(
+                                  "${totalVendido.toInt()} $unitStr",
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                );
+                              },
                             ),
-                            if (p['monto_vendido'] != null)
-                              Text(
-                                AppCurrency.format((p['monto_vendido'] as num).toDouble()),
-                                style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
+                            Builder(
+                              builder: (context) {
+                                final num? montoNum = (p['monto_vendido'] ?? p['total_monto']) as num?;
+                                if (montoNum != null) {
+                                  return Text(
+                                    AppCurrency.format(montoNum.toDouble()),
+                                    style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
                           ],
                         ),
                       ],
@@ -155,20 +169,27 @@ class _TopProductsChartState extends State<TopProductsChart> {
   Widget _buildDetailPanel(Map<String, dynamic> p, int index) {
     String name = p['nombre']?.toString() ?? 'Producto';
     int totalVendido = (p['total_vendido'] as num).toInt();
+    String unitStr = (p['unidad_venta'] as String?)?.trim().isNotEmpty == true
+        ? p['unidad_venta'].toString().trim()
+        : 'unidades';
+    int factorVenta = (p['unidades_por_venta'] as num?)?.toInt() ?? 1;
+    String baseUnitContext = factorVenta > 1 
+        ? " (${totalVendido * factorVenta} u. base)"
+        : "";
     
     String insightText;
     if (p['monto_vendido'] != null) {
       double monto = (p['monto_vendido'] as num).toDouble();
       if (index == 0) {
-        insightText = "🥇 $name es tu ESTRELLA ABSOLUTA: $totalVendido unidades y ${AppCurrency.format(monto)}. Este producto sostiene tu negocio. Negocia mejores precios con tu proveedor por volumen.";
+        insightText = "$name es tu ESTRELLA ABSOLUTA: $totalVendido $unitStr$baseUnitContext y ${AppCurrency.format(monto)}. Este producto sostiene tu negocio. Negocia mejores precios con tu proveedor por volumen.";
       } else {
-        insightText = "$name ha generado ${AppCurrency.format(monto)} en $totalVendido unidades vendidas. No dejes que se quede sin stock.";
+        insightText = "$name ha generado ${AppCurrency.format(monto)} en $totalVendido $unitStr$baseUnitContext. No dejes que se quede sin stock.";
       }
     } else {
       if (index == 0) {
-        insightText = "🥇 $name es tu ESTRELLA ABSOLUTA con $totalVendido unidades vendidas. Asegúrate de nunca quebrar stock para no perder ventas.";
+        insightText = "$name es tu ESTRELLA ABSOLUTA con $totalVendido $unitStr$baseUnitContext vendidos. Asegúrate de nunca quebrar stock para no perder ventas.";
       } else {
-        insightText = "El producto $name es un pilar de tu negocio con $totalVendido unidades vendidas. No dejes que se quede sin stock.";
+        insightText = "El producto $name es un pilar de tu negocio con $totalVendido $unitStr$baseUnitContext vendidos. No dejes que se quede sin stock.";
       }
     }
     

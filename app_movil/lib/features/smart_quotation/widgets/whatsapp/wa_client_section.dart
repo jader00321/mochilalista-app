@@ -158,6 +158,7 @@ class WaClientSection extends StatelessWidget {
         counterText: "",
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       ),
+      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
       onChanged: onChanged,
     );
   }

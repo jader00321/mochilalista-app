@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:app_movil/features/catalog/models/product_model.dart';
@@ -67,7 +69,8 @@ class QuickSaleDetailModal extends StatefulWidget {
   State<QuickSaleDetailModal> createState() => _QuickSaleDetailModalState();
 }
 
-class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
+class _QuickSaleDetailModalState extends State<QuickSaleDetailModal>
+    with SingleTickerProviderStateMixin {
   Product? _fullProduct;
   bool _isLoadingVariants = true;
   bool _showVariantSelector = false;
@@ -86,9 +89,16 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
 
   final Map<int, VariantDetailState> _variantDrafts = {};
 
+  AnimationController? _maxStockBannerAnim;
+  Timer? _maxStockBannerTimer;
+
   @override
   void initState() {
     super.initState();
+    _maxStockBannerAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
     _currentSelection = widget.product;
     _systemPrice = widget.product.price;
     _qtyCtrl.text = widget.initialQty.toString();
@@ -148,11 +158,24 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
 
   @override
   void dispose() {
+    _maxStockBannerTimer?.cancel();
+    _maxStockBannerAnim?.dispose();
     _qtyCtrl.dispose();
     _priceCtrl.dispose();
     _discountCtrl.dispose();
     _discountFocusNode.dispose();
     super.dispose();
+  }
+
+  void _triggerMaxStockReached(int maxStock, String unitName) {
+    HapticFeedback.lightImpact();
+    _maxStockBannerTimer?.cancel();
+    _maxStockBannerAnim?.forward();
+    _maxStockBannerTimer = Timer(const Duration(milliseconds: 2800), () {
+      if (mounted) {
+        _maxStockBannerAnim?.reverse();
+      }
+    });
   }
 
   Future<void> _loadVariants() async {
@@ -251,6 +274,13 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
   void _qtyAction(int delta) {
     int current = int.tryParse(_qtyCtrl.text) ?? 0;
     int newQty = current + delta;
+    final maxStock = _currentSelection.effectiveVendibleStock;
+    if (delta > 0 && maxStock > 0 && newQty > maxStock) {
+      _qtyCtrl.text = maxStock.toString();
+      _triggerMaxStockReached(maxStock, _currentSelection.unit);
+      setState(() {});
+      return;
+    }
     if (newQty > 0) {
       _qtyCtrl.text = newQty.toString();
       setState(() {});
@@ -295,10 +325,14 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                 ? pres.precioVentaFinal / pres.factorGananciaVenta!
                 : null);
 
+      final bool isVariantShared = (_fullProduct?.modoStock == 'COMPARTIDO')
+          ? true
+          : pres.usaStockCompartido;
+
       final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
       final pool =
           _fullProduct?.stockCompartido ?? widget.product.sharedStockPool;
-      final int availableStock = pres.usaStockCompartido
+      final int availableStock = isVariantShared
           ? quickProv.getRemainingAvailableForPresentation(
               productId: _currentSelection.productId,
               presentation: pres,
@@ -322,8 +356,9 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
         unit: pres.unidadVenta ?? "Unidad",
         conversionFactor: pres.unidadesPorVenta,
         cost: calculatedCost,
-        usaStockCompartido: pres.usaStockCompartido,
+        usaStockCompartido: isVariantShared,
         sharedStockPool: pool,
+        cupoMaximoVariante: pres.cupoMaximoVariante,
       );
 
       _systemPrice = _currentSelection.price;
@@ -487,7 +522,9 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
         height: 54,
         width: double.infinity,
         child: ElevatedButton(
-          onPressed: (currentQty > 0 && subtotal >= 0 && !exceedsStock)
+          onPressed: (currentQty > 0 &&
+                  subtotal >= 0 &&
+                  (effectiveStock <= 0 || currentQty <= effectiveStock))
               ? _confirm
               : null,
           style: ElevatedButton.styleFrom(
@@ -728,13 +765,13 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                               }
                               if (!context.mounted) return;
                               if (currentPres != null) {
-                                await StockUpdateModal.show(
+                                final res = await StockUpdateModal.show(
                                   context: context,
                                   presentation: currentPres,
                                   provider: invProv,
                                   isDark: isDark,
                                 );
-                                if (!context.mounted) return;
+                                if (res != true || !context.mounted) return;
                                 await _loadVariants();
                                 ProductPresentation? updatedPres;
                                 if (_fullProduct != null) {
@@ -761,16 +798,30 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                                         .firstOrNull;
                                   } catch (_) {}
                                 }
-                                updatedPres ??= currentPres;
-                                final factor = updatedPres.unidadesPorVenta > 0
-                                    ? updatedPres.unidadesPorVenta
-                                    : 1;
-                                final newStockInSalesUnits =
-                                    updatedPres.stockActual ~/ factor;
+                                 final ProductPresentation finalPres =
+                                     updatedPres ?? currentPres;
+                                 final factor = finalPres.unidadesPorVenta > 0
+                                     ? finalPres.unidadesPorVenta
+                                     : 1;
+                                 final newStockInSalesUnits =
+                                     finalPres.stockActual ~/ factor;
 
                                 setState(() {
                                   _currentSelection = _currentSelection
-                                      .copyWith(stock: newStockInSalesUnits);
+                                      .copyWith(
+                                        stock: ((_fullProduct?.modoStock == 'COMPARTIDO') || finalPres.usaStockCompartido)
+                                            ? Provider.of<QuickSaleProvider>(context, listen: false).getRemainingAvailableForPresentation(
+                                                productId: _currentSelection.productId,
+                                                presentation: finalPres,
+                                                sharedStockPool: _fullProduct?.stockCompartido ?? widget.product.sharedStockPool,
+                                                excludePresentationId: widget.product.presentationId,
+                                              )
+                                            : (finalPres.stockActual ~/ factor),
+                                        usaStockCompartido: ((_fullProduct?.modoStock == 'COMPARTIDO') || finalPres.usaStockCompartido),
+                                        sharedStockPool: _fullProduct?.stockCompartido ?? widget.product.sharedStockPool,
+                                        cupoMaximoVariante: finalPres.cupoMaximoVariante,
+                                        clearCupo: finalPres.cupoMaximoVariante == null,
+                                      );
                                   int currentQty =
                                       int.tryParse(_qtyCtrl.text) ?? 1;
                                   if (currentQty > newStockInSalesUnits &&
@@ -794,7 +845,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
 
                                 widget.onStockUpdated?.call(
                                   _currentSelection.presentationId,
-                                  updatedPres.stockActual,
+                                  finalPres.stockActual,
                                 );
                                 if (context.mounted) {
                                   final quickProv =
@@ -894,15 +945,18 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                                   : Colors.blue[800],
                             ),
                             const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                "Seleccionar Variante / Presentación",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: textColor,
+                            Expanded(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  "Seleccionar Variante / Presentación",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: textColor,
+                                  ),
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1009,7 +1063,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                "Pool Base: $remainingPool und. (= máx. $maxPhysical ${_currentSelection.unit}$cupoStr)",
+                                "Inventario base compartido: $remainingPool und. (= máx. $maxPhysical ${_currentSelection.unit}$cupoStr)",
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
@@ -1048,7 +1102,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            "📦 Stock Propio disponible: ${_currentSelection.stock} ${_currentSelection.unit}",
+                            "Stock Propio disponible: ${_currentSelection.stock} ${_currentSelection.unit}",
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -1397,7 +1451,25 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                                 border: InputBorder.none,
                                 isDense: true,
                               ),
-                              onChanged: (v) => setState(() {}),
+                              onChanged: (v) {
+                                int? parsed = int.tryParse(v);
+                                if (parsed != null &&
+                                    effectiveStock > 0 &&
+                                    parsed > effectiveStock) {
+                                  _qtyCtrl.text = effectiveStock.toString();
+                                  _qtyCtrl.selection =
+                                      TextSelection.fromPosition(
+                                        TextPosition(
+                                          offset: _qtyCtrl.text.length,
+                                        ),
+                                      );
+                                  _triggerMaxStockReached(
+                                    effectiveStock,
+                                    _currentSelection.unit,
+                                  );
+                                }
+                                setState(() {});
+                              },
                             ),
                           ),
                           IconButton(
@@ -1451,15 +1523,60 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal> {
                 ),
               ],
             ),
-            if (exceedsStock)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Text(
-                  "Supera el stock actual de ${_currentSelection.effectiveVendibleStock}",
-                  style: TextStyle(
-                    color: isDark ? Colors.red[300] : Colors.red,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+            if (_maxStockBannerAnim != null)
+              SizeTransition(
+                sizeFactor: CurvedAnimation(
+                  parent: _maxStockBannerAnim!,
+                  curve: Curves.easeOutCubic,
+                ),
+                axisAlignment: -1.0,
+                child: FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: _maxStockBannerAnim!,
+                    curve: Curves.easeIn,
+                  ),
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.amber.shade900.withValues(alpha: 0.25)
+                          : const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.amber.shade700
+                            : const Color(0xFFF59E0B),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: 16,
+                          color: isDark
+                              ? Colors.amber.shade300
+                              : const Color(0xFFB45309),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Stock máximo alcanzado: solo hay ${_currentSelection.effectiveVendibleStock} ${_currentSelection.unit} disponibles para vender",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.amber.shade200
+                                  : const Color(0xFF92400E),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

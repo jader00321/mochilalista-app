@@ -276,6 +276,7 @@ class StagingVariant {
   String? sourceVariantUuid; // UUID de la variante padre que originó este sobrante
   int? allocatedBaseUnits; // Unidades transferidas desde la madre
   double? allocatedPurchaseCost; // Costo de compra transferido desde la madre
+  int? originalMotherIngresoOverride; // Ingreso override previo de la madre antes de extraer sobrante
   bool usaStockCompartido = false; // Flag para modo Compartido/Mixto
   int? cupoMaximoVariante; // Cupo opcional para variantes compartidas
   bool allowLeftoverInReserve = false;
@@ -445,6 +446,7 @@ class StagingVariant {
       ..sourceVariantUuid = json['sourceVariantUuid']
       ..allocatedBaseUnits = json['allocated_base_units']
       ..allocatedPurchaseCost = (json['allocated_purchase_cost'] as num?)?.toDouble()
+      ..originalMotherIngresoOverride = json['original_mother_ingreso_override']
       ..usaStockCompartido = json['usa_stock_compartido'] == true || json['usa_stock_compartido'] == 1
       ..cupoMaximoVariante = json['cupo_maximo_variante']
       ..allowLeftoverInReserve = json['allow_leftover_in_reserve'] == true || json['allow_leftover_in_reserve'] == 1
@@ -578,6 +580,7 @@ class StagingVariant {
     allowDeficitApproved = false;
     allocatedBaseUnits = null;
     allocatedPurchaseCost = null;
+    originalMotherIngresoOverride = null;
     usaStockCompartido = false;
     cupoMaximoVariante = null;
     _snapshotCosto = null; // Clear snapshot when reverting to absolute original

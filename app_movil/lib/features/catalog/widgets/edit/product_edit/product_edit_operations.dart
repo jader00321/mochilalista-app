@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/services/unit_catalog_service.dart';
+import 'package:app_movil/core/widgets/presentation_card/presentation_math_engine.dart';
 import 'package:app_movil/features/catalog/widgets/form/product_controller_factory.dart';
 import 'package:app_movil/features/catalog/widgets/form/product_form_mapper.dart';
 import 'package:app_movil/features/catalog/widgets/product_save_success_dialog.dart';
@@ -98,10 +100,30 @@ class ProductEditOperations {
         costoPres: pres.costoUnitarioCalculado?.toStringAsFixed(2) ?? "0.00",
         margen: pres.factorGananciaVenta?.toStringAsFixed(2) ?? "1.35",
         precioVenta: pres.precioVentaFinal.toStringAsFixed(2),
-        stockInicial: (pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1)).toString(),
-        stockFinal: (pres.usaStockCompartido && pres.cupoMaximoVariante != null && pres.cupoMaximoVariante! > 0)
-            ? pres.cupoMaximoVariante.toString()
-            : (pres.stockActual ~/ (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1)).toString(),
+        stockInicial: (() {
+          final int factorV = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+          if (pres.usaStockCompartido) {
+            final int baseEff = product.stockCompartido > 0 ? product.stockCompartido : pres.stockActual;
+            final int maxF = baseEff ~/ factorV;
+            if (pres.cupoMaximoVariante != null && pres.cupoMaximoVariante! > 0) {
+              return (pres.cupoMaximoVariante! <= maxF ? pres.cupoMaximoVariante! : maxF).toString();
+            }
+            return maxF.toString();
+          }
+          return (pres.stockActual ~/ factorV).toString();
+        })(),
+        stockFinal: (() {
+          final int factorV = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+          if (pres.usaStockCompartido) {
+            final int baseEff = product.stockCompartido > 0 ? product.stockCompartido : pres.stockActual;
+            final int maxF = baseEff ~/ factorV;
+            if (pres.cupoMaximoVariante != null && pres.cupoMaximoVariante! > 0) {
+              return (pres.cupoMaximoVariante! <= maxF ? pres.cupoMaximoVariante! : maxF).toString();
+            }
+            return maxF.toString();
+          }
+          return (pres.stockActual ~/ factorV).toString();
+        })(),
         barcode: pres.codigoBarras ?? "",
         providerId: safeProvId,
         estado: pres.estado,
@@ -357,6 +379,19 @@ class ProductEditOperations {
 
     controllers.insert(parentIndex + 1, newChild);
 
+    final parentEngine = sourceMap['mathEngine'] as PresentationMathEngine?;
+    if (parentEngine != null) {
+      parentEngine.originalBaseStock =
+          (parentEngine.originalBaseStock - leftoverUnits).clamp(0, 99999999);
+      parentEngine.trueOriginalBaseStock = parentEngine.originalBaseStock;
+      sourceMap['originalBaseStock'] = parentEngine.originalBaseStock;
+      parentEngine.syncLeftoverState(false, true);
+      parentEngine.matematicaSimpleEdicion();
+    } else {
+      sourceMap['originalBaseStock'] =
+          (((sourceMap['originalBaseStock'] as int?) ?? 0) - leftoverUnits).clamp(0, 99999999);
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text("✅ Variante sobrante creada debajo"),
@@ -374,9 +409,11 @@ class ProductEditOperations {
     int parentIndex = controllers.indexWhere((c) => c['id'] == parentId);
     if (parentIndex != -1) {
       String? childId = controllers[parentIndex]['childId'];
+      int transferred = 0;
       if (childId != null) {
         int childIndex = controllers.indexWhere((c) => c['id'] == childId);
         if (childIndex != -1) {
+          transferred = (controllers[childIndex]['transferredBaseUnits'] as int?) ?? 0;
           ProductControllerFactory.disposeControllerMap(controllers[childIndex]);
           controllers.removeAt(childIndex);
           keys.remove(childId);
@@ -384,6 +421,21 @@ class ProductEditOperations {
       }
       controllers[parentIndex]['childId'] = null;
       controllers[parentIndex]['leftoverCreated'] = false;
+      final parentEngine = controllers[parentIndex]['mathEngine'] as PresentationMathEngine?;
+      if (parentEngine != null) {
+        if (transferred > 0) {
+          parentEngine.originalBaseStock = parentEngine.originalBaseStock + transferred;
+          parentEngine.trueOriginalBaseStock = parentEngine.originalBaseStock;
+        }
+        controllers[parentIndex]['originalBaseStock'] = parentEngine.originalBaseStock;
+        parentEngine.syncLeftoverState(true, false);
+        parentEngine.matematicaSimpleEdicion();
+      } else {
+        if (transferred > 0) {
+          controllers[parentIndex]['originalBaseStock'] =
+              ((controllers[parentIndex]['originalBaseStock'] as int?) ?? 0) + transferred;
+        }
+      }
     }
   }
 
@@ -457,10 +509,30 @@ class ProductEditOperations {
       idsToDelete.add(item['db_id']);
     }
 
+    final String deletedId = item['id'];
+    final String? sourceParentId = item['sourceParentId'] as String?;
+    final int transferred = (item['transferredBaseUnits'] as int?) ?? 0;
+
+    // Reintegrar automáticamente a la variante padre si esta era su variante unitaria
     for (var c in controllers) {
-      if (c['childId'] == item['id']) {
+      if (c['id'] == sourceParentId || c['childId'] == deletedId) {
         c['childId'] = null;
         c['leftoverCreated'] = false;
+        final parentEngine = c['mathEngine'] as PresentationMathEngine?;
+        if (parentEngine != null) {
+          if (transferred > 0) {
+            parentEngine.originalBaseStock = parentEngine.originalBaseStock + transferred;
+            parentEngine.trueOriginalBaseStock = parentEngine.originalBaseStock;
+          }
+          c['originalBaseStock'] = parentEngine.originalBaseStock;
+          parentEngine.syncLeftoverState(true, false);
+          parentEngine.matematicaSimpleEdicion();
+        } else {
+          if (transferred > 0) {
+            c['originalBaseStock'] =
+                ((c['originalBaseStock'] as int?) ?? 0) + transferred;
+          }
+        }
       }
     }
 
@@ -489,7 +561,7 @@ class ProductEditOperations {
         SnackBar(
           content: Text(
             wasDefault
-                ? "⭐ Variante eliminada. La siguiente fue promovida a Principal."
+                ? "Variante eliminada. La siguiente fue promovida a Principal."
                 : "Variante eliminada.",
           ),
           backgroundColor: wasDefault ? Colors.teal : Colors.grey[800],
@@ -516,6 +588,7 @@ class ProductEditOperations {
     String modoStock = 'INDEPENDIENTE',
     int stockCompartido = 0,
     double costoBase = 0.0,
+    Map<String, GlobalKey>? keys,
   }) async {
     if (!formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -535,6 +608,105 @@ class ProductEditOperations {
         ),
       );
       return false;
+    }
+
+    // Validación preventiva de Caso C (Stock Base insuficiente para formar paquetes en variantes compartidas)
+    if (modoStock == 'COMPARTIDO' || modoStock == 'MIXTO') {
+      final sharedControllers = controllers.where((c) {
+        if (modoStock == 'COMPARTIDO') return true;
+        return c['usaStockCompartido'] == true;
+      }).toList();
+
+      if (sharedControllers.isNotEmpty && stockCompartido > 0) {
+        final allZeroFormable = sharedControllers.every((c) {
+          final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+          final safeFactor = factor <= 0 ? 1 : factor;
+          return stockCompartido < safeFactor;
+        });
+
+        if (allZeroFormable) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("El stock compartido no alcanza para formar ningún paquete. Agrega una variante por Unidad o ajusta el inventario."),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return false;
+        }
+      }
+    }
+
+    // Validación de unidades base faltantes (deficit) o sobrantes (hasLeftover) en modo Stock Propio
+    for (var c in controllers) {
+      bool isShared = false;
+      if (modoStock == 'COMPARTIDO') {
+        isShared = true;
+      } else if (modoStock == 'MIXTO') {
+        isShared = c['usaStockCompartido'] == true;
+      }
+
+      if (!isShared) {
+        final int factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+        final int safeFactor = factor <= 0 ? 1 : factor;
+        final String specific = (c['specific'] as TextEditingController?)?.text.trim() ?? '';
+        final String uVenta = (c['unidadVenta'] as TextEditingController?)?.text.trim() ?? 'Unidad';
+        final String variantName = specific.isNotEmpty ? specific : uVenta;
+
+        StockValidationResult? validation = c['stockValidation'] as StockValidationResult?;
+        if (validation == null) {
+          int baseUnits = 0;
+          final ajusteText = (c['ajusteBase'] as TextEditingController?)?.text.trim() ?? '';
+          if (ajusteText.isNotEmpty) {
+            baseUnits = int.tryParse(ajusteText) ?? 0;
+          } else {
+            final engine = c['mathEngine'] as PresentationMathEngine?;
+            if (engine != null) {
+              baseUnits = engine.originalBaseStock;
+            } else {
+              final visual = int.tryParse((c['stockFinal'] as TextEditingController?)?.text ?? '0') ?? 0;
+              baseUnits = visual * safeFactor;
+            }
+          }
+          validation = UnitCatalogService.validateStockForUnit(
+            totalUnitsBase: baseUnits,
+            presentationFactor: safeFactor,
+            baseUnitCost: 0.0,
+            unitName: uVenta,
+          );
+        }
+
+        if (safeFactor > 1) {
+          if (validation.status == StockValidationStatus.deficit) {
+            final key = keys?[c['id']];
+            if (key?.currentContext != null) {
+              Scrollable.ensureVisible(key!.currentContext!, duration: const Duration(milliseconds: 300));
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("❌ '$variantName': ${validation.userMessage(uVenta, safeFactor)}"),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+            return false;
+          }
+          if (validation.status == StockValidationStatus.hasLeftover && c['leftoverCreated'] != true) {
+            final key = keys?[c['id']];
+            if (key?.currentContext != null) {
+              Scrollable.ensureVisible(key!.currentContext!, duration: const Duration(milliseconds: 300));
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("⚠️ '$variantName': ${validation.userMessage(uVenta, safeFactor)}"),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+            return false;
+          }
+        }
+      }
     }
 
     bool hasDefault = controllers.any((c) => c['isDefault'] == true);

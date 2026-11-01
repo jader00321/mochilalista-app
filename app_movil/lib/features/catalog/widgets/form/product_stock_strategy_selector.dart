@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+enum StockAdvisorState {
+  hidden,
+  recommendation,
+  mandatory,
+}
+
 class ProductStockStrategySelector extends StatefulWidget {
   final String selectedStrategy; // 'INDEPENDIENTE', 'COMPARTIDO', 'MIXTO'
   final ValueChanged<String> onStrategyChanged;
@@ -37,6 +43,112 @@ class _ProductStockStrategySelectorState
   bool _isAdvisorDismissed = false;
 
   @override
+  void initState() {
+    super.initState();
+    widget.sharedStockController.addListener(_onSharedStockChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant ProductStockStrategySelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sharedStockController != widget.sharedStockController) {
+      oldWidget.sharedStockController.removeListener(_onSharedStockChanged);
+      widget.sharedStockController.addListener(_onSharedStockChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.sharedStockController.removeListener(_onSharedStockChanged);
+    super.dispose();
+  }
+
+  void _onSharedStockChanged() {
+    _syncSharedVariantsAfterBaseStockChange();
+    if (mounted) setState(() {});
+  }
+
+  void _syncSharedVariantsAfterBaseStockChange() {
+    if (widget.controllers == null || widget.controllers!.isEmpty) return;
+    final int newBaseStock = int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
+
+    for (final c in widget.controllers!) {
+      final bool isShared = widget.selectedStrategy == 'COMPARTIDO' ||
+          (widget.selectedStrategy == 'MIXTO' && c['usaStockCompartido'] == true);
+      if (!isShared) continue;
+
+      final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+      final safeFactor = factor <= 0 ? 1 : factor;
+      final maxFisico = newBaseStock ~/ safeFactor;
+
+      final stockFinalCtrl = c['stockFinal'] as TextEditingController?;
+      if (stockFinalCtrl == null) continue;
+
+      final dynamic rawCupo = c['cupoMaximoVariante'];
+      if (rawCupo == null) {
+        stockFinalCtrl.text = maxFisico.toString();
+      } else {
+        final int cupoInt = (rawCupo as num).toInt();
+        if (cupoInt > maxFisico) {
+          c['cupoMaximoVariante'] = maxFisico;
+          stockFinalCtrl.text = maxFisico.toString();
+        } else {
+          stockFinalCtrl.text = cupoInt.toString();
+        }
+      }
+    }
+  }
+
+  StockAdvisorState _evaluateStockAdvisor() {
+    if (widget.selectedStrategy != 'COMPARTIDO' && widget.selectedStrategy != 'MIXTO') {
+      return StockAdvisorState.hidden;
+    }
+    if (widget.controllers == null || widget.controllers!.isEmpty) {
+      return StockAdvisorState.hidden;
+    }
+
+    final sharedItems = widget.controllers!.where((c) {
+      if (widget.selectedStrategy == 'COMPARTIDO') return true;
+      if (widget.selectedStrategy == 'MIXTO') return c['usaStockCompartido'] == true;
+      return false;
+    }).toList();
+
+    if (sharedItems.isEmpty) return StockAdvisorState.hidden;
+
+    final int stockBaseTotal = int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
+    if (stockBaseTotal <= 0) return StockAdvisorState.hidden;
+
+    // Regla 1: Caso A (Oculto)
+    // Si al menos una variante compartida activa divide exactamente las unidades base
+    // (stockBaseTotal >= factor && stockBaseTotal % factor == 0)
+    final hasExactDivisor = sharedItems.any((c) {
+      final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+      final safeFactor = factor <= 0 ? 1 : factor;
+      return stockBaseTotal >= safeFactor && (stockBaseTotal % safeFactor == 0);
+    });
+
+    if (hasExactDivisor) {
+      return StockAdvisorState.hidden;
+    }
+
+    // Regla 3: Caso C (Obligatorio)
+    // Si en TODAS las variantes compartidas stockBaseTotal < factor (0 paquetes vendibles en todas)
+    final allZeroFormable = sharedItems.every((c) {
+      final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+      final safeFactor = factor <= 0 ? 1 : factor;
+      return stockBaseTotal < safeFactor;
+    });
+
+    if (allZeroFormable) {
+      return StockAdvisorState.mandatory;
+    }
+
+    // Regla 2: Caso B (Recomendación opcional descartable)
+    // Al menos una variante forma >= 1 paquete, pero en todas sobra residuo
+    return StockAdvisorState.recommendation;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
     final primaryColor = isDark ? Colors.blue[300]! : const Color(0xFF1E5BB0);
@@ -44,7 +156,8 @@ class _ProductStockStrategySelectorState
     final borderColor = isDark ? Colors.white12 : Colors.grey.shade300;
     final textTheme = Theme.of(context).textTheme;
 
-    final bool showAdvisor = _shouldShowUnitAdvisor();
+    final advisorState = _evaluateStockAdvisor();
+    final bool showAdvisor = advisorState != StockAdvisorState.hidden;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -97,7 +210,7 @@ class _ProductStockStrategySelectorState
                   ],
                 ),
               ),
-              if (showAdvisor && _isAdvisorDismissed)
+              if (showAdvisor && _isAdvisorDismissed && advisorState != StockAdvisorState.mandatory)
                 InkWell(
                   onTap: () => setState(() => _isAdvisorDismissed = false),
                   borderRadius: BorderRadius.circular(8),
@@ -120,7 +233,7 @@ class _ProductStockStrategySelectorState
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          "💡 Sugerencia unitaria",
+                          "Sugerencia unitaria",
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -194,8 +307,8 @@ class _ProductStockStrategySelectorState
                       Expanded(
                         child: Text(
                           widget.selectedStrategy == 'COMPARTIDO'
-                              ? "Pool Único: Todas las presentaciones descontarán de este stock central en unidades base."
-                              : "Pool Mixto: Las presentaciones marcadas con 'Compartido' descontarán de este stock.",
+                              ? "Inventario base compartido: Todas las presentaciones descontarán de este stock central en unidades base."
+                              : "Stock Mixto: Las presentaciones marcadas con 'Compartido' descontarán de este stock.",
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -278,6 +391,9 @@ class _ProductStockStrategySelectorState
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    // Chips rápidos ubicados inmediatamente debajo del campo de stock base
+                    _buildQuickAddChipsRow(),
                   ] else ...[
                     // MODO EDITAR PRODUCTO: Stock Base Actual + Ingreso = Final + Costo Base
                     Row(
@@ -391,6 +507,9 @@ class _ProductStockStrategySelectorState
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    // Chips rápidos ubicados inmediatamente debajo de los campos de stock
+                    _buildQuickAddChipsRow(),
                     const SizedBox(height: 10),
                     // Costo Base Unitario en Edición
                     Column(
@@ -424,49 +543,12 @@ class _ProductStockStrategySelectorState
                     ),
                   ],
 
-                  const SizedBox(height: 10),
-                  // Chips de ajuste rápido con ShaderMask suave en los extremos
-                  ShaderMask(
-                    shaderCallback: (Rect bounds) {
-                      return const LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black,
-                          Colors.black,
-                          Colors.transparent,
-                        ],
-                        stops: [0.0, 0.04, 0.96, 1.0],
-                      ).createShader(bounds);
-                    },
-                    blendMode: BlendMode.dstIn,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Row(
-                          children: [
-                            _buildQuickAddChip("+10 und", 10),
-                            const SizedBox(width: 6),
-                            _buildQuickAddChip("+50 und", 50),
-                            const SizedBox(width: 6),
-                            _buildQuickAddChip("+100 und", 100),
-                            const SizedBox(width: 6),
-                            _buildQuickAddChip("+500 und", 500),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
                   // Resumen Vivo del Stock Calculado por Variante
                   _buildSharedVariantsSummary(isDark),
 
                   // Asesor Inteligente de Unidades Sobrantes
-                  if (showAdvisor && !_isAdvisorDismissed)
-                    _buildAdvisorBanner(isDark),
+                  if (showAdvisor && (!_isAdvisorDismissed || advisorState == StockAdvisorState.mandatory))
+                    _buildAdvisorBanner(isDark, advisorState),
                 ],
               ),
             ),
@@ -503,6 +585,7 @@ class _ProductStockStrategySelectorState
     final orig = widget.originalBaseStock ?? 0;
     final ingreso = int.tryParse(widget.sharedIngresoController?.text.trim() ?? "0") ?? 0;
     widget.sharedStockController.text = (orig + ingreso).toString();
+    _syncSharedVariantsAfterBaseStockChange();
     setState(() {});
   }
 
@@ -573,6 +656,27 @@ class _ProductStockStrategySelectorState
     );
   }
 
+  Widget _buildQuickAddChipsRow() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            _buildQuickAddChip("+10 und", 10),
+            const SizedBox(width: 6),
+            _buildQuickAddChip("+50 und", 50),
+            const SizedBox(width: 6),
+            _buildQuickAddChip("+100 und", 100),
+            const SizedBox(width: 6),
+            _buildQuickAddChip("+500 und", 500),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildQuickAddChip(String label, int amount) {
     return InkWell(
       onTap: () {
@@ -584,6 +688,7 @@ class _ProductStockStrategySelectorState
         } else {
           int current = int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
           widget.sharedStockController.text = (current + amount).toString();
+          _syncSharedVariantsAfterBaseStockChange();
           setState(() {});
         }
       },
@@ -622,7 +727,7 @@ class _ProductStockStrategySelectorState
 
     if (sharedItems.isEmpty) return const SizedBox.shrink();
 
-    final summaryItems = <String>[];
+    final pillWidgets = <Widget>[];
     for (int i = 0; i < sharedItems.length; i++) {
       final c = sharedItems[i];
       final rawName = (c['specific'] as TextEditingController?)?.text.trim() ?? '';
@@ -640,8 +745,33 @@ class _ProductStockStrategySelectorState
         if (visual > 0 && visual < maxFisico) cupo = visual;
       }
 
-      final effective = (cupo != null && cupo > 0 && cupo < maxFisico) ? cupo : maxFisico;
-      summaryItems.add('$name ($uVenta x$safeFactor): $effective disp.');
+      final isCapped = cupo != null && cupo >= 0 && cupo < maxFisico;
+      final effective = isCapped ? cupo : maxFisico;
+
+      final label = isCapped
+          ? '$name (${uVenta ?? "Und"} x$safeFactor): $effective disp. (de $maxFisico máx.)'
+          : '$name (${uVenta ?? "Und"} x$safeFactor): $effective disp.';
+
+      pillWidgets.add(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isDark ? Colors.blue.withValues(alpha: 0.3) : const Color(0xFFCBD5E1),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.blue[200] : const Color(0xFF1E293B),
+            ),
+          ),
+        ),
+      );
     }
 
     return Container(
@@ -671,87 +801,109 @@ class _ProductStockStrategySelectorState
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            summaryItems.join(' • '),
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.grey[200] : const Color(0xFF1E293B),
-            ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: pillWidgets,
           ),
         ],
       ),
     );
   }
 
-  bool _shouldShowUnitAdvisor() {
-    if (widget.selectedStrategy != 'COMPARTIDO' && widget.selectedStrategy != 'MIXTO') {
-      return false;
+  Widget _buildAdvisorBanner(bool isDark, StockAdvisorState state) {
+    final bool isMandatory = state == StockAdvisorState.mandatory;
+    final int stockBaseTotal = int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
+
+    int minFactor = 999999;
+    if (widget.controllers != null) {
+      for (final c in widget.controllers!) {
+        final bool isShared = widget.selectedStrategy == 'COMPARTIDO' ||
+            (widget.selectedStrategy == 'MIXTO' && c['usaStockCompartido'] == true);
+        if (isShared) {
+          final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+          final safeFactor = factor <= 0 ? 1 : factor;
+          if (safeFactor < minFactor) minFactor = safeFactor;
+        }
+      }
     }
-    if (widget.controllers == null || widget.controllers!.isEmpty) return false;
+    if (minFactor == 999999) minFactor = 1;
 
-    final sharedItems = widget.controllers!.where((c) {
-      if (widget.selectedStrategy == 'COMPARTIDO') return true;
-      if (widget.selectedStrategy == 'MIXTO') return c['usaStockCompartido'] == true;
-      return false;
-    }).toList();
+    final bannerColor = isMandatory
+        ? (isDark ? const Color(0xFF3F1D1D) : const Color(0xFFFEF2F2))
+        : (isDark ? const Color(0xFF2C223E) : const Color(0xFFFAF5FF));
 
-    if (sharedItems.isEmpty) return false;
+    final borderColor = isMandatory
+        ? (isDark ? Colors.red.withValues(alpha: 0.5) : const Color(0xFFFECACA))
+        : (isDark ? Colors.purple.withValues(alpha: 0.4) : const Color(0xFFD8B4FE));
 
-    // Verificar si alguna variante vende por Unidad (Factor = 1)
-    final hasUnitVariant = sharedItems.any((c) {
-      final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
-      return factor == 1;
-    });
+    final iconColor = isMandatory
+        ? (isDark ? Colors.red[300]! : const Color(0xFFDC2626))
+        : (isDark ? Colors.purple[300]! : const Color(0xFF7E22CE));
 
-    return !hasUnitVariant;
-  }
+    final titleColor = isMandatory
+        ? (isDark ? Colors.red[200]! : const Color(0xFF991B1B))
+        : (isDark ? Colors.purple[200]! : const Color(0xFF581C87));
 
-  Widget _buildAdvisorBanner(bool isDark) {
+    final descColor = isMandatory
+        ? (isDark ? Colors.grey[300]! : const Color(0xFF7F1D1D))
+        : (isDark ? Colors.grey[300]! : const Color(0xFF4C1D95));
+
+    final btnColor = isMandatory
+        ? (isDark ? const Color(0xFFDC2626) : const Color(0xFFB91C1C))
+        : (isDark ? const Color(0xFF7E22CE) : const Color(0xFF9333EA));
+
     return Container(
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF2C223E) : const Color(0xFFFAF5FF),
+        color: bannerColor,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isDark ? Colors.purple.withValues(alpha: 0.4) : const Color(0xFFD8B4FE),
-        ),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.auto_awesome_rounded, size: 16, color: isDark ? Colors.purple[300] : Colors.purple[700]),
+              Icon(
+                isMandatory ? Icons.warning_amber_rounded : Icons.auto_awesome_rounded,
+                size: 16,
+                color: iconColor,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  "Asesor de Stock: Evita unidades sobrantes",
+                  isMandatory
+                      ? "Asesor de Stock: Acción requerida (Stock insuficiente)"
+                      : "Asesor de Stock: Evita unidades sobrantes",
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.purple[200] : Colors.purple[900],
+                    color: titleColor,
                   ),
                 ),
               ),
-              InkWell(
-                onTap: () => setState(() => _isAdvisorDismissed = true),
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(Icons.close_rounded, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+              if (!isMandatory)
+                InkWell(
+                  onTap: () => setState(() => _isAdvisorDismissed = true),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.close_rounded, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            "Ninguna variante compartida vende por Unidad (Factor 1). Al vender por paquetes o pares, pueden quedar unidades base sueltas que no podrás liquidar.",
+            isMandatory
+                ? "Tienes $stockBaseTotal und. base, pero tu paquete más pequeño requiere $minFactor und. Con este inventario no se puede vender ningún paquete. Crea la variante por Unidad para venderlas o aumenta el stock base."
+                : "Tienes $stockBaseTotal und. base. Al vender por paquetes o pares, sobrarán unidades sueltas que no podrás liquidar. Agrega una variante por Unidad para venderlas individualmente.",
             style: TextStyle(
               fontSize: 11.5,
-              color: isDark ? Colors.grey[300] : const Color(0xFF4C1D95),
+              color: descColor,
             ),
           ),
           const SizedBox(height: 10),
@@ -764,11 +916,11 @@ class _ProductStockStrategySelectorState
               },
               icon: const Icon(Icons.add_shopping_cart_rounded, size: 15),
               label: const Text(
-                "✨ Crear variante por Unidad automáticamente",
+                "Crear variante por Unidad automáticamente",
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: isDark ? const Color(0xFF7E22CE) : const Color(0xFF9333EA),
+                backgroundColor: btnColor,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -780,3 +932,4 @@ class _ProductStockStrategySelectorState
     );
   }
 }
+

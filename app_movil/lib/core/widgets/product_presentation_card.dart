@@ -400,6 +400,12 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
                     },
                     sharedStockCtrl: widget.sharedStockCtrl,
                     controllerMap: widget.controllerMap,
+                    onUnitChanged: (unitName, factor) {
+                      widget.onBeforeDiscreteMutation?.call();
+                      _engine.onUnidadVentaChanged(unitName, factor, false);
+                      widget.onDiscreteMutationCompleted?.call();
+                      widget.onStateChange(true);
+                    },
                   ),
                   const SizedBox(height: 16),
 

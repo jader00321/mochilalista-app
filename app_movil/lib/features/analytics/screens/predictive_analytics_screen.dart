@@ -11,7 +11,12 @@ import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
 
 class PredictiveAnalyticsScreen extends StatefulWidget {
-  const PredictiveAnalyticsScreen({super.key});
+  final PredictiveData? initialData;
+
+  const PredictiveAnalyticsScreen({
+    super.key,
+    this.initialData,
+  });
 
   @override
   State<PredictiveAnalyticsScreen> createState() => _PredictiveAnalyticsScreenState();
@@ -35,7 +40,15 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    if (widget.initialData != null) {
+      _data = widget.initialData;
+      if (_data!.historicalPoints.isNotEmpty) {
+        _selectedPatrimonyPoint = _data!.historicalPoints.last;
+      }
+      _isLoading = false;
+    } else {
+      _loadData();
+    }
   }
 
   Future<void> _loadData() async {
@@ -197,25 +210,20 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(12)),
-                      child: const Icon(Icons.auto_graph, color: Colors.white, size: 20),
-                    ),
-                    const SizedBox(width: 10),
-                    const Flexible(
-                      child: Text(
-                        "Proyección a 30 Días",
-                        style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.auto_graph, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Proyección a 30 Días",
+                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -428,25 +436,20 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), shape: BoxShape.circle),
-                      child: const Icon(Icons.tune, color: Colors.blueAccent, size: 20),
-                    ),
-                    const SizedBox(width: 10),
-                    const Flexible(
-                      child: Text(
-                        "Simulador de Escenarios",
-                        style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.tune, color: Colors.blueAccent, size: 18),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Simulador de Escenarios",
+                    style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -469,7 +472,8 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
             runSpacing: 8,
             children: [
               _buildQuickSimulationChip(
-                label: "📈 Campaña (+30% ventas)",
+                label: "Campaña (+30% ventas)",
+                icon: Icons.trending_up,
                 isSelected: _salesSimulationPct == 30.0 && _costsSimulationPct == 0.0 && _discountPct == 0.0,
                 onTap: () {
                   setState(() {
@@ -487,7 +491,8 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                 isDark: isDark,
               ),
               _buildQuickSimulationChip(
-                label: "🚛 Subida Proveedor (+10% costos)",
+                label: "Subida Proveedor (+10% costos)",
+                icon: Icons.local_shipping_outlined,
                 isSelected: _salesSimulationPct == 0.0 && _costsSimulationPct == 10.0 && _discountPct == 0.0,
                 onTap: () {
                   setState(() {
@@ -505,7 +510,8 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                 isDark: isDark,
               ),
               _buildQuickSimulationChip(
-                label: "🏷️ Liquidación (+20% ventas, -5% dto.)",
+                label: "Liquidación (+20% ventas, -5% dto.)",
+                icon: Icons.local_offer_outlined,
                 isSelected: _salesSimulationPct == 20.0 && _costsSimulationPct == 0.0 && _discountPct == 5.0,
                 onTap: () {
                   setState(() {
@@ -523,7 +529,8 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                 isDark: isDark,
               ),
               _buildQuickSimulationChip(
-                label: "🔄 Restaurar 0%",
+                label: "Restaurar 0%",
+                icon: Icons.refresh_rounded,
                 isSelected: _salesSimulationPct == 0.0 && _costsSimulationPct == 0.0 && _discountPct == 0.0,
                 onTap: () {
                   setState(() {
@@ -543,13 +550,16 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Variación en Volumen", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text("Proyecta si logras vender más o menos mercadería", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Variación en Volumen", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text("Proyecta si logras vender más o menos mercadería", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Text(
                 "${_salesSimulationPct > 0 ? '+' : ''}${_salesSimulationPct.toInt()}%", 
                 style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 15),
@@ -586,13 +596,16 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Variación en Costos de Proveedor", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text("Qué pasa si suben o bajan precios de compra", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Variación en Costos de Proveedor", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text("Qué pasa si suben o bajan precios de compra", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Text(
                 "${_costsSimulationPct > 0 ? '+' : ''}${_costsSimulationPct.toInt()}%", 
                 style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent, fontSize: 15),
@@ -620,6 +633,55 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                 Text("-50%", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
                 Text("0%", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
                 Text("+50%", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Slider 3: Descuento Comercial en Precio
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Variación en Precio / Descuento", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text("Rebajas de precio en promociones o liquidación", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _discountPct > 0 ? "-${_discountPct.toInt()}%" : "0%", 
+                style: TextStyle(
+                  fontWeight: FontWeight.bold, 
+                  color: _discountPct > 0 ? Colors.amber[700] : Colors.grey, 
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+          Slider(
+            value: _discountPct,
+            min: 0,
+            max: 25,
+            divisions: 5,
+            activeColor: Colors.amber[700],
+            onChanged: (val) {
+              setState(() {
+                _discountPct = val;
+              });
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("0%", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                Text("-10%", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                Text("-25%", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
               ],
             ),
           ),
@@ -662,26 +724,29 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      scenarioIcon,
-                      size: 15,
-                      color: isBaseScenario ? Colors.grey : (isFavorable ? Colors.green : Colors.redAccent),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isBaseScenario 
-                          ? "${AppCurrency.format(0.0)} vs proy. base"
-                          : "${diffProfit >= 0 ? '+' : '-'}${AppCurrency.format(diffProfit.abs())} vs proy. base",
-                      style: TextStyle(
-                        fontSize: 12, 
-                        fontWeight: FontWeight.bold, 
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        scenarioIcon,
+                        size: 15,
                         color: isBaseScenario ? Colors.grey : (isFavorable ? Colors.green : Colors.redAccent),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(
+                        isBaseScenario 
+                            ? "${AppCurrency.format(0.0)} vs proy. base"
+                            : "${diffProfit >= 0 ? '+' : '-'}${AppCurrency.format(diffProfit.abs())} vs proy. base",
+                        style: TextStyle(
+                          fontSize: 12, 
+                          fontWeight: FontWeight.bold, 
+                          color: isBaseScenario ? Colors.grey : (isFavorable ? Colors.green : Colors.redAccent),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -693,6 +758,54 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                     color: scenarioColor,
                   ),
                 ),
+                const SizedBox(height: 10),
+                // Píldora de Respaldo de Inventario
+                Builder(
+                  builder: (context) {
+                    final double currentInv = _data?.currentInventoryValue ?? 0.0;
+                    final bool hasStockBacking = currentInv >= simCosts || currentInv >= (simSales * 0.7);
+                    final double stockDeficit = simCosts > currentInv ? (simCosts - currentInv) : 0.0;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: hasStockBacking 
+                            ? Colors.teal.withValues(alpha: 0.12)
+                            : Colors.orange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: hasStockBacking 
+                              ? Colors.teal.withValues(alpha: 0.3)
+                              : Colors.orange.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              hasStockBacking ? Icons.check_circle_outline : Icons.inventory_2_outlined,
+                              size: 13,
+                              color: hasStockBacking ? Colors.teal : Colors.orange,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              hasStockBacking
+                                  ? "Respaldo de Inventario: Cubierto (${AppCurrency.format(currentInv)})"
+                                  : "Respaldo de Inventario: Requiere Reposición (+${AppCurrency.format(stockDeficit)})",
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: hasStockBacking ? Colors.teal : Colors.orange,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 if (_discountPct > 0) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -702,9 +815,16 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
                     ),
-                    child: Text(
-                      "🏷️ Descuento Comercial: -${_discountPct.toInt()}% en precio de venta",
-                      style: const TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.local_offer_outlined, size: 12, color: Colors.amber),
+                        const SizedBox(width: 4),
+                        Text(
+                          "Descuento Comercial: -${_discountPct.toInt()}% en precio de venta",
+                          style: const TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -796,6 +916,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
 
   Widget _buildQuickSimulationChip({
     required String label,
+    required IconData icon,
     required bool isSelected,
     required VoidCallback onTap,
     required bool isDark,
@@ -814,15 +935,32 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                 : (isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[200]),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isSelected ? Colors.transparent : (isDark ? Colors.white12 : Colors.grey[300]!),
+              color: isSelected 
+                  ? (isReset ? Colors.white24 : Colors.blueAccent.withValues(alpha: 0.4)) 
+                  : (isDark ? Colors.white12 : Colors.grey[300]!),
+              width: isSelected ? 1.5 : 1.0,
             ),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 13,
+                  color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -860,28 +998,23 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.indigoAccent.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.speed_rounded, color: Colors.indigoAccent, size: 20),
-                    ),
-                    const SizedBox(width: 10),
-                    const Flexible(
-                      child: Text(
-                        "Diagnóstico del Motor", 
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16), 
-                        maxLines: 1, 
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: Colors.indigoAccent.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.speed_rounded, color: Colors.indigoAccent, size: 18),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Diagnóstico del Motor", 
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16), 
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -905,18 +1038,42 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      isInitialPhase ? "Estado de Calibración del Motor" : "Ritmo Quincenal de Ventas",
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[300] : Colors.grey[700]),
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          isInitialPhase ? "Estado de Calibración del Motor" : "Ritmo Quincenal de Ventas",
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[300] : Colors.grey[700]),
+                        ),
+                      ),
                     ),
-                    Text(
-                      isInitialPhase ? "🌱 Etapa Inicial" : "${isPositive ? '+' : ''}${velocity.toStringAsFixed(1)}%",
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: isInitialPhase ? Colors.teal : (isPositive ? Colors.green : Colors.redAccent),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (isInitialPhase ? Colors.teal : (isPositive ? Colors.green : Colors.redAccent)).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isInitialPhase ? Icons.spa_outlined : (isPositive ? Icons.trending_up : Icons.trending_down),
+                            size: 13,
+                            color: isInitialPhase ? Colors.teal : (isPositive ? Colors.green : Colors.redAccent),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isInitialPhase ? "Etapa Inicial" : "${isPositive ? '+' : ''}${velocity.toStringAsFixed(1)}%",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isInitialPhase ? Colors.teal : (isPositive ? Colors.green : Colors.redAccent),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1069,12 +1226,23 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         children: [
           Row(
             children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: Colors.purpleAccent.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.account_balance_wallet_outlined, color: Colors.purpleAccent, size: 18),
+              ),
+              const SizedBox(width: 8),
               const Expanded(
-                child: Text(
-                  "Evolución Patrimonial", 
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Evolución Patrimonial", 
+                    style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1086,7 +1254,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Selector de 3 vistas por pestañas/chips
+          // Selector de 3 vistas por pestañas/chips (con iconos vectoriales y cero emojis)
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
@@ -1097,21 +1265,24 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
               children: [
                 Expanded(
                   child: _buildChartTabButton(
-                    label: "📊 Normalizada",
+                    label: "Normalizada",
+                    icon: Icons.tune_rounded,
                     index: 0,
                     isDark: isDark,
                   ),
                 ),
                 Expanded(
                   child: _buildChartTabButton(
-                    label: "📦 Inventario",
+                    label: "Inventario",
+                    icon: Icons.inventory_2_outlined,
                     index: 1,
                     isDark: isDark,
                   ),
                 ),
                 Expanded(
                   child: _buildChartTabButton(
-                    label: "💰 Beneficio",
+                    label: "Beneficio",
+                    icon: Icons.monetization_on_outlined,
                     index: 2,
                     isDark: isDark,
                   ),
@@ -1121,39 +1292,58 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Leyenda dinámica según la vista activa
-          Row(
+          // Leyenda dinámica según la vista activa (con Wrap para CERO overflow)
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              if (_selectedChartTab == 0 || _selectedChartTab == 1) ...[
-                Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle)),
-                const SizedBox(width: 4),
-                Text(_selectedChartTab == 0 ? "Inventario (%)" : "Inventario (S/)", style: const TextStyle(fontSize: 11)),
-                const SizedBox(width: 12),
-              ],
-              if (_selectedChartTab == 0 || _selectedChartTab == 2) ...[
-                Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle)),
-                const SizedBox(width: 4),
-                Text(_selectedChartTab == 0 ? "Beneficio (%)" : "Beneficio (S/)", style: const TextStyle(fontSize: 11)),
-                const SizedBox(width: 12),
-              ],
-              if (_selectedChartTab == 2) ...[
-                Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle)),
-                const SizedBox(width: 4),
-                const Text("Ventas (S/)", style: TextStyle(fontSize: 11)),
-              ],
+              if (_selectedChartTab == 0 || _selectedChartTab == 1)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle)),
+                    const SizedBox(width: 4),
+                    Text(_selectedChartTab == 0 ? "Inventario (%)" : "Inventario (S/)", style: const TextStyle(fontSize: 11)),
+                  ],
+                ),
+              if (_selectedChartTab == 0 || _selectedChartTab == 2)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle)),
+                    const SizedBox(width: 4),
+                    Text(_selectedChartTab == 0 ? "Beneficio (%)" : "Beneficio (S/)", style: const TextStyle(fontSize: 11)),
+                  ],
+                ),
+              if (_selectedChartTab == 2)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle)),
+                    const SizedBox(width: 4),
+                    const Text("Ventas (S/)", style: TextStyle(fontSize: 11)),
+                  ],
+                ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Gráfico dinámico con etiquetas en Eje Y y X acotado en ClipRRect
+          // Gráfico dinámico con holgura superior, padding interno y títulos anti-colisión
           SizedBox(
-            height: 220,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+            height: 230,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 14, right: 12, bottom: 4),
               child: LineChart(
                 LineChartData(
-                  minY: _selectedChartTab == 0 ? 0.0 : null,
-                  maxY: _selectedChartTab == 0 ? 100.0 : null,
+                  minY: 0.0,
+                  maxY: _selectedChartTab == 0
+                      ? 110.0
+                      : (_selectedChartTab == 1
+                          ? (maxInv > 0 ? maxInv * 1.15 : 100.0)
+                          : ((maxProfit > maxSales ? maxProfit : maxSales) > 0 
+                              ? (maxProfit > maxSales ? maxProfit : maxSales) * 1.15 
+                              : 100.0)),
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
@@ -1170,6 +1360,11 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                         getTitlesWidget: (value, meta) {
                           int index = value.toInt();
                           if (index >= 0 && index < points.length) {
+                            // 🛡️ ANTI-COLISIÓN DE FECHAS: Si no es el último pero está pegado al final (< 2 puntos o < 0.75 * interval), suprimir
+                            int distanceToLast = points.length - 1 - index;
+                            if (distanceToLast > 0 && (distanceToLast < 2 || distanceToLast < (interval * 0.75))) {
+                              return const SizedBox.shrink();
+                            }
                             String dateStr = points[index]['date'];
                             List<String> parts = dateStr.split('-');
                             if (parts.length == 3) {
@@ -1186,11 +1381,22 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 46,
+                        reservedSize: 54,
                         getTitlesWidget: (value, meta) {
                           if (_selectedChartTab == 0) {
+                            // En normalizada, mostrar ticks limpios cada 25% y suprimir el 110% de holgura
+                            if (value > 100.0) return const SizedBox.shrink();
+                            if (value % 25 != 0 && value % 20 != 0 && value != 0) return const SizedBox.shrink();
                             return Text("${value.toInt()}%", style: TextStyle(fontSize: 9, color: Colors.grey[500]));
                           } else {
+                            if (value < 0) return const SizedBox.shrink(); // Cero negativos para evitar S/ -1 encimado sobre S/ 0
+                            // 🛡️ ANTI-COLISIÓN DE EJE Y: Si el valor está muy cerca (< 0.35 * interval) de una línea de grilla entera
+                            if (meta.appliedInterval > 0) {
+                              double dist = (value / meta.appliedInterval) - (value / meta.appliedInterval).round();
+                              if (dist.abs() > 0.05 && dist.abs() < 0.35) {
+                                return const SizedBox.shrink();
+                              }
+                            }
                             if (value >= 1000) {
                               return Text("S/ ${(value / 1000).toStringAsFixed(1)}k", style: TextStyle(fontSize: 9, color: Colors.grey[500]));
                             }
@@ -1292,6 +1498,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
 
   Widget _buildChartTabButton({
     required String label,
+    required IconData icon,
     required int index,
     required bool isDark,
   }) {
@@ -1310,13 +1517,30 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
               ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 2))]
               : null,
         ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? Colors.blueAccent : (isDark ? Colors.grey[400] : Colors.grey[700]),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2.0),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 13,
+                  color: isSelected ? Colors.blueAccent : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? Colors.blueAccent : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1351,8 +1575,14 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
             children: [
               Icon(Icons.calendar_today_rounded, size: 14, color: Colors.purpleAccent.withValues(alpha: 0.9)),
               const SizedBox(width: 6),
-              Text(formattedDate, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const Spacer(),
+              Expanded(
+                child: Text(
+                  formattedDate, 
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 6),
               Text("Detalle del día", style: TextStyle(fontSize: 11, color: Colors.grey[500])),
             ],
           ),
@@ -1471,19 +1701,21 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.verified_outlined, color: confColor, size: 20),
+              Icon(Icons.verified_outlined, color: confColor, size: 18),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  "Estimaciones Teóricas & Confianza",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white : Colors.black87),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Estimaciones Teóricas",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+                  ),
                 ),
               ),
               const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: confColor.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(12),
@@ -1491,7 +1723,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                 ),
                 child: Text(
                   "Confianza $confidence",
-                  style: TextStyle(color: confColor, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: confColor, fontSize: 10.5, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -1526,6 +1758,26 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                 : 'A medida que registres más ventas diarias en Caja Rápida, Cotizaciones y Catálogo, la precisión de las proyecciones aumentará automáticamente.'}",
             style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[300] : Colors.grey[800], height: 1.4),
           ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: confColor,
+                side: BorderSide(color: confColor.withValues(alpha: 0.5)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              icon: const Icon(Icons.point_of_sale_rounded, size: 16),
+              label: const Text(
+                "Registrar Ventas en Caja Rápida",
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -1538,7 +1790,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
     required bool isDark,
     required VoidCallback onTap,
     bool isLightOnGradient = false,
-    String label = "ⓘ ¿Cómo funciona?",
+    String label = "¿Cómo funciona?",
   }) {
     return Material(
       color: Colors.transparent,
@@ -1546,7 +1798,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
           decoration: BoxDecoration(
             color: isLightOnGradient 
                 ? Colors.white.withValues(alpha: 0.18) 
@@ -1558,13 +1810,24 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                   : (isDark ? Colors.white24 : Colors.blueAccent.withValues(alpha: 0.3)),
             ),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.bold,
-              color: isLightOnGradient ? Colors.white : Colors.blueAccent,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.help_outline_rounded,
+                size: 12,
+                color: isLightOnGradient ? Colors.white : Colors.blueAccent,
+              ),
+              const SizedBox(width: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isLightOnGradient ? Colors.white : Colors.blueAccent,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1750,7 +2013,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("🛡️ Conservador (80%):", style: TextStyle(fontSize: 11.5)),
+                      const Text("Conservador (80%):", style: TextStyle(fontSize: 11.5)),
                       Text(AppCurrency.format(_data!.conservativeEstimate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Colors.amber)),
                     ],
                   ),
@@ -1758,7 +2021,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("🎯 Esperado (100%):", style: TextStyle(fontSize: 11.5)),
+                      const Text("Esperado (100%):", style: TextStyle(fontSize: 11.5)),
                       Text(AppCurrency.format(_data!.expectedEstimate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Colors.green)),
                     ],
                   ),
@@ -1766,7 +2029,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("🚀 Optimista (120%):", style: TextStyle(fontSize: 11.5)),
+                      const Text("Optimista (120%):", style: TextStyle(fontSize: 11.5)),
                       Text(AppCurrency.format(_data!.optimisticEstimate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Colors.blueAccent)),
                     ],
                   ),
@@ -1776,7 +2039,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           ),
           const SizedBox(height: 8),
           _buildModalPracticalTip(
-            tip: "💡 ¿Cómo usarlo? Utiliza la proyección para presupuestar tus compras a proveedores sin arriesgar tu liquidez ni sobreendeudarte.",
+            tip: "Utiliza la proyección para presupuestar tus compras a proveedores sin arriesgar tu liquidez ni sobreendeudarte.",
           ),
         ],
       ),
@@ -1840,7 +2103,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           ),
           const SizedBox(height: 8),
           _buildModalPracticalTip(
-            tip: "💡 Consejo Práctico: Usa los chips de 1 toque para simular campañas comerciales antes de lanzar ofertas y verificar si el volumen compensará el descuento.",
+            tip: "Usa los chips de 1 toque para simular campañas comerciales antes de lanzar ofertas y verificar si el volumen compensará el descuento.",
           ),
         ],
       ),
@@ -1862,7 +2125,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           _buildModalMetricHeader(
             label: "Diagnóstico de Quincena",
             value: _data!.isInitialPhase 
-                ? "🌱 Etapa Inicial" 
+                ? "Etapa Inicial" 
                 : "${_data!.salesVelocity >= 0 ? '+' : ''}${_data!.salesVelocity.toStringAsFixed(1)}%",
             color: _data!.isInitialPhase ? Colors.teal : (_data!.salesVelocity >= 0 ? Colors.green : Colors.redAccent),
           ),
@@ -1889,7 +2152,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           ),
           const SizedBox(height: 8),
           _buildModalPracticalTip(
-            tip: "💡 Revisa este indicador cada semana para anticiparte a quiebres de stock o temporadas lentas antes de que termine el mes.",
+            tip: "Revisa este indicador cada semana para anticiparte a quiebres de stock o temporadas lentas antes de que termine el mes.",
           ),
         ],
       ),
@@ -1934,7 +2197,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
           ),
           const SizedBox(height: 8),
           _buildModalPracticalTip(
-            tip: "💡 Un inventario en continuo ascenso con beneficio plano indica sobrecompra de mercadería estancada. Mantén ambas curvas creciendo en armonía.",
+            tip: "Un inventario en continuo ascenso con beneficio plano indica sobrecompra de mercadería estancada. Mantén ambas curvas creciendo en armonía.",
           ),
         ],
       ),
@@ -1968,6 +2231,7 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
   }
 
   Widget _buildModalPracticalTip({required String tip}) {
+    String cleanTip = tip.startsWith("💡 ") ? tip.substring(3) : tip;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1975,9 +2239,18 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
       ),
-      child: Text(
-        tip,
-        style: const TextStyle(fontSize: 12, color: Colors.amber, height: 1.4, fontWeight: FontWeight.w500),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lightbulb_outline_rounded, size: 16, color: Colors.amber),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              cleanTip,
+              style: const TextStyle(fontSize: 12, color: Colors.amber, height: 1.4, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
       ),
     );
   }

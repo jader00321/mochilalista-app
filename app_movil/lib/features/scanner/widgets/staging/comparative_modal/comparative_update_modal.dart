@@ -652,29 +652,16 @@ class _ComparativeUpdateModalState extends State<ComparativeUpdateModal> {
       // 1. Guardar primero todos los cambios del modal en la variante actual
       _saveModalDataToVariant();
 
-      // 2. Ajustar el stock ingresante de esta variante restando el sobrante
-      int currentIngreso = int.tryParse(_stockIngresanteCtrl.text) ?? widget.variant.stockIngresanteBase;
-      int adjustedStock = currentIngreso - sobrante;
-      widget.variant.stockIngresanteOverride = adjustedStock;
-      widget.variant.allowLeftoverInReserve = false;
-
-      // Recalcular costo de presentación según el nuevo stock ingresante
-      double costoUnitBase = widget.variant.originalCostoUnitario > 0 
-          ? widget.variant.originalCostoUnitario 
-          : ((double.tryParse(_pagoTotalCtrl.text) ?? 0.0) / (adjustedStock > 0 ? adjustedStock : 1));
-      int factorVenta = _activeFactorVenta;
-      widget.variant.costoUnitarioSugerido = costoUnitBase * factorVenta;
-
-      // 3. Crear la nueva variante con cálculo proporcional de compra
+      // 2. Crear la nueva variante con cálculo proporcional de compra y deducción única exacta
       final newVariantUuid = widget.provider.createLeftoverVariant(widget.variant.uuidTemporal, sobrante);
 
       _wasConfirmed = true;
       widget.onConfirm();
 
-      // 4. Cerrar el modal retornando el UUID de la nueva variante
+      // 3. Cerrar el modal retornando el UUID de la nueva variante
       Navigator.pop(context, newVariantUuid);
 
-      // 5. Scroll suave y resalte
+      // 4. Scroll suave y resalte
       if (newVariantUuid != null) {
         widget.provider.scrollToAndHighlightVariant(newVariantUuid);
       }

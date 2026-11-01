@@ -72,8 +72,12 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
   int get _poolBaseUnits {
     if (_isShared) {
       final p = _parentProduct;
-      if (p != null && p.stockCompartido > 0) {
-        return p.stockCompartido;
+      if (p != null) {
+        return p.stockCompartido > 0
+            ? p.stockCompartido
+            : (widget.presentation.stockActual > 0
+                ? widget.presentation.stockActual
+                : p.stockCompartido);
       }
       return widget.presentation.stockActual;
     }
@@ -314,7 +318,7 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                     const SizedBox(width: 12),
                     Text(
                       _isShared
-                          ? "Ajustar Cupo de Stock"
+                          ? "Ajustar Stock Disponible"
                           : "Abastecer / Editar Stock",
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
@@ -337,125 +341,326 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
             ),
             const SizedBox(height: 12),
 
-            // 🔥 Banner Informativo / Gestión para Variantes de Stock Compartido
+            // Banner Informativo / Gestión para Variantes de Stock Compartido
             if (_isShared) ...[
-              Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1E3A8A).withValues(alpha: 0.25)
-                      : const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
+              if (_maxPhysicalUnits == 0 && _poolBaseUnits > 0)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
                     color: isDark
-                        ? Colors.blue.shade700
-                        : const Color(0xFF93C5FD),
+                        ? const Color(0xFF78350F).withValues(alpha: 0.25)
+                        : const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.amber.shade700
+                          : const Color(0xFFFCD34D),
+                    ),
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.hub_rounded,
-                          size: 20,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 20,
+                            color: isDark
+                                ? Colors.amber[300]
+                                : const Color(0xFFB45309),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Unidades base insuficientes para 1 $_unidadVenta",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: isDark
+                                    ? Colors.amber[200]
+                                    : const Color(0xFF92400E),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        "Quedan $_poolBaseUnits unidades base sueltas que no alcanzan para formar 1 paquete de esta variante (requiere $_factor unidades). Puedes editar el producto para crear una variante por Unidad o ajustar el factor.",
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          height: 1.35,
                           color: isDark
-                              ? Colors.blue[300]
-                              : const Color(0xFF1E40AF),
+                              ? Colors.amber[100]
+                              : const Color(0xFF78350F),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "Variante con Stock Compartido",
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDark
+                                ? Colors.amber[700]
+                                : const Color(0xFFD97706),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 10,
+                              horizontal: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onPressed: _navigateToEdit,
+                          icon: const Icon(Icons.edit_note_rounded, size: 18),
+                          label: const Text(
+                            "Editar Producto",
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
-                              color: isDark
-                                  ? Colors.blue[200]
-                                  : const Color(0xFF1E40AF),
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      "Esta presentación usa el Pool Compartido con $_poolBaseUnits unidades base (máximo físico de $_maxPhysicalUnits $_unidadVenta).\n\nPuedes acotar un cupo vendible menor para esta variante sin alterar las unidades físicas del inventario.",
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        height: 1.35,
-                        color: isDark
-                            ? Colors.blue[100]
-                            : const Color(0xFF1E3A8A),
                       ),
+                    ],
+                  ),
+                )
+              else if (((widget.presentation.cupoMaximoVariante == 0) || (_parsedInput == 0)) && _maxPhysicalUnits > 0)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF78350F).withValues(alpha: 0.25)
+                        : const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.amber.shade700
+                          : const Color(0xFFFCD34D),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 6,
-                                horizontal: 8,
-                              ),
-                              side: BorderSide(
-                                color: isDark
-                                    ? Colors.blue[400]!
-                                    : Colors.blue[800]!,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            onPressed: () => _update(_maxPhysicalUnits),
-                            icon: const Icon(Icons.refresh, size: 13),
-                            label: Text(
-                              "Restaurar al máximo ($_maxPhysicalUnits)",
-                              style: const TextStyle(
-                                fontSize: 11,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 20,
+                            color: isDark
+                                ? Colors.amber[300]
+                                : const Color(0xFFB45309),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Stock asignado para vender agotado (0 disp.)",
+                              style: TextStyle(
+                                fontSize: 13,
                                 fontWeight: FontWeight.bold,
+                                color: isDark
+                                    ? Colors.amber[200]
+                                    : const Color(0xFF92400E),
                               ),
                             ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        "El stock asignado para vender llegó a 0, pero aún cuentas con $_poolBaseUnits unidades base en inventario (hasta $_maxPhysicalUnits $_unidadVenta disponibles). Aumenta el cupo o pulsa \"Restaurar al máximo\".",
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          height: 1.35,
+                          color: isDark
+                              ? Colors.amber[100]
+                              : const Color(0xFF78350F),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 6,
-                                horizontal: 8,
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isDark
+                                    ? Colors.amber[700]
+                                    : const Color(0xFFD97706),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                  horizontal: 10,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
                               ),
+                              onPressed: () => _update(_maxPhysicalUnits),
+                              icon: const Icon(Icons.refresh_rounded, size: 16),
+                              label: Text(
+                                "Restaurar al máximo ($_maxPhysicalUnits)",
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: isDark
+                                  ? Colors.amber[200]
+                                  : const Color(0xFF92400E),
                               side: BorderSide(
                                 color: isDark
-                                    ? Colors.blue[400]!
-                                    : Colors.blue[800]!,
+                                    ? Colors.amber[400]!
+                                    : const Color(0xFFB45309),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                                horizontal: 10,
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
                             onPressed: _navigateToEdit,
-                            icon: const Icon(Icons.edit_note, size: 14),
+                            icon: const Icon(Icons.edit_note_rounded, size: 16),
                             label: const Text(
                               "Editar Producto",
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF1E3A8A).withValues(alpha: 0.25)
+                        : const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.blue.shade700
+                          : const Color(0xFF93C5FD),
                     ),
-                  ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.hub_rounded,
+                            size: 20,
+                            color: isDark
+                                ? Colors.blue[300]
+                                : const Color(0xFF1E40AF),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Inventario base compartido",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: isDark
+                                    ? Colors.blue[200]
+                                    : const Color(0xFF1E40AF),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        "Inventario base compartido: $_poolBaseUnits und. · Máximo posible: $_maxPhysicalUnits $_unidadVenta.\n\nPuedes acotar un stock disponible para vender menor para esta variante sin alterar las unidades físicas del almacén.",
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          height: 1.35,
+                          color: isDark
+                              ? Colors.blue[100]
+                              : const Color(0xFF1E3A8A),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                  horizontal: 8,
+                                ),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.blue[400]!
+                                      : Colors.blue[800]!,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              onPressed: () => _update(_maxPhysicalUnits),
+                              icon: const Icon(Icons.refresh, size: 13),
+                              label: Text(
+                                "Usar máximo ($_maxPhysicalUnits)",
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                  horizontal: 8,
+                                ),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.blue[400]!
+                                      : Colors.blue[800]!,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              onPressed: _navigateToEdit,
+                              icon: const Icon(Icons.edit_note, size: 14),
+                              label: const Text(
+                                "Editar Producto",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
 
-              // ⚠️ Banner Temporal Animado de Exceso de Máximo Físico (4 segundos)
+              // Banner Temporal Animado de Exceso de Máximo Físico (4 segundos)
               AnimatedCrossFade(
                 duration: const Duration(milliseconds: 300),
                 crossFadeState: _showExcessWarning
@@ -492,7 +697,7 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "⚠️ No puedes aumentar más del máximo permitido ($_maxPhysicalUnits $_unidadVenta según tus $_poolBaseUnits unidades base compartidas).",
+                              "No puedes aumentar más del máximo permitido ($_maxPhysicalUnits $_unidadVenta según tus $_poolBaseUnits unidades base compartidas).",
                               style: TextStyle(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
@@ -806,7 +1011,7 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                                   size: 13,
                                 ),
                                 label: const Text(
-                                  "🛠️ Ir a Editar",
+                                  "Ir a Editar",
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -834,7 +1039,7 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                                 onPressed: _squareStock,
                                 icon: const Icon(Icons.flash_on, size: 13),
                                 label: const Text(
-                                  "⚡ Cuadrar aquí",
+                                  "Cuadrar aquí",
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -929,20 +1134,13 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
             ),
             const SizedBox(height: 10),
 
-            // Chips rápidos
+            // Chips rápidos adaptativos
             Center(
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
-                children: [
-                  if (_isShared || _selectedMode == 1)
-                    _buildChip("-5", -5, isDark),
-                  _buildChip("+1", 1, isDark),
-                  _buildChip("+5", 5, isDark),
-                  _buildChip("+10", 10, isDark),
-                  _buildChip("+50", 50, isDark),
-                ],
+                children: _buildQuickChips(isDark),
               ),
             ),
 
@@ -1025,8 +1223,8 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
                   Text(
                     _isShared
                         ? (_parsedInput >= _maxPhysicalUnits
-                              ? "Cupo al máximo: $_parsedInput $_unidadVenta disponibles (toma de las $_poolBaseUnits u. base)"
-                              : "Cupo acotado: $_parsedInput $_unidadVenta disponibles (de un máx. físico de $_maxPhysicalUnits)")
+                              ? "Stock disponible al máximo: $_parsedInput $_unidadVenta disponibles (de las $_poolBaseUnits u. base)"
+                              : "Stock disponible acotado: $_parsedInput $_unidadVenta disponibles (de un máx. físico de $_maxPhysicalUnits)")
                         : (_hasFactor
                               ? (resultingBase % _factor == 0
                                     ? "Resultado: $resultingSalesUnits $_unidadVenta = $resultingBase unidades base"
@@ -1045,6 +1243,42 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildQuickChips(bool isDark) {
+    if (_isShared) {
+      final chips = <Widget>[];
+      if (_maxPhysicalUnits <= 3) {
+        if (_parsedInput > 0) chips.add(_buildExactChip("0", 0, isDark));
+        if (_maxPhysicalUnits >= 1) chips.add(_buildExactChip("1", 1, isDark));
+        if (_maxPhysicalUnits >= 2) chips.add(_buildExactChip("2", 2, isDark));
+      } else if (_maxPhysicalUnits <= 10) {
+        chips.add(_buildChip("-1", -1, isDark));
+        chips.add(_buildChip("+1", 1, isDark));
+        if (_maxPhysicalUnits >= 5) chips.add(_buildChip("+5", 5, isDark));
+      } else if (_maxPhysicalUnits <= 30) {
+        chips.add(_buildChip("-5", -5, isDark));
+        chips.add(_buildChip("+1", 1, isDark));
+        chips.add(_buildChip("+5", 5, isDark));
+        chips.add(_buildChip("+10", 10, isDark));
+      } else {
+        chips.add(_buildChip("-10", -10, isDark));
+        chips.add(_buildChip("+1", 1, isDark));
+        chips.add(_buildChip("+5", 5, isDark));
+        chips.add(_buildChip("+10", 10, isDark));
+        chips.add(_buildChip("+50", 50, isDark));
+      }
+      chips.add(_buildExactChip("Máx ($_maxPhysicalUnits)", _maxPhysicalUnits, isDark, isHighlight: true));
+      return chips;
+    }
+
+    return [
+      if (_selectedMode == 1) _buildChip("-5", -5, isDark),
+      _buildChip("+1", 1, isDark),
+      _buildChip("+5", 5, isDark),
+      _buildChip("+10", 10, isDark),
+      _buildChip("+50", 50, isDark),
+    ];
   }
 
   Widget _buildChip(String label, int delta, bool isDark) {
@@ -1068,4 +1302,34 @@ class _StockUpdateModalState extends State<StockUpdateModal> {
       ),
     );
   }
+
+  Widget _buildExactChip(String label, int value, bool isDark, {bool isHighlight = false}) {
+    return InkWell(
+      onTap: () => _update(value),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isHighlight
+              ? (isDark ? Colors.blue[900]?.withValues(alpha: 0.5) : const Color(0xFFDBEAFE))
+              : (isDark ? Colors.white10 : Colors.grey[200]),
+          borderRadius: BorderRadius.circular(8),
+          border: isHighlight
+              ? Border.all(color: isDark ? Colors.blue.shade400 : const Color(0xFF3B82F6))
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: isHighlight
+                ? (isDark ? Colors.blue[200] : const Color(0xFF1E40AF))
+                : (isDark ? Colors.grey[300] : Colors.grey[800]),
+          ),
+        ),
+      ),
+    );
+  }
 }
+

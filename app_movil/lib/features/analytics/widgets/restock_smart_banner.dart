@@ -5,6 +5,8 @@ import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:provider/provider.dart';
 
+import 'package:app_movil/core/services/lifecycle_resume_coordinator.dart';
+
 /// 🏆 RestockSmartBanner (Mobile Awards Standard)
 /// Componente de dos estados para Alertas de Stock en el Home:
 /// 1. [Modo Píldora Simple]: Etiqueta compacta limpia [ ⚠️ N Alertas de Stock ] (por defecto).
@@ -32,11 +34,13 @@ class _RestockSmartBannerState extends State<RestockSmartBanner>
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
+    LifecycleResumeCoordinator.instance.registerController(_pulseController);
     _checkRestockAlerts();
   }
 
   @override
   void dispose() {
+    LifecycleResumeCoordinator.instance.unregisterController(_pulseController);
     _pulseController.dispose();
     super.dispose();
   }

@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 enum WhatsAppMessageStyle {
   commercial,
   compact,
@@ -9,17 +11,34 @@ enum WhatsAppMessageStyle {
   String get label {
     switch (this) {
       case WhatsAppMessageStyle.commercial:
-        return '✨ Comercial Detallado';
+        return 'Comercial Detallado';
       case WhatsAppMessageStyle.compact:
-        return '⚡ Resumen Directo';
+        return 'Resumen Directo';
       case WhatsAppMessageStyle.urgentOffer:
-        return '🔥 Cierre de Oferta';
+        return 'Cierre de Oferta';
       case WhatsAppMessageStyle.accountDebt:
-        return '🔔 Estado de Cuenta';
+        return 'Estado de Cuenta';
       case WhatsAppMessageStyle.followUp:
-        return '🤝 Seguimiento Amable';
+        return 'Seguimiento Amable';
       case WhatsAppMessageStyle.deliveryReady:
-        return '📦 Pedido Listo / Envío';
+        return 'Pedido Listo / Envío';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case WhatsAppMessageStyle.commercial:
+        return Icons.receipt_long_rounded;
+      case WhatsAppMessageStyle.compact:
+        return Icons.bolt_rounded;
+      case WhatsAppMessageStyle.urgentOffer:
+        return Icons.local_offer_rounded;
+      case WhatsAppMessageStyle.accountDebt:
+        return Icons.account_balance_wallet_rounded;
+      case WhatsAppMessageStyle.followUp:
+        return Icons.handshake_rounded;
+      case WhatsAppMessageStyle.deliveryReady:
+        return Icons.local_shipping_rounded;
     }
   }
 
@@ -158,6 +177,92 @@ class WhatsAppConfig {
       updateClientData: updateClientData ?? this.updateClientData,
       updateBusinessData: updateBusinessData ?? this.updateBusinessData,
     );
+  }
+
+  /// Aplica la Matriz de Configuración oficial de las 6 Plantillas (Sección 3.6 del Plan Maestro)
+  /// Conservando siempre la libertad del comerciante de modificar manualmente cualquier opción después.
+  void applyTemplateStyle(WhatsAppMessageStyle newStyle) {
+    style = newStyle;
+    switch (newStyle) {
+      case WhatsAppMessageStyle.commercial:
+        showSubtotals = true;
+        showSavingsSection = true;
+        showDiscountDetail = true;
+        showTotalGlobal = true;
+        showBusinessInfo = true;
+        showPaymentInfo = true;
+        includeValidity = true;
+        includeDelivery = true;
+        showDebtInfo = true;
+        showInstallmentDetails = true;
+        showDeliveryInfo = true;
+        break;
+      case WhatsAppMessageStyle.compact:
+        showSubtotals = true;
+        showSavingsSection = false;
+        showDiscountDetail = false;
+        showTotalGlobal = true;
+        showBusinessInfo = false;
+        showPaymentInfo = true;
+        includeValidity = false;
+        includeDelivery = false;
+        showDebtInfo = true;
+        showInstallmentDetails = true;
+        showDeliveryInfo = false;
+        break;
+      case WhatsAppMessageStyle.urgentOffer:
+        showSubtotals = true;
+        showSavingsSection = true;
+        showDiscountDetail = true;
+        showTotalGlobal = true;
+        showBusinessInfo = false;
+        showPaymentInfo = true;
+        includeValidity = true;
+        includeDelivery = false;
+        showDebtInfo = false;
+        showInstallmentDetails = false;
+        showDeliveryInfo = false;
+        break;
+      case WhatsAppMessageStyle.accountDebt:
+        showSubtotals = true;
+        showSavingsSection = false;
+        showDiscountDetail = false;
+        showTotalGlobal = true;
+        showBusinessInfo = true;
+        showPaymentInfo = true;
+        includeValidity = false;
+        includeDelivery = false;
+        showDebtInfo = true;
+        showInstallmentDetails = true;
+        showDeliveryInfo = false;
+        break;
+      case WhatsAppMessageStyle.followUp:
+        showSubtotals = true;
+        showSavingsSection = false;
+        showDiscountDetail = false;
+        showTotalGlobal = true;
+        showBusinessInfo = true;
+        showPaymentInfo = false;
+        includeValidity = true;
+        includeDelivery = false;
+        showDebtInfo = false;
+        showInstallmentDetails = false;
+        showDeliveryInfo = false;
+        break;
+      case WhatsAppMessageStyle.deliveryReady:
+        showSubtotals = false;
+        showSavingsSection = false;
+        showDiscountDetail = false;
+        showTotalGlobal = true;
+        showBusinessInfo = true;
+        showPaymentInfo = true;
+        includeValidity = false;
+        includeDelivery = true;
+        showDebtInfo = true;
+        showInstallmentDetails = true;
+        showDeliveryInfo = true;
+        break;
+    }
   }
 
   factory WhatsAppConfig.fromJson(Map<String, dynamic> json) {

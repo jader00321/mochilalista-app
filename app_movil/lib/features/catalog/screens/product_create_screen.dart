@@ -136,6 +136,14 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
 
   void _createUnitVariantAutomatically() {
     HapticFeedback.mediumImpact();
+    final existingNames = <String>[];
+    for (var c in _controllers) {
+      final spec = (c['specific'] as TextEditingController?)?.text.trim() ?? "";
+      final uVenta = (c['unidadVenta'] as TextEditingController?)?.text.trim() ?? "";
+      if (spec.isNotEmpty) existingNames.add(spec);
+      if (uVenta.isNotEmpty) existingNames.add(uVenta);
+    }
+    final safeName = ProductControllerFactory.generateSafeUnitVariantName(existingNames);
     final baseCost = double.tryParse(_baseCostCtrl.text) ?? 0.0;
     final margen = 1.35;
     final pVenta = baseCost * margen;
@@ -143,14 +151,14 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
     final newMap = ProductControllerFactory.createNewControllerMap(
       id: newId,
       isEditMode: false,
-      specificName: "Unidad",
+      specificName: safeName,
       unidadVenta: "Unidad",
       unidadesVenta: "1",
       costoPres: baseCost.toStringAsFixed(2),
       margen: margen.toStringAsFixed(2),
       precioVenta: pVenta.toStringAsFixed(2),
       stockInicial: "0",
-      stockFinal: _sharedStockCtrl.text,
+      stockFinal: _sharedStockCtrl.text.trim().isEmpty ? "0" : _sharedStockCtrl.text.trim(),
       usaStockCompartido: true,
     );
     newMap['costoBaseUnitario'] = baseCost;
@@ -160,9 +168,9 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
       _syncDraft();
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("✨ Variante 'Unidad (x1)' agregada al pool compartido"),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: Text("Variante '$safeName (x1)' agregada al inventario compartido"),
+        duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -377,6 +385,7 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
       modoStock: _modoStock,
       stockCompartido: int.tryParse(_sharedStockCtrl.text.trim()) ?? 0,
       costoBase: double.tryParse(_baseCostCtrl.text.trim()) ?? 0.0,
+      keys: _presentationKeys,
     );
     if (success && mounted) {
       _isSaving = true;

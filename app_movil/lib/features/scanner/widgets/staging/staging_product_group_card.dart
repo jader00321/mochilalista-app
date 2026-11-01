@@ -461,6 +461,7 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
           // FOOTER: AGREGAR OTRA VARIANTE
           Container(
             width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 28),
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: widget.isDark ? const Color(0xFF14141C) : Colors.white,
@@ -513,9 +514,9 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
         ? 'Stock Compartido'
         : (modoStock == 'MIXTO' ? 'Stock Mixto' : 'Stock Independiente');
     final IconData modoIcon = modoStock == 'COMPARTIDO'
-        ? Icons.all_inclusive_rounded
+        ? Icons.hub_rounded
         : (modoStock == 'MIXTO'
-            ? Icons.electric_bolt_outlined
+            ? Icons.tune_rounded
             : Icons.inventory_2_outlined);
 
     return Wrap(
@@ -539,7 +540,7 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
             "Pool: ${group.stockCompartido} uds",
             isDark ? Colors.tealAccent : Colors.teal.shade700,
             isDark,
-            icon: Icons.hub_outlined,
+            icon: Icons.hub_rounded,
           ),
         _tag(
           marca,
@@ -626,6 +627,7 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
                           .where((c) => c.id == group.categoriaSugeridaId)
                           .firstOrNull
                     : null,
+                hintText: "Categoría...",
                 itemAsString: (c) => c.nombre,
                 onChanged: (c) {
                   if (c != null) setState(() => group.categoriaSugeridaId = c.id);
@@ -650,63 +652,281 @@ class _StagingProductGroupCardState extends State<StagingProductGroupCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              "Estrategia de Stock:",
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[400] : Colors.grey[700],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Wrap(
-              spacing: 6,
-              children: [
-                _buildStrategyChoiceChip(group, 'COMPARTIDO', '🔗 Compartido', Colors.teal, isDark),
-                _buildStrategyChoiceChip(group, 'INDEPENDIENTE', '📦 Independiente', Colors.blueGrey, isDark),
-                _buildStrategyChoiceChip(group, 'MIXTO', '⚡ Mixto', Colors.amber, isDark),
-              ],
-            ),
-          ],
+        Text(
+          "Estrategia de Stock:",
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.grey[400] : Colors.grey[700],
+          ),
         ),
-        if (group.modoStock == 'COMPARTIDO')
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              "Todas las presentaciones compartirán un stock común en unidades base.",
-              style: TextStyle(fontSize: 10.5, fontStyle: FontStyle.italic, color: isDark ? Colors.tealAccent : Colors.teal.shade800),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1B1B26) : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isDark ? Colors.white10 : Colors.grey.shade300,
             ),
           ),
+          padding: const EdgeInsets.all(3),
+          child: Row(
+            children: [
+              _buildStrategySegment(group, 'COMPARTIDO', 'Compartido', Icons.hub_rounded, Colors.teal, isDark),
+              const SizedBox(width: 4),
+              _buildStrategySegment(group, 'INDEPENDIENTE', 'Independiente', Icons.inventory_2_outlined, Colors.blueGrey, isDark),
+              const SizedBox(width: 4),
+              _buildStrategySegment(group, 'MIXTO', 'Mixto', Icons.tune_rounded, Colors.amber, isDark),
+            ],
+          ),
+        ),
+        if (group.modoStock == 'COMPARTIDO') ...[
+          const SizedBox(height: 8),
+          _buildSharedMasterPoolBlock(group, isDark),
+          _buildStockAdvisorCard(group, isDark),
+        ] else if (group.modoStock == 'MIXTO') ...[
+          const SizedBox(height: 8),
+          _buildSharedMasterPoolBlock(group, isDark),
+          _buildStockAdvisorCard(group, isDark),
+        ],
       ],
     );
   }
 
-  Widget _buildStrategyChoiceChip(StagingProductGroup group, String strategyKey, String label, MaterialColor baseColor, bool isDark) {
-    final isSelected = group.modoStock == strategyKey;
-    final color = isDark ? baseColor[300]! : baseColor[800]!;
-    return ChoiceChip(
-      label: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10.5,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: isSelected ? (isDark ? Colors.black87 : Colors.white) : color,
-        ),
-      ),
-      selected: isSelected,
-      selectedColor: color,
-      backgroundColor: isDark ? const Color(0xFF1F1F2C) : Colors.grey.shade100,
-      visualDensity: VisualDensity.compact,
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-      onSelected: (selected) {
-        if (selected) {
+  Widget _buildStrategySegment(
+    StagingProductGroup group,
+    String strategyKey,
+    String label,
+    IconData icon,
+    MaterialColor baseColor,
+    bool isDark,
+  ) {
+    final bool isSelected = group.modoStock == strategyKey;
+    final Color selectedBg = isDark ? baseColor[800]! : baseColor[600]!;
+    final Color normalText = isDark ? Colors.grey[400]! : Colors.grey[700]!;
+    const Color activeText = Colors.white;
+
+    return Expanded(
+      child: InkWell(
+        onTap: () {
           setState(() {
             widget.provider.setGroupStockStrategy(group.uuidTemporal, strategyKey);
           });
-        }
-      },
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? selectedBg : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 14,
+                  color: isSelected ? activeText : normalText,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    color: isSelected ? activeText : normalText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSharedMasterPoolBlock(StagingProductGroup group, bool isDark) {
+    final int poolUnits = group.stockCompartido;
+    final double costoBase = group.costoBase;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.teal.withValues(alpha: 0.12) : Colors.teal.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark ? Colors.teal.withValues(alpha: 0.3) : Colors.teal.shade200,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.hub_rounded, size: 16, color: isDark ? Colors.tealAccent : Colors.teal.shade800),
+              const SizedBox(width: 6),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Stock Base Compartido",
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.tealAccent : Colors.teal.shade900,
+                    ),
+                  ),
+                  Text(
+                    "$poolUnits unidades base",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                "Costo Base Unitario",
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.tealAccent : Colors.teal.shade900,
+                ),
+              ),
+              Text(
+                AppCurrency.format(costoBase),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStockAdvisorCard(StagingProductGroup group, bool isDark) {
+    final sharedVariants = group.variantes.where((v) => group.modoStock == 'COMPARTIDO' || v.usaStockCompartido).toList();
+    if (sharedVariants.isEmpty) return const SizedBox.shrink();
+
+    final int pool = group.stockCompartido;
+    if (pool <= 0) return const SizedBox.shrink();
+
+    // Regla A: si al menos una presentación tiene división exacta (factor <= 1 o pool % factor == 0), no hay problema
+    final bool hasExact = sharedVariants.any((v) => v.effectiveFactorVenta <= 1 || (pool % v.effectiveFactorVenta == 0));
+    if (hasExact) return const SizedBox.shrink();
+
+    // Regla C: En TODAS las presentaciones compartidas pool < factor (déficit crítico)
+    final bool allZeroFormable = sharedVariants.every((v) => pool < v.effectiveFactorVenta);
+
+    if (allZeroFormable) {
+      return Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isDark ? Colors.red.withValues(alpha: 0.4) : Colors.red.shade300),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.error_outline, size: 16, color: isDark ? Colors.red[300] : Colors.red[700]),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    "Asesor de Stock: El pool de $pool unid. base no alcanza para armar ninguna presentación completa.",
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.red[200] : Colors.red[900],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  widget.provider.addUnitVariantToSharedGroup(group.uuidTemporal);
+                });
+              },
+              icon: const Icon(Icons.add, size: 14),
+              label: const Text("Añadir presentación 'Unidad (x1)' para vender sueltas", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDark ? Colors.red[800] : Colors.red[700],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                minimumSize: const Size(0, 30),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Regla B: Todas dejan residuo (ej. 14 unid. en paquetes de 4 y 6)
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.amber.withValues(alpha: 0.12) : Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: isDark ? Colors.amber.withValues(alpha: 0.4) : Colors.amber.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.lightbulb_outline, size: 16, color: isDark ? Colors.amber[300] : Colors.amber[800]),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  "Asesor de Stock: El pool de $pool unid. deja sobrantes en todas las presentaciones.",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.amber[200] : Colors.amber[900],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          OutlinedButton.icon(
+            onPressed: () {
+              setState(() {
+                widget.provider.addUnitVariantToSharedGroup(group.uuidTemporal);
+              });
+            },
+            icon: const Icon(Icons.add, size: 14),
+            label: const Text("Añadir presentación 'Unidad (x1)' (Recomendado)", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: isDark ? Colors.amber[200] : Colors.amber[900],
+              side: BorderSide(color: isDark ? Colors.amber[300]! : Colors.amber.shade400),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+              minimumSize: const Size(0, 30),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

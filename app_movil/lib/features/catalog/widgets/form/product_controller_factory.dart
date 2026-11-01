@@ -178,7 +178,7 @@ class ProductControllerFactory {
     final parentSpec = (parentMap['specific'] as TextEditingController).text;
     final specName = parentSpec.isNotEmpty ? "$parentSpec - Suelta" : "Suelta";
 
-    return createNewControllerMap(
+    final map = createNewControllerMap(
       id: newChildId,
       dbId: null,
       isDefault: false,
@@ -200,5 +200,29 @@ class ProductControllerFactory {
       stockBaseOriginal: leftoverUnits,
       costoBaseOriginal: costoBaseIndividual,
     );
+    map['sourceParentId'] = parentMap['id'];
+    map['transferredBaseUnits'] = leftoverUnits;
+    return map;
+  }
+
+  static String generateSafeUnitVariantName(List<String> existingNames) {
+    final normalized = existingNames.map((n) => n.trim().toLowerCase()).toSet();
+    const candidates = [
+      "Unidad",
+      "Venta por Unidad",
+      "Unidad Individual",
+      "Unidad Suelta",
+      "Pieza Individual",
+    ];
+    for (final candidate in candidates) {
+      if (!normalized.contains(candidate.toLowerCase())) {
+        return candidate;
+      }
+    }
+    int counter = 2;
+    while (normalized.contains("unidad $counter")) {
+      counter++;
+    }
+    return "Unidad $counter";
   }
 }

@@ -174,9 +174,7 @@ class ProductDetailVariantSelector extends StatelessWidget {
                                   const SizedBox(width: 2.5),
                                 ],
                                 Text(
-                                  p.usaStockCompartido
-                                      ? "Pool: ${p.unidadesVendiblesDisponibles} disp."
-                                      : "${p.unidadesVendiblesDisponibles} disp.",
+                                  "${p.unidadesVendiblesDisponibles} disp.",
                                   style: TextStyle(
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w600,

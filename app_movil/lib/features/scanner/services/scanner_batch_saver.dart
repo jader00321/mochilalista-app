@@ -233,14 +233,13 @@ class ScannerBatchSaver {
                 updateData['codigo_barras'] = v.codigoBarra;
               }
 
-              final bool esCompartido = v.usaStockCompartido || (group.modoStock == 'COMPARTIDO');
+              final bool esCompartido = (group.modoStock == 'COMPARTIDO') || (group.modoStock == 'MIXTO' && v.usaStockCompartido);
               if (esCompartido) {
                 updateData['usa_stock_compartido'] = 1;
-                if (v.cupoMaximoVariante != null) {
-                  updateData['cupo_maximo_variante'] = v.cupoMaximoVariante;
-                }
-              } else if (group.modoStock == 'INDEPENDIENTE') {
+                updateData['cupo_maximo_variante'] = v.cupoMaximoVariante;
+              } else {
                 updateData['usa_stock_compartido'] = 0;
+                updateData['cupo_maximo_variante'] = null;
               }
 
               await txn.update(
@@ -352,7 +351,7 @@ class ScannerBatchSaver {
                 limit: 1,
               );
               final int esDefaultValue = existingDefaults.isEmpty ? 1 : 0;
-              final bool esCompartido = v.usaStockCompartido || (group.modoStock == 'COMPARTIDO');
+              final bool esCompartido = (group.modoStock == 'COMPARTIDO') || (group.modoStock == 'MIXTO' && v.usaStockCompartido);
 
               int newPresId = await txn.insert('presentaciones_producto', {
                 'producto_id': idProducto,
@@ -372,7 +371,7 @@ class ScannerBatchSaver {
                 'precio_venta_final': v.precioVentaSugerido,
                 'stock_actual': (esCompartido && group.stockCompartido > 0) ? group.stockCompartido : cantidadSumar,
                 'usa_stock_compartido': esCompartido ? 1 : 0,
-                'cupo_maximo_variante': v.cupoMaximoVariante,
+                'cupo_maximo_variante': esCompartido ? v.cupoMaximoVariante : null,
                 'estado': 'publico',
                 'activo': 1,
                 'es_default': esDefaultValue,

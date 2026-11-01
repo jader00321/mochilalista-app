@@ -182,9 +182,9 @@ void main() {
         ),
       );
 
-      // Comprueba los badges de pool en las variantes compartidas y stock directo en la independiente
-      expect(find.text('Pool: 100 disp.'), findsOneWidget);
-      expect(find.text('Pool: 8 disp.'), findsOneWidget);
+      // Comprueba los badges en las variantes compartidas y stock directo en la independiente
+      expect(find.text('100 disp.'), findsOneWidget);
+      expect(find.text('8 disp.'), findsOneWidget);
       await tester.scrollUntilVisible(find.text('4 disp.'), 100);
       expect(find.text('4 disp.'), findsOneWidget); // 20 ~/ 5 = 4
       expect(tester.takeException(), isNull);
@@ -215,8 +215,8 @@ void main() {
         ),
       );
 
-      // Comprueba que el banner informativo del pool compartido está visible
-      expect(find.textContaining('Esta presentación usa el Pool Compartido'), findsOneWidget);
+      // Comprueba que el banner informativo del stock compartido está visible
+      expect(find.textContaining('Inventario base compartido'), findsWidgets);
       expect(find.byIcon(Icons.hub_rounded), findsWidgets);
     });
 

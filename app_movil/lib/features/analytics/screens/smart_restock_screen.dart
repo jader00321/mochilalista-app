@@ -612,11 +612,13 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text(
-          'Motor Inteligente de Abastecimiento', 
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Motor Inteligente de Abastecimiento', 
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,

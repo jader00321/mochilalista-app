@@ -239,14 +239,29 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
 
     for (int i = 0; i < staging.productosAgrupados.length; i++) {
       final group = staging.productosAgrupados[i];
+      if (group.modoStock == 'COMPARTIDO') {
+        final sharedVars = group.variantes.where((v) => v.usaStockCompartido && v.isConfirmed).toList();
+        final pool = group.stockCompartido;
+        if (sharedVars.isNotEmpty && pool > 0) {
+          final allBelowFactor = sharedVars.every((v) => pool < v.effectiveFactorVenta);
+          if (allBelowFactor) {
+            _scrollToConflictGroup(provider, group.uuidTemporal);
+            return;
+          }
+        }
+      }
+
       bool hasConflict = group.variantes.any((variant) {
         if (!variant.isConfirmed) return false;
+        final isShared = group.modoStock == 'COMPARTIDO' || (group.modoStock == 'MIXTO' && variant.usaStockCompartido);
+        if (isShared) return false;
+
         final int stockBD = variant.matchPresentacion.datos?.stockActual ?? 0;
         final int totalBase = variant.calculateTotalUnitsBase(stockActualBD: stockBD);
         final int factor = variant.effectiveFactorVenta;
         if (factor > 1) {
-          if (totalBase ~/ factor == 0 && totalBase > 0 && !variant.allowDeficitApproved) return true;
-          if (totalBase % factor > 0 && totalBase ~/ factor >= 1 && !variant.allowLeftoverInReserve) return true;
+          if (totalBase ~/ factor == 0 && totalBase > 0) return true;
+          if (totalBase % factor > 0 && totalBase ~/ factor >= 1) return true;
         }
         return false;
       });
@@ -266,8 +281,28 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
     final staging = provider.stagingData;
     if (staging != null) {
       for (var group in staging.productosAgrupados) {
+        if (group.modoStock == 'COMPARTIDO') {
+          final sharedVars = group.variantes.where((v) => v.usaStockCompartido && v.isConfirmed).toList();
+          final pool = group.stockCompartido;
+          if (sharedVars.isNotEmpty && pool > 0) {
+            final allBelowFactor = sharedVars.every((v) => pool < v.effectiveFactorVenta);
+            if (allBelowFactor) {
+              errors.add({
+                'name': 'Stock Compartido Insuficiente',
+                'group': group.matchProducto.datos?.nombre ?? group.nombrePadre,
+                'groupUuid': group.uuidTemporal,
+                'status': 'deficit',
+                'diff': pool,
+                'unit': 'unid. base (menor a todas las presentaciones)',
+              });
+            }
+          }
+        }
+
         for (var variant in group.variantes) {
           if (!variant.isConfirmed) continue;
+          final isShared = group.modoStock == 'COMPARTIDO' || (group.modoStock == 'MIXTO' && variant.usaStockCompartido);
+          if (isShared) continue;
           
           final int stockBD = variant.matchPresentacion.datos?.stockActual ?? 0;
           final int totalBase = variant.calculateTotalUnitsBase(stockActualBD: stockBD);
@@ -278,7 +313,7 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
             final int completas = totalBase ~/ factor;
             final int sobrante = totalBase % factor;
 
-            if (completas == 0 && totalBase > 0 && !variant.allowDeficitApproved) {
+            if (completas == 0 && totalBase > 0) {
               errors.add({
                 'name': variant.nombreEspecifico.isEmpty ? 'Variante Principal' : variant.nombreEspecifico,
                 'group': group.matchProducto.datos?.nombre ?? group.nombrePadre,
@@ -287,7 +322,7 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                 'diff': factor - totalBase,
                 'unit': 'unid. para 1 $unidad',
               });
-            } else if (sobrante > 0 && completas >= 1 && !variant.allowLeftoverInReserve) {
+            } else if (sobrante > 0 && completas >= 1) {
               errors.add({
                 'name': variant.nombreEspecifico.isEmpty ? 'Variante Principal' : variant.nombreEspecifico,
                 'group': group.matchProducto.datos?.nombre ?? group.nombrePadre,

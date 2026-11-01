@@ -55,24 +55,29 @@ class InventoryWrapper {
     return "Margen No Definido";
   }
 
-  bool get isOutOfStock => displayStock <= 0;
+  bool get isOutOfStock =>
+      usaStockCompartido ? effectiveBaseStock <= 0 : displayStock <= 0;
 
   bool get isLowStock =>
       displayStock > 0 &&
       displayStock <= (presentation.stockAlerta ?? 5);
 
   /// Indica si esta presentación específica usa stock compartido
-  bool get usaStockCompartido => presentation.usaStockCompartido;
+  bool get usaStockCompartido =>
+      presentation.usaStockCompartido || product.isStockCompartido;
 
   /// Indica si el producto o la presentación tienen un pool de stock compartido
   bool get hasSharedStock =>
       product.isStockCompartido ||
-      (product.isStockMixto && presentation.usaStockCompartido);
+      (product.isStockMixto && presentation.usaStockCompartido) ||
+      presentation.usaStockCompartido;
 
   /// Stock base efectivo para esta presentación (del pool compartido si aplica o su stock independiente)
   int get effectiveBaseStock {
-    if (hasSharedStock && product.stockCompartido > 0) {
-      return product.stockCompartido;
+    if (hasSharedStock) {
+      return product.stockCompartido > 0
+          ? product.stockCompartido
+          : (product.isStockCompartido ? product.stockCompartido : presentation.stockActual);
     }
     return presentation.stockActual;
   }
@@ -80,16 +85,23 @@ class InventoryWrapper {
   /// Factor de conversión de la presentación (unidades por unidad de venta)
   int get factor => presentation.unidadesPorVenta > 0 ? presentation.unidadesPorVenta : 1;
 
+  /// Máximo número de unidades de venta físicas que se pueden formar con el stock base disponible
+  int get maxPhysicalSalesUnits => factor > 0 ? effectiveBaseStock ~/ factor : 0;
+
+  /// Indica si el cupo vendible asignado llegó a 0 o las unidades físicas no alcanzan para un paquete,
+  /// pero aún existen unidades base en el inventario.
+  bool get hasQuotaExhaustedWithBaseStock =>
+      usaStockCompartido && displayStock <= 0 && effectiveBaseStock > 0;
+
   /// Stock real para validaciones de carrito (en unidades de venta)
   int get displayStockForValidation => displayStock;
 
   int get displayStock {
-    int factor = presentation.unidadesPorVenta;
-    if (factor <= 0) factor = 1;
-    final int baseCalculated = effectiveBaseStock ~/ factor;
-    if (presentation.usaStockCompartido &&
-        presentation.cupoMaximoVariante != null &&
-        presentation.cupoMaximoVariante! > 0) {
+    int f = presentation.unidadesPorVenta;
+    if (f <= 0) f = 1;
+    final int baseCalculated = effectiveBaseStock ~/ f;
+    if (usaStockCompartido &&
+        presentation.cupoMaximoVariante != null) {
       return presentation.cupoMaximoVariante! < baseCalculated
           ? presentation.cupoMaximoVariante!
           : baseCalculated;
@@ -103,7 +115,7 @@ class InventoryWrapper {
     return effectiveBaseStock % factor;
   }
 
-  bool get hasLooseUnits => stockRemainder > 0;
+  bool get hasLooseUnits => !usaStockCompartido && stockRemainder > 0;
 
   String get presentationFactorChip {
     final rawUnit = presentation.unidadVenta ?? presentation.umpCompra ?? "Unidad";
@@ -154,17 +166,37 @@ class InventoryWrapper {
   }
 
   String get displayStockText {
-    if (displayStock <= 0) return "Agotado";
+    if (displayStock <= 0) {
+      if (usaStockCompartido && effectiveBaseStock > 0) {
+        if (maxPhysicalSalesUnits > 0) {
+          return "0 disp. (Libera hasta $maxPhysicalSalesUnits)";
+        } else {
+          return "0 disp. (Quedan $effectiveBaseStock u. base)";
+        }
+      }
+      return "Agotado";
+    }
     String unidad = presentation.unidadVenta ?? presentation.umpCompra ?? "Unidad";
     final pluralized = pluralize(unidad, displayStock);
-    if (hasLooseUnits) {
-      return "$displayStock $pluralized (+${stockRemainder}u)";
+    if (!usaStockCompartido) {
+      if (hasLooseUnits) {
+        return "$displayStock $pluralized (+${stockRemainder}u)";
+      }
     }
     return "$displayStock $pluralized";
   }
 
   String get displayStockCleanText {
-    if (displayStock <= 0) return "Agotado";
+    if (displayStock <= 0) {
+      if (usaStockCompartido && effectiveBaseStock > 0) {
+        if (maxPhysicalSalesUnits > 0) {
+          return "0 disp. (Libera hasta $maxPhysicalSalesUnits)";
+        } else {
+          return "0 disp. (Quedan $effectiveBaseStock u. base)";
+        }
+      }
+      return "Agotado";
+    }
     String unidad = presentation.unidadVenta ?? presentation.umpCompra ?? "Unidad";
     return "$displayStock ${pluralize(unidad, displayStock)}";
   }

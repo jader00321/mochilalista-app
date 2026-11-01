@@ -67,15 +67,17 @@ class ProductNomenclatureLabel extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              Text(
-                presentacion!,
-                style: TextStyle(
-                  fontWeight: FontWeight.w400,
-                  fontSize: 13,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+              Flexible(
+                child: Text(
+                  presentacion!,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w400,
+                    fontSize: 13,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

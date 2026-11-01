@@ -453,26 +453,30 @@ class WaConfigSection extends StatelessWidget {
       );
     }
 
-    return Material(
-      color: isActive ? activeBg : inactiveBg,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: openPopover,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: isActive ? activeBg : inactiveBg,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isActive ? activeBorder : inactiveBorder,
-              width: isActive ? 1.5 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
+        border: Border.all(
+          color: isActive ? activeBorder : inactiveBorder,
+          width: isActive ? 1.5 : 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: openPopover,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
               // Fila superior: Icono + Spacer + Botón ⓘ + Check ✓/+
               Row(
                 children: [
@@ -530,7 +534,8 @@ class WaConfigSection extends StatelessWidget {
                   color: isDark ? Colors.grey[400] : Colors.grey[600],
                 ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

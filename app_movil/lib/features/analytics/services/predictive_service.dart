@@ -79,6 +79,25 @@ class PredictiveService {
       double currentInvValue = 0.0;
       double totalAccumSales = 0.0;
       double totalAccumProfit = 0.0;
+
+      // Buscar una referencia confiable de inventario real (último valor saneado < 20,000)
+      double baselineInv = 0.0;
+      for (int k = sorted.length - 1; k >= 0; k--) {
+        try {
+          var m = jsonDecode(sorted[k]['metrics_json']);
+          double v = (m['inventoryValue'] as num?)?.toDouble() ?? 0.0;
+          if (v > 0 && v < 20000.0) {
+            baselineInv = v;
+            break;
+          }
+        } catch (_) {}
+      }
+      if (baselineInv == 0.0 && sorted.isNotEmpty) {
+        try {
+          var m = jsonDecode(sorted.last['metrics_json']);
+          baselineInv = (m['inventoryValue'] as num?)?.toDouble() ?? 0.0;
+        } catch (_) {}
+      }
       
       for (int i = 0; i < sorted.length; i++) {
         var s = sorted[i];
@@ -91,6 +110,24 @@ class PredictiveService {
         double reportedMargin = (metrics['margin'] as num?)?.toDouble() ?? 0.30;
         if (reportedMargin <= 0.0 || reportedMargin >= 1.0) reportedMargin = 0.30;
         
+        // 🛡️ SANEAMIENTO RETROACTIVO: Eliminar picos espurios (ej. S/ 42,629.75 del bug anterior)
+        if ((invValue > 20000.0 && baselineInv < 15000.0) ||
+            (baselineInv > 0 && invValue > (baselineInv * 2.5) && invValue > 5000.0)) {
+          invValue = baselineInv;
+          metrics['inventoryValue'] = baselineInv;
+          final snapshotId = s['id'];
+          if (snapshotId != null) {
+            _db.database.then((db) {
+              db.update(
+                'business_snapshots',
+                {'metrics_json': jsonEncode(metrics)},
+                where: 'id = ?',
+                whereArgs: [snapshotId],
+              ).catchError((_) => 0);
+            }).catchError((_) {});
+          }
+        }
+
         currentInvValue = invValue;
 
         // Calculate daily sale by subtracting previous cumulative
