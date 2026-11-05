@@ -185,7 +185,7 @@ class SplashRotationManager {
           capsuleText = "Visión IA lista • ${snapshot.pendingQuotesCount} cotizaciones en espera";
           capsuleIcon = Icons.document_scanner_outlined;
         } else {
-          capsuleText = "Calibrando escáner de visión computacional...";
+          capsuleText = "Escáner inteligente listo para procesar facturas";
           capsuleIcon = Icons.auto_awesome_rounded;
         }
         break;

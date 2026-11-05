@@ -657,22 +657,18 @@ class _ProductStockStrategySelectorState
   }
 
   Widget _buildQuickAddChipsRow() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            _buildQuickAddChip("+10 und", 10),
-            const SizedBox(width: 6),
-            _buildQuickAddChip("+50 und", 50),
-            const SizedBox(width: 6),
-            _buildQuickAddChip("+100 und", 100),
-            const SizedBox(width: 6),
-            _buildQuickAddChip("+500 und", 500),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(child: _buildQuickAddChip("+10 und", 10)),
+          const SizedBox(width: 5),
+          Expanded(child: _buildQuickAddChip("+50 und", 50)),
+          const SizedBox(width: 5),
+          Expanded(child: _buildQuickAddChip("+100 und", 100)),
+          const SizedBox(width: 5),
+          Expanded(child: _buildQuickAddChip("+500 und", 500)),
+        ],
       ),
     );
   }
@@ -694,18 +690,23 @@ class _ProductStockStrategySelectorState
       },
       borderRadius: BorderRadius.circular(6),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
         decoration: BoxDecoration(
           color: widget.isDark ? Colors.white12 : Colors.white,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: widget.isDark ? Colors.white24 : Colors.grey.shade300),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            color: widget.isDark ? Colors.blue[300] : const Color(0xFF1E5BB0),
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: widget.isDark ? Colors.blue[300] : const Color(0xFF1E5BB0),
+            ),
           ),
         ),
       ),

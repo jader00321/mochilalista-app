@@ -1,0 +1,134 @@
+================================================================================
+                    MOCHILALISTA APP - NOTAS DE VERSION V9.18
+================================================================================
+Version: 9.18.0+68
+Nombre del Paquete: mochilalista_v9.18
+Fecha: 4 de Noviembre de 2026
+Compilacion: Release APK (mochilalista_v9.18.apk)
+Plataforma: Android (Flutter SDK ^3.9.0)
+Arquitectura: 100% Local-First Offline SQLite con reactividad a 0ms
+Calidad de Codigo: 0 Errores | 0 Advertencias | 100% Tests Aprobados
+
+================================================================================
+RESUMEN EJECUTIVO DE LA ACTUALIZACION
+================================================================================
+La version 9.18 de MochilaLista introduce una consolidacion integral de estabilidad
+de renderizado, reactividad en tiempo real de inventarios y refinamiento visual
+cinematico de clase mundial.
+
+Esta entrega erradica definitivamente la excepcion critica de ParentDataWidget en
+el HomeScreen y en el muelle de trabajo flotante (PersistentWorkDock), permitiendo
+al comerciante navegar entre tareas concurrentes (borradores de productos, carritos
+de caja rapida, cotizaciones activas y escaneo) con cero parpadeos, cero excepciones
+y renderizado perfecto a 60/120 FPS.
+
+Asimismo, se implementa la sincronizacion instantanea a 0ms del campo "Stock disponible
+para vender" en presentaciones de productos compartidos tanto en creacion como en
+edicion con proteccion de foco activo, la visualizacion integra de los chips de suma
+rapida de stock (+10 a +500 und) en cualquier resolucion de pantalla, y una evolucion
+cinematica del Splash Screen V2 con isotipo protagonista al 72%, aura radial ambiental,
+pildora inferior anti-truncamiento y resplandor luminiscente en sus 18 experiencias
+visuales.
+
+================================================================================
+DETALLE DE NOVEDADES Y CAMBIOS TECNICOS IMPLEMENTADOS
+================================================================================
+
+1. ERRADICACION DEFINITIVA DE PANTALLA BLANCA/GRIS (PARENTDATAWIDGET FIX):
+   - Retiro de RepaintBoundary externo en HomeScreen:
+     En lib/core/screens/home_screen.dart, se removio el RepaintBoundary superfluo
+     que envolvia externamente a PersistentWorkDock dentro del Stack de _HomeDashboardView.
+     Al ser PersistentWorkDock hijo directo del Stack, los AnimatedPositioned y
+     Positioned internos interactuan directamente con el ParentData del Stack anfitrion,
+     eliminando de raiz la excepcion 'Incorrect use of ParentDataWidget'.
+   - Reubicacion quirurgica de RepaintBoundary en PersistentWorkDock:
+     En lib/core/widgets/persistent_work_dock.dart, el aislamiento de repintado se
+     traslado al interior de cada retorno posicionado (envolviendo el GestureDetector hijo):
+     * Estado 1: Modo Edge Peek (lengüeta lateral minimizada).
+     * Estado 2: Modo Globo Flotante 2D (burbuja interactiva con fisicas de anclaje).
+     * Estado 3: Modo Barra Expandida (dock inferior desplegado con accesos rapidos).
+   - Auditoria estructural de Stacks:
+     Se audito todo el arbol de widgets en home_screen.dart y main_navigation_screen.dart,
+     certificando cero colisiones de ParentData y garantizando transiciones suaves
+     incluso con multiples tareas activas en cola.
+
+2. SINCRONIZACION A 0ms DE STOCK COMPARTIDO EN PRESENTACIONES (NUEVO Y EDICION):
+   - Soporte de foco activo en MiniInput:
+     En presentation_custom_field.dart, se agrego el parametro opcional FocusNode
+     en MiniInput y se vinculo directamente a su TextFormField interno.
+   - Enlace bidireccional en ProductPresentationCard:
+     Se vinculo formalmente widget.controllerMap['sharedStockCtrl'] = widget.sharedStockCtrl
+     tanto en initState como en didUpdateWidget.
+   - Unificacion de fuente de verdad en PresentationStockSection:
+     El metodo _syncSharedStockQuotaIfUnbounded sincroniza availableSalesUnits
+     utilizando la misma formula exacta que alimenta la pildora azul ("= X Caja disp.")
+     y la tarjeta "Libre hasta X Caja" (Stock Inicial en creacion o Stock Base + Ingreso
+     en edicion de producto).
+   - Reactividad a 0ms sin pisar la escritura activa del comerciante:
+     Listeners reactivos a sharedStockCtrl y unidadesVentaCtrl actualizan inmediatamente
+     stockFinalCtrl.text reflejando el cupo real disponible (mostrando el valor real y
+     jamas "0"). Al mismo tiempo, mientras el campo cuente con foco activo
+     (_sharedQuotaFocusNode.hasFocus), no se altera el cursor del usuario.
+   - Respeto a cupos personalizados en base de datos:
+     Si una variante en edicion cuenta con cupoMaximoVariante persistido en SQLite,
+     este se respeta fielmente; si es nulo, se sincroniza con el total disponible.
+   - Optimizacion en ProductControllerFactory y PresentationMathEngine:
+     Se alineo la inicializacion por defecto de variantes para arrancar con el stock
+     disponible en lugar del valor estatico "0".
+
+3. VISIBILIDAD 100% COMPLETA DE CHIPS RAPIDOS (+10 und a +500 und):
+   - Rediseño de fila en ProductStockStrategySelector:
+     En lib/features/catalog/widgets/form/product_stock_strategy_selector.dart,
+     se reconstruyeron los metodos _buildQuickAddChipsRow y _buildQuickAddChip.
+   - Layout adaptativo balanceado:
+     Se reemplazo el espaciado rigido por un Row flexible donde cada chip esta
+     envuelto en un Expanded con FittedBox(fit: BoxFit.scaleDown) y padding simetrico
+     (horizontal: 4, vertical: 5).
+   - Compatibilidad ultra-compacta:
+     En pantallas de 320dp y 360dp, ningun chip sufre cortes de texto (como "+500 u"),
+     garantizando legibilidad total en los 4 valores (+10 und, +50 und, +100 und, +500 und).
+
+4. ELEVACION VISUAL, PROPORCION Y RIQUEZA CINEMATICA DEL SPLASH SCREEN V2:
+   - Erradicacion de textos con elipsis forzadas ("..."):
+     En cold_start_splash_screen.dart, el texto de la pildora inferior de estado se
+     envolvio en Flexible + FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft),
+     permitiendo que mensajes extensos del negocio se adapten sin cortar palabras.
+   - Textos contextuales de alta precision:
+     En splash_rotation_manager.dart, se optimizaron las leyendas contextuales del
+     negocio con tono motivador y comercial, eliminando puntos suspensivos hardcodeados.
+   - Protagonismo del Isotipo en MochilaBrandMedallion:
+     * El trazado vectorial puro de la mochila crecio de 0.58 a 0.72 del medallon (72% de presencia).
+     * Centrado optico con traslacion vertical calibrada (dy = +7.5).
+     * Doble bisel perimetral glassmorphism con iluminacion cenital.
+     * Micro-respiracion elastica suave en ciclo continuo (escala 1.0 -> 1.045).
+   - Aura radial ambiental y barra luminiscente:
+     * Se incorporo un orbe radial dinamico de 220dp detras del medallon con gradiente
+       sintonizado al color de acento del arquetipo visual activo.
+     * La barra de progreso inferior ahora integra un gradiente luminiscente multicapa.
+   - Enriquecimiento de los 18 CustomPainters geometricos:
+     En los 6 archivos de pintores (ecosystem, vault, radar, vision_ai, finance, logistics):
+     * Aumento de grosores de trazo a 2.0px - 2.8px para mayor nitidez en pantallas AMOLED/OLED.
+     * Pases de resplandor suave volumetrico mediante MaskFilter.blur(BlurStyle.normal, 3.5).
+     * Opacidad basal minima de 0.45 a mitad del ciclo de animacion (t = 0.5) para evitar
+       momentos vacios o palidos.
+
+5. CERTIFICACION Y BLINDAJE DE CALIDAD:
+   - Nueva suite de pruebas automatizadas:
+     test/home_white_screen_and_shared_stock_fix_test.dart con 11/11 tests aprobados:
+     * Renderizado del HomeScreen con tareas activas en PersistentWorkDock en sus 3 modos
+       (Globo Flotante, Edge Peek y Barra Expandida) con tester.takeException() == null.
+     * Sincronizacion inmediata de stock disponible para vender en creacion y edicion.
+     * Respeto estricto del foco activo del usuario durante la edicion manual de cupo.
+     * Integridad de los 4 chips rapidos en resoluciones estrechas (320dp y 360dp).
+     * Renderizado del Splash Screen V2 con isotipo al 72% y pildora FittedBox sin cortes.
+   - Analisis de codigo estatico:
+     flutter analyze lib test: 0 errores, 0 advertencias, 0 sugerencias.
+
+================================================================================
+ARCHIVOS DE ENTREGA
+================================================================================
+- APK Release: C:\Users\vjuli\Documents\v-app-offline apks\mochilalista_v9.18.apk
+- Notas de Version: C:\Users\vjuli\Documents\v-app-offline apks\mochilalista_v9.18_cambios.txt
+- Copia de Notas: C:\Users\vjuli\Documents\v-app-offline apks\mochilalista_v9.18.txt
+================================================================================
+

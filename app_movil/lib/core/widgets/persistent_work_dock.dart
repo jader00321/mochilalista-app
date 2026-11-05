@@ -135,7 +135,8 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
             _confirmDiscard(
               context,
               title: '¿Descartar Caja Rápida?',
-              message: 'Se limpiarán los productos agregados a la venta rápida.',
+              message:
+                  'Se limpiarán los productos agregados a la venta rápida.',
               onConfirm: () => quickProv.clearCart(),
             );
           },
@@ -167,7 +168,8 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
             _confirmDiscard(
               context,
               title: '¿Descartar Factura?',
-              message: 'Se perderán los datos extraídos de la factura pendiente.',
+              message:
+                  'Se perderán los datos extraídos de la factura pendiente.',
               onConfirm: () => scannerProv.clearData(),
             );
           },
@@ -194,7 +196,9 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
               context,
               MaterialPageRoute(
                 builder: (_) => MatchingScreen(
-                  extractedItems: matchingProv.pairs.map((p) => p.sourceItem).toList(),
+                  extractedItems: matchingProv.pairs
+                      .map((p) => p.sourceItem)
+                      .toList(),
                   metadata: matchingProv.metadata,
                 ),
               ),
@@ -240,7 +244,8 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
             _confirmDiscard(
               context,
               title: '¿Descartar Borrador?',
-              message: 'Se eliminará la cotización manual guardada como borrador.',
+              message:
+                  'Se eliminará la cotización manual guardada como borrador.',
               onConfirm: () => smartProv.clearManualDraft(),
             );
           },
@@ -272,16 +277,15 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
             HapticFeedback.lightImpact();
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => const ProductCreateScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const ProductCreateScreen()),
             );
           },
           onDiscard: () {
             _confirmDiscard(
               context,
               title: '¿Descartar Producto?',
-              message: 'Se perderán los datos del producto que estabas creando.',
+              message:
+                  'Se perderán los datos del producto que estabas creando.',
               onConfirm: () => invProv.clearCreationDraft(),
             );
           },
@@ -393,50 +397,53 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
           right: !_isLeftEdge ? 0 : null,
           width: 28,
           height: 64,
-          child: GestureDetector(
-            onTap: () {
-              HapticFeedback.mediumImpact();
-              setState(() {
-                _isEdgeTucked = false;
-              });
-              _syncSessionState();
-            },
-            onHorizontalDragUpdate: (details) {
-              final pullingInward = _isLeftEdge ? details.delta.dx > 1 : details.delta.dx < -1;
-              if (pullingInward) {
+          child: RepaintBoundary(
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
                 setState(() {
                   _isEdgeTucked = false;
-                  _bubblePanX = _isLeftEdge ? 24.0 : screenWidth - 82.0;
                 });
                 _syncSessionState();
-              }
-            },
-            child: Container(
-              width: 28,
-              height: 64,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
-                borderRadius: _isLeftEdge
-                    ? const BorderRadius.horizontal(right: Radius.circular(18))
-                    : const BorderRadius.horizontal(left: Radius.circular(18)),
-                border: Border.all(
-                  color: currentTask.color,
-                  width: 2.2,
+              },
+              onHorizontalDragUpdate: (details) {
+                final pullingInward = _isLeftEdge
+                    ? details.delta.dx > 1
+                    : details.delta.dx < -1;
+                if (pullingInward) {
+                  setState(() {
+                    _isEdgeTucked = false;
+                    _bubblePanX = _isLeftEdge ? 24.0 : screenWidth - 82.0;
+                  });
+                  _syncSessionState();
+                }
+              },
+              child: Container(
+                width: 28,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                  borderRadius: _isLeftEdge
+                      ? const BorderRadius.horizontal(right: Radius.circular(18))
+                      : const BorderRadius.horizontal(left: Radius.circular(18)),
+                  border: Border.all(color: currentTask.color, width: 2.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: currentTask.color.withValues(alpha: 0.45),
+                      blurRadius: 14,
+                      spreadRadius: 1,
+                      offset: Offset(_isLeftEdge ? 2 : -2, 2),
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: currentTask.color.withValues(alpha: 0.45),
-                    blurRadius: 14,
-                    spreadRadius: 1,
-                    offset: Offset(_isLeftEdge ? 2 : -2, 2),
+                child: Center(
+                  child: Icon(
+                    _isLeftEdge
+                        ? Icons.chevron_right_rounded
+                        : Icons.chevron_left_rounded,
+                    color: currentTask.color,
+                    size: 22,
                   ),
-                ],
-              ),
-              child: Center(
-                child: Icon(
-                  _isLeftEdge ? Icons.chevron_right_rounded : Icons.chevron_left_rounded,
-                  color: currentTask.color,
-                  size: 22,
                 ),
               ),
             ),
@@ -460,102 +467,111 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
       }
 
       return AnimatedPositioned(
-        duration: _bubblePanX != null ? Duration.zero : const Duration(milliseconds: 250),
+        duration: _bubblePanX != null
+            ? Duration.zero
+            : const Duration(milliseconds: 250),
         curve: Curves.easeOutCubic,
         bottom: _bubbleBottom.clamp(minBottom, maxBottom),
         left: leftPos,
         right: rightPos,
         width: 58,
         height: 58,
-        child: GestureDetector(
-          onTap: _expandFromBubble,
-          onPanUpdate: (details) {
-            setState(() {
-              final currentStartX = _bubblePanX ?? (_isLeftEdge ? 16.0 : screenWidth - 74.0);
-              _bubblePanX = (currentStartX + details.delta.dx).clamp(0.0, screenWidth - 58.0);
-              _bubbleBottom = (_bubbleBottom - details.delta.dy).clamp(minBottom, maxBottom);
-            });
-            _syncSessionState();
-          },
-          onPanEnd: (details) {
-            final velocityX = details.velocity.pixelsPerSecond.dx;
-            final currentX = _bubblePanX ?? (_isLeftEdge ? 16.0 : screenWidth - 74.0);
+        child: RepaintBoundary(
+          child: GestureDetector(
+            onTap: _expandFromBubble,
+            onPanUpdate: (details) {
+              setState(() {
+                final currentStartX =
+                    _bubblePanX ?? (_isLeftEdge ? 16.0 : screenWidth - 74.0);
+                _bubblePanX = (currentStartX + details.delta.dx).clamp(
+                  0.0,
+                  screenWidth - 58.0,
+                );
+                _bubbleBottom = (_bubbleBottom - details.delta.dy).clamp(
+                  minBottom,
+                  maxBottom,
+                );
+              });
+              _syncSessionState();
+            },
+            onPanEnd: (details) {
+              final velocityX = details.velocity.pixelsPerSecond.dx;
+              final currentX =
+                  _bubblePanX ?? (_isLeftEdge ? 16.0 : screenWidth - 74.0);
 
-            setState(() {
-              // Si se arroja o jala fuertemente contra el borde -> Modo Edge Peek
-              if (currentX < 24.0 || velocityX < -650) {
-                _isEdgeTucked = true;
-                _isLeftEdge = true;
-              } else if (currentX > screenWidth - 82.0 || velocityX > 650) {
-                _isEdgeTucked = true;
-                _isLeftEdge = false;
-              } else {
-                // Magnetismo suave hacia el lateral más cercano
-                _isEdgeTucked = false;
-                _isLeftEdge = currentX < (screenWidth / 2);
-              }
-              _bubblePanX = null;
-            });
-            _syncSessionState();
-          },
-          child: AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, child) {
-              final pulse = 1.0 + (_pulseController.value * 0.08);
-              return Transform.scale(
-                scale: pulse,
-                child: Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: currentTask.color,
-                      width: 2.2,
+              setState(() {
+                // Si se arroja o jala fuertemente contra el borde -> Modo Edge Peek
+                if (currentX < 24.0 || velocityX < -650) {
+                  _isEdgeTucked = true;
+                  _isLeftEdge = true;
+                } else if (currentX > screenWidth - 82.0 || velocityX > 650) {
+                  _isEdgeTucked = true;
+                  _isLeftEdge = false;
+                } else {
+                  // Magnetismo suave hacia el lateral más cercano
+                  _isEdgeTucked = false;
+                  _isLeftEdge = currentX < (screenWidth / 2);
+                }
+                _bubblePanX = null;
+              });
+              _syncSessionState();
+            },
+            child: AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, child) {
+                final pulse = 1.0 + (_pulseController.value * 0.08);
+                return Transform.scale(
+                  scale: pulse,
+                  child: Container(
+                    width: 58,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: currentTask.color, width: 2.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: currentTask.color.withValues(alpha: 0.4),
+                          blurRadius: 16,
+                          spreadRadius: 1,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: currentTask.color.withValues(alpha: 0.4),
-                        blurRadius: 16,
-                        spreadRadius: 1,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Icon(
-                        currentTask.icon,
-                        color: currentTask.color,
-                        size: 26,
-                      ),
-                      if (tasks.length > 1)
-                        Positioned(
-                          top: 2,
-                          right: 2,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.redAccent,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              "${tasks.length}",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          currentTask.icon,
+                          color: currentTask.color,
+                          size: 26,
+                        ),
+                        if (tasks.length > 1)
+                          Positioned(
+                            top: 2,
+                            right: 2,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                "${tasks.length}",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       );
@@ -566,15 +582,19 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
     // =========================================================================
     final hasMultiple = tasks.length > 1;
     final effectiveBottom = widget.isFloating
-        ? InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 16)
+        ? InteractiveSheetWrapper.getEffectiveBottomPadding(
+            context,
+            minPadding: 16,
+          )
         : 0.0;
 
     return Positioned(
       bottom: 0,
       left: 0,
       right: 0,
-      child: GestureDetector(
-        onHorizontalDragEnd: (details) {
+      child: RepaintBoundary(
+        child: GestureDetector(
+          onHorizontalDragEnd: (details) {
           final velocity = details.primaryVelocity ?? 0.0;
           if (velocity < -250) {
             _minimizeToBubble(isLeft: true);
@@ -583,8 +603,8 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
           }
         },
         child: Container(
-          margin: widget.margin ??
-              EdgeInsets.fromLTRB(16, 8, 16, effectiveBottom),
+          margin:
+              widget.margin ?? EdgeInsets.fromLTRB(16, 8, 16, effectiveBottom),
           child: Material(
             elevation: isDark ? 6 : 14,
             shadowColor: currentTask.color.withValues(alpha: 0.35),
@@ -594,7 +614,9 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(
-                  color: currentTask.color.withValues(alpha: isDark ? 0.45 : 0.3),
+                  color: currentTask.color.withValues(
+                    alpha: isDark ? 0.45 : 0.3,
+                  ),
                   width: 1.5,
                 ),
               ),
@@ -611,65 +633,86 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
                       behavior: HitTestBehavior.opaque,
                       child: Container(
                         height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: isDark
                               ? Colors.black.withValues(alpha: 0.3)
                               : Colors.grey.shade100,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(21)),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(21),
+                          ),
                         ),
                         child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: tasks.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 6),
-                        itemBuilder: (ctx, i) {
-                          final t = tasks[i];
-                          final isSelected = i == _selectedTaskIndex;
-                          return InkWell(
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              setState(() => _selectedTaskIndex = i);
-                            },
-                            borderRadius: BorderRadius.circular(10),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? t.color.withValues(alpha: 0.18)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: tasks.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 6),
+                          itemBuilder: (ctx, i) {
+                            final t = tasks[i];
+                            final isSelected = i == _selectedTaskIndex;
+                            return InkWell(
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                setState(() => _selectedTaskIndex = i);
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
                                   color: isSelected
-                                      ? t.color.withValues(alpha: 0.6)
+                                      ? t.color.withValues(alpha: 0.18)
                                       : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? t.color.withValues(alpha: 0.6)
+                                        : Colors.transparent,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      t.icon,
+                                      size: 14,
+                                      color: isSelected ? t.color : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      t.shortTitle,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.w500,
+                                        color: isSelected
+                                            ? t.color
+                                            : (isDark
+                                                  ? Colors.grey[400]
+                                                  : Colors.grey[700]),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(t.icon, size: 14, color: isSelected ? t.color : Colors.grey),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    t.shortTitle,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                      color: isSelected ? t.color : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
-                  ),
 
                   // Fila Principal con Ajuste Tipográfico (Zero Truncamiento)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     child: Row(
                       children: [
                         // Avatar con pulso
@@ -683,10 +726,14 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
                                 width: 40,
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: currentTask.color.withValues(alpha: 0.15),
+                                  color: currentTask.color.withValues(
+                                    alpha: 0.15,
+                                  ),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: currentTask.color.withValues(alpha: 0.5),
+                                    color: currentTask.color.withValues(
+                                      alpha: 0.5,
+                                    ),
                                     width: 1.5,
                                   ),
                                 ),
@@ -715,7 +762,9 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
                                   style: TextStyle(
                                     fontWeight: FontWeight.w900,
                                     fontSize: 14,
-                                    color: isDark ? Colors.white : Colors.black87,
+                                    color: isDark
+                                        ? Colors.white
+                                        : Colors.black87,
                                   ),
                                 ),
                               ),
@@ -726,7 +775,9 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
                                 ),
                               ),
                             ],
@@ -740,7 +791,10 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
                             icon: const Icon(Icons.close_rounded, size: 18),
                             tooltip: 'Descartar',
                             padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
                             color: isDark ? Colors.grey[400] : Colors.grey[500],
                             onPressed: currentTask.onDiscard,
                           ),
@@ -752,7 +806,10 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
                           style: ElevatedButton.styleFrom(
                             backgroundColor: currentTask.color,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             shape: RoundedRectangleBorder(
@@ -767,7 +824,10 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
                               SizedBox(width: 4),
                               Text(
                                 'Reanudar',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
                           ),
@@ -782,7 +842,10 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
                             color: isDark ? Colors.grey[400] : Colors.grey[600],
                           ),
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 24, minHeight: 28),
+                          constraints: const BoxConstraints(
+                            minWidth: 24,
+                            minHeight: 28,
+                          ),
                           tooltip: 'Minimizar a globo',
                           onPressed: () => _minimizeToBubble(isLeft: false),
                         ),
@@ -795,6 +858,7 @@ class _PersistentWorkDockState extends State<PersistentWorkDock>
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

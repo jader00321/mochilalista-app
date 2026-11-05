@@ -91,6 +91,9 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
   @override
   void initState() {
     super.initState();
+    if (widget.sharedStockCtrl != null) {
+      widget.controllerMap['sharedStockCtrl'] = widget.sharedStockCtrl;
+    }
     if (widget.controllerMap.containsKey('isExpanded')) {
       _isCardExpanded = widget.controllerMap['isExpanded'] == true;
     } else {
@@ -150,6 +153,9 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
   @override
   void didUpdateWidget(covariant ProductPresentationCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.sharedStockCtrl != null) {
+      widget.controllerMap['sharedStockCtrl'] = widget.sharedStockCtrl;
+    }
     if (widget.controllerMap.containsKey('isExpanded') &&
         widget.controllerMap['isExpanded'] != _isCardExpanded) {
       _isCardExpanded = widget.controllerMap['isExpanded'] == true;

@@ -21,8 +21,9 @@ class VaultSonicResonancePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2 - 40);
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
-    // 3 Ondas armónicas con perturbación sinusoidal
+    // 4 Ondas armónicas con perturbación sinusoidal
     for (int ring = 1; ring <= 4; ring++) {
       final baseR = 60.0 + ring * 22.0 * progress;
       final wavePath = Path();
@@ -44,13 +45,18 @@ class VaultSonicResonancePainter extends CustomPainter {
       wavePath.close();
 
       final color = ring % 2 == 0 ? const Color(0xFF10B981) : const Color(0xFF38BDF8);
-      final alpha = (0.55 - ring * 0.10) * progress;
+
+      final waveGlow = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.8
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = color.withValues(alpha: 0.30 * animAlpha);
+      canvas.drawPath(wavePath, waveGlow);
 
       final wavePaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.3
-        ..color = color.withValues(alpha: alpha);
-
+        ..strokeWidth = 2.2
+        ..color = color.withValues(alpha: (0.75 - ring * 0.08) * animAlpha);
       canvas.drawPath(wavePath, wavePaint);
     }
   }
@@ -75,6 +81,7 @@ class VaultHexShieldPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2 - 40);
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
     final hexRadii = [80.0, 115.0, 145.0];
     final directions = [1.0, -1.0, 0.7];
@@ -94,18 +101,32 @@ class VaultHexShieldPainter extends CustomPainter {
         }
 
         // Puntos de anclaje de seguridad en los vértices
+        final vertexGlow = Paint()
+          ..style = PaintingStyle.fill
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+          ..color = const Color(0xFF34D399).withValues(alpha: 0.50 * animAlpha);
+        canvas.drawCircle(pt, 4.5, vertexGlow);
+
         final vertexPaint = Paint()
           ..style = PaintingStyle.fill
-          ..color = const Color(0xFF34D399).withValues(alpha: 0.65 * progress);
-        canvas.drawCircle(pt, 2.5, vertexPaint);
+          ..color = const Color(0xFF34D399).withValues(alpha: 0.90 * animAlpha);
+        canvas.drawCircle(pt, 3.0, vertexPaint);
       }
       hexPath.close();
 
+      final color = (h == 1 ? const Color(0xFF38BDF8) : const Color(0xFF059669));
+
+      final hexGlow = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.6
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = color.withValues(alpha: 0.35 * animAlpha);
+      canvas.drawPath(hexPath, hexGlow);
+
       final hexPaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = (h == 1 ? const Color(0xFF38BDF8) : const Color(0xFF059669))
-            .withValues(alpha: (0.45 - h * 0.10) * progress);
+        ..strokeWidth = 2.2
+        ..color = color.withValues(alpha: (0.75 - h * 0.10) * animAlpha);
       canvas.drawPath(hexPath, hexPaint);
     }
   }
@@ -131,6 +152,7 @@ class VaultGyroscopePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2 - 40);
     final baseRadius = 88.0 * (0.85 + progress * 0.15);
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
     final angles = [0.45, -0.75, 1.85];
     final aspectRatios = [0.42, 0.38, 0.45];
@@ -146,10 +168,17 @@ class VaultGyroscopePainter extends CustomPainter {
       canvas.rotate(angles[i] + (loop * 0.3 * (i % 2 == 0 ? 1 : -1)));
       canvas.scale(1.2, aspectRatios[i]);
 
+      final orbitGlow = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.8
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = colors[i].withValues(alpha: 0.35 * animAlpha);
+      canvas.drawCircle(Offset.zero, baseRadius * (1.0 + i * 0.25), orbitGlow);
+
       final orbitPaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = colors[i].withValues(alpha: 0.45 * progress);
+        ..strokeWidth = 2.2
+        ..color = colors[i].withValues(alpha: 0.70 * animAlpha);
       canvas.drawCircle(Offset.zero, baseRadius * (1.0 + i * 0.25), orbitPaint);
 
       // Satélite en órbita
@@ -158,10 +187,17 @@ class VaultGyroscopePainter extends CustomPainter {
         math.cos(satAngle) * baseRadius * (1.0 + i * 0.25),
         math.sin(satAngle) * baseRadius * (1.0 + i * 0.25),
       );
+
+      final satGlow = Paint()
+        ..style = PaintingStyle.fill
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = colors[i].withValues(alpha: 0.65 * animAlpha);
+      canvas.drawCircle(satPos, 6.5, satGlow);
+
       final satPaint = Paint()
         ..style = PaintingStyle.fill
-        ..color = colors[i].withValues(alpha: 0.90 * progress);
-      canvas.drawCircle(satPos, 4.0, satPaint);
+        ..color = colors[i].withValues(alpha: animAlpha);
+      canvas.drawCircle(satPos, 4.5, satPaint);
 
       canvas.restore();
     }

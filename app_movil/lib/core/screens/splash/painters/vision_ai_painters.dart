@@ -23,24 +23,47 @@ class VisionHolographicScanPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2 - 40);
     final scanHeight = 160.0 * progress;
     final scanWidth = 140.0 * progress;
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
     // Caja delimitadora de escáner (Bounding Box)
     final boxRect = Rect.fromCenter(center: center, width: scanWidth, height: scanHeight);
+
+    final boxGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.6
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+      ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.35 * animAlpha);
+    canvas.drawRRect(RRect.fromRectAndRadius(boxRect, const Radius.circular(16)), boxGlow);
+
     final boxPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.25 * progress);
+      ..strokeWidth = 2.0
+      ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.65 * animAlpha);
     canvas.drawRRect(RRect.fromRectAndRadius(boxRect, const Radius.circular(16)), boxPaint);
 
     // Haz láser horizontal oscilante
     final laserY = center.dy - (scanHeight / 2) + ((math.sin(loop * math.pi * 2) + 1.0) / 2.0) * scanHeight;
-    final laserPaint = Paint()
+
+    final laserGlow = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
+      ..strokeWidth = 4.5
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
       ..shader = LinearGradient(
         colors: [
           const Color(0xFF8B5CF6).withValues(alpha: 0.0),
-          const Color(0xFFA78BFA).withValues(alpha: 0.90 * progress),
+          const Color(0xFFA78BFA).withValues(alpha: 0.60 * animAlpha),
+          const Color(0xFF8B5CF6).withValues(alpha: 0.0),
+        ],
+      ).createShader(Rect.fromLTWH(center.dx - scanWidth / 2, laserY, scanWidth, 2));
+    canvas.drawLine(Offset(center.dx - scanWidth / 2, laserY), Offset(center.dx + scanWidth / 2, laserY), laserGlow);
+
+    final laserPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.6
+      ..shader = LinearGradient(
+        colors: [
+          const Color(0xFF8B5CF6).withValues(alpha: 0.0),
+          const Color(0xFFA78BFA).withValues(alpha: 0.95 * animAlpha),
           const Color(0xFF8B5CF6).withValues(alpha: 0.0),
         ],
       ).createShader(Rect.fromLTWH(center.dx - scanWidth / 2, laserY, scanWidth, 2));
@@ -57,19 +80,25 @@ class VisionHolographicScanPainter extends CustomPainter {
 
     for (final pos in ocrPositions) {
       final isNearLaser = (pos.dy - laserY).abs() < 24.0;
-      final dotAlpha = isNearLaser ? 0.95 : 0.35;
+      final dotAlpha = isNearLaser ? 0.95 : 0.45;
+
+      final dotGlow = Paint()
+        ..style = PaintingStyle.fill
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = const Color(0xFFA78BFA).withValues(alpha: dotAlpha * 0.5 * animAlpha);
+      canvas.drawCircle(pos, isNearLaser ? 5.5 : 3.5, dotGlow);
 
       final dotPaint = Paint()
         ..style = PaintingStyle.fill
-        ..color = const Color(0xFFA78BFA).withValues(alpha: dotAlpha * progress);
-      canvas.drawCircle(pos, isNearLaser ? 3.5 : 2.0, dotPaint);
+        ..color = const Color(0xFFA78BFA).withValues(alpha: dotAlpha * animAlpha);
+      canvas.drawCircle(pos, isNearLaser ? 4.0 : 2.5, dotPaint);
 
       if (isNearLaser) {
         final ringPaint = Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.0
-          ..color = const Color(0xFFC4B5FD).withValues(alpha: 0.60 * progress);
-        canvas.drawCircle(pos, 7.0, ringPaint);
+          ..strokeWidth = 1.8
+          ..color = const Color(0xFFC4B5FD).withValues(alpha: 0.80 * animAlpha);
+        canvas.drawCircle(pos, 8.0, ringPaint);
       }
     }
   }
@@ -94,12 +123,19 @@ class VisionOpticalReticlePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2 - 40);
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
     // Anillo giratorio de enfoque
+    final ringGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.6
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+      ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.35 * animAlpha);
+
     final ringPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.40 * progress);
+      ..strokeWidth = 2.2
+      ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.70 * animAlpha);
 
     canvas.save();
     canvas.translate(center.dx, center.dy);
@@ -110,17 +146,28 @@ class VisionOpticalReticlePainter extends CustomPainter {
       final a = (i * math.pi * 2 / notches);
       final p1 = Offset(math.cos(a) * 85.0, math.sin(a) * 85.0);
       final p2 = Offset(math.cos(a) * 92.0, math.sin(a) * 92.0);
+      canvas.drawLine(p1, p2, ringGlow);
       canvas.drawLine(p1, p2, ringPaint);
     }
+    canvas.drawCircle(Offset.zero, 88.0 * progress, ringGlow);
     canvas.drawCircle(Offset.zero, 88.0 * progress, ringPaint);
     canvas.restore();
 
     // Cruz de micro-precisión central
-    final crossLength = 12.0;
+    const crossLength = 14.0;
+    final crossGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.8
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+      ..color = const Color(0xFFC4B5FD).withValues(alpha: 0.50 * animAlpha);
+
+    canvas.drawLine(Offset(center.dx - crossLength, center.dy), Offset(center.dx + crossLength, center.dy), crossGlow);
+    canvas.drawLine(Offset(center.dx, center.dy - crossLength), Offset(center.dx, center.dy + crossLength), crossGlow);
+
     final crossPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..color = const Color(0xFFC4B5FD).withValues(alpha: 0.65 * progress);
+      ..strokeWidth = 2.2
+      ..color = const Color(0xFFC4B5FD).withValues(alpha: 0.85 * animAlpha);
 
     canvas.drawLine(Offset(center.dx - crossLength, center.dy), Offset(center.dx + crossLength, center.dy), crossPaint);
     canvas.drawLine(Offset(center.dx, center.dy - crossLength), Offset(center.dx, center.dy + crossLength), crossPaint);
@@ -147,6 +194,7 @@ class VisionPrismExtractionPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2 - 40);
     final prismR = 95.0 * progress;
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
     // Triángulo refractario base
     final trianglePath = Path();
@@ -161,10 +209,17 @@ class VisionPrismExtractionPainter extends CustomPainter {
     }
     trianglePath.close();
 
+    final prismGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.0
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+      ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.40 * animAlpha);
+    canvas.drawPath(trianglePath, prismGlow);
+
     final prismPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.45 * progress);
+      ..strokeWidth = 2.4
+      ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.75 * animAlpha);
     canvas.drawPath(trianglePath, prismPaint);
 
     // Haces de refracción salientes
@@ -180,16 +235,29 @@ class VisionPrismExtractionPainter extends CustomPainter {
       final start = Offset(center.dx + math.cos(a) * 60, center.dy + math.sin(a) * 60);
       final end = Offset(center.dx + math.cos(a) * 135, center.dy + math.sin(a) * 135);
 
+      final rayGlow = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.8
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = colors[i].withValues(alpha: 0.35 * animAlpha);
+      canvas.drawLine(start, end, rayGlow);
+
       final rayPaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = colors[i].withValues(alpha: 0.50 * progress);
+        ..strokeWidth = 2.2
+        ..color = colors[i].withValues(alpha: 0.75 * animAlpha);
       canvas.drawLine(start, end, rayPaint);
+
+      final tokenGlow = Paint()
+        ..style = PaintingStyle.fill
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = colors[i].withValues(alpha: 0.65 * animAlpha);
+      canvas.drawCircle(end, 5.0, tokenGlow);
 
       final tokenPaint = Paint()
         ..style = PaintingStyle.fill
-        ..color = colors[i].withValues(alpha: 0.90 * progress);
-      canvas.drawCircle(end, 3.0, tokenPaint);
+        ..color = colors[i].withValues(alpha: animAlpha);
+      canvas.drawCircle(end, 3.5, tokenPaint);
     }
   }
 

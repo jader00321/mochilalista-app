@@ -23,77 +23,96 @@ class MochilaBrandMedallion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final borderRadius = BorderRadius.circular(size * 0.28);
+    final double breathingScale = 1.0 + (0.045 * pulseValue);
 
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: borderRadius,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  const Color(0xFF1E293B),
-                  const Color(0xFF0F172A),
-                ]
-              : [
-                  Colors.white,
-                  const Color(0xFFF1F5F9),
-                ],
-        ),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.16 + (0.08 * pulseValue))
-              : accentColor.withValues(alpha: 0.25),
-          width: 1.5,
-        ),
-        boxShadow: [
-          // Aura cromática sincronizada con el arquetipo activo
-          BoxShadow(
-            color: accentColor.withValues(alpha: (isDark ? 0.28 : 0.18) * pulseValue),
-            blurRadius: 36 * pulseValue,
-            spreadRadius: 2 * pulseValue,
+    return Transform.scale(
+      scale: breathingScale,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: borderRadius,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [
+                    const Color(0xFF1E293B),
+                    const Color(0xFF0F172A),
+                  ]
+                : [
+                    Colors.white,
+                    const Color(0xFFF1F5F9),
+                  ],
           ),
-          // Sombra de profundidad dimensional
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.10),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.18 + (0.10 * pulseValue))
+                : accentColor.withValues(alpha: 0.35),
+            width: 1.5,
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Destello especular superior de vidrio tallado
-            Positioned(
-              top: -size * 0.25,
-              left: -size * 0.2,
-              child: Container(
-                width: size * 1.4,
-                height: size * 0.65,
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(0, -0.4),
-                    radius: 0.8,
-                    colors: [
-                      Colors.white.withValues(alpha: isDark ? 0.10 : 0.25),
-                      Colors.transparent,
-                    ],
+          boxShadow: [
+            // Aura cromática sincronizada con el arquetipo activo
+            BoxShadow(
+              color: accentColor.withValues(alpha: (isDark ? 0.32 : 0.22) * pulseValue),
+              blurRadius: 38 * pulseValue,
+              spreadRadius: 2 * pulseValue,
+            ),
+            // Sombra de profundidad dimensional
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.10),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Destello especular superior de vidrio tallado
+              Positioned(
+                top: -size * 0.25,
+                left: -size * 0.2,
+                child: Container(
+                  width: size * 1.4,
+                  height: size * 0.65,
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0, -0.4),
+                      radius: 0.8,
+                      colors: [
+                        Colors.white.withValues(alpha: isDark ? 0.12 : 0.28),
+                        Colors.transparent,
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
 
-            // Isotipo vectorial puro de alta precisión
-            CustomPaint(
-              size: Size(size * 0.58, size * 0.58),
-              painter: MochilaBrandEmblemPainter(),
-            ),
-          ],
+              // Doble bisel glassmorphic perimetral interior
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: borderRadius,
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.10)
+                          : Colors.white.withValues(alpha: 0.60),
+                      width: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+
+              // Isotipo vectorial puro de alta precisión escalado al 72%
+              CustomPaint(
+                size: Size(size * 0.72, size * 0.72),
+                painter: MochilaBrandEmblemPainter(),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -130,9 +149,10 @@ class MochilaBrandEmblemPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // Escala base normalizada (100 x 100)
+    // Escala base normalizada (100 x 100) centrada armónicamente
     canvas.save();
     canvas.scale(w / 100.0, h / 100.0);
+    canvas.translate(0, 7.5);
 
     // 1. Asa superior naranja
     final handleRect = Rect.fromCenter(center: const Offset(50, 16), width: 22, height: 16);

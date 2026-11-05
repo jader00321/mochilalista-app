@@ -10,6 +10,7 @@ class MiniInput extends StatelessWidget {
   final bool isBold;
   final bool isDark;
   final bool readOnly;
+  final FocusNode? focusNode;
   final VoidCallback? onChanged;
   final VoidCallback? onEditingComplete;
   final void Function(PointerDownEvent)? onTapOutside;
@@ -23,6 +24,7 @@ class MiniInput extends StatelessWidget {
     this.isBold = false,
     required this.isDark,
     this.readOnly = false,
+    this.focusNode,
     this.onChanged,
     this.onEditingComplete,
     this.onTapOutside,
@@ -50,6 +52,7 @@ class MiniInput extends StatelessWidget {
           height: 42,
           child: TextField(
             controller: ctrl,
+            focusNode: focusNode,
             readOnly: readOnly,
             enableInteractiveSelection: !readOnly,
             keyboardType: isNum

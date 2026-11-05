@@ -150,9 +150,30 @@ class PresentationMathEngine {
         if (activeRoundingTarget != null) {
           roundPrice(activeRoundingTarget!);
         }
-        onStateUpdate();
-        return;
       }
+
+      // Sincronizar reactivamente el cupo disponible ante cambio de factor de venta
+      final dynamic sharedCtrl = controllerMap['sharedStockCtrl'];
+      final String? sharedStr = sharedCtrl is TextEditingController
+          ? sharedCtrl.text
+          : controllerMap['stockBaseTotal']?.toString();
+      final int sharedBase = int.tryParse(sharedStr ?? "0") ?? 0;
+      final int availableSalesUnits = safeFactor > 0 ? (sharedBase ~/ safeFactor) : sharedBase;
+
+      if (controllerMap['cupoMaximoVariante'] == null) {
+        stockFinalCtrl.text = availableSalesUnits.toString();
+      } else {
+        final int cupo = (controllerMap['cupoMaximoVariante'] as num).toInt();
+        if (cupo > availableSalesUnits) {
+          controllerMap['cupoMaximoVariante'] = availableSalesUnits;
+          stockFinalCtrl.text = availableSalesUnits.toString();
+        } else {
+          stockFinalCtrl.text = cupo.toString();
+        }
+      }
+
+      onStateUpdate();
+      return;
     }
 
     bool isEdit = controllerMap['isEditMode'] == true;
@@ -777,6 +798,21 @@ class PresentationMathEngine {
       recalcularPrecios(fromMargen: true);
       if (controllerMap['activeRoundingTarget'] != null) {
         roundPrice(controllerMap['activeRoundingTarget'] as double);
+      }
+
+      // 4. Sincronizar inmediatamente el stock disponible para vender
+      final dynamic sharedCtrl = controllerMap['sharedStockCtrl'];
+      final String? sharedStr = sharedCtrl is TextEditingController
+          ? sharedCtrl.text
+          : controllerMap['stockBaseTotal']?.toString();
+      final int sharedBase = int.tryParse(sharedStr ?? "0") ?? 0;
+      final int availableSalesUnits = safeFactor > 0 ? (sharedBase ~/ safeFactor) : sharedBase;
+
+      if (controllerMap['cupoMaximoVariante'] == null) {
+        stockFinalCtrl.text = availableSalesUnits.toString();
+      } else {
+        final int cupo = (controllerMap['cupoMaximoVariante'] as num).toInt();
+        stockFinalCtrl.text = (cupo <= availableSalesUnits ? cupo : availableSalesUnits).toString();
       }
     } else {
       // 1. Guardar Snapshot de Modo Compartido

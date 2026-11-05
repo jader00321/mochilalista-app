@@ -338,16 +338,14 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
         ),
         // Contenido principal directamente anclado (DashboardHeader gobierna el padding.top estable)
         mainContent,
-        RepaintBoundary(
-          child: PersistentWorkDock(
-            isFloating: true,
-            onBubbleModeChanged: (isBubble) {
-              if (mounted) setState(() => _isDockBubble = isBubble);
-            },
-            onTasksChanged: (hasTasks) {
-              if (mounted) setState(() => _hasActiveTasks = hasTasks);
-            },
-          ),
+        PersistentWorkDock(
+          isFloating: true,
+          onBubbleModeChanged: (isBubble) {
+            if (mounted) setState(() => _isDockBubble = isBubble);
+          },
+          onTasksChanged: (hasTasks) {
+            if (mounted) setState(() => _hasActiveTasks = hasTasks);
+          },
         ),
       ],
     );

@@ -23,6 +23,7 @@ class EcosystemBridgesPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2 - 40);
     const nodeCount = 5;
     final r = 118.0 * progress;
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
     final nodes = <Offset>[];
     for (int i = 0; i < nodeCount; i++) {
@@ -30,14 +31,19 @@ class EcosystemBridgesPainter extends CustomPainter {
       nodes.add(Offset(center.dx + math.cos(a) * r, center.dy + math.sin(a) * r * 0.9));
     }
 
+    final bridgeGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.8
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+      ..color = const Color(0xFF38BDF8).withValues(alpha: 0.35 * animAlpha);
+
     final bridgePaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..color = const Color(0xFF38BDF8).withValues(alpha: 0.25 * progress);
+      ..strokeWidth = 2.0
+      ..color = const Color(0xFF38BDF8).withValues(alpha: 0.65 * animAlpha);
 
     for (int i = 0; i < nodeCount; i++) {
       for (int j = i + 1; j < nodeCount; j++) {
-        // Arco sinusoidal elástico entre nodos
         final p1 = nodes[i];
         final p2 = nodes[j];
         final mid = Offset((p1.dx + p2.dx) / 2, (p1.dy + p2.dy) / 2);
@@ -47,20 +53,27 @@ class EcosystemBridgesPainter extends CustomPainter {
         final path = Path()
           ..moveTo(p1.dx, p1.dy)
           ..quadraticBezierTo(cp.dx, cp.dy, p2.dx, p2.dy);
+        canvas.drawPath(path, bridgeGlow);
         canvas.drawPath(path, bridgePaint);
       }
 
-      // Nodo de ecosistema
-      final nodePaint = Paint()
-        ..style = PaintingStyle.fill
-        ..color = const Color(0xFF0284C7).withValues(alpha: 0.85 * progress);
-      canvas.drawCircle(nodes[i], 4.5, nodePaint);
+      final auraGlow = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.5
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = const Color(0xFF38BDF8).withValues(alpha: 0.50 * animAlpha);
+      canvas.drawCircle(nodes[i], 9.0, auraGlow);
 
       final auraPaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = const Color(0xFF38BDF8).withValues(alpha: 0.40 * progress);
-      canvas.drawCircle(nodes[i], 8.5, auraPaint);
+        ..strokeWidth = 2.0
+        ..color = const Color(0xFF38BDF8).withValues(alpha: 0.75 * animAlpha);
+      canvas.drawCircle(nodes[i], 9.0, auraPaint);
+
+      final nodePaint = Paint()
+        ..style = PaintingStyle.fill
+        ..color = const Color(0xFF0284C7).withValues(alpha: animAlpha);
+      canvas.drawCircle(nodes[i], 5.0, nodePaint);
     }
   }
 
@@ -86,6 +99,7 @@ class EcosystemCrystalAssemblyPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2 - 40);
     const facetCount = 6;
     final maxDist = 135.0 * (1.0 - progress * 0.4);
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
     for (int i = 0; i < facetCount; i++) {
       final a = (i * math.pi * 2 / facetCount) + (loop * 0.15);
@@ -104,15 +118,22 @@ class EcosystemCrystalAssemblyPainter extends CustomPainter {
       }
       facetPath.close();
 
+      final facetGlow = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.6
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = const Color(0xFF38BDF8).withValues(alpha: 0.40 * animAlpha);
+      canvas.drawPath(facetPath, facetGlow);
+
       final facetPaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.3
-        ..color = const Color(0xFF0284C7).withValues(alpha: 0.45 * progress);
+        ..strokeWidth = 2.2
+        ..color = const Color(0xFF0284C7).withValues(alpha: 0.80 * animAlpha);
       canvas.drawPath(facetPath, facetPaint);
 
       final facetFill = Paint()
         ..style = PaintingStyle.fill
-        ..color = const Color(0xFF38BDF8).withValues(alpha: 0.08 * progress);
+        ..color = const Color(0xFF38BDF8).withValues(alpha: 0.18 * animAlpha);
       canvas.drawPath(facetPath, facetFill);
     }
   }
@@ -140,6 +161,7 @@ class EcosystemCrownCampaignPainter extends CustomPainter {
     const rays = 16;
     final r1 = 68.0;
     final r2 = 125.0 * progress;
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
     for (int i = 0; i < rays; i++) {
       final a = (i * math.pi * 2 / rays) + (loop * 0.2);
@@ -149,18 +171,33 @@ class EcosystemCrownCampaignPainter extends CustomPainter {
       final currentR2 = isAccent ? r2 + 15.0 : r2;
       final end = Offset(center.dx + math.cos(a) * currentR2, center.dy + math.sin(a) * currentR2);
 
+      if (isAccent) {
+        final rayGlow = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4.2
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+          ..color = const Color(0xFF38BDF8).withValues(alpha: 0.45 * animAlpha);
+        canvas.drawLine(start, end, rayGlow);
+      }
+
       final rayPaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = isAccent ? 2.0 : 1.0
+        ..strokeWidth = isAccent ? 2.6 : 2.0
         ..color = (isAccent ? const Color(0xFF38BDF8) : const Color(0xFF0284C7))
-            .withValues(alpha: (isAccent ? 0.65 : 0.30) * progress);
+            .withValues(alpha: (isAccent ? 0.85 : 0.55) * animAlpha);
       canvas.drawLine(start, end, rayPaint);
 
       if (isAccent) {
+        final sparkGlow = Paint()
+          ..style = PaintingStyle.fill
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+          ..color = const Color(0xFF67E8F9).withValues(alpha: 0.70 * animAlpha);
+        canvas.drawCircle(end, 5.0, sparkGlow);
+
         final sparkPaint = Paint()
           ..style = PaintingStyle.fill
-          ..color = const Color(0xFF67E8F9).withValues(alpha: 0.85 * progress);
-        canvas.drawCircle(end, 2.5, sparkPaint);
+          ..color = const Color(0xFF67E8F9).withValues(alpha: animAlpha);
+        canvas.drawCircle(end, 3.0, sparkPaint);
       }
     }
   }

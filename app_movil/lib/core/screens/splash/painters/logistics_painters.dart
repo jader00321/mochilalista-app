@@ -22,69 +22,84 @@ class LogisticsCrosshairPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2 - 40);
     final armLength = 130.0 * progress;
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
+
+    final lineGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.6
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+      ..color = const Color(0xFFF59E0B).withValues(alpha: 0.35 * animAlpha);
 
     final linePaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..color = const Color(0xFFF59E0B).withValues(alpha: 0.35 * progress);
+      ..strokeWidth = 2.0
+      ..color = const Color(0xFFF59E0B).withValues(alpha: 0.65 * animAlpha);
 
-    // Ejes cartesianos principales con marcas de graduación
+    // Ejes cartesianos principales con glow pass
+    canvas.drawLine(Offset(center.dx - armLength, center.dy), Offset(center.dx + armLength, center.dy), lineGlow);
+    canvas.drawLine(Offset(center.dx, center.dy - armLength), Offset(center.dx, center.dy + armLength), lineGlow);
     canvas.drawLine(Offset(center.dx - armLength, center.dy), Offset(center.dx + armLength, center.dy), linePaint);
     canvas.drawLine(Offset(center.dx, center.dy - armLength), Offset(center.dx, center.dy + armLength), linePaint);
 
     // Marcas de graduación cada 20dp
     final tickPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..color = const Color(0xFFFBBF24).withValues(alpha: 0.40 * progress);
+      ..strokeWidth = 1.8
+      ..color = const Color(0xFFFBBF24).withValues(alpha: 0.65 * animAlpha);
 
     for (double d = 60; d <= armLength; d += 20) {
-      canvas.drawLine(Offset(center.dx + d, center.dy - 4), Offset(center.dx + d, center.dy + 4), tickPaint);
-      canvas.drawLine(Offset(center.dx - d, center.dy - 4), Offset(center.dx - d, center.dy + 4), tickPaint);
-      canvas.drawLine(Offset(center.dx - 4, center.dy + d), Offset(center.dx + 4, center.dy + d), tickPaint);
-      canvas.drawLine(Offset(center.dx - 4, center.dy - d), Offset(center.dx + 4, center.dy - d), tickPaint);
+      canvas.drawLine(Offset(center.dx + d, center.dy - 5), Offset(center.dx + d, center.dy + 5), tickPaint);
+      canvas.drawLine(Offset(center.dx - d, center.dy - 5), Offset(center.dx - d, center.dy + 5), tickPaint);
+      canvas.drawLine(Offset(center.dx - 5, center.dy + d), Offset(center.dx + 5, center.dy + d), tickPaint);
+      canvas.drawLine(Offset(center.dx - 5, center.dy - d), Offset(center.dx + 5, center.dy - d), tickPaint);
     }
 
-    // Corchetes angulares HUD en las 4 esquinas
-    final bracketSize = 18.0;
+    // Corchetes angulares HUD en las 4 esquinas con glow pass
+    const bracketSize = 18.0;
     final bracketOffset = 72.0 * (0.95 + math.sin(loop * math.pi * 2) * 0.05);
+
+    final bracketGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.2
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+      ..color = const Color(0xFFF59E0B).withValues(alpha: 0.45 * animAlpha);
+
     final bracketPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..color = const Color(0xFFF59E0B).withValues(alpha: 0.70 * progress);
+      ..strokeWidth = 2.4
+      ..color = const Color(0xFFF59E0B).withValues(alpha: 0.90 * animAlpha);
 
     // Top-Left
-    canvas.drawPath(
-      Path()
-        ..moveTo(center.dx - bracketOffset, center.dy - bracketOffset + bracketSize)
-        ..lineTo(center.dx - bracketOffset, center.dy - bracketOffset)
-        ..lineTo(center.dx - bracketOffset + bracketSize, center.dy - bracketOffset),
-      bracketPaint,
-    );
+    final pTL = Path()
+      ..moveTo(center.dx - bracketOffset, center.dy - bracketOffset + bracketSize)
+      ..lineTo(center.dx - bracketOffset, center.dy - bracketOffset)
+      ..lineTo(center.dx - bracketOffset + bracketSize, center.dy - bracketOffset);
+    canvas.drawPath(pTL, bracketGlow);
+    canvas.drawPath(pTL, bracketPaint);
+
     // Top-Right
-    canvas.drawPath(
-      Path()
-        ..moveTo(center.dx + bracketOffset - bracketSize, center.dy - bracketOffset)
-        ..lineTo(center.dx + bracketOffset, center.dy - bracketOffset)
-        ..lineTo(center.dx + bracketOffset, center.dy - bracketOffset + bracketSize),
-      bracketPaint,
-    );
+    final pTR = Path()
+      ..moveTo(center.dx + bracketOffset - bracketSize, center.dy - bracketOffset)
+      ..lineTo(center.dx + bracketOffset, center.dy - bracketOffset)
+      ..lineTo(center.dx + bracketOffset, center.dy - bracketOffset + bracketSize);
+    canvas.drawPath(pTR, bracketGlow);
+    canvas.drawPath(pTR, bracketPaint);
+
     // Bottom-Left
-    canvas.drawPath(
-      Path()
-        ..moveTo(center.dx - bracketOffset, center.dy + bracketOffset - bracketSize)
-        ..lineTo(center.dx - bracketOffset, center.dy + bracketOffset)
-        ..lineTo(center.dx - bracketOffset + bracketSize, center.dy + bracketOffset),
-      bracketPaint,
-    );
+    final pBL = Path()
+      ..moveTo(center.dx - bracketOffset, center.dy + bracketOffset - bracketSize)
+      ..lineTo(center.dx - bracketOffset, center.dy + bracketOffset)
+      ..lineTo(center.dx - bracketOffset + bracketSize, center.dy + bracketOffset);
+    canvas.drawPath(pBL, bracketGlow);
+    canvas.drawPath(pBL, bracketPaint);
+
     // Bottom-Right
-    canvas.drawPath(
-      Path()
-        ..moveTo(center.dx + bracketOffset - bracketSize, center.dy + bracketOffset)
-        ..lineTo(center.dx + bracketOffset, center.dy + bracketOffset)
-        ..lineTo(center.dx + bracketOffset, center.dy + bracketOffset - bracketSize),
-      bracketPaint,
-    );
+    final pBR = Path()
+      ..moveTo(center.dx + bracketOffset - bracketSize, center.dy + bracketOffset)
+      ..lineTo(center.dx + bracketOffset, center.dy + bracketOffset)
+      ..lineTo(center.dx + bracketOffset, center.dy + bracketOffset - bracketSize);
+    canvas.drawPath(pBR, bracketGlow);
+    canvas.drawPath(pBR, bracketPaint);
   }
 
   @override
@@ -110,14 +125,15 @@ class LogisticsGridPainter extends CustomPainter {
     const cellSize = 28.0;
     const gridCols = 7;
     const gridRows = 7;
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
     final startX = center.dx - (gridCols * cellSize) / 2;
     final startY = center.dy - (gridRows * cellSize) / 2;
 
     final baseGridPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8
-      ..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05 * progress);
+      ..strokeWidth = 1.2
+      ..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.14 * animAlpha);
 
     for (int r = 0; r < gridRows; r++) {
       for (int c = 0; c < gridCols; c++) {
@@ -136,13 +152,19 @@ class LogisticsGridPainter extends CustomPainter {
         if (isActive) {
           final activePaint = Paint()
             ..style = PaintingStyle.fill
-            ..color = const Color(0xFFF59E0B).withValues(alpha: 0.22 * progress);
+            ..color = const Color(0xFFF59E0B).withValues(alpha: 0.35 * animAlpha);
           canvas.drawRect(cellRect.deflate(2.0), activePaint);
+
+          final nodeGlow = Paint()
+            ..style = PaintingStyle.fill
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+            ..color = const Color(0xFFFBBF24).withValues(alpha: 0.60 * animAlpha);
+          canvas.drawCircle(cellRect.center, 4.5, nodeGlow);
 
           final nodePaint = Paint()
             ..style = PaintingStyle.fill
-            ..color = const Color(0xFFFBBF24).withValues(alpha: 0.70 * progress);
-          canvas.drawCircle(cellRect.center, 2.0, nodePaint);
+            ..color = const Color(0xFFFBBF24).withValues(alpha: animAlpha);
+          canvas.drawCircle(cellRect.center, 2.8, nodePaint);
         }
       }
     }
@@ -170,27 +192,42 @@ class LogisticsDualFlowPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2 - 40);
     const particleCount = 16;
     final maxR = 125.0 * progress;
+    final double animAlpha = (0.35 + (0.65 * progress)).clamp(0.0, 1.0);
 
     for (int i = 0; i < particleCount; i++) {
       final t = (i / particleCount + loop) % 1.0;
       final r = 60.0 + t * (maxR - 60.0);
-      final alpha = (1.0 - t) * 0.75 * progress;
+      final alpha = (0.45 + (1.0 - t) * 0.55) * animAlpha;
 
       // Hélice 1: Entradas (Azul Cobalto)
       final angle1 = t * math.pi * 3.5;
       final pos1 = Offset(center.dx + math.cos(angle1) * r, center.dy + math.sin(angle1) * r);
+
+      final glow1 = Paint()
+        ..style = PaintingStyle.fill
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = const Color(0xFF0284C7).withValues(alpha: alpha * 0.55);
+      canvas.drawCircle(pos1, 5.5, glow1);
+
       final paint1 = Paint()
         ..style = PaintingStyle.fill
         ..color = const Color(0xFF0284C7).withValues(alpha: alpha);
-      canvas.drawCircle(pos1, 3.2, paint1);
+      canvas.drawCircle(pos1, 3.8, paint1);
 
       // Hélice 2: Ventas (Verde Esmeralda en contra-giro)
       final angle2 = -t * math.pi * 3.5 + math.pi;
       final pos2 = Offset(center.dx + math.cos(angle2) * r, center.dy + math.sin(angle2) * r);
+
+      final glow2 = Paint()
+        ..style = PaintingStyle.fill
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5)
+        ..color = const Color(0xFF10B981).withValues(alpha: alpha * 0.55);
+      canvas.drawCircle(pos2, 5.5, glow2);
+
       final paint2 = Paint()
         ..style = PaintingStyle.fill
         ..color = const Color(0xFF10B981).withValues(alpha: alpha);
-      canvas.drawCircle(pos2, 3.2, paint2);
+      canvas.drawCircle(pos2, 3.8, paint2);
     }
   }
 

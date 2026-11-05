@@ -236,15 +236,40 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Logo Hero Emblem con Medallón Vectorial Puro (Cero Parche Blanco)
-                  Hero(
-                    tag: 'app_brand_logo',
-                    child: MochilaBrandMedallion(
-                      size: 104,
-                      accentColor: config.accentColor,
-                      pulseValue: _glowAnim.value,
-                      isDark: isDark,
-                    ),
+                  // Logo Hero Emblem con Medallón Vectorial Puro y Aura Radial Ambiental
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Aura radial ambiental dinámicamente sincronizada con el color del arquetipo
+                      Container(
+                        width: 220,
+                        height: 220,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              config.accentColor.withValues(
+                                alpha: isDark ? 0.28 * _glowAnim.value : 0.18 * _glowAnim.value,
+                              ),
+                              config.accentColor.withValues(
+                                alpha: isDark ? 0.08 * _glowAnim.value : 0.05 * _glowAnim.value,
+                              ),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 0.55, 1.0],
+                          ),
+                        ),
+                      ),
+                      Hero(
+                        tag: 'app_brand_logo',
+                        child: MochilaBrandMedallion(
+                          size: 104,
+                          accentColor: config.accentColor,
+                          pulseValue: _glowAnim.value,
+                          isDark: isDark,
+                        ),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 22),
@@ -285,7 +310,7 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
             ),
           ),
 
-          // Indicador de Progreso Sutil en la base
+          // Barra de Progreso Luminiscente en la base
           Positioned(
             bottom: 48,
             left: 0,
@@ -296,17 +321,41 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
                 builder: (context, _) {
                   return Opacity(
                     opacity: _fadeInAnim.value,
-                    child: SizedBox(
+                    child: Container(
                       width: 140,
-                      child: ClipRRect(
+                      height: 4.0,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(10),
-                        child: LinearProgressIndicator(
-                          value: _mainController.value,
-                          minHeight: 3.5,
-                          backgroundColor: isDark
-                              ? Colors.white.withValues(alpha: 0.08)
-                              : Colors.black.withValues(alpha: 0.06),
-                          valueColor: AlwaysStoppedAnimation<Color>(config.accentColor),
+                        boxShadow: [
+                          BoxShadow(
+                            color: config.accentColor.withValues(alpha: 0.35 * _glowAnim.value),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      alignment: Alignment.centerLeft,
+                      child: FractionallySizedBox(
+                        widthFactor: _mainController.value.clamp(0.0, 1.0),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            gradient: LinearGradient(
+                              colors: [
+                                config.accentColor.withValues(alpha: 0.75),
+                                config.accentColor,
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: config.accentColor.withValues(alpha: 0.6),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -352,15 +401,18 @@ class _ColdStartSplashScreenState extends State<ColdStartSplashScreen>
           ),
           const SizedBox(width: 8),
           Flexible(
-            child: Text(
-              config.capsuleText,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                config.capsuleText,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

@@ -69,27 +69,77 @@ class _PresentationStockSectionState extends State<PresentationStockSection> {
   bool _mostrarAjusteBase = false;
   Timer? _warningTimer;
   String? _quotaWarningMessage;
+  late final FocusNode _sharedQuotaFocusNode;
 
   @override
   void initState() {
     super.initState();
-    final bool isShared = widget.modoStock == 'COMPARTIDO' ||
-        (widget.modoStock == 'MIXTO' && widget.usaStockCompartido);
-    if (isShared && widget.stockFinalCtrl.text.trim().isEmpty) {
-      final int factorV = int.tryParse(widget.unidadesVentaCtrl.text) ?? 1;
-      final int safeFactor = factorV <= 0 ? 1 : factorV;
-      final int sharedBase = int.tryParse(widget.sharedStockCtrl?.text ?? "0") ?? 0;
-      final int availableSalesUnits = safeFactor > 0 ? (sharedBase ~/ safeFactor) : sharedBase;
-      final int? customCupo = widget.controllerMap?['cupoMaximoVariante'] as int?;
-      final int effective = (customCupo != null && customCupo <= availableSalesUnits) ? customCupo : availableSalesUnits;
-      widget.stockFinalCtrl.text = effective.toString();
+    _sharedQuotaFocusNode = FocusNode();
+    widget.sharedStockCtrl?.addListener(_onSharedOrUnitChanged);
+    widget.unidadesVentaCtrl.addListener(_onSharedOrUnitChanged);
+
+    _syncSharedStockQuotaIfUnbounded();
+  }
+
+  @override
+  void didUpdateWidget(covariant PresentationStockSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sharedStockCtrl != widget.sharedStockCtrl) {
+      oldWidget.sharedStockCtrl?.removeListener(_onSharedOrUnitChanged);
+      widget.sharedStockCtrl?.addListener(_onSharedOrUnitChanged);
     }
+    if (oldWidget.unidadesVentaCtrl != widget.unidadesVentaCtrl) {
+      oldWidget.unidadesVentaCtrl.removeListener(_onSharedOrUnitChanged);
+      widget.unidadesVentaCtrl.addListener(_onSharedOrUnitChanged);
+    }
+    _syncSharedStockQuotaIfUnbounded();
   }
 
   @override
   void dispose() {
+    widget.sharedStockCtrl?.removeListener(_onSharedOrUnitChanged);
+    widget.unidadesVentaCtrl.removeListener(_onSharedOrUnitChanged);
+    _sharedQuotaFocusNode.dispose();
     _warningTimer?.cancel();
     super.dispose();
+  }
+
+  void _onSharedOrUnitChanged() {
+    _syncSharedStockQuotaIfUnbounded();
+    if (mounted) setState(() {});
+  }
+
+  void _syncSharedStockQuotaIfUnbounded() {
+    final bool isShared = widget.modoStock == 'COMPARTIDO' ||
+        (widget.modoStock == 'MIXTO' && widget.usaStockCompartido);
+    if (!isShared) return;
+
+    final int factorV = int.tryParse(widget.unidadesVentaCtrl.text) ?? 1;
+    final int safeFactor = factorV <= 0 ? 1 : factorV;
+    final int sharedBase = int.tryParse(widget.sharedStockCtrl?.text ?? "0") ?? 0;
+    final int availableSalesUnits = safeFactor > 0 ? (sharedBase ~/ safeFactor) : sharedBase;
+
+    final int? customCupo = widget.controllerMap?['cupoMaximoVariante'] as int?;
+
+    // Si el usuario está tipeando activamente en este campo, no sobrescribir su cursor
+    if (_sharedQuotaFocusNode.hasFocus) return;
+
+    if (customCupo == null) {
+      final currentVisual = int.tryParse(widget.stockFinalCtrl.text);
+      if (currentVisual != availableSalesUnits) {
+        widget.stockFinalCtrl.text = availableSalesUnits.toString();
+      }
+    } else {
+      if (customCupo > availableSalesUnits) {
+        widget.controllerMap?['cupoMaximoVariante'] = availableSalesUnits;
+        widget.stockFinalCtrl.text = availableSalesUnits.toString();
+      } else {
+        final currentVisual = int.tryParse(widget.stockFinalCtrl.text);
+        if (currentVisual != customCupo) {
+          widget.stockFinalCtrl.text = customCupo.toString();
+        }
+      }
+    }
   }
 
   void _restoreIfEmpty(int maxFisico) {
@@ -306,6 +356,7 @@ class _PresentationStockSectionState extends State<PresentationStockSection> {
                         flex: 5,
                         child: MiniInput(
                           ctrl: widget.stockFinalCtrl,
+                          focusNode: _sharedQuotaFocusNode,
                           label: "Stock disponible para vender",
                           hint: "$availableSalesUnits",
                           isNum: true,

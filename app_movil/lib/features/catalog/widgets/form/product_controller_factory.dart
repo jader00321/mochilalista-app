@@ -91,7 +91,11 @@ class ProductControllerFactory {
       'stockInicial': TextEditingController(text: stockInicial),
       'nuevoIngreso': TextEditingController(text: nuevoIngreso),
       'stockDescuento': TextEditingController(text: stockDescuento),
-      'stockFinal': TextEditingController(text: stockFinal),
+      'stockFinal': TextEditingController(
+        text: (usaStockCompartido && cupoMaximoVariante != null && stockFinal == "0")
+            ? cupoMaximoVariante.toString()
+            : stockFinal,
+      ),
       'ajusteBase': TextEditingController(text: ajusteBase),
 
       'umpCompra': TextEditingController(text: umpCompra),
