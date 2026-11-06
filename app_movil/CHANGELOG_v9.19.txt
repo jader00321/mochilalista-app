@@ -1,0 +1,139 @@
+================================================================================
+                    MOCHILALISTA APP - NOTAS DE VERSION V9.19
+================================================================================
+Version: 9.19.0+69
+Nombre del Paquete: mochilalista_v9.19
+Fecha: 6 de Noviembre de 2026
+Compilacion: Release APK (mochilalista_v9.19.apk)
+Plataforma: Android (Flutter SDK ^3.9.0)
+Arquitectura: 100% Local-First Offline SQLite con reactividad a 0ms
+Calidad de Codigo: 0 Errores | 0 Advertencias | 100% Tests Aprobados
+Repositorio: Rama dev/mejoras-v9.0-comercializacion-seguridad (Sincronizado)
+
+================================================================================
+RESUMEN EJECUTIVO DE LA ACTUALIZACION
+================================================================================
+La version 9.19 de MochilaLista introduce soluciones definitivas a tres problemas
+criticos de logica, reactividad y experiencia de usuario identificados en las
+pantallas de "Editor WhatsApp" y "Editar Producto".
+
+Esta entrega perfecciona la ergonomia del comerciante al redactar cotizaciones
+y gestionar pagos bancarios mediante chips inteligentes y orden-agnosticos con
+memoria de sesion, elimina falsos positivos en la sincronizacion del perfil de
+negocio con enunciados adaptativos compactos, y blinda la reversibilidad total
+(Undo / Deshacer) en la edicion de productos mixtos y variantes compartidas.
+
+Adicionalmente, se consolida la estabilidad de renderizado responsive para
+pantallas estrechas (360px) en la linea de tiempo de cuotas y se actualiza el
+ecosistema de pruebas automatizadas con certificacion forense completa.
+
+================================================================================
+DETALLE DE MEJORAS Y CORRECCIONES TECNICAS
+================================================================================
+
+1. REINGENIERIA DEL SISTEMA DE CHIPS EN "EDITOR WHATSAPP"
+--------------------------------------------------------------------------------
+- Procesamiento Orden-Agnostico y 0 Duplicaciones:
+  * Se rediseño por completo la logica de insercion y remocion de cuentas bancarias
+    (Yape, Plin, BCP, BBVA, CCI) en el campo de texto de pagos.
+  * La evaluacion se realiza ahora linea por linea mediante expresiones regulares
+    canonicas por tipo de entidad bancaria, erradicando el bug critico en el que
+    apagar el ultimo chip activado (ej. CCI) duplicaba su linea en lugar de borrarla.
+  * Se garantiza que cualquier chip puede ser activado o desactivado en cualquier
+    orden sin generar saltos de linea vacios ni duplicar texto.
+
+- Memoria de Sesion para Numeros Digitados:
+  * WaBusinessSection se convirtio en StatefulWidget con persistencia de estado
+    vinculada al ciclo de vida de la pantalla.
+  * Si el usuario escribe o edita un numero de cuenta (ej. "BCP Soles: 191-12345678"
+    o "Yape: 976644890") y desactiva el chip, dicho numero se conserva en la memoria
+    temporal de sesion. Al volver a encender el chip, se restaura el numero completo
+    en lugar de una plantilla vacia.
+
+- Micro-animaciones y Eliminacion del Doble Check Redundante:
+  * Se elimino el caracter redundante "✓" en la etiqueta de los chips activos
+    (ahora muestra "Yape" cuando esta activo con su icono check_circle, y "+ Yape"
+    cuando esta inactivo).
+  * Se añadieron micro-interacciones suaves con AnimatedContainer y AnimatedSwitcher
+    para transiciones fluidas de color, borde, icono y elevacion.
+
+
+2. DETECCION INTELIGENTE Y ENUNCIADO ADAPTATIVO EN PERFIL DE NEGOCIO
+--------------------------------------------------------------------------------
+- Reversion Automatica del Estado [Modificado]:
+  * Inicializacion limpia del campo de cuentas con la informacion real del negocio
+    (biz.paymentInfo ?? ""), evitando falsos positivos al abrir la ventana.
+  * Comparacion en tiempo real normalizada de los 4 campos clave: Telefono, RUC,
+    Direccion (incluyendo coordenadas GPS de latitud y longitud) y Cuentas de pago.
+  * Si el comerciante revierte los valores a su estado original (manualmente, con
+    los chips o con el boton restaurar), el sistema reconoce instantaneamente la
+    coincidencia exacta, ocultando el badge [Modificado] y desmarcando la casilla.
+
+- Enunciado Inferior Adaptativo y Conciso:
+  * El texto explicativo largo se reemplazo por un mensaje sintetico y adaptativo
+    en gramatica natural en español, sin mostrar valores antiguos ni nuevos:
+    * 0 cambios: "Tus datos coinciden con el perfil actual de tu negocio."
+    * 1 cambio: "Se actualizará en tu perfil: Cuentas de pago."
+    * 2 cambios: "Se actualizarán en tu perfil: Teléfono y Cuentas de pago."
+    * 3 o mas cambios: "Se actualizarán en tu perfil: Teléfono, RUC y Dirección."
+  * La casilla de verificacion se deshabilita automaticamente cuando no existen
+    cambios reales pendientes de actualizar.
+
+
+3. REVERSION TOTAL (UNDO) Y ESTRATEGIA DE STOCK EN "EDITAR PRODUCTO"
+--------------------------------------------------------------------------------
+- Blindaje Forense de Snapshots (ProductEditSnapshot & PresentationSnapshot):
+  * Se integro la captura y restauracion completa de:
+    - usaStockCompartido (preserva el flag booleano de descuento compartido)
+    - cupoMaximoVariante (preserva el cupo maximo de cada presentacion)
+    - modoStock (Shared, Independent, Mixed)
+    - baseCost, stockCompartido y stockIngreso (+ Ingreso / Nuevas)
+    - Mapas clonados e independientes de savedPropioSnapshot y savedCompartidoSnapshot.
+
+- Reversion Atomica con Proteccion de Eventos (_isApplyingSnapshot):
+  * Al ingresar "+50 und" en un producto mixto y pulsar el boton Deshacer (Undo):
+    * "+ Ingreso (Nuevas)" vuelve fielmente a "0 und".
+    * "= Stock Final" se recalcula y restaura a su valor original de "66 und".
+    * Todas las presentaciones compartidas preservan usaStockCompartido: true.
+    * El resumen azul "Stock Final Calculado por Variante" ("Principal (Par x2):
+      2 disp. (de 33 máx.)" y "Caja (½ Docena x6): 11 disp.") se mantiene visible
+      en todo momento, sin desaparecer ni degradarse a stock propio independiente.
+
+- Sincronizacion Reactiva a 0ms:
+  * ProductStockStrategySelector sincroniza sus controladores con listeners activos
+    durante todo el ciclo de vida del widget.
+  * ProductEditChangeDetector detecta la igualdad exacta con el snapshot inicial,
+    ocultando automaticamente el boton amarillo de deshacer tanto si se presiona
+    Undo como si el usuario borra manualmente el ingreso y regresa a 0.
+
+
+4. AUDITORIA RESPONSIVE EN LINEA DE TIEMPO DE CUOTAS
+--------------------------------------------------------------------------------
+- SalePaymentTimeline Responsive en Pantallas Estrechas:
+  * Las acciones de cuotas pendientes (+ Mora, Recordar WhatsApp, Cobrar) se
+    migraron a un contenedor Wrap con WrapAlignment.end, eliminando cualquier
+    posibilidad de RenderFlex overflow en dispositivos compactos de 360px y 320px.
+
+================================================================================
+CERTIFICACION DE CALIDAD Y SUITE DE PRUEBAS
+================================================================================
+- Analizador Estatico: dart analyze lib test -> 0 errores | 0 advertencias | 0 sugerencias.
+- Suite Focalizada (37 pruebas):
+  * test/whatsapp_chips_and_product_edit_undo_test.dart: 9 pruebas aprobadas.
+  * test/trazabilidad_stock_inicial_y_editor_whatsapp_test.dart: 7 pruebas aprobadas.
+  * test/product_edit_snapshot_and_reversion_test.dart: 5 pruebas aprobadas.
+  * test/product_edit_screen_widget_test.dart: 9 pruebas aprobadas.
+  * test/product_draft_and_edit_change_detector_test.dart: 7 pruebas aprobadas.
+- Cobertura Global del Proyecto: 790+ pruebas unitarias y de widgets aprobadas.
+
+================================================================================
+ARCHIVOS GENERADOS
+================================================================================
+1. mochilalista_v9.19.apk -> Instalador APK Release para Android
+2. mochilalista_v9.19_cambios.txt -> Documento tecnico de cambios (Bloc de Notas)
+3. mochilalista_v9.19.txt -> Resumen ejecutivo y registro de version
+
+================================================================================
+                     MOCHILALISTA APP - NOVIEMBRE 2026
+================================================================================
+
