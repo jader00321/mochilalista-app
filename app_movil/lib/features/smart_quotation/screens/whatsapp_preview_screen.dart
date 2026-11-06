@@ -77,6 +77,26 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
   double? _bizLat;
   double? _bizLng;
 
+  String _originalBizAddress = "";
+  String _originalBizRuc = "";
+  String _originalBizPhone = "";
+  String _originalBizPayment = "";
+  double? _originalBizLat;
+  double? _originalBizLng;
+
+  final Map<PaymentChipType, String> _sessionPaymentMemory = {};
+
+  static String _normalizePaymentText(String raw) {
+    return raw
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .replaceAll(RegExp(r'[📱🏦🏛️]\s*'), '')
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .join('\n');
+  }
+
   String get _currentContextKey {
     if (_saleData != null) {
       final bool isLoan = _saleData!['origen_venta'] == 'prestamo_personal' || _saleData!['is_loan'] == true;
@@ -221,12 +241,21 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
 
         final biz = authProv.currentBusiness;
         if (biz != null) {
-          _bizAddressCtrl.text = biz.address ?? "";
-          _bizRucCtrl.text = biz.ruc ?? "";
-          _bizPhoneCtrl.text = authProv.user?.phone ?? "";
-          _bizPaymentCtrl.text = biz.paymentInfo ?? "BCP: 000-000...\nYape: 999...";
-          _bizLat = biz.latitud;
-          _bizLng = biz.longitud;
+          _originalBizAddress = (biz.address ?? "").trim();
+          _originalBizRuc = (biz.ruc ?? "").trim();
+          _originalBizPhone = (authProv.user?.phone ?? "").trim();
+          _originalBizPayment = (biz.paymentInfo != null && biz.paymentInfo!.trim().isNotEmpty)
+              ? biz.paymentInfo!.trim()
+              : "";
+          _originalBizLat = biz.latitud;
+          _originalBizLng = biz.longitud;
+
+          _bizAddressCtrl.text = _originalBizAddress;
+          _bizRucCtrl.text = _originalBizRuc;
+          _bizPhoneCtrl.text = _originalBizPhone;
+          _bizPaymentCtrl.text = _originalBizPayment;
+          _bizLat = _originalBizLat;
+          _bizLng = _originalBizLng;
         }
 
         // Aplicamos preferencias guardadas del usuario de WhatsApp indexadas por contexto
@@ -432,7 +461,15 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       final double interestRate = (_saleData!['porcentaje_interes'] ?? 0.0).toDouble();
       final double abonoInicial = (_saleData!['abono_inicial'] ?? 0.0).toDouble();
 
-      final double debtWithInterest = totalWithInterest - abonoInicial;
+      double moraTotal = (_saleData!['mora_total'] as num?)?.toDouble() ?? 0.0;
+      if (moraTotal <= 0 && _saleData!['cuotas'] != null) {
+        final list = _saleData!['cuotas'] as List;
+        moraTotal = list.fold(0.0, (acc, c) => acc + ((c['mora_monto'] as num?)?.toDouble() ?? 0.0));
+      }
+
+      // Regla de Oro: Proteger Capital e Interés Original ante recargos de mora
+      final double pureTotalWithInterest = (totalWithInterest - moraTotal) > 0 ? (totalWithInterest - moraTotal) : 0.0;
+      final double debtWithInterest = (pureTotalWithInterest - abonoInicial) > 0 ? (pureTotalWithInterest - abonoInicial) : 0.0;
       final double debtBase = (interestRate > 0 && debtWithInterest > 0)
           ? debtWithInterest / (1 + (interestRate / 100))
           : debtWithInterest;
@@ -448,6 +485,9 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       sb.writeln("🏦 *DETALLE DEL PRÉSTAMO*");
       sb.writeln("▪ Capital Prestado: *${AppCurrency.format(capitalNeto)}*");
       sb.writeln("▪ Interés Aplicado ($rateLabel): *$interestDisplay*");
+      if (moraTotal > 0.01) {
+        sb.writeln("▪ Recargo por Mora: *+ ${AppCurrency.format(moraTotal)}*");
+      }
       sb.writeln("▪ Total a Devolver: *${AppCurrency.format(totalWithInterest)}*");
 
       if (abonoInicial > 0.01) {
@@ -503,6 +543,15 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       double finalTotal = isSale ? (_saleData!['monto_total'] ?? 0).toDouble() : _quotation!.totalAmount;
       final double finalSavings = isSale ? (_saleData!['descuento_aplicado'] ?? 0).toDouble() : _quotation!.totalSavings;
 
+      double moraTotalSale = 0.0;
+      if (isSale) {
+        moraTotalSale = (_saleData!['mora_total'] as num?)?.toDouble() ?? 0.0;
+        if (moraTotalSale <= 0 && _saleData!['cuotas'] != null) {
+          final list = _saleData!['cuotas'] as List;
+          moraTotalSale = list.fold(0.0, (acc, c) => acc + ((c['mora_monto'] as num?)?.toDouble() ?? 0.0));
+        }
+      }
+
       sb.writeln("📊 *RESUMEN TOTAL*");
       sb.writeln("▪ Importe Total: *${AppCurrency.format(finalTotal)}*");
 
@@ -512,6 +561,10 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
         } else {
           sb.writeln("▪ Ahorro Total: *${AppCurrency.format(finalSavings)}* 🎉");
         }
+      }
+
+      if (moraTotalSale > 0.01) {
+        sb.writeln("▪ Recargo por Mora: *+ ${AppCurrency.format(moraTotalSale)}*");
       }
 
       if (isSale) {
@@ -534,11 +587,50 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       final List<dynamic>? cuotasRaw = _saleData?['cuotas'];
       if (cuotasRaw != null && cuotasRaw.isNotEmpty) {
         sb.writeln("📅 *CRONOGRAMA DE PAGOS* (${cuotasRaw.length} Cuotas)");
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+
         for (var c in cuotasRaw) {
-          final bool pagado = c['estado'] == 'pagado';
-          final String icon = pagado ? "✅ Pagado" : "⏳ Pendiente";
-          final String date = DateFormat('dd/MM/yyyy').format(DateTime.parse(c['fecha_vencimiento']));
-          sb.writeln("▪ Cuota ${c['numero_cuota']}: *${AppCurrency.format(c['monto'])}* (Vence: $date) - $icon");
+          final double cuotaMonto = (num.tryParse(c['monto'].toString()) ?? 0.0).toDouble();
+          final double cuotaPagado = (num.tryParse((c['monto_pagado'] ?? 0.0).toString()) ?? 0.0).toDouble();
+          final double saldoFalta = (cuotaMonto - cuotaPagado) > 0.001 ? (cuotaMonto - cuotaPagado) : 0.0;
+          final double moraMonto = (num.tryParse((c['mora_monto'] ?? 0.0).toString()) ?? 0.0).toDouble();
+          final double montoOriginal = (num.tryParse((c['monto_original'] ?? cuotaMonto).toString()) ?? cuotaMonto).toDouble();
+          final bool tieneMora = moraMonto > 0.01;
+          final bool pagado = c['estado'] == 'pagado' || (saldoFalta <= 0.01 && cuotaMonto > 0);
+
+          DateTime? dueDate;
+          try {
+            dueDate = DateTime.parse(c['fecha_vencimiento'].toString().split('T').first);
+          } catch (_) {}
+
+          final int daysOverdue = dueDate != null
+              ? today.difference(DateTime(dueDate.year, dueDate.month, dueDate.day)).inDays
+              : 0;
+          final bool isVencida = !pagado && daysOverdue > 0;
+          final String date = dueDate != null ? DateFormat('dd/MM/yyyy').format(dueDate) : c['fecha_vencimiento'].toString();
+
+          final String amountText = tieneMora
+              ? "*${AppCurrency.format(cuotaMonto)}* (Orig: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(moraMonto)} = Total: ${AppCurrency.format(cuotaMonto)})"
+              : "*${AppCurrency.format(cuotaMonto)}*";
+
+          if (pagado) {
+            sb.writeln("✅ Cuota ${c['numero_cuota']}: $amountText (Vence: $date) - Pagado");
+          } else if (isVencida) {
+            if (cuotaPagado > 0.01) {
+              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText - Vencida hace $daysOverdue d • Pago Parcial (Abonado: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})");
+            } else {
+              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText - Vencida hace $daysOverdue d");
+            }
+          } else {
+            if (cuotaPagado > 0.01) {
+              sb.writeln("🟠 Cuota ${c['numero_cuota']}: $amountText (Vence: $date) - Pago Parcial (Abonado: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})");
+            } else if (daysOverdue == 0) {
+              sb.writeln("⏳ Cuota ${c['numero_cuota']}: $amountText (Vence: Hoy) - Por vencer");
+            } else {
+              sb.writeln("⏳ Cuota ${c['numero_cuota']}: $amountText (Vence: $date) - Pendiente");
+            }
+          }
         }
         sb.writeln("");
       }
@@ -656,15 +748,28 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
     }
     final bool isSale = _saleData != null;
     final biz = authProv.currentBusiness;
-    final userPhone = authProv.user?.phone ?? "";
-    final bool hasBusinessChanges = (biz != null) && (
-      _bizAddressCtrl.text != (biz.address ?? "") ||
-      _bizRucCtrl.text != (biz.ruc ?? "") ||
-      _bizPhoneCtrl.text != userPhone ||
-      _bizPaymentCtrl.text != (biz.paymentInfo ?? "") ||
-      _bizLat != biz.latitud ||
-      _bizLng != biz.longitud
-    );
+    final List<String> changedBusinessFields = [];
+    if (biz != null) {
+      if (_bizPhoneCtrl.text.trim() != _originalBizPhone) {
+        changedBusinessFields.add("Teléfono");
+      }
+      if (_bizRucCtrl.text.trim() != _originalBizRuc) {
+        changedBusinessFields.add("RUC");
+      }
+      final bool isGpsChanged = _bizLat != _originalBizLat || _bizLng != _originalBizLng;
+      if (_bizAddressCtrl.text.trim() != _originalBizAddress || isGpsChanged) {
+        changedBusinessFields.add("Dirección");
+      }
+      final normPayment = _normalizePaymentText(_bizPaymentCtrl.text);
+      final normOrigPayment = _normalizePaymentText(_originalBizPayment);
+      if (normPayment != normOrigPayment) {
+        changedBusinessFields.add("Cuentas de pago");
+      }
+    }
+    final bool hasBusinessChanges = changedBusinessFields.isNotEmpty;
+    if (!hasBusinessChanges && _config.updateBusinessData) {
+      _config.updateBusinessData = false;
+    }
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -775,6 +880,8 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                       isGpsLoading: _isGpsLoading,
                       updateBusinessData: _config.updateBusinessData,
                       hasBusinessChanges: hasBusinessChanges,
+                      changedBusinessFields: changedBusinessFields,
+                      sessionPaymentMemory: _sessionPaymentMemory,
                       onGpsTap: _fillCurrentLocation,
                       onUpdateDataChanged: (v) => setState(() => _config.updateBusinessData = v),
                       onDataChanged: () => setState(() => _regenerateMessage()),

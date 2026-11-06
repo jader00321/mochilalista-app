@@ -95,6 +95,25 @@ class InventoryItemTile extends StatelessWidget {
                 ? (isDark ? Colors.orange[400]! : Colors.orange.shade800)
                 : (isDark ? Colors.teal[300]! : Colors.teal[700]!)));
 
+    final bool showAlertColors = provider.showStockAlertColors;
+    final Color neutralStockColor = isDark ? Colors.blueGrey[300]! : Colors.blueGrey[700]!;
+    final Color effectiveStockColor = showAlertColors ? stockColor : neutralStockColor;
+    final Color effectiveContentColor = (!showAlertColors)
+        ? effectiveStockColor
+        : ((hasQuotaExhaustedWithBase || item.hasLooseUnits)
+            ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
+            : effectiveStockColor);
+    final Color effectiveBadgeBg = (!showAlertColors)
+        ? (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100)
+        : ((hasQuotaExhaustedWithBase || item.hasLooseUnits)
+            ? (isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50)
+            : effectiveStockColor.withValues(alpha: 0.15));
+    final Color effectiveBadgeBorder = (!showAlertColors)
+        ? (isDark ? Colors.white12 : Colors.grey.shade300)
+        : ((hasQuotaExhaustedWithBase || item.hasLooseUnits)
+            ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
+            : effectiveStockColor.withValues(alpha: (isTrulyOutOfStock || isCritical) ? 0.7 : 0.4));
+
     final bool hasOffer = item.hasOffer;
     final double finalPrice = item.effectivePrice;
     
@@ -305,19 +324,20 @@ class InventoryItemTile extends StatelessWidget {
                           onTap: onTapStock ?? onTap,
                           borderRadius: BorderRadius.circular(10),
                           child: PulsingStockBadge(
-                            isPulsing: isTrulyOutOfStock || isCritical || hasQuotaExhaustedWithBase,
-                            child: Container(
+                            isPulsing: showAlertColors &&
+                                (isTrulyOutOfStock || isCritical || hasQuotaExhaustedWithBase),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: (hasQuotaExhaustedWithBase || item.hasLooseUnits)
-                                    ? (isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50)
-                                    : stockColor.withValues(alpha: 0.15), 
-                                borderRadius: BorderRadius.circular(10), 
+                                color: effectiveBadgeBg,
+                                borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: (hasQuotaExhaustedWithBase || item.hasLooseUnits)
-                                      ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
-                                      : stockColor.withValues(alpha: (isTrulyOutOfStock || isCritical) ? 0.7 : 0.4),
-                                  width: (isTrulyOutOfStock || isCritical || item.hasLooseUnits || hasQuotaExhaustedWithBase) ? 1.5 : 1.0,
+                                  color: effectiveBadgeBorder,
+                                  width: (showAlertColors &&
+                                          (isTrulyOutOfStock || isCritical || item.hasLooseUnits || hasQuotaExhaustedWithBase))
+                                      ? 1.5
+                                      : 1.0,
                                 ),
                               ),
                               child: Row(
@@ -332,29 +352,22 @@ class InventoryItemTile extends StatelessWidget {
                                                 ? Icons.warning_amber_rounded
                                                 : (item.hasLooseUnits ? Icons.tune_rounded : Icons.inventory_2_rounded))),
                                     size: 15,
-                                    color: (hasQuotaExhaustedWithBase || item.hasLooseUnits)
-                                        ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
-                                        : stockColor,
+                                    color: effectiveContentColor,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    unidadVentaText, 
+                                    unidadVentaText,
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
-                                      color: (hasQuotaExhaustedWithBase || item.hasLooseUnits)
-                                          ? (isDark ? Colors.amber[300]! : Colors.amber[900]!)
-                                          : stockColor,
+                                      color: effectiveContentColor,
                                     ),
                                   ),
                                   const SizedBox(width: 4),
                                   Icon(
                                     Icons.edit_note_rounded,
                                     size: 14,
-                                    color: ((hasQuotaExhaustedWithBase || item.hasLooseUnits)
-                                            ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
-                                            : stockColor)
-                                        .withValues(alpha: 0.7),
+                                    color: effectiveContentColor.withValues(alpha: 0.7),
                                   ),
                                 ],
                               ),

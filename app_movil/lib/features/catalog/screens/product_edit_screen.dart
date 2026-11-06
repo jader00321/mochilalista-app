@@ -55,6 +55,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   bool _allExpanded = true;
   bool _isLoading = true;
   bool _isInitializing = true;
+  bool _isApplyingSnapshot = false;
   ProductEditSnapshot? _initialSnapshot;
   final List<ProductEditSnapshot> _undoStack = [];
   Timer? _debounceTimer;
@@ -65,12 +66,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     _modoStock = widget.productToEdit.modoStock;
     _sharedStockCtrl = TextEditingController(text: widget.productToEdit.stockCompartido.toString());
     _sharedIngresoCtrl = TextEditingController(text: "0");
-    _sharedIngresoCtrl.addListener(() {
-      final ingreso = int.tryParse(_sharedIngresoCtrl.text) ?? 0;
-      final originalStock = widget.productToEdit.stockCompartido;
-      _sharedStockCtrl.text = (originalStock + ingreso).toString();
-      _onFormChangedWithDebounce();
-    });
+    _sharedIngresoCtrl.addListener(_onSharedIngresoChanged);
     _baseCostCtrl = TextEditingController(
       text: widget.productToEdit.costoBase > 0
           ? widget.productToEdit.costoBase.toStringAsFixed(2)
@@ -168,7 +164,16 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     super.dispose();
   }
 
+  void _onSharedIngresoChanged() {
+    if (_isApplyingSnapshot) return;
+    final ingreso = int.tryParse(_sharedIngresoCtrl.text) ?? 0;
+    final originalStock = widget.productToEdit.stockCompartido;
+    _sharedStockCtrl.text = (originalStock + ingreso).toString();
+    _onFormChangedWithDebounce();
+  }
+
   void _onBaseCostChanged() {
+    if (_isApplyingSnapshot) return;
     final baseCost = double.tryParse(_baseCostCtrl.text) ?? 0.0;
     for (var c in _presentationControllers) {
       c['costoBaseUnitario'] = baseCost;
@@ -262,6 +267,10 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       generalState: _generalState,
       idsToDelete: _idsToDelete,
       presentationControllers: _presentationControllers,
+      modoStock: _modoStock,
+      baseCostCtrl: _baseCostCtrl,
+      sharedStockCtrl: _sharedStockCtrl,
+      sharedIngresoCtrl: _sharedIngresoCtrl,
     );
     _isInitializing = false;
     _undoStack.clear();
@@ -285,12 +294,16 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       generalState: _generalState,
       idsToDelete: _idsToDelete,
       presentationControllers: _presentationControllers,
+      modoStock: _modoStock,
+      baseCostCtrl: _baseCostCtrl,
+      sharedStockCtrl: _sharedStockCtrl,
+      sharedIngresoCtrl: _sharedIngresoCtrl,
     );
     return !current.isIdenticalTo(_initialSnapshot!);
   }
 
   void _recordUndoSnapshot() {
-    if (_isInitializing || _initialSnapshot == null) return;
+    if (_isInitializing || _initialSnapshot == null || _isApplyingSnapshot) return;
     final current = ProductEditSnapshot.capture(
       nameCtrl: _nameCtrl,
       descCtrl: _descCtrl,
@@ -305,6 +318,10 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       generalState: _generalState,
       idsToDelete: _idsToDelete,
       presentationControllers: _presentationControllers,
+      modoStock: _modoStock,
+      baseCostCtrl: _baseCostCtrl,
+      sharedStockCtrl: _sharedStockCtrl,
+      sharedIngresoCtrl: _sharedIngresoCtrl,
     );
     if (_undoStack.isNotEmpty && _undoStack.last.isIdenticalTo(current)) {
       return;
@@ -408,6 +425,8 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   }
 
   void _applySnapshot(ProductEditSnapshot snapshot) {
+    _isApplyingSnapshot = true;
+    _debounceTimer?.cancel();
     setState(() {
       _selectedCategoryId = snapshot.categoryId;
       _selectedCategoryName = snapshot.categoryName;
@@ -441,12 +460,17 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
         targetControllers: _presentationControllers,
         targetKeys: _presentationKeys,
         targetIdsToDelete: _idsToDelete,
+        baseCostCtrl: _baseCostCtrl,
+        sharedStockCtrl: _sharedStockCtrl,
+        sharedIngresoCtrl: _sharedIngresoCtrl,
+        onModoStockChanged: (modo) => _modoStock = modo,
       );
 
       for (var map in _presentationControllers) {
         _attachPresentationListeners(map);
       }
     });
+    _isApplyingSnapshot = false;
   }
 
   int get _generalState {
@@ -692,6 +716,10 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       presentationControllers: _presentationControllers,
       initialSnapshot: _initialSnapshot,
       generalState: _generalState,
+      modoStock: _modoStock,
+      baseCostCtrl: _baseCostCtrl,
+      sharedStockCtrl: _sharedStockCtrl,
+      sharedIngresoCtrl: _sharedIngresoCtrl,
     );
     final result = hasChanges ? await ProductUnsavedChangesDialog.show(context, isDark: isDark) : true;
     FocusManager.instance.primaryFocus?.unfocus();

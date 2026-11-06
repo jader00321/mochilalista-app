@@ -5,12 +5,18 @@ class ClientSelectionCard extends StatelessWidget {
   final ClientModel? selectedClient;
   final VoidCallback onSearchOrAddTap;
   final VoidCallback onEditTap;
+  final List<ClientRewardModel> approvedRewards;
+  final ClientRewardModel? appliedReward;
+  final ValueChanged<ClientRewardModel?>? onRewardSelected;
 
   const ClientSelectionCard({
     super.key,
     required this.selectedClient,
     required this.onSearchOrAddTap,
     required this.onEditTap,
+    this.approvedRewards = const [],
+    this.appliedReward,
+    this.onRewardSelected,
   });
 
   String _formatPhone(String phone) {
@@ -37,7 +43,18 @@ class ClientSelectionCard extends StatelessWidget {
               child: Icon(Icons.person_pin_rounded, color: isDark ? Colors.blue[300] : Colors.blue[800], size: 22)
             ),
             const SizedBox(width: 12),
-            Text("1. Cliente de la Venta", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: isDark ? Colors.blue[100] : Colors.blue[900], letterSpacing: 0.5)),
+            Expanded(
+              child: Text(
+                "1. Cliente de la Venta",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.blue[100] : Colors.blue[900],
+                  letterSpacing: 0.5,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -144,6 +161,38 @@ class ClientSelectionCard extends StatelessWidget {
                               ],
                             ),
                           ],
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Color(selectedClient!.tier.colorHex).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  "${selectedClient!.tier.badgeText} • ${selectedClient!.puntosActuales} pts",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(selectedClient!.tier.colorHex),
+                                  ),
+                                ),
+                              ),
+                              if (selectedClient!.rachaPagosPuntuales > 0)
+                                Text(
+                                  "🔥 ${selectedClient!.rachaPagosPuntuales}",
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -162,6 +211,86 @@ class ClientSelectionCard extends StatelessWidget {
                         Icon(Icons.sticky_note_2, size: 16, color: isDark ? Colors.amber[300] : Colors.amber[800]),
                         const SizedBox(width: 8),
                         Expanded(child: Text(selectedClient!.notes!, style: TextStyle(color: isDark ? Colors.amber[100] : Colors.amber[900], fontSize: 13, fontStyle: FontStyle.italic, height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
+                  ),
+                ],
+
+                if (approvedRewards.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.emoji_events_rounded, color: Colors.amber, size: 18),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                appliedReward != null
+                                    ? "Premio aplicado en esta venta:"
+                                    : "¡Tiene ${approvedRewards.length} premio(s) por canjear!",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: isDark ? Colors.amber[200] : Colors.amber[900],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ...approvedRewards.map((rw) {
+                          final isThisApplied = appliedReward?.id == rw.id;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    "${rw.metaTitulo} (${rw.formattedBenefit})",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: isThisApplied ? FontWeight.bold : FontWeight.w500,
+                                      color: isThisApplied ? Colors.amber[900] : null,
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    if (isThisApplied) {
+                                      onRewardSelected?.call(null);
+                                    } else {
+                                      onRewardSelected?.call(rw);
+                                    }
+                                  },
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    backgroundColor: isThisApplied
+                                        ? Colors.redAccent.withValues(alpha: 0.15)
+                                        : Colors.amber.withValues(alpha: 0.25),
+                                  ),
+                                  child: Text(
+                                    isThisApplied ? "Quitar" : "Aplicar",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isThisApplied ? Colors.redAccent : Colors.amber[900],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
                       ],
                     ),
                   ),

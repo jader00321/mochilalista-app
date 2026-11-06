@@ -37,6 +37,7 @@ class SmartUpdateModal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stockIssues = validation.stockWarnings;
+    final sharedIssues = validation.sharedStockConflicts;
     final priceIssues = validation.priceChanges;
     final nameIssues = validation.nameChanges;
     final bundleIssues = validation.bundleChanges;
@@ -44,9 +45,9 @@ class SmartUpdateModal extends StatelessWidget {
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    bool hasNoRealIssues = stockIssues.isEmpty && priceIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty && unitIssues.isEmpty;
-    bool onlyPriceIssues = priceIssues.isNotEmpty && stockIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty && unitIssues.isEmpty;
-    bool onlyStockIssues = stockIssues.isNotEmpty && priceIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty && unitIssues.isEmpty;
+    bool hasNoRealIssues = stockIssues.isEmpty && sharedIssues.isEmpty && priceIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty && unitIssues.isEmpty;
+    bool onlyPriceIssues = priceIssues.isNotEmpty && stockIssues.isEmpty && sharedIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty && unitIssues.isEmpty;
+    bool onlyStockIssues = (stockIssues.isNotEmpty || sharedIssues.isNotEmpty) && priceIssues.isEmpty && nameIssues.isEmpty && bundleIssues.isEmpty && unitIssues.isEmpty;
 
     return InteractiveSheetWrapper(
       title: hasNoRealIssues ? "Todo en Orden" : "Centro de Resoluciones",
@@ -115,6 +116,49 @@ class SmartUpdateModal extends StatelessWidget {
                             icon: const Icon(Icons.delete_sweep, size: 20),
                             label: const Text("Eliminar Productos Agotados", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                             style: OutlinedButton.styleFrom(foregroundColor: isDark ? Colors.red[300] : Colors.red[800], side: BorderSide(color: isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                          ),
+                        ),
+                        Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),
+                      ],
+
+                      // 1.1 BLOQUE DE STOCK COMPARTIDO (Conflictos de Pozo)
+                      if (sharedIssues.isNotEmpty) ...[
+                        _buildSectionHeader("Conflictos de Stock Compartido", Icons.hub_rounded, isDark ? Colors.orange[300]! : Colors.orange[800]!),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.hub_rounded, color: isDark ? Colors.orange[300] : Colors.orange[800], size: 24),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  "La suma de variantes en la cotización supera el inventario base compartido del producto en almacén.",
+                                  style: TextStyle(fontSize: 14, color: isDark ? Colors.orange[100] : Colors.orange[900]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ...sharedIssues.map((c) => _buildSharedConflictRow(c, isDark, context)),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity, height: 50,
+                          child: ElevatedButton.icon(
+                            onPressed: () { Navigator.pop(context); onFixStock(); },
+                            icon: const Icon(Icons.auto_fix_high, size: 20),
+                            label: const Text("Ajustar al Stock Disponible", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isDark ? Colors.orange[800] : Colors.orange[700],
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
                           ),
                         ),
                         Divider(height: 40, thickness: 1.5, color: isDark ? Colors.white10 : Colors.grey[200]),
@@ -435,6 +479,195 @@ class SmartUpdateModal extends StatelessWidget {
               )
             ],
           )
+        ],
+      ),
+    );
+  }
+
+  // 🔗 TARJETA DE CONFLICTO DE STOCK COMPARTIDO
+  Widget _buildSharedConflictRow(SharedStockConflict c, bool isDark, BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF14141C) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.shade300,
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.hub_rounded, size: 20, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  c.productName,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              "Pozo almacén: ${c.totalSharedPool} und. base • Solicitado: ${c.totalRequestedBaseUnits} und. base (Exceso: +${c.excessBaseUnits} und.)",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.orange[200] : Colors.orange.shade900,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...c.conflictingItems.map((item) {
+            int otherOccupiedBase = 0;
+            for (var other in c.conflictingItems) {
+              if (other.itemId != item.itemId) {
+                otherOccupiedBase += other.requestedBaseUnits;
+              }
+            }
+            final int availableBaseForThis = (c.totalSharedPool - otherOccupiedBase).clamp(0, c.totalSharedPool);
+            final int factor = item.conversionFactor > 0 ? item.conversionFactor : 1;
+            final int maxUnitsFromBase = availableBaseForThis ~/ factor;
+            final int compatibleQty = item.cupoMaximo != null
+                ? (maxUnitsFromBase < item.cupoMaximo! ? maxUnitsFromBase : item.cupoMaximo!)
+                : maxUnitsFromBase;
+
+            final bool canAdjust = compatibleQty > 0 && compatibleQty < item.requestedQty;
+
+            return Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark ? Colors.white12 : Colors.grey.shade300,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.inventory_2_outlined, size: 16, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          item.presentationName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade100,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          "Pide: ${item.requestedQty} (${item.requestedBaseUnits} base)",
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.orange[200] : Colors.orange[900],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      if (canAdjust) ...[
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              if (onFixSingleStock != null) onFixSingleStock!(item.itemId, compatibleQty);
+                            },
+                            icon: const Icon(Icons.tune_rounded, size: 15),
+                            label: Text(
+                              "Ajustar a $compatibleQty",
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              backgroundColor: isDark ? Colors.orange[800] : Colors.orange[700],
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 0,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ] else if (compatibleQty == 0) ...[
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.red.withValues(alpha: 0.12) : Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              "0 und. libre con las demás",
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? Colors.red[300] : Colors.red[800],
+                                fontStyle: FontStyle.italic,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            if (onRemoveSingleItem != null) onRemoveSingleItem!(item.itemId);
+                          },
+                          icon: const Icon(Icons.delete_outline, size: 16),
+                          label: const Text(
+                            "Remover",
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            foregroundColor: isDark ? Colors.red[300] : Colors.red[700],
+                            side: BorderSide(
+                              color: isDark ? Colors.red.withValues(alpha: 0.4) : Colors.red.shade300,
+                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );

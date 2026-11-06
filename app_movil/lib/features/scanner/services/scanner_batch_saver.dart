@@ -116,6 +116,7 @@ class ScannerBatchSaver {
               'modo_stock': group.modoStock,
               'stock_compartido': group.stockCompartido,
               'costo_base': group.costoBase,
+              'fecha_creacion': DateTime.now().toIso8601String(),
               'fecha_actualizacion': DateTime.now().toIso8601String(),
             });
           } else if (idProducto != null) {

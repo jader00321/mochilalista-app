@@ -72,6 +72,7 @@ class QuotationService {
       List<NameChange> nameChanges = [];
       List<BundleChange> bundleChanges = [];
       List<UnitChange> unitChanges = [];
+      List<SharedStockConflict> sharedConflicts = [];
 
       // 1. Acumular demanda total en unidades base para detectar colisiones y desabastecimiento
       Map<int, int> totalDemandPerPres = {};
@@ -162,6 +163,60 @@ class QuotationService {
             totalDemandPerPres[pId] = (totalDemandPerPres[pId] ?? 0) + totalBaseUnits;
           }
         }
+      }
+
+      // 1.1 Detección precisa de conflictos de stock compartido acumulado (a nivel de pool)
+      final Map<int, List<QuoteItemConflictDetail>> sharedConflictItemsByProd = {};
+      final Set<int> conflictProdIds = {};
+
+      for (var item in iRows) {
+        if (item['presentation_id'] != null) {
+          int pId = item['presentation_id'] as int;
+          bool isShared = usaSharedStockPerPres[pId] ?? false;
+          int prodId = productIdPerPres[pId] ?? 0;
+          if (isShared && prodId > 0) {
+            final pool = sharedStockPerProduct[prodId] ?? 0;
+            final demanded = totalDemandPerSharedProduct[prodId] ?? 0;
+            if (demanded > pool) {
+              conflictProdIds.add(prodId);
+              final factor = factorPerPres[pId] ?? 1;
+              final qty = (item['quantity'] as int?) ?? 1;
+              sharedConflictItemsByProd.putIfAbsent(prodId, () => []).add(
+                QuoteItemConflictDetail(
+                  itemId: item['id'] as int,
+                  presentationId: pId,
+                  presentationName: (item['specific_name'] as String?) ??
+                      (item['product_name'] as String? ?? ''),
+                  requestedQty: qty,
+                  conversionFactor: factor,
+                  requestedBaseUnits: qty * factor,
+                  cupoMaximo: cupoPerPres[pId],
+                ),
+              );
+            }
+          }
+        }
+      }
+
+      for (final prodId in conflictProdIds) {
+        final pool = sharedStockPerProduct[prodId] ?? 0;
+        final demanded = totalDemandPerSharedProduct[prodId] ?? 0;
+        final items = sharedConflictItemsByProd[prodId] ?? [];
+        String pName = "Producto compartido";
+        final pRow = await db.query('productos', columns: ['nombre'], where: 'id = ?', whereArgs: [prodId]);
+        if (pRow.isNotEmpty) {
+          pName = (pRow.first['nombre'] as String?) ?? pName;
+        }
+        hasIssues = true;
+        canSell = false;
+        sharedConflicts.add(SharedStockConflict(
+          productId: prodId,
+          productName: pName,
+          totalSharedPool: pool,
+          totalRequestedBaseUnits: demanded,
+          excessBaseUnits: demanded - pool,
+          conflictingItems: items,
+        ));
       }
 
       for (var item in iRows) {
@@ -424,34 +479,45 @@ class QuotationService {
             ? physicalAvailableUnits.clamp(0, cupo)
             : physicalAvailableUnits;
         
-        if (effectiveAvailableStock < demandedBase) {
+        if (isShared && prodId > 0) {
+          if (conflictProdIds.contains(prodId)) {
+            // Ya registrado en sharedStockConflicts a nivel de pozo común.
+            // Solo verificamos si individualmente además viola su cupo
+            if (cupo != null && qty > cupo) {
+              hasIssues = true;
+              canSell = false;
+              warnings.add(StockWarning(
+                itemId: item['id'] as int,
+                productName: itemName ?? "Desconocido",
+                requested: qty,
+                available: cupo,
+                message: "La variante tiene un cupo asignado de $cupo disp. (requiere $qty).",
+              ));
+            }
+          } else if (cupo != null && qty > cupo) {
+            hasIssues = true;
+            canSell = false;
+            warnings.add(StockWarning(
+              itemId: item['id'] as int,
+              productName: itemName ?? "Desconocido",
+              requested: qty,
+              available: cupo,
+              message: "La variante tiene un cupo asignado de $cupo disp. (requiere $qty).",
+            ));
+          }
+        } else if (effectiveAvailableStock < demandedBase) {
           hasIssues = true;
           canSell = false;
           int requestedUnits = (demandedBase / factor).ceil();
-          String warningMsg;
-          if (isShared) {
-            warningMsg = "Stock compartido insuficiente (demanda acumulada del pool: $demandedBase und. base, disponible: $effectiveAvailableStock und. base = $physicalAvailableUnits disp.).";
-          } else if (demandedBase > (qty * factor)) {
-            warningMsg = "Stock insuficiente por demanda acumulada en la lista (requiere $requestedUnits, disponible $physicalAvailableUnits).";
-          } else {
-            warningMsg = "Stock insuficiente (requiere $requestedUnits, disponible $physicalAvailableUnits).";
-          }
+          String warningMsg = demandedBase > (qty * factor)
+              ? "Stock insuficiente por demanda acumulada en la lista (requiere $requestedUnits, disponible $physicalAvailableUnits)."
+              : "Stock insuficiente (requiere $requestedUnits, disponible $physicalAvailableUnits).";
           warnings.add(StockWarning(
             itemId: item['id'] as int,
             productName: itemName ?? "Desconocido",
             requested: requestedUnits,
             available: vendibleAvailableUnits,
             message: warningMsg,
-          ));
-        } else if (isShared && cupo != null && qty > cupo) {
-          hasIssues = true;
-          canSell = false;
-          warnings.add(StockWarning(
-            itemId: item['id'] as int,
-            productName: itemName ?? "Desconocido",
-            requested: qty,
-            available: vendibleAvailableUnits,
-            message: "La variante tiene un cupo asignado de $cupo disp. (requiere $qty).",
           ));
         }
 
@@ -474,7 +540,16 @@ class QuotationService {
         }
       }
 
-      return ValidationResult(hasIssues: hasIssues, canSell: canSell, stockWarnings: warnings, priceChanges: prices, nameChanges: nameChanges, bundleChanges: bundleChanges, unitChanges: unitChanges);
+      return ValidationResult(
+        hasIssues: hasIssues,
+        canSell: canSell,
+        stockWarnings: warnings,
+        priceChanges: prices,
+        nameChanges: nameChanges,
+        bundleChanges: bundleChanges,
+        unitChanges: unitChanges,
+        sharedStockConflicts: sharedConflicts,
+      );
     } catch (e) {
       throw Exception("Error local al validar integridad: $e");
     }

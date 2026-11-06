@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/models/category_model.dart';
@@ -50,6 +51,42 @@ class InventoryProvider with ChangeNotifier {
   int? _lastMaxStock;
   bool _lastHasOffer = false;
   bool _lastOnlyDefaults = false;
+
+  // 🎨 Configuración discreta de alertas de color de stock
+  static const String _kStockAlertColorsKey = 'inventory_show_stock_alert_colors';
+  bool _showStockAlertColors = true;
+  bool get showStockAlertColors => _showStockAlertColors;
+
+  InventoryProvider() {
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _showStockAlertColors = prefs.getBool(_kStockAlertColorsKey) ?? true;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> toggleStockAlertColors() async {
+    _showStockAlertColors = !_showStockAlertColors;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kStockAlertColorsKey, _showStockAlertColors);
+    } catch (_) {}
+  }
+
+  Future<void> setShowStockAlertColors(bool value) async {
+    if (_showStockAlertColors == value) return;
+    _showStockAlertColors = value;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kStockAlertColorsKey, _showStockAlertColors);
+    } catch (_) {}
+  }
 
   // 📝 Borrador en memoria de Crear Producto
   ProductCreateDraft? _creationDraft;

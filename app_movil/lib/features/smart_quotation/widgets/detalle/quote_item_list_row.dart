@@ -8,6 +8,8 @@ class QuoteItemListRow extends StatelessWidget {
   final QuotationItem item;
   final StockWarning? stockError;
   final PriceChange? priceError;
+  final SharedStockConflict? sharedConflict;
+  final QuoteItemConflictDetail? sharedConflictDetail;
   final bool isDark; 
 
   const QuoteItemListRow({
@@ -15,12 +17,15 @@ class QuoteItemListRow extends StatelessWidget {
     required this.item,
     this.stockError,
     this.priceError,
+    this.sharedConflict,
+    this.sharedConflictDetail,
     required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     bool hasStockIssue = stockError != null && stockError!.itemId != -1;
+    bool hasSharedIssue = sharedConflictDetail != null && !hasStockIssue;
     bool hasPriceIssue = priceError != null && priceError!.itemId != -1;
 
     // 🔥 PRECIOS (El Cotizado es la VERDAD)
@@ -38,6 +43,11 @@ class QuoteItemListRow extends StatelessWidget {
       borderColor = isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade300;
       bgColor = isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red[50]!;
       shadowColor = isDark ? Colors.transparent : Colors.red.withValues(alpha: 0.15);
+      borderWidth = 1.5;
+    } else if (hasSharedIssue) {
+      borderColor = isDark ? Colors.orange.withValues(alpha: 0.5) : Colors.orange.shade300;
+      bgColor = isDark ? Colors.orange.withValues(alpha: 0.1) : Colors.orange[50]!;
+      shadowColor = isDark ? Colors.transparent : Colors.orange.withValues(alpha: 0.15);
       borderWidth = 1.5;
     } else if (hasPriceIssue) {
       borderColor = isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200;
@@ -89,6 +99,21 @@ class QuoteItemListRow extends StatelessWidget {
                       child: const FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text("AGOTADO", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5))
+                      )
+                    ),
+                  )
+                )
+              else if (hasSharedIssue)
+                Positioned(
+                  bottom: -6, left: 0, right: 0, 
+                  child: Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 55),
+                      decoration: BoxDecoration(color: isDark ? Colors.orange[800] : Colors.orange[700], borderRadius: BorderRadius.circular(6)), 
+                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2), 
+                      child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text("COMPARTIDO", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold, letterSpacing: 0.5))
                       )
                     ),
                   )
@@ -168,6 +193,36 @@ class QuoteItemListRow extends StatelessWidget {
                             child: Text(
                               stockError!.message,
                               style: TextStyle(fontSize: 11, color: isDark ? Colors.red[200] : Colors.red[900], fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (hasSharedIssue)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.hub_rounded, size: 14, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              "Stock compartido insuficiente entre variantes de este producto",
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? Colors.orange[200] : Colors.orange[900],
+                                fontStyle: FontStyle.italic,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],

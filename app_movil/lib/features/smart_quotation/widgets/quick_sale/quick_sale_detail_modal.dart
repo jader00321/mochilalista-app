@@ -329,18 +329,17 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal>
           ? true
           : pres.usaStockCompartido;
 
-      final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
-      final pool =
-          _fullProduct?.stockCompartido ?? widget.product.sharedStockPool;
-      final int availableStock = isVariantShared
-          ? quickProv.getRemainingAvailableForPresentation(
-              productId: _currentSelection.productId,
-              presentation: pres,
-              sharedStockPool: pool,
-              excludePresentationId: widget.product.presentationId,
-            )
-          : pres.stockActual ~/
-                (pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1);
+      final pool = (_fullProduct != null && _fullProduct!.stockCompartido > 0)
+          ? _fullProduct!.stockCompartido
+          : widget.product.sharedStockPool;
+      final factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+      final int canonicalStock = isVariantShared
+          ? (pres.cupoMaximoVariante != null
+              ? ((pool ~/ factor) < pres.cupoMaximoVariante!
+                  ? (pool ~/ factor)
+                  : pres.cupoMaximoVariante!)
+              : (pool ~/ factor))
+          : (pres.stockActual ~/ factor);
 
       _currentSelection = MatchedProduct(
         productId: _currentSelection.productId,
@@ -351,7 +350,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal>
         brand: _fullProduct!.marcaNombre ?? _currentSelection.brand,
         price: pres.precioVentaFinal,
         offerPrice: newOffer,
-        stock: availableStock,
+        stock: canonicalStock,
         imageUrl: pres.imagenUrl ?? _fullProduct!.imagenUrl,
         unit: pres.unidadVenta ?? "Unidad",
         conversionFactor: pres.unidadesPorVenta,
@@ -504,7 +503,30 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal>
     double subtotal = currentPrice * currentQty;
     double totalSavings = (_systemPrice - currentPrice) * currentQty;
 
-    final effectiveStock = _currentSelection.effectiveVendibleStock;
+    final quickProvLive = Provider.of<QuickSaleProvider>(context);
+    final currentPoolLive = (_fullProduct != null && _fullProduct!.stockCompartido > 0)
+        ? _fullProduct!.stockCompartido
+        : widget.product.sharedStockPool;
+    final int liveVendibleStock = _currentSelection.usaStockCompartido
+        ? quickProvLive.getRemainingAvailableForPresentation(
+            productId: _currentSelection.productId,
+            presentation: ProductPresentation(
+              id: _currentSelection.presentationId,
+              unidadesPorVenta: _currentSelection.conversionFactor,
+              usaStockCompartido: true,
+              cupoMaximoVariante: _currentSelection.cupoMaximoVariante,
+              precioVentaFinal: _currentSelection.price,
+              stockActual: currentPoolLive,
+            ),
+            sharedStockPool: currentPoolLive,
+            excludePresentationId: widget.product.presentationId,
+          )
+        : (_currentSelection.stock -
+            (widget.product.presentationId == _currentSelection.presentationId
+                ? 0
+                : quickProvLive.getQuantity(_currentSelection.presentationId)));
+
+    final effectiveStock = liveVendibleStock;
     bool isStockEmpty = effectiveStock <= 0;
     bool exceedsStock =
         currentQty > effectiveStock && !effectiveStock.isNegative;
@@ -719,8 +741,8 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal>
                               isStockEmpty
                                   ? "Agotado"
                                   : (_currentSelection.usaStockCompartido
-                                        ? "Stock vendible: ${_currentSelection.effectiveVendibleStock} ${_currentSelection.unit}"
-                                        : "Stock disponible: ${_currentSelection.stock} ${_currentSelection.unit}"),
+                                        ? "Stock vendible: $effectiveStock ${_currentSelection.unit}"
+                                        : "Stock disponible: $effectiveStock ${_currentSelection.unit}"),
                               style: TextStyle(
                                 color: isStockEmpty
                                     ? (isDark ? Colors.red[300] : Colors.red)
@@ -1019,17 +1041,22 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal>
                   Builder(
                     builder: (ctx) {
                       final quickProv = Provider.of<QuickSaleProvider>(ctx);
-                      final pool = _fullProduct!.stockCompartido > 0
+                      final pool = (_fullProduct != null && _fullProduct!.stockCompartido > 0)
                           ? _fullProduct!.stockCompartido
                           : widget.product.sharedStockPool;
-                      final remainingPool = quickProv.getRemainingPoolStock(
-                        _fullProduct!.id,
+                      final availableBase = quickProv.getAvailableBaseForLine(
+                        _currentSelection.productId,
                         pool,
+                        excludePresentationId: widget.product.presentationId,
                       );
                       final factor = _currentSelection.conversionFactor > 0
                           ? _currentSelection.conversionFactor
                           : 1;
-                      final maxPhysical = remainingPool ~/ factor;
+                      final maxPhysical = quickProv.getMaxVendibleForPresentation(
+                        availableBase: availableBase,
+                        conversionFactor: factor,
+                        cupoMaximoVariante: _currentSelection.cupoMaximoVariante,
+                      );
                       final cupo = _currentSelection.cupoMaximoVariante;
                       final cupoStr = cupo != null
                           ? " · Cupo: $cupo disp."
@@ -1063,7 +1090,7 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal>
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                "Inventario base compartido: $remainingPool und. (= máx. $maxPhysical ${_currentSelection.unit}$cupoStr)",
+                                "Inventario base compartido: $pool und. base · Disponible: $availableBase und. (= máx. $maxPhysical ${_currentSelection.unit}$cupoStr)",
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
@@ -1117,17 +1144,8 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal>
                   ),
                 ],
 
-                ShaderMask(
-                  shaderCallback: (Rect bounds) {
-                    return const LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [Colors.black, Colors.black, Colors.transparent],
-                      stops: [0.0, 0.94, 1.0],
-                    ).createShader(bounds);
-                  },
-                  blendMode: BlendMode.dstIn,
-                  child: SingleChildScrollView(
+                SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
                     child: Row(
@@ -1151,16 +1169,17 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal>
 
                         int dispStock;
                         if (p.usaStockCompartido) {
-                          final pool =
-                              _fullProduct?.stockCompartido ??
-                              widget.product.sharedStockPool;
+                          final pool = (_fullProduct != null &&
+                                  _fullProduct!.stockCompartido > 0)
+                              ? _fullProduct!.stockCompartido
+                              : widget.product.sharedStockPool;
                           dispStock = quickProv
                               .getRemainingAvailableForPresentation(
                                 productId: _currentSelection.productId,
                                 presentation: p,
                                 sharedStockPool: pool,
                                 excludePresentationId:
-                                    _currentSelection.presentationId,
+                                    widget.product.presentationId,
                               );
                         } else {
                           dispStock =
@@ -1253,7 +1272,6 @@ class _QuickSaleDetailModalState extends State<QuickSaleDetailModal>
                       }).toList(),
                     ),
                   ),
-                ),
                 const SizedBox(height: 14),
               ],
             ],

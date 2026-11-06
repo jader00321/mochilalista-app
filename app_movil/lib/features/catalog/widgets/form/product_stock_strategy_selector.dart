@@ -46,6 +46,7 @@ class _ProductStockStrategySelectorState
   void initState() {
     super.initState();
     widget.sharedStockController.addListener(_onSharedStockChanged);
+    widget.sharedIngresoController?.addListener(_onSharedIngresoChanged);
   }
 
   @override
@@ -55,12 +56,21 @@ class _ProductStockStrategySelectorState
       oldWidget.sharedStockController.removeListener(_onSharedStockChanged);
       widget.sharedStockController.addListener(_onSharedStockChanged);
     }
+    if (oldWidget.sharedIngresoController != widget.sharedIngresoController) {
+      oldWidget.sharedIngresoController?.removeListener(_onSharedIngresoChanged);
+      widget.sharedIngresoController?.addListener(_onSharedIngresoChanged);
+    }
   }
 
   @override
   void dispose() {
     widget.sharedStockController.removeListener(_onSharedStockChanged);
+    widget.sharedIngresoController?.removeListener(_onSharedIngresoChanged);
     super.dispose();
+  }
+
+  void _onSharedIngresoChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onSharedStockChanged() {

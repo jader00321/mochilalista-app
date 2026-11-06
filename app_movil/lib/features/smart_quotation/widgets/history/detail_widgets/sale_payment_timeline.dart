@@ -4,7 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
-import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/cuota_reminder_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/cuota_morosidad_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/whatsapp_preview_modal.dart';
 
 class SalePaymentTimeline extends StatelessWidget {
   final List<dynamic> cuotasRaw;
@@ -13,6 +14,7 @@ class SalePaymentTimeline extends StatelessWidget {
   final String? clientName;
   final int? clientId;
   final int? saleId;
+  final bool isLoan;
   final VoidCallback? onPaymentSuccess;
 
   const SalePaymentTimeline({
@@ -23,6 +25,7 @@ class SalePaymentTimeline extends StatelessWidget {
     this.clientName,
     this.clientId,
     this.saleId,
+    this.isLoan = false,
     this.onPaymentSuccess,
   });
 
@@ -92,46 +95,76 @@ class SalePaymentTimeline extends StatelessWidget {
               child: Column(
                 children: cuotasRaw.map((cRaw) {
                   final c = Map<String, dynamic>.from(cRaw as Map);
-                  final bool cuotaPagada = c['estado'] == 'pagado';
+                  final double cuotaMonto = (num.tryParse(c['monto'].toString()) ?? 0.0).toDouble();
+                  final double cuotaPagado = (num.tryParse((c['monto_pagado'] ?? 0.0).toString()) ?? 0.0).toDouble();
+                  final double saldoFalta = (cuotaMonto - cuotaPagado) > 0.001 ? (cuotaMonto - cuotaPagado) : 0.0;
+                  final double montoOriginal = (num.tryParse((c['monto_original'] ?? cuotaMonto).toString()) ?? cuotaMonto).toDouble();
+                  final double moraMonto = (num.tryParse((c['mora_monto'] ?? 0.0).toString()) ?? 0.0).toDouble();
+                  final bool moraAuto = c['mora_automatica'] == 1 || c['mora_automatica'] == true;
+                  final bool tieneMora = moraMonto > 0.01;
+                  final bool cuotaPagada = c['estado'] == 'pagado' || (saldoFalta <= 0.01 && cuotaMonto > 0);
 
                   DateTime? dueDate;
                   try {
-                    dueDate = DateTime.parse(c['fecha_vencimiento'].toString());
+                    dueDate = DateTime.parse(c['fecha_vencimiento'].toString().split('T').first);
                   } catch (_) {}
 
-                  final bool isVencido = !cuotaPagada &&
-                      dueDate != null &&
-                      dueDate.isBefore(DateTime.now().subtract(const Duration(days: 1)));
+                  final now = DateTime.now();
+                  final today = DateTime(now.year, now.month, now.day);
+                  final int daysDiff = dueDate != null
+                      ? today.difference(DateTime(dueDate.year, dueDate.month, dueDate.day)).inDays
+                      : 0;
+                  final bool isVencido = !cuotaPagada && daysDiff > 0;
 
                   final String dateFormatted = dueDate != null
                       ? DateFormat('dd/MM/yyyy').format(dueDate)
                       : c['fecha_vencimiento'].toString();
 
-                  final Color badgeBg = cuotaPagada
-                      ? (isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50)
-                      : (isVencido
-                          ? (isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red.shade50)
-                          : (isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade50));
+                  String badgeLabel;
+                  IconData badgeIcon;
+                  Color badgeBg;
+                  Color badgeBorder;
+                  Color badgeColor;
 
-                  final Color badgeBorder = cuotaPagada
-                      ? (isDark ? Colors.green.shade700 : Colors.green.shade200)
-                      : (isVencido
-                          ? (isDark ? Colors.red.shade700 : Colors.red.shade200)
-                          : (isDark ? Colors.orange.shade700 : Colors.orange.shade200));
-
-                  final Color badgeColor = cuotaPagada
-                      ? (isDark ? Colors.green.shade300 : Colors.green.shade800)
-                      : (isVencido
-                          ? (isDark ? Colors.red.shade300 : Colors.red.shade800)
-                          : (isDark ? Colors.orange.shade300 : Colors.orange.shade900));
-
-                  final String badgeLabel = cuotaPagada
-                      ? "PAGADO"
-                      : (isVencido ? "VENCIDO" : "PENDIENTE");
-
-                  final IconData badgeIcon = cuotaPagada
-                      ? Icons.check_circle
-                      : (isVencido ? Icons.error_outline : Icons.hourglass_top);
+                  if (cuotaPagada) {
+                    badgeLabel = "PAGADO";
+                    badgeIcon = Icons.check_circle;
+                    badgeBg = isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50;
+                    badgeBorder = isDark ? Colors.green.shade700 : Colors.green.shade200;
+                    badgeColor = isDark ? Colors.green.shade300 : Colors.green.shade800;
+                  } else if (isVencido) {
+                    badgeIcon = Icons.error_outline;
+                    badgeBg = isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red.shade50;
+                    badgeBorder = isDark ? Colors.red.shade700 : Colors.red.shade200;
+                    badgeColor = isDark ? Colors.red.shade300 : Colors.red.shade800;
+                    if (cuotaPagado > 0.01) {
+                      badgeLabel = "VENCIDA ($daysDiff d) • PAGO PARCIAL";
+                    } else if (tieneMora) {
+                      badgeLabel = "VENCIDA ($daysDiff d) • CON MORA";
+                    } else {
+                      badgeLabel = "VENCIDA ($daysDiff d)";
+                    }
+                  } else {
+                    if (cuotaPagado > 0.01) {
+                      badgeLabel = "PAGO PARCIAL";
+                      badgeIcon = Icons.timelapse;
+                      badgeBg = isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade50;
+                      badgeBorder = isDark ? Colors.orange.shade700 : Colors.orange.shade200;
+                      badgeColor = isDark ? Colors.orange.shade300 : Colors.orange.shade900;
+                    } else if (daysDiff == 0) {
+                      badgeLabel = "VENCE HOY";
+                      badgeIcon = Icons.notification_important_outlined;
+                      badgeBg = isDark ? Colors.amber.withValues(alpha: 0.2) : Colors.amber.shade50;
+                      badgeBorder = isDark ? Colors.amber.shade700 : Colors.amber.shade300;
+                      badgeColor = isDark ? Colors.amber.shade300 : Colors.amber.shade900;
+                    } else {
+                      badgeLabel = "PENDIENTE";
+                      badgeIcon = Icons.hourglass_top;
+                      badgeBg = isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade50;
+                      badgeBorder = isDark ? Colors.orange.shade700 : Colors.orange.shade200;
+                      badgeColor = isDark ? Colors.orange.shade300 : Colors.orange.shade900;
+                    }
+                  }
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 10),
@@ -185,7 +218,7 @@ class SalePaymentTimeline extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              AppCurrency.format(c['monto']),
+                              AppCurrency.format(cuotaMonto),
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
@@ -194,6 +227,61 @@ class SalePaymentTimeline extends StatelessWidget {
                             ),
                           ],
                         ),
+
+                        // Desglose si tiene mora o abono parcial
+                        if (tieneMora || cuotaPagado > 0.01) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const SizedBox(width: 34),
+                              Expanded(
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    if (tieneMora) ...[
+                                      Text(
+                                        "Orig: ${AppCurrency.format(montoOriginal)} • + Mora: ${AppCurrency.format(moraMonto)}",
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          color: Colors.redAccent,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (moraAuto)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.withValues(alpha: 0.2),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            "⚡ Auto",
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.amber[800],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                    if (cuotaPagado > 0.01 && !cuotaPagada) ...[
+                                      Text(
+                                        "Abonado: ${AppCurrency.format(cuotaPagado)} • Falta: ${AppCurrency.format(saldoFalta)}",
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: isDark ? Colors.orange[200] : Colors.orange[900],
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
 
                         const SizedBox(height: 10),
 
@@ -234,19 +322,68 @@ class SalePaymentTimeline extends StatelessWidget {
 
                               // Acciones si está pendiente
                               if (!cuotaPagada)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  alignment: WrapAlignment.end,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
+                                    // Botón + Mora / Mora
                                     InkWell(
                                       borderRadius: BorderRadius.circular(8),
                                       onTap: () {
-                                        CuotaReminderModal.show(
+                                        CuotaMorosidadModal.show(
                                           context: context,
                                           cuota: c,
-                                          dateFormatted: dateFormatted,
+                                          isDark: isDark,
+                                          onSaved: () {
+                                            onPaymentSuccess?.call();
+                                            Provider.of<SaleProvider>(context, listen: false).silentRefresh();
+                                          },
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: tieneMora
+                                              ? Colors.redAccent.withValues(alpha: 0.15)
+                                              : Colors.orange.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              tieneMora ? Icons.timer_outlined : Icons.add_circle_outline,
+                                              size: 14,
+                                              color: tieneMora ? Colors.redAccent : Colors.orange[800],
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              tieneMora ? "Mora" : "+ Mora",
+                                              style: TextStyle(
+                                                color: tieneMora ? Colors.redAccent : Colors.orange[800],
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    // Botón Recordar (Estudio Seguro de WhatsApp)
+                                    InkWell(
+                                      borderRadius: BorderRadius.circular(8),
+                                      onTap: () {
+                                        WhatsAppPreviewModal.showCuotaReminder(
+                                          context: context,
+                                          cuota: c,
                                           clientName: clientName,
                                           clientPhone: clientPhone,
                                           isDark: isDark,
+                                          operationTitle: isLoan ? "Préstamo" : "Venta a Crédito",
                                         );
                                       },
                                       child: Container(
@@ -274,6 +411,7 @@ class SalePaymentTimeline extends StatelessWidget {
                                     ),
                                     const SizedBox(width: 8),
 
+                                    // Botón Cobrar
                                     if (clientId != null && clientId! > 0)
                                       InkWell(
                                         borderRadius: BorderRadius.circular(8),

@@ -241,6 +241,8 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
         if (widget.sale.clientId != null) {
           try {
             await trackingProv.loadClients();
+            await trackingProv.loadClientLedger(widget.sale.clientId!);
+            await trackingProv.loadClientDebts(widget.sale.clientId!);
           } catch (_) {}
         }
         if (mounted) CustomSnackBar.show(context, message: widget.sale.origenVenta == 'prestamo_personal' ? "Préstamo anulado exitosamente." : "Venta Anulada y stock devuelto.", isError: false);
@@ -327,6 +329,8 @@ class _SaleActionBottomSheetState extends State<SaleActionBottomSheet> {
         if (widget.sale.clientId != null) {
           try {
             await trackingProv.loadClients();
+            await trackingProv.loadClientLedger(widget.sale.clientId!);
+            await trackingProv.loadClientDebts(widget.sale.clientId!);
           } catch (_) {}
         }
         if (mounted) CustomSnackBar.show(context, message: widget.sale.origenVenta == 'prestamo_personal' ? "Préstamo Restaurado exitosamente." : "Venta Restaurada exitosamente.", isError: false);

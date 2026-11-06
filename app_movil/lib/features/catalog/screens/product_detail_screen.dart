@@ -369,6 +369,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           stockVisual: stockVisual,
                           presentation: _selectedPresentation,
                           isDark: isDark,
+                          fechaCreacion: _currentProduct.fechaCreacionParsed,
                           onRestock: _openRestockModal,
                           onEditProduct: _navigateToEdit,
                         ),

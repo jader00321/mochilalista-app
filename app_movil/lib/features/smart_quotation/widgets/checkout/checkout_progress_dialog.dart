@@ -25,6 +25,7 @@ class CheckoutProgressDialog extends StatefulWidget {
   final double interestRate;
   final List<InstallmentModel> installments;
   final String? saleNote; 
+  final int? recompensaCanjeId;
   final bool isDark;
   final BuildContext parentContext;
 
@@ -42,6 +43,7 @@ class CheckoutProgressDialog extends StatefulWidget {
     required this.interestRate,
     required this.installments,
     this.saleNote,
+    this.recompensaCanjeId,
     required this.isDark,
     required this.parentContext,
   });
@@ -161,7 +163,8 @@ class _CheckoutProgressDialogState extends State<CheckoutProgressDialog> {
         discount: widget.discount,
         abonoInicial: widget.paid,
         porcentajeInteres: widget.interestRate,
-        installments: widget.paymentStatus == 'pendiente' ? widget.installments : []
+        installments: widget.paymentStatus == 'pendiente' ? widget.installments : [],
+        recompensaCanjeId: widget.recompensaCanjeId,
       );
 
       if (checkoutError != null) {

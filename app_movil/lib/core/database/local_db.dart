@@ -13,6 +13,11 @@ class LocalDatabase {
     _database = db;
   }
 
+  @visibleForTesting
+  static Future<void> createDBForTesting(Database db) async {
+    await instance._createDB(db, 30);
+  }
+
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('mochilalista.db');
@@ -25,7 +30,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 26, // Upgrade to v26: Soporte para cupo máximo por variante compartida (cupo_maximo_variante)
+      version: 30, // Upgrade to v30: Motor de morosidad dual (manual y periódico), cuotas y mora_total en ventas
       onCreate: _createDB,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -173,6 +178,358 @@ class LocalDatabase {
       } catch (e) {
         debugPrint("Error en migración V26: $e");
       }
+    }
+
+    // Migración V26 -> V27: Reingeniería de Reputación (0-1000), Gamificación, Metas de Recompensas y Kardex
+    if (oldVersion < 27) {
+      try {
+        await ensureColumnExists(db, 'clientes', 'puntos_actuales', 'INTEGER DEFAULT 0');
+        await ensureColumnExists(db, 'clientes', 'puntos_historicos', 'INTEGER DEFAULT 0');
+        await ensureColumnExists(db, 'clientes', 'racha_pagos_puntuales', 'INTEGER DEFAULT 0');
+        await ensureColumnExists(db, 'clientes', 'score_reputacion', 'INTEGER DEFAULT 500');
+        await ensureColumnExists(db, 'clientes', 'nivel_reputacion', "TEXT DEFAULT 'PLATA'");
+
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS metas_recompensas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            negocio_id INTEGER NOT NULL,
+            nombre TEXT NOT NULL,
+            puntos_requeridos INTEGER NOT NULL,
+            tipo_beneficio TEXT NOT NULL,
+            valor_beneficio REAL NOT NULL,
+            descripcion TEXT,
+            activo INTEGER DEFAULT 1,
+            es_predeterminada INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE
+          )
+        ''');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_metas_negocio ON metas_recompensas(negocio_id, activo, puntos_requeridos)');
+
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS recompensas_cliente (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            negocio_id INTEGER NOT NULL,
+            cliente_id INTEGER NOT NULL,
+            meta_id INTEGER NOT NULL,
+            puntos_consumidos INTEGER NOT NULL,
+            estado TEXT NOT NULL DEFAULT 'PENDIENTE_REVISION',
+            tipo_beneficio TEXT NOT NULL,
+            valor_beneficio REAL NOT NULL,
+            titulo_recompensa TEXT NOT NULL,
+            descripcion_recompensa TEXT,
+            fecha_desbloqueo TEXT NOT NULL,
+            fecha_aprobacion TEXT,
+            fecha_canje TEXT,
+            venta_canje_id INTEGER,
+            nota_revision TEXT,
+            FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE,
+            FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE CASCADE,
+            FOREIGN KEY (meta_id) REFERENCES metas_recompensas (id) ON DELETE CASCADE,
+            FOREIGN KEY (venta_canje_id) REFERENCES ventas (id) ON DELETE SET NULL
+          )
+        ''');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_recompensas_cliente_estado ON recompensas_cliente(cliente_id, estado)');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_recompensas_negocio_estado ON recompensas_cliente(negocio_id, estado)');
+
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS historial_puntos_reputacion (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            negocio_id INTEGER NOT NULL,
+            cliente_id INTEGER NOT NULL,
+            tipo_movimiento TEXT NOT NULL,
+            puntos_delta INTEGER NOT NULL,
+            puntos_saldo_resultante INTEGER NOT NULL,
+            score_delta INTEGER NOT NULL,
+            score_resultante INTEGER NOT NULL,
+            motivo TEXT NOT NULL,
+            referencia_tipo TEXT,
+            referencia_id INTEGER,
+            fecha_registro TEXT NOT NULL,
+            FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE,
+            FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE CASCADE
+          )
+        ''');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_historial_puntos_cliente ON historial_puntos_reputacion(cliente_id, fecha_registro)');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_historial_puntos_negocio ON historial_puntos_reputacion(negocio_id, fecha_registro)');
+
+        // Semillas predeterminadas de metas para todos los negocios
+        await seedDefaultMetasRecompensas(db);
+
+        // Recálculo inicial de fidelización y reputación para clientes existentes
+        await retroCalculateClientsLoyaltyInitial(db);
+
+        debugPrint("✅ Migración V27 completada con éxito: Gamificación y Reputación listas.");
+      } catch (e) {
+        debugPrint("Error en migración V27: $e");
+      }
+    }
+
+    // Migración V27 -> V28: fecha_creacion en productos para alertas de stock bajo con 7 días de gracia
+    if (oldVersion < 28) {
+      try {
+        await ensureColumnExists(db, 'productos', 'fecha_creacion', 'TEXT');
+        await db.execute(
+          "UPDATE productos SET fecha_creacion = COALESCE(fecha_actualizacion, datetime('now', '-30 days')) WHERE fecha_creacion IS NULL"
+        );
+        debugPrint("✅ Migración V28 completada con éxito: fecha_creacion añadida a productos.");
+      } catch (e) {
+        debugPrint("Error en migración V28: $e");
+      }
+    }
+
+    // Migración V28 -> V29: Anulación atómica de préstamos/ventas, motivo_anulacion, fecha_anulacion, estados de cuotas e índices
+    if (oldVersion < 29) {
+      try {
+        await ensureColumnExists(db, 'ventas', 'is_archived', 'INTEGER DEFAULT 0');
+        await ensureColumnExists(db, 'ventas', 'motivo_anulacion', 'TEXT');
+        await ensureColumnExists(db, 'ventas', 'fecha_anulacion', 'TEXT');
+        await ensureColumnExists(db, 'cuotas', 'estado', "TEXT DEFAULT 'pendiente'");
+        await ensureColumnExists(db, 'cuotas', 'monto_pagado', 'REAL DEFAULT 0.0');
+        await ensureColumnExists(db, 'pagos', 'fecha_pago', 'TEXT');
+
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_archived ON ventas(is_archived, negocio_id)');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_cuotas_estado ON cuotas(estado, venta_id)');
+        debugPrint("✅ Migración V29 completada con éxito: Anulación atómica y cuotas blindadas.");
+      } catch (e) {
+        debugPrint("Error en migración V29: $e");
+      }
+    }
+
+    // Migración V29 -> V30: Motor de morosidad (manual y automático periódico) en cuotas y mora_total en ventas
+    if (oldVersion < 30) {
+      try {
+        await ensureColumnExists(db, 'ventas', 'mora_total', 'REAL DEFAULT 0.0');
+        await ensureColumnExists(db, 'cuotas', 'monto_original', 'REAL');
+        await ensureColumnExists(db, 'cuotas', 'mora_monto', 'REAL DEFAULT 0.0');
+        await ensureColumnExists(db, 'cuotas', 'mora_porcentaje', 'REAL DEFAULT 0.0');
+        await ensureColumnExists(db, 'cuotas', 'mora_automatica', 'INTEGER DEFAULT 0');
+        await ensureColumnExists(db, 'cuotas', 'mora_frecuencia', 'TEXT');
+        await ensureColumnExists(db, 'cuotas', 'mora_intervalo_dias', 'INTEGER DEFAULT 1');
+        await ensureColumnExists(db, 'cuotas', 'mora_tipo', "TEXT DEFAULT 'fijo'");
+        await ensureColumnExists(db, 'cuotas', 'mora_valor', 'REAL DEFAULT 0.0');
+        await ensureColumnExists(db, 'cuotas', 'mora_fecha_inicio', 'TEXT');
+        await ensureColumnExists(db, 'cuotas', 'mora_ultima_aplicacion', 'TEXT');
+        await ensureColumnExists(db, 'cuotas', 'mora_periodos_acumulados', 'INTEGER DEFAULT 0');
+
+        // Curación retroactiva e inicialización de cuotas existentes
+        await db.execute("UPDATE cuotas SET monto_original = monto WHERE monto_original IS NULL");
+        await db.execute("UPDATE cuotas SET mora_monto = 0.0 WHERE mora_monto IS NULL");
+        await db.execute("UPDATE cuotas SET mora_automatica = 0 WHERE mora_automatica IS NULL");
+        await db.execute("UPDATE ventas SET mora_total = 0.0 WHERE mora_total IS NULL");
+
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_cuotas_mora ON cuotas(mora_automatica, estado, fecha_vencimiento)');
+        debugPrint("✅ Migración V30 completada con éxito: Motor de morosidad y protección contable listos.");
+      } catch (e) {
+        debugPrint("Error en migración V30: $e");
+      }
+    }
+  }
+
+  /// 🎁 Siembra automática de metas predeterminadas para cada negocio si no tiene ninguna configurada.
+  static Future<void> seedDefaultMetasRecompensas(DatabaseExecutor db) async {
+    try {
+      final negocios = await db.rawQuery('SELECT id FROM negocios');
+      final now = DateTime.now().toIso8601String();
+
+      for (var neg in negocios) {
+        int nId = neg['id'] as int;
+        final existing = await db.rawQuery(
+          'SELECT COUNT(*) as cnt FROM metas_recompensas WHERE negocio_id = ?',
+          [nId],
+        );
+        int cnt = (existing.first['cnt'] as int?) ?? 0;
+
+        if (cnt == 0) {
+          final defaultMetas = [
+            {
+              'negocio_id': nId,
+              'nombre': 'Descuento de Bienvenida',
+              'puntos_requeridos': 100,
+              'tipo_beneficio': 'DESCUENTO_MONTO',
+              'valor_beneficio': 5.0,
+              'descripcion': 'Descuento directo de S/ 5.00 en tu próxima compra.',
+              'activo': 1,
+              'es_predeterminada': 1,
+              'created_at': now,
+            },
+            {
+              'negocio_id': nId,
+              'nombre': '10% de Ahorro Especial',
+              'puntos_requeridos': 300,
+              'tipo_beneficio': 'DESCUENTO_PORCENTAJE',
+              'valor_beneficio': 10.0,
+              'descripcion': '10% de descuento en útiles o mercadería seleccionada.',
+              'activo': 1,
+              'es_predeterminada': 1,
+              'created_at': now,
+            },
+            {
+              'negocio_id': nId,
+              'nombre': 'Bono Especial Fidelidad',
+              'puntos_requeridos': 500,
+              'tipo_beneficio': 'DESCUENTO_MONTO',
+              'valor_beneficio': 30.0,
+              'descripcion': 'Bono directo de S/ 30.00 para tu siguiente compra en tienda.',
+              'activo': 1,
+              'es_predeterminada': 1,
+              'created_at': now,
+            },
+            {
+              'negocio_id': nId,
+              'nombre': 'Línea de Crédito Preferencial VIP',
+              'puntos_requeridos': 1000,
+              'tipo_beneficio': 'CREDITO_PREFERENCIAL',
+              'valor_beneficio': 800.0,
+              'descripcion': 'Acceso a línea de crédito preferencial de hasta S/ 800.00 con 0% interés.',
+              'activo': 1,
+              'es_predeterminada': 1,
+              'created_at': now,
+            },
+          ];
+
+          for (var meta in defaultMetas) {
+            await db.insert('metas_recompensas', meta);
+          }
+          debugPrint("✅ Sembradas 4 metas de recompensas por defecto para el negocio #$nId");
+        }
+      }
+    } catch (e) {
+      debugPrint("Advertencia en seedDefaultMetasRecompensas: $e");
+    }
+  }
+
+  /// 🧮 Sincronización inicial ligera de score, nivel y racha de clientes existentes según su historial real.
+  static Future<void> retroCalculateClientsLoyaltyInitial(DatabaseExecutor db) async {
+    try {
+      final clients = await db.rawQuery('SELECT id FROM clientes');
+      final todayStr = DateTime.now().toIso8601String().split('T').first;
+
+      for (var c in clients) {
+        int clientId = c['id'] as int;
+
+        // 1. Estadísticas de ventas
+        final salesStats = await db.rawQuery('''
+          SELECT 
+            COUNT(*) as total_ventas,
+            SUM(CASE WHEN is_archived = 1 THEN 1 ELSE 0 END) as ventas_anuladas,
+            SUM(CASE WHEN (is_archived IS NULL OR is_archived = 0) THEN monto_pagado ELSE 0 END) as total_pagado
+          FROM ventas 
+          WHERE cliente_id = ?
+        ''', [clientId]);
+
+        int totalVentas = (salesStats.first['total_ventas'] as int?) ?? 0;
+        int ventasAnuladas = (salesStats.first['ventas_anuladas'] as int?) ?? 0;
+        double totalPagado = ((salesStats.first['total_pagado'] as num?) ?? 0.0).toDouble();
+        int ventasCompletadas = totalVentas - ventasAnuladas;
+
+        // 2. Historial de cuotas y puntualidad
+        final cuotas = await db.rawQuery('''
+          SELECT c.fecha_vencimiento, c.estado, c.monto, c.monto_pagado,
+                 MAX(p.fecha_pago) as ultima_fecha_pago
+          FROM cuotas c
+          JOIN ventas v ON c.venta_id = v.id
+          LEFT JOIN pagos p ON p.cuota_id = c.id
+          WHERE v.cliente_id = ? AND (v.is_archived IS NULL OR v.is_archived = 0)
+          GROUP BY c.id
+          ORDER BY c.fecha_vencimiento ASC
+        ''', [clientId]);
+
+        int racha = 0;
+        int cuotasPuntuales = 0;
+        int cuotasVencidasActivas = 0;
+        int totalCuotas = cuotas.length;
+
+        for (var cuota in cuotas) {
+          String due = (cuota['fecha_vencimiento'] as String? ?? '').split('T').first;
+          String status = cuota['estado'] as String? ?? 'pendiente';
+          String? lastPay = cuota['ultima_fecha_pago'] as String?;
+
+          if (status == 'pagado') {
+            String payDate = (lastPay ?? due).split('T').first;
+            if (payDate.compareTo(due) <= 0) {
+              racha++;
+              cuotasPuntuales++;
+            } else {
+              racha = 0; // Se pagó fuera de término
+            }
+          } else {
+            // Cuota pendiente o parcial
+            if (due.compareTo(todayStr) < 0) {
+              cuotasVencidasActivas++;
+              racha = 0;
+            }
+          }
+        }
+
+        // 3. Cálculo de Score Multivariable (0 - 1000)
+        double score = 500.0;
+
+        // Puntualidad (peso principal)
+        if (totalCuotas > 0) {
+          double complianceRate = cuotasPuntuales / totalCuotas;
+          score += (complianceRate * 150.0);
+          score += (racha * 15.0).clamp(0.0, 150.0);
+          if (cuotasVencidasActivas > 0) {
+            score -= (cuotasVencidasActivas * 80.0);
+          }
+        } else {
+          // Cliente solo de contado: bono neutral por compras limpias
+          if (ventasCompletadas > 0) score += 50.0;
+        }
+
+        // Constancia y Frecuencia
+        if (ventasCompletadas >= 9) {
+          score += 150.0;
+        } else if (ventasCompletadas >= 4) {
+          score += 80.0;
+        } else if (ventasCompletadas >= 1) {
+          score += 30.0;
+        }
+
+        // Penalización por cancelaciones
+        if (totalVentas > 0 && (ventasAnuladas / totalVentas) > 0.20) {
+          score -= 80.0;
+        }
+
+        // Volumen Neto (LTV)
+        if (cuotasVencidasActivas == 0) {
+          if (totalPagado > 5000) {
+            score += 150.0;
+          } else if (totalPagado > 2000) {
+            score += 110.0;
+          } else if (totalPagado > 500) {
+            score += 75.0;
+          } else if (totalPagado > 100) {
+            score += 30.0;
+          }
+        }
+
+        int finalScore = score.round().clamp(0, 1000);
+
+        // Determinación del nivel
+        String nivel;
+        if (cuotasVencidasActivas > 1 || finalScore < 400) {
+          nivel = 'OBSERVACION';
+        } else if (finalScore < 600) {
+          nivel = 'BRONCE';
+        } else if (finalScore < 750) {
+          nivel = 'PLATA';
+        } else if (finalScore < 900) {
+          nivel = 'ORO';
+        } else {
+          nivel = 'DIAMANTE_VIP';
+        }
+
+        await db.rawUpdate('''
+          UPDATE clientes 
+          SET score_reputacion = ?, nivel_reputacion = ?, racha_pagos_puntuales = ?
+          WHERE id = ?
+        ''', [finalScore, nivel, racha, clientId]);
+      }
+      debugPrint("✅ Recálculo inicial de fidelización ejecutado para ${clients.length} clientes.");
+    } catch (e) {
+      debugPrint("Advertencia en retroCalculateClientsLoyaltyInitial: $e");
     }
   }
 
@@ -356,7 +713,7 @@ class LocalDatabase {
       '''CREATE TABLE proveedores (id $idType, negocio_id $intType, nombre_empresa $textType, contacto_nombre $textNullable, telefono $textNullable, email $textNullable, ruc $textNullable, fecha_creacion $textNullable, activo $boolType, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE)''',
     );
     await db.execute(
-      '''CREATE TABLE productos (id $idType, negocio_id $intType, categoria_id $intNullable, marca_id $intNullable, codigo_barras $textNullable, nombre $textType, descripcion $textNullable, imagen_url $textNullable, estado $textNullable DEFAULT 'privado', fecha_actualizacion $textNullable, modo_stock $textNullable DEFAULT 'INDEPENDIENTE', stock_compartido $intNullable DEFAULT 0, costo_base $realNullable DEFAULT 0.0, FOREIGN KEY (negocio_id) REFERENCES negocios (id), FOREIGN KEY (categoria_id) REFERENCES categorias (id), FOREIGN KEY (marca_id) REFERENCES marcas (id))''',
+      '''CREATE TABLE productos (id $idType, negocio_id $intType, categoria_id $intNullable, marca_id $intNullable, codigo_barras $textNullable, nombre $textType, descripcion $textNullable, imagen_url $textNullable, estado $textNullable DEFAULT 'privado', fecha_creacion $textNullable, fecha_actualizacion $textNullable, modo_stock $textNullable DEFAULT 'INDEPENDIENTE', stock_compartido $intNullable DEFAULT 0, costo_base $realNullable DEFAULT 0.0, FOREIGN KEY (negocio_id) REFERENCES negocios (id), FOREIGN KEY (categoria_id) REFERENCES categorias (id), FOREIGN KEY (marca_id) REFERENCES marcas (id))''',
     );
     await db.execute(
       '''CREATE TABLE facturas_carga (id $idType, numero_secuencial $intNullable, negocio_id $intType, imagen_url $textType, estado $textNullable DEFAULT 'procesando', fecha_carga $textNullable, proveedor_id $intNullable, monto_total_factura $realNullable, fecha_emision $textNullable, cantidad_items_extraidos $intNullable, datos_crudos_ia_json $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (proveedor_id) REFERENCES proveedores (id) ON DELETE SET NULL)''',
@@ -367,7 +724,7 @@ class LocalDatabase {
 
     // 3. CRM y Cotizaciones
     await db.execute(
-      '''CREATE TABLE clientes (id $idType, negocio_id $intType, creado_por_usuario_id $intType, usuario_vinculado_id $intNullable, nombre_completo $textType, telefono $textType, dni_ruc $textNullable, direccion $textNullable, correo $textNullable, notas $textNullable, nivel_confianza $textNullable DEFAULT 'bueno', etiquetas $textNullable, deuda_total $realNullable DEFAULT 0.00, saldo_a_favor $realNullable DEFAULT 0.00, entregas_pendientes $intNullable DEFAULT 0, fecha_registro $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (usuario_vinculado_id) REFERENCES usuarios (id))''',
+      '''CREATE TABLE clientes (id $idType, negocio_id $intType, creado_por_usuario_id $intType, usuario_vinculado_id $intNullable, nombre_completo $textType, telefono $textType, dni_ruc $textNullable, direccion $textNullable, correo $textNullable, notas $textNullable, nivel_confianza $textNullable DEFAULT 'bueno', etiquetas $textNullable, deuda_total $realNullable DEFAULT 0.00, saldo_a_favor $realNullable DEFAULT 0.00, entregas_pendientes $intNullable DEFAULT 0, puntos_actuales $intNullable DEFAULT 0, puntos_historicos $intNullable DEFAULT 0, racha_pagos_puntuales $intNullable DEFAULT 0, score_reputacion $intNullable DEFAULT 500, nivel_reputacion $textNullable DEFAULT 'PLATA', fecha_registro $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (usuario_vinculado_id) REFERENCES usuarios (id))''',
     );
     await db.execute(
       '''CREATE TABLE smart_quotations (id $idType, numero_secuencial $intNullable, negocio_id $intType, creado_por_usuario_id $intType, client_id $intNullable, client_name $textNullable, institution_name $textNullable, grade_level $textNullable, notas $textNullable, total_amount $realNullable DEFAULT 0.0, total_savings $realNullable DEFAULT 0.0, status $textNullable DEFAULT 'PENDING', type $textNullable DEFAULT 'manual', is_template $boolTypeFalse, clone_source_id $intNullable, valid_until $textNullable, source_image_url $textNullable, original_text_dump $textNullable, created_at $textNullable, updated_at $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (client_id) REFERENCES clientes (id))''',
@@ -378,13 +735,13 @@ class LocalDatabase {
 
     // 4. Ventas y Pagos
     await db.execute(
-      '''CREATE TABLE ventas (id $idType, numero_secuencial $intNullable, negocio_id $intType, creado_por_usuario_id $intType, cotizacion_id $intNullable UNIQUE, cliente_id $intNullable, origen_venta $textNullable DEFAULT 'smart_quotation', is_archived $boolTypeFalse, motivo_anulacion $textNullable, nota_prestamo $textNullable, metodo_pago $textType, estado_pago $textNullable DEFAULT 'pagado', estado_entrega $textNullable DEFAULT 'entregado', fecha_entrega $textNullable, monto_total $realType, monto_pagado $realType, descuento_aplicado $realNullable DEFAULT 0.00, abono_inicial $realNullable DEFAULT 0.0, porcentaje_interes $realNullable DEFAULT 0.0, foto_entrega $textNullable, fecha_venta $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (cotizacion_id) REFERENCES smart_quotations (id), FOREIGN KEY (cliente_id) REFERENCES clientes (id))''',
+      '''CREATE TABLE ventas (id $idType, numero_secuencial $intNullable, negocio_id $intType, creado_por_usuario_id $intType, cotizacion_id $intNullable UNIQUE, cliente_id $intNullable, origen_venta $textNullable DEFAULT 'smart_quotation', is_archived $boolTypeFalse, motivo_anulacion $textNullable, fecha_anulacion $textNullable, nota_prestamo $textNullable, metodo_pago $textType, estado_pago $textNullable DEFAULT 'pagado', estado_entrega $textNullable DEFAULT 'entregado', fecha_entrega $textNullable, monto_total $realType, monto_pagado $realType, descuento_aplicado $realNullable DEFAULT 0.00, abono_inicial $realNullable DEFAULT 0.0, porcentaje_interes $realNullable DEFAULT 0.0, mora_total $realNullable DEFAULT 0.0, foto_entrega $textNullable, fecha_venta $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (cotizacion_id) REFERENCES smart_quotations (id), FOREIGN KEY (cliente_id) REFERENCES clientes (id))''',
     );
     await db.execute(
       '''CREATE TABLE venta_items (id $idType, venta_id $intType, presentation_id $intNullable, product_id $intNullable, bundle_id $intNullable, cantidad $intType DEFAULT 1, precio_unitario $realType, original_unit_price $realNullable, subtotal $realType, nombre_producto $textType, brand_name $textNullable, specific_name $textNullable, unidad_medida $textNullable, original_text $textNullable, image_url $textNullable, is_manual_price $boolTypeFalse, FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE, FOREIGN KEY (presentation_id) REFERENCES presentaciones_producto (id), FOREIGN KEY (bundle_id) REFERENCES paquetes (id))''',
     );
     await db.execute(
-      '''CREATE TABLE cuotas (id $idType, venta_id $intType, numero_cuota $intType, monto $realType, monto_pagado $realNullable DEFAULT 0.00, fecha_vencimiento $textType, estado $textNullable DEFAULT 'pendiente', FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE)''',
+      '''CREATE TABLE cuotas (id $idType, venta_id $intType, numero_cuota $intType, monto $realType, monto_pagado $realNullable DEFAULT 0.00, fecha_vencimiento $textType, estado $textNullable DEFAULT 'pendiente', monto_original $realNullable, mora_monto $realNullable DEFAULT 0.0, mora_porcentaje $realNullable DEFAULT 0.0, mora_automatica $intNullable DEFAULT 0, mora_frecuencia $textNullable, mora_intervalo_dias $intNullable DEFAULT 1, mora_tipo $textNullable DEFAULT 'fijo', mora_valor $realNullable DEFAULT 0.0, mora_fecha_inicio $textNullable, mora_ultima_aplicacion $textNullable, mora_periodos_acumulados $intNullable DEFAULT 0, FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE)''',
     );
     await db.execute(
       '''CREATE TABLE pagos (id $idType, negocio_id $intType, creado_por_usuario_id $intType, cliente_id $intNullable, venta_id $intNullable, cuota_id $intNullable, monto $realType, metodo_pago $textType, nota $textNullable, fecha_pago $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (cliente_id) REFERENCES clientes (id), FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE SET NULL, FOREIGN KEY (cuota_id) REFERENCES cuotas (id) ON DELETE SET NULL)''',
@@ -424,6 +781,8 @@ class LocalDatabase {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_presentaciones_compartido ON presentaciones_producto(producto_id, usa_stock_compartido, activo)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_negocio ON ventas(negocio_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_ventas_archived ON ventas(is_archived, negocio_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_cuotas_estado ON cuotas(estado, venta_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_clientes_negocio ON clientes(negocio_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_quotations_negocio ON smart_quotations(negocio_id)');
     
@@ -436,6 +795,27 @@ class LocalDatabase {
       '''CREATE TABLE business_snapshots (id $idType, negocio_id $intType, snapshot_date $textType, metrics_json $textType, created_at $textType, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE)'''
     );
     await db.execute('CREATE INDEX IF NOT EXISTS idx_business_snapshots_negocio ON business_snapshots(negocio_id, snapshot_date)');
+
+    // 10. Gamificación, Reputación y Recompensas (V27)
+    await db.execute(
+      '''CREATE TABLE metas_recompensas (id $idType, negocio_id $intType, nombre $textType, puntos_requeridos $intType, tipo_beneficio $textType, valor_beneficio $realType, descripcion $textNullable, activo $boolType, es_predeterminada $boolTypeFalse, created_at $textType, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE)'''
+    );
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_metas_negocio ON metas_recompensas(negocio_id, activo, puntos_requeridos)');
+
+    await db.execute(
+      '''CREATE TABLE recompensas_cliente (id $idType, negocio_id $intType, cliente_id $intType, meta_id $intType, puntos_consumidos $intType, estado $textType DEFAULT 'PENDIENTE_REVISION', tipo_beneficio $textType, valor_beneficio $realType, titulo_recompensa $textType, descripcion_recompensa $textNullable, fecha_desbloqueo $textType, fecha_aprobacion $textNullable, fecha_canje $textNullable, venta_canje_id $intNullable, nota_revision $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE CASCADE, FOREIGN KEY (meta_id) REFERENCES metas_recompensas (id) ON DELETE CASCADE, FOREIGN KEY (venta_canje_id) REFERENCES ventas (id) ON DELETE SET NULL)'''
+    );
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_recompensas_cliente_estado ON recompensas_cliente(cliente_id, estado)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_recompensas_negocio_estado ON recompensas_cliente(negocio_id, estado)');
+
+    await db.execute(
+      '''CREATE TABLE historial_puntos_reputacion (id $idType, negocio_id $intType, cliente_id $intType, tipo_movimiento $textType, puntos_delta $intType, puntos_saldo_resultante $intType, score_delta $intType, score_resultante $intType, motivo $textType, referencia_tipo $textNullable, referencia_id $intNullable, fecha_registro $textType, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE CASCADE)'''
+    );
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_historial_puntos_cliente ON historial_puntos_reputacion(cliente_id, fecha_registro)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_historial_puntos_negocio ON historial_puntos_reputacion(negocio_id, fecha_registro)');
+
+    // Sembrar metas predeterminadas
+    await seedDefaultMetasRecompensas(db);
   }
 
   Future<void> closeConnection() async {

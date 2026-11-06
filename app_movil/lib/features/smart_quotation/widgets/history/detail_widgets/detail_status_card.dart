@@ -172,10 +172,17 @@ class DetailStatusCard extends StatelessWidget {
               if (isLoan) ...[
                 // Desglose de Préstamo Personal: Capital, Interés, Total, Abonado, Saldo Deudor Exigible
                 ...(() {
+                  double moraTotal = (saleData['mora_total'] as num?)?.toDouble() ?? 0.0;
+                  if (moraTotal <= 0 && cuotasRaw.isNotEmpty) {
+                    moraTotal = cuotasRaw.fold(0.0, (acc, c) => acc + ((c['mora_monto'] as num?)?.toDouble() ?? 0.0));
+                  }
                   final double interesRate = (saleData['porcentaje_interes'] ?? 0).toDouble();
                   final double totalWithInterest = (saleData['monto_total'] ?? totalAmount).toDouble();
                   final double abonoInicial = (saleData['abono_inicial'] ?? 0).toDouble();
-                  final double debtWithInterest = totalWithInterest - abonoInicial;
+                  
+                  // Protección de Capital e Interés Original ante adición de Morosidad
+                  final double pureTotalWithInterest = (totalWithInterest - moraTotal) > 0 ? (totalWithInterest - moraTotal) : 0.0;
+                  final double debtWithInterest = (pureTotalWithInterest - abonoInicial) > 0 ? (pureTotalWithInterest - abonoInicial) : 0.0;
                   final double debtBase = (interesRate > 0 && debtWithInterest > 0)
                       ? debtWithInterest / (1 + (interesRate / 100))
                       : debtWithInterest;
@@ -189,6 +196,13 @@ class DetailStatusCard extends StatelessWidget {
                         "Interés / Financiamiento (${interesRate.toStringAsFixed(1)}%)",
                         "+ ${AppCurrency.format(interestAmount)}",
                         Colors.orange,
+                        isDark,
+                      ),
+                    if (moraTotal > 0.01)
+                      _buildSummaryRow(
+                        "Mora / Recargos por Retraso",
+                        "+ ${AppCurrency.format(moraTotal)}",
+                        Colors.redAccent,
                         isDark,
                       ),
                     _buildSummaryRow("Método de Desembolso", saleData['metodo_pago'].toString().toUpperCase(), textColor, isDark),
@@ -210,21 +224,28 @@ class DetailStatusCard extends StatelessWidget {
                 if ((saleData['descuento_aplicado'] ?? 0) > 0)
                   _buildSummaryRow("Descuento", "- ${AppCurrency.format(saleData['descuento_aplicado'])}", isDark ? Colors.green[400]! : Colors.green, isDark),
 
-                if (saleData['estado_pago'] == 'pendiente' && (saleData['porcentaje_interes'] ?? 0) > 0)
-                  ...(() {
-                    double interesRate = (saleData['porcentaje_interes'] ?? 0).toDouble();
-                    double totalWithInterest = (saleData['monto_total'] ?? 0).toDouble();
-                    double abonoInicial = (saleData['abono_inicial'] ?? 0).toDouble();
-                    double debtWithInterest = totalWithInterest - abonoInicial;
-                    if (debtWithInterest < 0) debtWithInterest = 0;
+                ...(() {
+                  double moraTotal = (saleData['mora_total'] as num?)?.toDouble() ?? 0.0;
+                  if (moraTotal <= 0 && cuotasRaw.isNotEmpty) {
+                    moraTotal = cuotasRaw.fold(0.0, (acc, c) => acc + ((c['mora_monto'] as num?)?.toDouble() ?? 0.0));
+                  }
+                  final double interesRate = (saleData['porcentaje_interes'] ?? 0).toDouble();
+                  final double totalWithInterest = (saleData['monto_total'] ?? 0).toDouble();
+                  final double abonoInicial = (saleData['abono_inicial'] ?? 0).toDouble();
+                  final double pureTotalWithInterest = (totalWithInterest - moraTotal) > 0 ? (totalWithInterest - moraTotal) : 0.0;
+                  final double debtWithInterest = (pureTotalWithInterest - abonoInicial) > 0 ? pureTotalWithInterest - abonoInicial : 0.0;
+                  final double debtBase = (interesRate > 0 && debtWithInterest > 0) ? debtWithInterest / (1 + (interesRate / 100)) : debtWithInterest;
+                  final double interestAmount = debtWithInterest - debtBase;
 
-                    double debtBase = debtWithInterest / (1 + (interesRate / 100));
-                    double interestAmount = debtWithInterest - debtBase;
-
-                    return [
-                      _buildSummaryRow("Financiamiento (${interesRate.toStringAsFixed(1)}%)", "+ ${AppCurrency.format(interestAmount)}", Colors.orange, isDark)
-                    ];
-                  })(),
+                  final List<Widget> extraRows = [];
+                  if (saleData['estado_pago'] == 'pendiente' && interestAmount > 0.01) {
+                    extraRows.add(_buildSummaryRow("Financiamiento (${interesRate.toStringAsFixed(1)}%)", "+ ${AppCurrency.format(interestAmount)}", Colors.orange, isDark));
+                  }
+                  if (moraTotal > 0.01) {
+                    extraRows.add(_buildSummaryRow("Mora / Recargos por Retraso", "+ ${AppCurrency.format(moraTotal)}", Colors.redAccent, isDark));
+                  }
+                  return extraRows;
+                })(),
 
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -244,6 +265,7 @@ class DetailStatusCard extends StatelessWidget {
                 clientName: saleData['cliente_nombre'] ?? (saleData['cliente_info'] != null ? saleData['cliente_info']['nombre_completo'] : null),
                 clientId: saleData['cliente_id'] as int?,
                 saleId: saleData['id'] as int?,
+                isLoan: isLoan,
                 onPaymentSuccess: onPaymentSuccess,
               ),
             ],

@@ -71,10 +71,11 @@ class QuotationActionButtons extends StatelessWidget {
   }
 
   Widget _buildBottomActionBar(BuildContext context) {
-    bool canSell = validation == null || validation!.canSell; 
+    bool canSell = validation == null || (validation!.canSell && validation!.sharedStockConflicts.isEmpty); 
     bool isSold = status == 'SOLD';
     
     int errorCount = (validation?.stockWarnings.length ?? 0) + 
+                     (validation?.sharedStockConflicts.length ?? 0) +
                      (validation?.bundleChanges.where((b) => b.isDeleted || b.isDeactivated || b.isCompositionChange).length ?? 0) +
                      (validation?.unitChanges.length ?? 0);
                      

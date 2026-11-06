@@ -44,6 +44,24 @@ class InventoryGridCard extends StatelessWidget {
         : (stock <= 5
             ? (isDark ? Colors.orange[300]! : Colors.orange)
             : (isDark ? Colors.teal[300]! : Colors.green[700]!));
+
+    final bool showAlertColors = provider.showStockAlertColors;
+    final Color neutralStockColor = isDark ? Colors.blueGrey[300]! : Colors.blueGrey[700]!;
+    final Color effectiveContentColor = (!showAlertColors)
+        ? neutralStockColor
+        : (item.hasLooseUnits
+            ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
+            : stockColor);
+    final Color effectiveBadgeBg = (!showAlertColors)
+        ? (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100)
+        : (item.hasLooseUnits
+            ? (isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50)
+            : stockColor.withValues(alpha: 0.12));
+    final Color effectiveBadgeBorder = (!showAlertColors)
+        ? (isDark ? Colors.white12 : Colors.grey.shade300)
+        : (item.hasLooseUnits
+            ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
+            : stockColor.withValues(alpha: (isOut || stock <= 5) ? 0.7 : 0.35));
     final bool hasOffer = item.hasOffer;
 
     String discountBadgeText = "OFERTA";
@@ -251,19 +269,18 @@ class InventoryGridCard extends StatelessWidget {
                   InkWell(
                     onTap: onTapStock ?? onTap,
                     borderRadius: BorderRadius.circular(8),
-                    child: Container(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                       decoration: BoxDecoration(
-                        color: item.hasLooseUnits
-                            ? (isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50)
-                            : stockColor.withValues(alpha: 0.12),
+                        color: effectiveBadgeBg,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: item.hasLooseUnits
-                              ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
-                              : stockColor.withValues(alpha: (isOut || stock <= 5) ? 0.7 : 0.35),
-                          width: (isOut || stock <= 5 || item.hasLooseUnits) ? 1.2 : 0.9,
+                          color: effectiveBadgeBorder,
+                          width: (showAlertColors && (isOut || stock <= 5 || item.hasLooseUnits))
+                              ? 1.2
+                              : 0.9,
                         ),
                       ),
                       child: Row(
@@ -276,9 +293,7 @@ class InventoryGridCard extends StatelessWidget {
                                     ? Icons.warning_amber_rounded
                                     : (item.hasLooseUnits ? Icons.tune_rounded : Icons.inventory_2_rounded)),
                             size: 13,
-                            color: item.hasLooseUnits
-                                ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
-                                : stockColor,
+                            color: effectiveContentColor,
                           ),
                           const SizedBox(width: 4),
                           Expanded(
@@ -287,9 +302,7 @@ class InventoryGridCard extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: item.hasLooseUnits
-                                    ? (isDark ? Colors.amber[300]! : Colors.amber[900]!)
-                                    : stockColor,
+                                color: effectiveContentColor,
                               ),
                               maxLines: 2,
                             ),
@@ -297,10 +310,7 @@ class InventoryGridCard extends StatelessWidget {
                           Icon(
                             Icons.edit_note_rounded,
                             size: 13,
-                            color: (item.hasLooseUnits
-                                    ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
-                                    : stockColor)
-                                .withValues(alpha: 0.7),
+                            color: effectiveContentColor.withValues(alpha: 0.7),
                           ),
                         ],
                       ),

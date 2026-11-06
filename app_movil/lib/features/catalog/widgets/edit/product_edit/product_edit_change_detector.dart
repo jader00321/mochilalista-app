@@ -23,6 +23,10 @@ class ProductEditChangeDetector {
     required List<Map<String, dynamic>> presentationControllers,
     ProductEditSnapshot? initialSnapshot,
     int generalState = 2,
+    String modoStock = 'INDEPENDIENTE',
+    TextEditingController? baseCostCtrl,
+    TextEditingController? sharedStockCtrl,
+    TextEditingController? sharedIngresoCtrl,
   }) {
     if (initialSnapshot != null) {
       final current = ProductEditSnapshot.capture(
@@ -39,12 +43,33 @@ class ProductEditChangeDetector {
         generalState: generalState,
         idsToDelete: idsToDelete,
         presentationControllers: presentationControllers,
+        modoStock: modoStock,
+        baseCostCtrl: baseCostCtrl,
+        sharedStockCtrl: sharedStockCtrl,
+        sharedIngresoCtrl: sharedIngresoCtrl,
       );
       return !current.isIdenticalTo(initialSnapshot);
     }
 
     if (isDirty) return true;
     final p = productToEdit;
+
+    // Estrategia global de stock
+    if (modoStock != p.modoStock) return true;
+    if (sharedIngresoCtrl != null &&
+        sharedIngresoCtrl.text.trim().isNotEmpty &&
+        sharedIngresoCtrl.text.trim() != "0") {
+      return true;
+    }
+    if (sharedStockCtrl != null) {
+      final s = int.tryParse(sharedStockCtrl.text.trim()) ?? 0;
+      if (s != p.stockCompartido) return true;
+    }
+    if (baseCostCtrl != null) {
+      final b = double.tryParse(baseCostCtrl.text.trim()) ?? 0.0;
+      if ((b - p.costoBase).abs() > 0.005) return true;
+    }
+
     if (nameCtrl.text.trim() != p.nombre.trim()) return true;
     if (descCtrl.text.trim() != (p.descripcion ?? "").trim()) return true;
     final normBrand = (selectedBrandId == null || selectedBrandId <= 0)
@@ -263,6 +288,14 @@ class ProductEditChangeDetector {
               : orig.proveedorId;
       if (normCtrlProv != normOrigProv) return true;
       if (ctrl['providerId'] != null && (ctrl['providerId'] as int) < 0) {
+        return true;
+      }
+
+      // Estrategia de variante
+      if ((ctrl['usaStockCompartido'] == true) != orig.usaStockCompartido) {
+        return true;
+      }
+      if (ctrl['cupoMaximoVariante'] != orig.cupoMaximoVariante) {
         return true;
       }
     }

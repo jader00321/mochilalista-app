@@ -287,6 +287,7 @@ class SaleProvider with ChangeNotifier {
     List<InstallmentModel>? installments,
     String origenVenta = "smart_quotation",
     List<Map<String, dynamic>>? detalleVenta,
+    int? recompensaCanjeId,
   }) async {
     if (_negocioId == null || _usuarioId == null) return "Error: Sesión no válida.";
     
@@ -310,7 +311,8 @@ class SaleProvider with ChangeNotifier {
         "abono_inicial": abonoInicial,
         "porcentaje_interes": porcentajeInteres,
         "cuotas": installments?.map((e) => e.toJson()).toList() ?? [],
-        "items": detalleVenta ?? []
+        "items": detalleVenta ?? [],
+        if (recompensaCanjeId != null) "recompensa_canje_id": recompensaCanjeId,
       };
 
       await _salesService.createSale(saleData, _negocioId!, _usuarioId!);
@@ -952,5 +954,57 @@ class SaleProvider with ChangeNotifier {
     } catch (e) {
       return null;
     }
+  }
+
+  // =========================================================================
+  // ⚡ DELEGACIONES DEL MOTOR DE MOROSIDAD
+  // =========================================================================
+
+  Future<bool> aplicarMorosidadManual(
+    int cuotaId, {
+    required String tipo,
+    required double valor,
+    double? nuevoMontoTotal,
+  }) async {
+    final success = await _salesService.aplicarMorosidadManual(
+      cuotaId,
+      tipo: tipo,
+      valor: valor,
+      nuevoMontoTotal: nuevoMontoTotal,
+    );
+    if (success) notifyListeners();
+    return success;
+  }
+
+  Future<bool> quitarMorosidad(int cuotaId) async {
+    final success = await _salesService.quitarMorosidad(cuotaId);
+    if (success) notifyListeners();
+    return success;
+  }
+
+  Future<bool> configurarMorosidadAutomatica(
+    int cuotaId, {
+    required bool activa,
+    String? frecuencia,
+    int? intervaloDias,
+    String? tipo,
+    double? valor,
+    bool calcularDesdeVencimiento = true,
+  }) async {
+    final success = await _salesService.configurarMorosidadAutomatica(
+      cuotaId,
+      activa: activa,
+      frecuencia: frecuencia,
+      intervaloDias: intervaloDias,
+      tipo: tipo,
+      valor: valor,
+      calcularDesdeVencimiento: calcularDesdeVencimiento,
+    );
+    if (success) notifyListeners();
+    return success;
+  }
+
+  Future<void> evaluarMorosidadPeriodica({int? ventaId, int? clienteId, DateTime? referenceDate}) async {
+    await _salesService.evaluarMorosidadPeriodica(ventaId: ventaId, clienteId: clienteId, referenceDate: referenceDate);
   }
 }

@@ -99,6 +99,193 @@ class InventoryFilterHeader extends StatelessWidget {
     );
   }
 
+  void _showColorAlertExplanation(BuildContext context, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final isAlertActive = provider.showStockAlertColors;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: (isAlertActive
+                                  ? (isDark ? Colors.teal[700]! : Colors.teal.shade100)
+                                  : (isDark ? Colors.grey[800]! : Colors.grey[200]!))
+                              .withValues(alpha: 0.4),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.palette_outlined,
+                          color: isAlertActive
+                              ? (isDark ? Colors.tealAccent : Colors.teal.shade700)
+                              : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Alerta Visual de Colores de Stock",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                            Text(
+                              isAlertActive
+                                  ? "Colores llamativos activados"
+                                  : "Estilo neutro discreto activado",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isAlertActive
+                                    ? (isDark ? Colors.tealAccent : Colors.teal)
+                                    : Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: isAlertActive,
+                        activeThumbColor: Colors.tealAccent,
+                        activeTrackColor: Colors.teal,
+                        onChanged: (val) {
+                          provider.setShowStockAlertColors(val);
+                          setModalState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    "¿Para qué sirve esta función?",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.grey[200] : Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "• Activada: Resalta las cantidades en colores según el nivel de inventario (rojo = sin stock, naranja = stock bajo o cupo agotado, verde = stock óptimo) con un pulso visual dinámico.\n\n"
+                    "• Desactivada: Muestra todos los badges de stock en un estilo neutro uniforme y sin pulsaciones, ideal para una visualización más sobria y sin distracciones.",
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            isDark ? const Color(0xFF2E3856) : Colors.grey[200],
+                        foregroundColor: isDark ? Colors.white : Colors.black87,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text("Entendido"),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildStockAlertColorButton(BuildContext context, bool isDark) {
+    final isActive = provider.showStockAlertColors;
+    final color = isActive
+        ? (isDark ? Colors.tealAccent : Colors.teal.shade700)
+        : (isDark ? Colors.grey[500]! : Colors.grey);
+
+    return Tooltip(
+      message: isActive
+          ? "Colores de stock activos (Mantén presionado para info)"
+          : "Estilo neutro activo (Mantén presionado para info)",
+      child: InkWell(
+        onTap: () {
+          provider.toggleStockAlertColors();
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                !isActive
+                    ? "Colores de stock activados"
+                    : "Estilo neutro activado (colores desactivados)",
+              ),
+              duration: const Duration(seconds: 3),
+              action: SnackBarAction(
+                label: "Detalles",
+                onPressed: () => _showColorAlertExplanation(context, isDark),
+              ),
+            ),
+          );
+        },
+        onLongPress: () => _showColorAlertExplanation(context, isDark),
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: isActive
+                ? color.withValues(alpha: 0.15)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isActive
+                  ? color.withValues(alpha: 0.5)
+                  : Colors.transparent,
+            ),
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Icon(
+              isActive ? Icons.palette_rounded : Icons.palette_outlined,
+              key: ValueKey<bool>(isActive),
+              size: 20,
+              color: color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SliverPersistentHeader(
@@ -164,12 +351,14 @@ class InventoryFilterHeader extends StatelessWidget {
                     "A-Z",
                     isDark,
                   ),
+                  const SizedBox(width: 6),
+                  _buildStockAlertColorButton(context, isDark),
 
                   Container(
                     height: 26,
                     width: 1,
                     color: isDark ? Colors.white24 : Colors.grey[300],
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    margin: const EdgeInsets.symmetric(horizontal: 10),
                   ),
 
                   Container(

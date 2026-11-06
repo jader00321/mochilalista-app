@@ -33,6 +33,7 @@ class TrackingProvider with ChangeNotifier {
   bool _isLoadingQuotations = false;
 
   int _clientCount = 0;
+  int _pendingRewardsCount = 0;
 
   // --- GETTERS ---
   bool get isLoading => _isLoading;
@@ -50,6 +51,7 @@ class TrackingProvider with ChangeNotifier {
   List<SmartQuotationModel> get currentClientQuotations => _currentClientQuotations;
   bool get isLoadingQuotations => _isLoadingQuotations;
   int get clientCount => _clientCount;
+  int get pendingRewardsCount => _pendingRewardsCount;
 
   // 🔥 RECIBE EL CONTEXTO MULTI-PERFIL
   void updateContext(int? negocioId, int? usuarioId) {
@@ -69,6 +71,7 @@ class TrackingProvider with ChangeNotifier {
       _currentSort = "newest";
       _filterIsAppClient = false; 
       _clientCount = 0;
+      _pendingRewardsCount = 0;
     }
   }
 
@@ -98,6 +101,14 @@ class TrackingProvider with ChangeNotifier {
     }
   }
 
+  Future<void> loadPendingRewardsCount() async {
+    if (_negocioId == null) return;
+    try {
+      _pendingRewardsCount = await _service.getPendingReviewRewardsCount(_negocioId!);
+      notifyListeners();
+    } catch (_) {}
+  }
+
   Future<void> loadClients() async {
     if (_negocioId == null) return;
     _isLoading = true;
@@ -106,6 +117,7 @@ class TrackingProvider with ChangeNotifier {
     try {
       _allClients = await _service.getAllClients(_negocioId!);
       _clientCount = _allClients.length; // 🔥 Mantiene el contador del Home sincronizado al 100%
+      await loadPendingRewardsCount();
     } catch (e) {
       _handleException(e);
     } finally {
@@ -316,13 +328,13 @@ class TrackingProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> registerLoan(int clientId, double amount, String motivo, {double? interestRate, String? metodoPago, List<InstallmentModel>? installments}) async {
+  Future<bool> registerLoan(int clientId, double amount, String motivo, {DateTime? loanDate, double? interestRate, String? metodoPago, List<InstallmentModel>? installments}) async {
     if (_negocioId == null || _usuarioId == null) return false;
     _isLoading = true;
     notifyListeners();
 
     try {
-      await _service.registerLoan(clientId, _negocioId!, _usuarioId!, amount: amount, motivo: motivo, interestRate: interestRate, metodoPago: metodoPago, installments: installments);
+      await _service.registerLoan(clientId, _negocioId!, _usuarioId!, amount: amount, motivo: motivo, loanDate: loanDate, interestRate: interestRate, metodoPago: metodoPago, installments: installments);
       await loadClients();
       await loadClientLedger(clientId);
       await loadClientDebts(clientId);

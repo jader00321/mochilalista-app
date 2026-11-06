@@ -153,57 +153,70 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       double newTotalAmount = 0.0;
       double newTotalSavings = 0.0;
 
+      final Map<int, int> sharedAdjustedQuantities = {};
+      final Set<int> sharedRemovedItemIds = {};
+
+      for (var conflict in validation.sharedStockConflicts) {
+        int remainingBase = conflict.totalSharedPool;
+        for (var cItem in conflict.conflictingItems) {
+          final factor = cItem.conversionFactor > 0 ? cItem.conversionFactor : 1;
+          final maxUnitsFromBase = remainingBase ~/ factor;
+          final maxAllowed = cItem.cupoMaximo != null
+              ? (maxUnitsFromBase < cItem.cupoMaximo! ? maxUnitsFromBase : cItem.cupoMaximo!)
+              : maxUnitsFromBase;
+          final allocatedQty = cItem.requestedQty <= maxAllowed ? cItem.requestedQty : maxAllowed;
+
+          if (allocatedQty > 0) {
+            sharedAdjustedQuantities[cItem.itemId] = allocatedQty;
+            remainingBase -= allocatedQty * factor;
+          } else {
+            sharedRemovedItemIds.add(cItem.itemId);
+          }
+        }
+      }
+
       final stockWarningsMap = {for (var w in validation.stockWarnings) w.itemId: w};
 
       for (var qItem in _fullQuotation!.items) {
-        final warning = stockWarningsMap[qItem.id];
-        if (warning != null) {
-          if (warning.available <= 0) {
-            // Producto agotado: se retira de la lista para levantar el bloqueo de venta
-            continue;
-          }
-          // Stock parcial disponible: ajustar la cantidad requerida al stock disponible
-          final qty = warning.available;
-          newTotalAmount += qItem.unitPriceApplied * qty;
-          double savings = (qItem.originalUnitPrice - qItem.unitPriceApplied) * qty;
-          if (savings > 0) newTotalSavings += savings;
-
-          itemsPayload.add({
-            "product_id": qItem.productId, 
-            "presentation_id": qItem.presentationId, 
-            "bundle_id": qItem.bundleId,
-            "quantity": qty,
-            "unit_price_applied": qItem.unitPriceApplied, 
-            "original_unit_price": qItem.originalUnitPrice, 
-            "product_name": qItem.productName,
-            "brand_name": qItem.brandName,
-            "specific_name": qItem.specificName,
-            "sales_unit": qItem.salesUnit,
-            "is_manual_price": qItem.isManualPrice, 
-            "image_url": qItem.imageUrl,
-            "original_text": qItem.originalText
-          });
-        } else {
-          newTotalAmount += qItem.unitPriceApplied * qItem.quantity;
-          double savings = (qItem.originalUnitPrice - qItem.unitPriceApplied) * qItem.quantity;
-          if (savings > 0) newTotalSavings += savings;
-
-          itemsPayload.add({
-            "product_id": qItem.productId, 
-            "presentation_id": qItem.presentationId, 
-            "bundle_id": qItem.bundleId,
-            "quantity": qItem.quantity,
-            "unit_price_applied": qItem.unitPriceApplied, 
-            "original_unit_price": qItem.originalUnitPrice, 
-            "product_name": qItem.productName,
-            "brand_name": qItem.brandName,
-            "specific_name": qItem.specificName,
-            "sales_unit": qItem.salesUnit,
-            "is_manual_price": qItem.isManualPrice, 
-            "image_url": qItem.imageUrl,
-            "original_text": qItem.originalText
-          });
+        if (sharedRemovedItemIds.contains(qItem.id)) {
+          // Se retira de la lista para levantar el conflicto de stock compartido
+          continue;
         }
+
+        int qty = qItem.quantity;
+        if (sharedAdjustedQuantities.containsKey(qItem.id)) {
+          qty = sharedAdjustedQuantities[qItem.id]!;
+        } else {
+          final warning = stockWarningsMap[qItem.id];
+          if (warning != null) {
+            if (warning.available <= 0) {
+              // Producto agotado: se retira de la lista para levantar el bloqueo de venta
+              continue;
+            }
+            // Stock parcial disponible: ajustar la cantidad requerida al stock disponible
+            qty = warning.available;
+          }
+        }
+
+        newTotalAmount += qItem.unitPriceApplied * qty;
+        double savings = (qItem.originalUnitPrice - qItem.unitPriceApplied) * qty;
+        if (savings > 0) newTotalSavings += savings;
+
+        itemsPayload.add({
+          "product_id": qItem.productId, 
+          "presentation_id": qItem.presentationId, 
+          "bundle_id": qItem.bundleId,
+          "quantity": qty,
+          "unit_price_applied": qItem.unitPriceApplied, 
+          "original_unit_price": qItem.originalUnitPrice, 
+          "product_name": qItem.productName,
+          "brand_name": qItem.brandName,
+          "specific_name": qItem.specificName,
+          "sales_unit": qItem.salesUnit,
+          "is_manual_price": qItem.isManualPrice, 
+          "image_url": qItem.imageUrl,
+          "original_text": qItem.originalText
+        });
       }
 
       final wbProv = Provider.of<WorkbenchProvider>(context, listen: false);
@@ -338,13 +351,18 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final validation = workbenchProv.getValidationFor(widget.quotationId);
 
     if (newStatus == 'READY' && validation != null) {
-      if (!validation.canSell) {
+      if (!validation.canSell || validation.sharedStockConflicts.isNotEmpty) {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
             backgroundColor: Theme.of(context).cardTheme.color,
             title: Row(children: [Icon(Icons.warning_amber, color: Colors.orange[400]), const SizedBox(width: 10), const Text("Atención")]),
-            content: Text("No puedes marcar como 'Listo para Vender' porque hay productos agotados o con stock insuficiente.\n\nPor favor usa el botón 'CORREGIR' primero.", style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white70 : Colors.black87, fontSize: 16)),
+            content: Text(
+              validation.sharedStockConflicts.isNotEmpty
+                  ? "No puedes marcar como 'Listo para Vender' porque hay un conflicto de stock compartido entre variantes de un mismo producto.\n\nPor favor usa el botón 'CORREGIR' primero."
+                  : "No puedes marcar como 'Listo para Vender' porque hay productos agotados o con stock insuficiente.\n\nPor favor usa el botón 'CORREGIR' primero.",
+              style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white70 : Colors.black87, fontSize: 16),
+            ),
             actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Entendido", style: TextStyle(fontSize: 16)))],
           )
         );
@@ -612,13 +630,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   }
 
   Widget _buildSmartAlertBanner(ValidationResult validation, bool isDark) {
-    bool isCritical = !validation.canSell; 
+    bool isCritical = !validation.canSell || validation.sharedStockConflicts.isNotEmpty; 
 
     if (isCritical) {
       // ═══════════════════════════════════════════════════════════════
-      // 🔴 BANNER CRÍTICO: Stock insuficiente / Bundle eliminado
+      // 🔴 BANNER CRÍTICO: Stock insuficiente / Bundle eliminado / Conflicto Compartido
       // Tamaño grande, rojo, icono de error. Impide la venta.
       // ═══════════════════════════════════════════════════════════════
+      final hasShared = validation.sharedStockConflicts.isNotEmpty;
       Color bgColor = isDark ? Colors.red[900]! : Colors.red;
       return Container(
         width: double.infinity,
@@ -626,17 +645,25 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            const Icon(Icons.error, color: Colors.white, size: 32),
+            Icon(hasShared ? Icons.hub_rounded : Icons.error, color: Colors.white, size: 32),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start, 
                 children: [
-                  const Text("¡Atención! Stock Insuficiente", style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16)), 
+                  Text(
+                    hasShared ? "¡Atención! Conflicto de Stock Compartido" : "¡Atención! Stock Insuficiente",
+                    style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16),
+                  ), 
                   const SizedBox(height: 4),
-                  Text("Productos agotados detectados.", style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.9)))
-                ]
-              )
+                  Text(
+                    hasShared
+                        ? "Variantes compiten por el mismo inventario base en almacén."
+                        : "Productos agotados detectados.",
+                    style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.9)),
+                  ),
+                ],
+              ),
             ),
             ElevatedButton(
               onPressed: () => _handleUpdateAnalysis(validation), 
@@ -1040,7 +1067,27 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                           final stockWarning = isClient ? null : validation?.stockWarnings.firstWhere((w) => w.itemId == item.id, orElse: () => StockWarning(itemId: -1, productName: "", requested: 0, available: 0));
                           final priceChange = isClient ? null : validation?.priceChanges.firstWhere((p) => p.itemId == item.id, orElse: () => PriceChange(itemId: -1, productName: "", oldPrice: 0, newPrice: 0));
                           
-                          return QuoteItemListRow(item: item, stockError: stockWarning, priceError: priceChange, isDark: isDark);
+                          SharedStockConflict? sharedConflict;
+                          QuoteItemConflictDetail? sharedConflictDetail;
+                          if (!isClient && validation != null) {
+                            for (final conflict in validation.sharedStockConflicts) {
+                              final match = conflict.conflictingItems.where((c) => c.itemId == item.id).firstOrNull;
+                              if (match != null) {
+                                sharedConflict = conflict;
+                                sharedConflictDetail = match;
+                                break;
+                              }
+                            }
+                          }
+
+                          return QuoteItemListRow(
+                            item: item,
+                            stockError: stockWarning,
+                            priceError: priceChange,
+                            sharedConflict: sharedConflict,
+                            sharedConflictDetail: sharedConflictDetail,
+                            isDark: isDark,
+                          );
                         },
                         childCount: items.length,
                       ),

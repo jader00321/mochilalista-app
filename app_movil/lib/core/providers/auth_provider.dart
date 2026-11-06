@@ -34,6 +34,7 @@ class AuthProvider with ChangeNotifier {
 
   String get userName => _activeUser?.fullName ?? "Usuario";
   String get businessName => _activeUser?.business?.commercialName ?? "Mi Negocio";
+  String get activeBusinessName => _activeUser?.business?.commercialName ?? "Mi Negocio";
   String get currentCurrency => _activeUser?.business?.moneda ?? 'S/ (Soles)';
   bool get hasPinCache => _hasPinCache;
   bool get isPinReminderSnoozed => _isPinReminderSnoozed;

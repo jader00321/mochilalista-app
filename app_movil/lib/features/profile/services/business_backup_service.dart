@@ -289,6 +289,11 @@ class BusinessBackupService {
     // 6. Snapshots
     backupData['data']['business_snapshots'] = await db.query('business_snapshots', where: 'negocio_id = ?', whereArgs: [negocioId]);
 
+    // 7. Gamificación, Reputación y Recompensas (V27)
+    backupData['data']['metas_recompensas'] = await db.query('metas_recompensas', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    backupData['data']['recompensas_cliente'] = await db.query('recompensas_cliente', where: 'negocio_id = ?', whereArgs: [negocioId]);
+    backupData['data']['historial_puntos_reputacion'] = await db.query('historial_puntos_reputacion', where: 'negocio_id = ?', whereArgs: [negocioId]);
+
     return backupData;
   }
 
@@ -474,6 +479,7 @@ class BusinessBackupService {
           Map<int, int> invoiceIdMap = {};
           Map<int, int> packageIdMap = {};
           Map<int, int> campaignIdMap = {};
+          Map<int, int> metaIdMap = {};
 
           // Insertar Categorias
           for (var item in data['categorias'] ?? []) {
@@ -521,6 +527,12 @@ class BusinessBackupService {
             item.remove('id');
             item['negocio_id'] = targetNegocioId;
             item['creado_por_usuario_id'] = currentUserId; // Asignar al usuario actual
+            // 🛡️ V27: Valores por defecto seguros para respaldos anteriores
+            item['puntos_actuales'] = item['puntos_actuales'] ?? 0;
+            item['puntos_historicos'] = item['puntos_historicos'] ?? 0;
+            item['racha_pagos_puntuales'] = item['racha_pagos_puntuales'] ?? 0;
+            item['score_reputacion'] = item['score_reputacion'] ?? 500;
+            item['nivel_reputacion'] = item['nivel_reputacion'] ?? 'PLATA';
             int newId = await txn.insert('clientes', item);
             clientIdMap[oldId] = newId;
           }
@@ -733,6 +745,39 @@ class BusinessBackupService {
             item['negocio_id'] = targetNegocioId;
             item['user_id'] = currentUserId;
             await txn.insert('notificaciones', item);
+          }
+
+          // =========================================================================
+          // 🏆 V27: Insertar Metas, Recompensas y Kardex de Fidelización
+          // =========================================================================
+          for (var item in data['metas_recompensas'] ?? []) {
+            int oldId = item['id'];
+            item = Map<String, dynamic>.from(item);
+            item.remove('id');
+            item['negocio_id'] = targetNegocioId;
+            int newId = await txn.insert('metas_recompensas', item);
+            metaIdMap[oldId] = newId;
+          }
+
+          for (var item in data['recompensas_cliente'] ?? []) {
+            item = Map<String, dynamic>.from(item);
+            item.remove('id');
+            item['negocio_id'] = targetNegocioId;
+            if (item['cliente_id'] != null) item['cliente_id'] = clientIdMap[item['cliente_id']];
+            if (item['meta_id'] != null) item['meta_id'] = metaIdMap[item['meta_id']];
+            if (item['venta_canje_id'] != null) item['venta_canje_id'] = saleIdMap[item['venta_canje_id']];
+            await txn.insert('recompensas_cliente', item);
+          }
+
+          for (var item in data['historial_puntos_reputacion'] ?? []) {
+            item = Map<String, dynamic>.from(item);
+            item.remove('id');
+            item['negocio_id'] = targetNegocioId;
+            if (item['cliente_id'] != null) item['cliente_id'] = clientIdMap[item['cliente_id']];
+            if (item['referencia_tipo'] == 'venta' && item['referencia_id'] != null) {
+              item['referencia_id'] = saleIdMap[item['referencia_id']];
+            }
+            await txn.insert('historial_puntos_reputacion', item);
           }
 
           // Aplicar PIN de seguridad si fue solicitado en Replace

@@ -363,6 +363,7 @@ void main() {
                 isGpsLoading: false,
                 updateBusinessData: false,
                 hasBusinessChanges: true,
+                changedBusinessFields: const ["Teléfono", "Cuentas de pago"],
                 onGpsTap: () {},
                 onUpdateDataChanged: (_) {},
                 onDataChanged: () {},
@@ -374,12 +375,12 @@ void main() {
 
       // Verificamos que se renderice el nuevo título y subtítulo del perfil
       expect(find.text("Guardar estos cambios en el perfil de mi negocio"), findsOneWidget);
-      expect(find.textContaining("Actualiza tu teléfono, RUC, dirección y cuentas"), findsOneWidget);
+      expect(find.text("Se actualizarán en tu perfil: Teléfono y Cuentas de pago."), findsOneWidget);
       expect(find.text("Modificado"), findsOneWidget);
 
-      // Verificamos que los chips muestren estado activo sin emojis en los botones
-      expect(find.text("✓ Yape"), findsOneWidget);
-      expect(find.text("✓ BCP"), findsOneWidget);
+      // Verificamos que los chips muestren estado activo sin doble check "✓" en los botones
+      expect(find.text("Yape"), findsOneWidget);
+      expect(find.text("BCP"), findsOneWidget);
       expect(find.text("+ Plin"), findsOneWidget);
     });
 
@@ -421,8 +422,8 @@ void main() {
       expect(paymentCtrl.text, contains("Plin: 987654321"));
       expect(paymentCtrl.text.split('\n').length, 2);
 
-      // Volvemos a tocar 'Yape' (actualmente activo '✓ Yape') para desactivarlo
-      await tester.tap(find.text("✓ Yape"));
+      // Volvemos a tocar 'Yape' (actualmente activo 'Yape') para desactivarlo
+      await tester.tap(find.text("Yape"));
       await tester.pumpAndSettle();
 
       expect(paymentCtrl.text, isNot(contains("Yape")));

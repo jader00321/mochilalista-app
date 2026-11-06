@@ -8,6 +8,7 @@ import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_filter_bar.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_card.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_profile_editor.dart';
+import 'package:app_movil/features/smart_quotation/screens/crm/loyalty_center_screen.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
@@ -378,6 +379,23 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          Consumer<TrackingProvider>(
+            builder: (_, trProv, __) => IconButton(
+              icon: Badge(
+                isLabelVisible: trProv.pendingRewardsCount > 0,
+                label: Text('${trProv.pendingRewardsCount}'),
+                backgroundColor: Colors.redAccent,
+                child: const Icon(Icons.military_tech_rounded, size: 26),
+              ),
+              tooltip: "Fidelización y Premios",
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoyaltyCenterScreen()),
+                ).then((_) => _onRefresh());
+              },
+            ),
+          ),
           const InfoTooltipButton(
             title: "Directorio de Clientes (CRM)",
             description:

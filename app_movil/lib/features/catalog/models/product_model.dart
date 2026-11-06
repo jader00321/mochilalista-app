@@ -355,6 +355,7 @@ class Product {
   final String modoStock;
   final int stockCompartido;
   final double costoBase;
+  final String? fechaCreacion;
   final String? fechaActualizacion;
 
   Product({
@@ -372,6 +373,7 @@ class Product {
     this.modoStock = 'INDEPENDIENTE',
     this.stockCompartido = 0,
     this.costoBase = 0.0,
+    this.fechaCreacion,
     this.fechaActualizacion,
   });
 
@@ -379,6 +381,17 @@ class Product {
   bool get isStockMixto => modoStock == 'MIXTO';
   bool get isStockIndependiente => modoStock == 'INDEPENDIENTE';
   bool get hasSharedStock => modoStock == 'COMPARTIDO' || modoStock == 'MIXTO';
+
+  DateTime? get fechaCreacionParsed =>
+      fechaCreacion != null ? DateTime.tryParse(fechaCreacion!) : null;
+
+  /// Plazo de gracia de 7 días: si el producto tiene menos de 7 días de creado,
+  /// no debe mostrar alertas de stock bajo al comerciante.
+  bool get isGracePeriodActive {
+    final created = fechaCreacionParsed;
+    if (created == null) return false;
+    return DateTime.now().difference(created).inDays < 7;
+  }
 
   factory Product.fromJson(Map<String, dynamic> json) {
     var list = json['presentaciones'] as List? ?? [];
@@ -401,6 +414,7 @@ class Product {
       modoStock: json['modo_stock'] ?? 'INDEPENDIENTE',
       stockCompartido: json['stock_compartido'] ?? 0,
       costoBase: (json['costo_base'] as num?)?.toDouble() ?? 0.0,
+      fechaCreacion: json['fecha_creacion']?.toString(),
       fechaActualizacion: json['fecha_actualizacion'],
     );
   }
@@ -420,6 +434,7 @@ class Product {
     String? modoStock,
     int? stockCompartido,
     double? costoBase,
+    String? fechaCreacion,
     String? fechaActualizacion,
   }) {
     return Product(
@@ -437,6 +452,7 @@ class Product {
       modoStock: modoStock ?? this.modoStock,
       stockCompartido: stockCompartido ?? this.stockCompartido,
       costoBase: costoBase ?? this.costoBase,
+      fechaCreacion: fechaCreacion ?? this.fechaCreacion,
       fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
     );
   }
@@ -455,6 +471,7 @@ class Product {
       'modo_stock': modoStock,
       'stock_compartido': stockCompartido,
       'costo_base': costoBase,
+      'fecha_creacion': fechaCreacion ?? DateTime.now().toIso8601String(),
       'fecha_actualizacion': DateTime.now().toIso8601String(),
     };
   }
@@ -473,6 +490,7 @@ class Product {
       'modo_stock': modoStock,
       'stock_compartido': stockCompartido,
       'costo_base': costoBase,
+      'fecha_creacion': fechaCreacion,
       'fecha_actualizacion': fechaActualizacion,
       'presentaciones': presentaciones.map((p) => p.toJson()).toList(),
     };

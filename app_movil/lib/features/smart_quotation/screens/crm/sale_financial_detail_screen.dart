@@ -7,7 +7,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
-import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_screen.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_screen.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/cuota_morosidad_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/whatsapp_preview_modal.dart'; 
 
 class SaleFinancialDetailScreen extends StatefulWidget {
   final int saleId;
@@ -196,13 +199,11 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
       return Scaffold(backgroundColor: bgColor, appBar: AppBar(), body: const Center(child: Text("Error cargando venta")));
     }
 
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-    
     // 🔥 Parseo double seguro desde SQLite
     final double baseTotal = (num.tryParse(_saleData!['monto_total'].toString()) ?? 0.0).toDouble();
     final double pagado = (num.tryParse(_saleData!['monto_pagado'].toString()) ?? 0.0).toDouble();
     final double interes = (num.tryParse(_saleData!['porcentaje_interes']?.toString() ?? '0') ?? 0.0).toDouble();
-    // La variable abonoInicial ya no es necesaria aquí, ya que monto_total incluye todo el cálculo y monto_pagado contabiliza el abono.
+    final double moraTotal = (num.tryParse((_saleData!['mora_total'] ?? 0.0).toString()) ?? 0.0).toDouble();
     final double total = baseTotal;
 
     double saldo = total - pagado;
@@ -263,7 +264,14 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                         decoration: BoxDecoration(color: Colors.orange.withAlpha((0.2 * 255).toInt()), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.withAlpha((0.5 * 255).toInt()))),
                         child: Text("Interés aplicado: ${interes.toStringAsFixed(1)}%", style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
-                    Text(currency.format(saldo), style: TextStyle(color: saldo == 0 ? Colors.greenAccent : Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+                    if (moraTotal > 0.01)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(color: Colors.red.withAlpha((0.2 * 255).toInt()), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.withAlpha((0.5 * 255).toInt()))),
+                        child: Text("Mora acumulada: + ${AppCurrency.format(moraTotal)}", style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    Text(AppCurrency.format(saldo), style: TextStyle(color: saldo == 0 ? Colors.greenAccent : Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
                     const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(color: Colors.white24, height: 1)),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -272,14 +280,14 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(isLoan ? "Monto Total" : "Costo Total", style: const TextStyle(color: Colors.white54, fontSize: 13)),
-                            Text(currency.format(total), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                            Text(AppCurrency.format(total), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                           ],
                         ),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             const Text("Abonado", style: TextStyle(color: Colors.white54, fontSize: 13)),
-                            Text(currency.format(pagado), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+                            Text(AppCurrency.format(pagado), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)),
                           ],
                         ),
                       ],
@@ -302,6 +310,10 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                     final c = cuotas[i];
                     final double cMonto = (num.tryParse(c['monto'].toString()) ?? 0.0).toDouble();
                     final double cPagado = (num.tryParse((c['monto_pagado'] ?? 0.0).toString()) ?? 0.0).toDouble();
+                    final double cMontoOriginal = (num.tryParse((c['monto_original'] ?? cMonto).toString()) ?? cMonto).toDouble();
+                    final double cMoraMonto = (num.tryParse((c['mora_monto'] ?? 0.0).toString()) ?? 0.0).toDouble();
+                    final double cMoraPorcentaje = (num.tryParse((c['mora_porcentaje'] ?? 0.0).toString()) ?? 0.0).toDouble();
+                    final bool isAutoMora = (c['mora_automatica'] == 1 || c['mora_automatica'] == true);
                     
                     double cSaldo = cMonto - cPagado;
                     bool isPaid = c['estado'] == 'pagado';
@@ -353,71 +365,178 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                           collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey,
                           leading: CircleAvatar(backgroundColor: statusColor.withValues(alpha: 0.15), child: Icon(statusIcon, color: statusColor)),
                           title: Text("Cuota ${c['numero_cuota']}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                          subtitle: Text(
-                            daysDiff < 0 && !isPaid ? "Venció hace ${daysDiff.abs()} días" : "Vence: ${DateFormat('dd/MM/yyyy').format(dueDate)}", 
-                            style: TextStyle(fontSize: 13, color: daysDiff < 0 && !isPaid ? (isDark ? Colors.red[300] : Colors.red) : (isDark ? Colors.grey[400] : Colors.grey[700]), fontWeight: daysDiff < 0 && !isPaid ? FontWeight.bold : FontWeight.normal)
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    daysDiff < 0 && !isPaid ? "Venció hace ${daysDiff.abs()} días" : "Vence: ${DateFormat('dd/MM/yyyy').format(dueDate)}", 
+                                    style: TextStyle(fontSize: 13, color: daysDiff < 0 && !isPaid ? (isDark ? Colors.red[300] : Colors.red) : (isDark ? Colors.grey[400] : Colors.grey[700]), fontWeight: daysDiff < 0 && !isPaid ? FontWeight.bold : FontWeight.normal)
+                                  ),
+                                  if (isAutoMora) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.orange.withValues(alpha: 0.6), width: 0.7),
+                                      ),
+                                      child: const Text("⚡ Auto", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.orange)),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              if (cMoraMonto > 0.01) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  "Orig: ${AppCurrency.format(cMontoOriginal)} • + Mora: ${AppCurrency.format(cMoraMonto)} (${cMoraPorcentaje.toStringAsFixed(1)}%)",
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber[700]),
+                                ),
+                              ],
+                            ],
                           ),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text(currency.format(cMonto), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: textColor)),
+                              Text(AppCurrency.format(cMonto), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: textColor)),
                               Text(statusText, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
                             ],
                           ),
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(20),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.grey[50], borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16))),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              child: Column(
                                 children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text("Total Cuota: ${currency.format(cMonto)}", style: TextStyle(fontSize: 14, color: textColor)),
-                                      const SizedBox(height: 4),
-                                      Text("Abonado: ${currency.format(cPagado)}", style: TextStyle(fontSize: 14, color: isDark ? Colors.green[400] : Colors.green)),
-                                      const SizedBox(height: 4),
-                                      Text("Falta Pagar: ${currency.format(cSaldo)}", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.red[300] : Colors.red)),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text("Total Cuota: ${AppCurrency.format(cMonto)}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textColor)),
+                                          if (cMoraMonto > 0.01) ...[
+                                            const SizedBox(height: 2),
+                                            Text("Base: ${AppCurrency.format(cMontoOriginal)}  •  Mora: +${AppCurrency.format(cMoraMonto)}", style: TextStyle(fontSize: 12, color: Colors.amber[800])),
+                                          ],
+                                          const SizedBox(height: 4),
+                                          Text("Abonado: ${AppCurrency.format(cPagado)}", style: TextStyle(fontSize: 14, color: isDark ? Colors.green[400] : Colors.green)),
+                                          const SizedBox(height: 4),
+                                          Text("Falta Pagar: ${AppCurrency.format(cSaldo)}", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.red[300] : Colors.red)),
+                                        ],
+                                      ),
+                                      if (!isPaid)
+                                        IconButton(
+                                          icon: Icon(Icons.edit_calendar, color: isDark ? Colors.blue[300] : Colors.blue),
+                                          tooltip: "Editar Fecha de Vencimiento",
+                                          onPressed: () async {
+                                            final newDate = await showDatePicker(
+                                              context: context,
+                                              initialDate: dueDate,
+                                              firstDate: DateTime.now().subtract(const Duration(days: 60)),
+                                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                                              builder: (context, child) {
+                                                return Theme(
+                                                  data: isDark ? ThemeData.dark().copyWith(
+                                                    colorScheme: ColorScheme.dark(primary: Colors.blue[300]!, onPrimary: Colors.black, surface: const Color(0xFF23232F), onSurface: Colors.white),
+                                                  ) : ThemeData.light().copyWith(
+                                                    colorScheme: ColorScheme.light(primary: Colors.blue[800]!, onPrimary: Colors.white, surface: Colors.white, onSurface: Colors.black),
+                                                  ),
+                                                  child: child!,
+                                                );
+                                              },
+                                            );
+                                            if (newDate != null && newDate.isAtSameMomentAs(dueDate) == false) {
+                                              setState(() => _isLoading = true);
+                                              if (!context.mounted) return;
+                                              final provider = Provider.of<SaleProvider>(context, listen: false);
+                                              final success = await provider.updateInstallmentDate(c['id'] as int, newDate.toIso8601String());
+                                              if (success) {
+                                                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fecha actualizada exitosamente"), backgroundColor: Colors.green));
+                                                await _loadData();
+                                              } else {
+                                                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al actualizar la fecha"), backgroundColor: Colors.red));
+                                                setState(() => _isLoading = false);
+                                              }
+                                            }
+                                          },
+                                        ),
                                     ],
                                   ),
-                                  if (!isPaid)
-                                    IconButton(
-                                      icon: Icon(Icons.edit_calendar, color: isDark ? Colors.blue[300] : Colors.blue),
-                                      tooltip: "Editar Fecha de Vencimiento",
-                                      onPressed: () async {
-                                        final newDate = await showDatePicker(
-                                          context: context,
-                                          initialDate: dueDate,
-                                          firstDate: DateTime.now().subtract(const Duration(days: 60)),
-                                          lastDate: DateTime.now().add(const Duration(days: 365)),
-                                          builder: (context, child) {
-                                            return Theme(
-                                              data: isDark ? ThemeData.dark().copyWith(
-                                                colorScheme: ColorScheme.dark(primary: Colors.blue[300]!, onPrimary: Colors.black, surface: const Color(0xFF23232F), onSurface: Colors.white),
-                                              ) : ThemeData.light().copyWith(
-                                                colorScheme: ColorScheme.light(primary: Colors.blue[800]!, onPrimary: Colors.white, surface: Colors.white, onSurface: Colors.black),
-                                              ),
-                                              child: child!,
+                                  if (!isPaid) ...[
+                                    const SizedBox(height: 12),
+                                    Divider(height: 1, thickness: 0.8, color: isDark ? Colors.white12 : Colors.grey.shade300),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        // Botón Morosidad
+                                        InkWell(
+                                          borderRadius: BorderRadius.circular(8),
+                                          onTap: () {
+                                            CuotaMorosidadModal.show(
+                                              context: context,
+                                              cuota: c,
+                                              isDark: isDark,
+                                              onSaved: _loadData,
                                             );
                                           },
-                                        );
-                                        if (newDate != null && newDate.isAtSameMomentAs(dueDate) == false) {
-                                          setState(() => _isLoading = true);
-                                          if (!context.mounted) return;
-                                          final provider = Provider.of<SaleProvider>(context, listen: false);
-                                          final success = await provider.updateInstallmentDate(c['id'] as int, newDate.toIso8601String());
-                                          if (success) {
-                                            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fecha actualizada exitosamente"), backgroundColor: Colors.green));
-                                            await _loadData();
-                                          } else {
-                                            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al actualizar la fecha"), backgroundColor: Colors.red));
-                                            setState(() => _isLoading = false);
-                                          }
-                                        }
-                                      },
-                                    )
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: (cMoraMonto > 0.01 ? Colors.amber : Colors.orange).withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: (cMoraMonto > 0.01 ? Colors.amber : Colors.orange).withValues(alpha: 0.4)),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.tune, size: 14, color: Colors.amber[800]),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  cMoraMonto > 0.01 ? "Mora: +${AppCurrency.format(cMoraMonto)}" : "+ Mora",
+                                                  style: TextStyle(color: Colors.amber[800], fontSize: 12, fontWeight: FontWeight.bold),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+
+                                        // Botón Recordar por WhatsApp con Estudio
+                                        InkWell(
+                                          borderRadius: BorderRadius.circular(8),
+                                          onTap: () {
+                                            WhatsAppPreviewModal.showCuotaReminder(
+                                              context: context,
+                                              cuota: c,
+                                              clientName: _saleData?['cliente_nombre'] ?? (_saleData?['cliente_info']?['nombre_completo']),
+                                              clientPhone: _saleData?['cliente_telefono'] ?? (_saleData?['cliente_info']?['telefono']),
+                                              isDark: isDark,
+                                            );
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.chat_bubble_outline, size: 14, color: Color(0xFF25D366)),
+                                                SizedBox(width: 4),
+                                                Text("Recordar", style: TextStyle(color: Color(0xFF25D366), fontSize: 12, fontWeight: FontWeight.bold)),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                             )
@@ -498,17 +617,17 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                                       child: Text("$quantity $salesUnit", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700])),
                                     ),
                                     const SizedBox(width: 8),
-                                    Text("x ${currency.format(unitP)}", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
+                                    Text("x ${AppCurrency.format(unitP)}", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
                                     if (originalP > unitP) ...[
                                       const SizedBox(width: 6),
-                                      Text(currency.format(originalP), style: TextStyle(color: Colors.red[300], fontSize: 11, decoration: TextDecoration.lineThrough)),
+                                      Text(AppCurrency.format(originalP), style: TextStyle(color: Colors.red[300], fontSize: 11, decoration: TextDecoration.lineThrough)),
                                     ]
                                   ],
                                 ),
                               ],
                             ),
                           ),
-                          Text(currency.format(unitP * quantity), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
+                          Text(AppCurrency.format(unitP * quantity), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                         ],
                       ),
                     )

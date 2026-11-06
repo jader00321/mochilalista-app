@@ -23,6 +23,7 @@ class CheckoutActionFooter extends StatelessWidget {
   final ClientModel? selectedClient;
   final double discount;
   final String? saleNote;
+  final int? recompensaCanjeId;
   final Function(double) onAutoFixInstallments;
 
   const CheckoutActionFooter({
@@ -42,6 +43,7 @@ class CheckoutActionFooter extends StatelessWidget {
     required this.selectedClient,
     required this.discount,
     required this.saleNote,
+    this.recompensaCanjeId,
     required this.onAutoFixInstallments,
   });
 
@@ -270,6 +272,7 @@ class CheckoutActionFooter extends StatelessWidget {
         interestRate: interestRate,
         installments: installments,
         saleNote: saleNote,
+        recompensaCanjeId: recompensaCanjeId,
         isDark: isDark,
         parentContext: context,
       ),

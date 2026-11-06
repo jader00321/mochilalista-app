@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 
 // Función global de seguridad para parsear JSON numéricos desde SQLite
 double _parseDouble(dynamic value) {
@@ -28,6 +29,13 @@ class ClientModel {
   final String nivelConfianza; 
   final List<String> etiquetas;
 
+  // 🔥 V27: Fidelización, Gamificación y Reputación Multivariable
+  final int puntosActuales;
+  final int puntosHistoricos;
+  final int rachaPagosPuntuales;
+  final int scoreReputacion;
+  final String nivelReputacion;
+
   final List<SaleSummary> lastSales; 
   final List<PaymentModel> lastPayments;
 
@@ -48,9 +56,25 @@ class ClientModel {
     required this.registeredDate,
     this.nivelConfianza = "bueno",
     this.etiquetas = const [],
+    this.puntosActuales = 0,
+    this.puntosHistoricos = 0,
+    this.rachaPagosPuntuales = 0,
+    this.scoreReputacion = 500,
+    this.nivelReputacion = "PLATA",
     this.lastSales = const [],
     this.lastPayments = const [],
   });
+
+  ReputationTier get tier => ReputationTier.fromKey(nivelReputacion);
+
+  double get suggestedCreditLimit {
+    return tier.calculateCreditLimit(lastSales, rachaPagosPuntuales, totalDebt);
+  }
+
+  double get limiteCreditoSugerido {
+    if (nivelReputacion == 'OBSERVACION' || totalDebt > 0.01) return 0.0;
+    return tier.limiteCreditoSugerido;
+  }
 
   factory ClientModel.fromJson(Map<String, dynamic> json) {
     // Manejo seguro de etiquetas (SQLite guarda listas como String)
@@ -82,6 +106,11 @@ class ClientModel {
       registeredDate: json['fecha_registro'] ?? "",
       nivelConfianza: json['nivel_confianza'] ?? "bueno",
       etiquetas: parsedEtiquetas,
+      puntosActuales: (json['puntos_actuales'] as num?)?.toInt() ?? 0,
+      puntosHistoricos: (json['puntos_historicos'] as num?)?.toInt() ?? 0,
+      rachaPagosPuntuales: (json['racha_pagos_puntuales'] as num?)?.toInt() ?? 0,
+      scoreReputacion: (json['score_reputacion'] as num?)?.toInt() ?? 500,
+      nivelReputacion: json['nivel_reputacion'] ?? "PLATA",
       lastSales: (json['ultimas_ventas'] as List?)?.map((e) => SaleSummary.fromJson(e)).toList() ?? [],
       lastPayments: (json['ultimos_pagos'] as List?)?.map((e) => PaymentModel.fromJson(e)).toList() ?? [],
     );
@@ -104,8 +133,65 @@ class ClientModel {
       'deuda_total': totalDebt,
       'saldo_a_favor': saldoAFavor,
       'entregas_pendientes': pendingDeliveryCount,
+      'puntos_actuales': puntosActuales,
+      'puntos_historicos': puntosHistoricos,
+      'racha_pagos_puntuales': rachaPagosPuntuales,
+      'score_reputacion': scoreReputacion,
+      'nivel_reputacion': nivelReputacion,
       'fecha_registro': registeredDate.isEmpty ? DateTime.now().toIso8601String() : registeredDate,
     };
+  }
+
+  ClientModel copyWith({
+    int? id,
+    int? negocioId,
+    int? creadoPorUsuarioId,
+    int? usuarioVinculadoId,
+    String? fullName,
+    String? phone,
+    String? docNumber,
+    String? address,
+    String? email,
+    String? notes,
+    double? totalDebt,
+    double? saldoAFavor,
+    int? pendingDeliveryCount,
+    String? registeredDate,
+    String? nivelConfianza,
+    List<String>? etiquetas,
+    int? puntosActuales,
+    int? puntosHistoricos,
+    int? rachaPagosPuntuales,
+    int? scoreReputacion,
+    String? nivelReputacion,
+    List<SaleSummary>? lastSales,
+    List<PaymentModel>? lastPayments,
+  }) {
+    return ClientModel(
+      id: id ?? this.id,
+      negocioId: negocioId ?? this.negocioId,
+      creadoPorUsuarioId: creadoPorUsuarioId ?? this.creadoPorUsuarioId,
+      usuarioVinculadoId: usuarioVinculadoId ?? this.usuarioVinculadoId,
+      fullName: fullName ?? this.fullName,
+      phone: phone ?? this.phone,
+      docNumber: docNumber ?? this.docNumber,
+      address: address ?? this.address,
+      email: email ?? this.email,
+      notes: notes ?? this.notes,
+      totalDebt: totalDebt ?? this.totalDebt,
+      saldoAFavor: saldoAFavor ?? this.saldoAFavor,
+      pendingDeliveryCount: pendingDeliveryCount ?? this.pendingDeliveryCount,
+      registeredDate: registeredDate ?? this.registeredDate,
+      nivelConfianza: nivelConfianza ?? this.nivelConfianza,
+      etiquetas: etiquetas ?? this.etiquetas,
+      puntosActuales: puntosActuales ?? this.puntosActuales,
+      puntosHistoricos: puntosHistoricos ?? this.puntosHistoricos,
+      rachaPagosPuntuales: rachaPagosPuntuales ?? this.rachaPagosPuntuales,
+      scoreReputacion: scoreReputacion ?? this.scoreReputacion,
+      nivelReputacion: nivelReputacion ?? this.nivelReputacion,
+      lastSales: lastSales ?? this.lastSales,
+      lastPayments: lastPayments ?? this.lastPayments,
+    );
   }
 }
 
@@ -221,6 +307,21 @@ class InstallmentModel {
   final double montoPagado;
   final String dueDate;
   final String status;
+  final double? montoOriginal;
+  final double moraMonto;
+  final double moraPorcentaje;
+  final bool moraAutomatica;
+  final String? moraFrecuencia;
+  final int moraIntervaloDias;
+  final String moraTipo;
+  final double moraValor;
+  final String? moraFechaInicio;
+  final String? moraUltimaAplicacion;
+  final int moraPeriodosAcumulados;
+
+  double get montoBase => montoOriginal ?? amount;
+  double get saldoPendiente => (amount - montoPagado) > 0 ? (amount - montoPagado) : 0.0;
+  bool get tieneMora => moraMonto > 0.01;
 
   InstallmentModel({
     this.id,
@@ -229,16 +330,39 @@ class InstallmentModel {
     this.montoPagado = 0.0,
     required this.dueDate,
     this.status = "pendiente",
+    this.montoOriginal,
+    this.moraMonto = 0.0,
+    this.moraPorcentaje = 0.0,
+    this.moraAutomatica = false,
+    this.moraFrecuencia,
+    this.moraIntervaloDias = 1,
+    this.moraTipo = 'fijo',
+    this.moraValor = 0.0,
+    this.moraFechaInicio,
+    this.moraUltimaAplicacion,
+    this.moraPeriodosAcumulados = 0,
   });
 
   factory InstallmentModel.fromJson(Map<String, dynamic> json) {
+    final amt = _parseDouble(json['monto']);
     return InstallmentModel(
       id: json['id'],
       installmentNumber: json['numero_cuota'] ?? 1,
-      amount: _parseDouble(json['monto']),
+      amount: amt,
       montoPagado: _parseDouble(json['monto_pagado']),
       dueDate: json['fecha_vencimiento'] ?? "",
       status: json['estado'] ?? "pendiente",
+      montoOriginal: json['monto_original'] != null ? _parseDouble(json['monto_original']) : amt,
+      moraMonto: _parseDouble(json['mora_monto']),
+      moraPorcentaje: _parseDouble(json['mora_porcentaje']),
+      moraAutomatica: json['mora_automatica'] == 1 || json['mora_automatica'] == true,
+      moraFrecuencia: json['mora_frecuencia'],
+      moraIntervaloDias: (json['mora_intervalo_dias'] as num?)?.toInt() ?? 1,
+      moraTipo: json['mora_tipo'] ?? 'fijo',
+      moraValor: _parseDouble(json['mora_valor']),
+      moraFechaInicio: json['mora_fecha_inicio'],
+      moraUltimaAplicacion: json['mora_ultima_aplicacion'],
+      moraPeriodosAcumulados: (json['mora_periodos_acumulados'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -251,6 +375,17 @@ class InstallmentModel {
       'monto_pagado': montoPagado,
       'fecha_vencimiento': dueDate,
       'estado': status,
+      'monto_original': montoOriginal ?? amount,
+      'mora_monto': moraMonto,
+      'mora_porcentaje': moraPorcentaje,
+      'mora_automatica': moraAutomatica ? 1 : 0,
+      'mora_frecuencia': moraFrecuencia,
+      'mora_intervalo_dias': moraIntervaloDias,
+      'mora_tipo': moraTipo,
+      'mora_valor': moraValor,
+      'mora_fecha_inicio': moraFechaInicio,
+      'mora_ultima_aplicacion': moraUltimaAplicacion,
+      'mora_periodos_acumulados': moraPeriodosAcumulados,
     };
   }
 
@@ -259,7 +394,51 @@ class InstallmentModel {
       "numero_cuota": installmentNumber,
       "monto": amount,
       "fecha_vencimiento": dueDate,
+      "monto_original": montoOriginal ?? amount,
+      "mora_monto": moraMonto,
+      "mora_porcentaje": moraPorcentaje,
+      "mora_automatica": moraAutomatica ? 1 : 0,
     };
+  }
+
+  InstallmentModel copyWith({
+    int? id,
+    int? installmentNumber,
+    double? amount,
+    double? montoPagado,
+    String? dueDate,
+    String? status,
+    double? montoOriginal,
+    double? moraMonto,
+    double? moraPorcentaje,
+    bool? moraAutomatica,
+    String? moraFrecuencia,
+    int? moraIntervaloDias,
+    String? moraTipo,
+    double? moraValor,
+    String? moraFechaInicio,
+    String? moraUltimaAplicacion,
+    int? moraPeriodosAcumulados,
+  }) {
+    return InstallmentModel(
+      id: id ?? this.id,
+      installmentNumber: installmentNumber ?? this.installmentNumber,
+      amount: amount ?? this.amount,
+      montoPagado: montoPagado ?? this.montoPagado,
+      dueDate: dueDate ?? this.dueDate,
+      status: status ?? this.status,
+      montoOriginal: montoOriginal ?? this.montoOriginal,
+      moraMonto: moraMonto ?? this.moraMonto,
+      moraPorcentaje: moraPorcentaje ?? this.moraPorcentaje,
+      moraAutomatica: moraAutomatica ?? this.moraAutomatica,
+      moraFrecuencia: moraFrecuencia ?? this.moraFrecuencia,
+      moraIntervaloDias: moraIntervaloDias ?? this.moraIntervaloDias,
+      moraTipo: moraTipo ?? this.moraTipo,
+      moraValor: moraValor ?? this.moraValor,
+      moraFechaInicio: moraFechaInicio ?? this.moraFechaInicio,
+      moraUltimaAplicacion: moraUltimaAplicacion ?? this.moraUltimaAplicacion,
+      moraPeriodosAcumulados: moraPeriodosAcumulados ?? this.moraPeriodosAcumulados,
+    );
   }
 }
 
@@ -282,14 +461,32 @@ class SaleModel {
   final double discount;
   final double abonoInicial;
   final double porcentajeInteres;
+  final double moraTotal;
   final String saleDate;
   final String? motivoAnulacion;
   final String? notes; // Add notes field
   final List<InstallmentModel> installments; 
   
   double get trueTotalAmount {
-    // El interés ya está sumado en el totalAmount guardado en la BD
+    // El interés y mora ya están sumados en el totalAmount guardado en la BD
     return totalAmount;
+  }
+
+  /// Capital base prestado protegido matemáticamente contra moras agregadas
+  double get capitalPrestadoCalculado {
+    if (!isLoan) return totalAmount;
+    final double totalSinMora = (totalAmount - moraTotal) > 0 ? (totalAmount - moraTotal) : 0.0;
+    if (porcentajeInteres <= 0) return totalSinMora;
+    return totalSinMora / (1 + (porcentajeInteres / 100));
+  }
+
+  /// Interés financiero original protegido contra moras agregadas
+  double get interesMontoCalculado {
+    if (!isLoan || porcentajeInteres <= 0) return 0.0;
+    final double totalSinMora = (totalAmount - moraTotal) > 0 ? (totalAmount - moraTotal) : 0.0;
+    final double capital = capitalPrestadoCalculado;
+    final diff = totalSinMora - capital;
+    return diff > 0 ? diff : 0.0;
   }
 
   double get pendingDebt {
@@ -327,6 +524,7 @@ class SaleModel {
     required this.discount,
     this.abonoInicial = 0.0,
     this.porcentajeInteres = 0.0,
+    this.moraTotal = 0.0,
     required this.saleDate,
     this.motivoAnulacion,
     this.notes,
@@ -353,6 +551,7 @@ class SaleModel {
       discount: _parseDouble(json['descuento_aplicado']),
       abonoInicial: _parseDouble(json['abono_inicial']),
       porcentajeInteres: _parseDouble(json['porcentaje_interes']),
+      moraTotal: _parseDouble(json['mora_total']),
       saleDate: json['fecha_venta'] ?? "",
       motivoAnulacion: json['motivo_anulacion'],
       notes: json['notas'] ?? json['nota_prestamo'],
@@ -379,6 +578,7 @@ class SaleModel {
       'descuento_aplicado': discount,
       'abono_inicial': abonoInicial,
       'porcentaje_interes': porcentajeInteres,
+      'mora_total': moraTotal,
       'fecha_venta': saleDate.isEmpty ? DateTime.now().toIso8601String() : saleDate,
     };
   }
@@ -390,6 +590,7 @@ class SaleModel {
     map['nota_prestamo'] = notes;
     map['abono_inicial'] = abonoInicial;
     map['porcentaje_interes'] = porcentajeInteres;
+    map['mora_total'] = moraTotal;
     return map;
   }
 
@@ -412,6 +613,7 @@ class SaleModel {
     double? discount,
     double? abonoInicial,
     double? porcentajeInteres,
+    double? moraTotal,
     String? saleDate,
     String? motivoAnulacion,
     String? notes,
@@ -436,6 +638,7 @@ class SaleModel {
       discount: discount ?? this.discount,
       abonoInicial: abonoInicial ?? this.abonoInicial,
       porcentajeInteres: porcentajeInteres ?? this.porcentajeInteres,
+      moraTotal: moraTotal ?? this.moraTotal,
       saleDate: saleDate ?? this.saleDate,
       motivoAnulacion: motivoAnulacion ?? this.motivoAnulacion,
       notes: notes ?? this.notes,
@@ -522,6 +725,7 @@ class ValidationResult {
   final List<NameChange> nameChanges;
   final List<BundleChange> bundleChanges;
   final List<UnitChange> unitChanges;
+  final List<SharedStockConflict> sharedStockConflicts;
 
   ValidationResult({
     required this.hasIssues,
@@ -531,6 +735,7 @@ class ValidationResult {
     this.nameChanges = const [],
     this.bundleChanges = const [],
     this.unitChanges = const [],
+    this.sharedStockConflicts = const [],
   });
 
   factory ValidationResult.fromJson(Map<String, dynamic> json) {
@@ -542,8 +747,92 @@ class ValidationResult {
       nameChanges: (json['name_changes'] as List?)?.map((e) => NameChange.fromJson(e)).toList() ?? [],
       bundleChanges: (json['bundle_changes'] as List?)?.map((e) => BundleChange.fromJson(e)).toList() ?? [],
       unitChanges: (json['unit_changes'] as List?)?.map((e) => UnitChange.fromJson(e)).toList() ?? [],
+      sharedStockConflicts: (json['shared_stock_conflicts'] as List?)?.map((e) => SharedStockConflict.fromJson(e)).toList() ?? [],
     );
   }
+}
+
+class SharedStockConflict {
+  final int productId;
+  final String productName;
+  final int totalSharedPool;
+  final int totalRequestedBaseUnits;
+  final int excessBaseUnits;
+  final List<QuoteItemConflictDetail> conflictingItems;
+
+  const SharedStockConflict({
+    required this.productId,
+    required this.productName,
+    required this.totalSharedPool,
+    required this.totalRequestedBaseUnits,
+    required this.excessBaseUnits,
+    required this.conflictingItems,
+  });
+
+  factory SharedStockConflict.fromJson(Map<String, dynamic> json) {
+    return SharedStockConflict(
+      productId: json['product_id'] ?? 0,
+      productName: json['product_name'] ?? 'Producto compartido',
+      totalSharedPool: json['total_shared_pool'] ?? 0,
+      totalRequestedBaseUnits: json['total_requested_base_units'] ?? 0,
+      excessBaseUnits: json['excess_base_units'] ?? 0,
+      conflictingItems: (json['conflicting_items'] as List?)
+              ?.map((e) => QuoteItemConflictDetail.fromJson(e))
+              .toList() ??
+          [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'product_id': productId,
+    'product_name': productName,
+    'total_shared_pool': totalSharedPool,
+    'total_requested_base_units': totalRequestedBaseUnits,
+    'excess_base_units': excessBaseUnits,
+    'conflicting_items': conflictingItems.map((e) => e.toJson()).toList(),
+  };
+}
+
+class QuoteItemConflictDetail {
+  final int itemId;
+  final int presentationId;
+  final String presentationName;
+  final int requestedQty;
+  final int conversionFactor;
+  final int requestedBaseUnits;
+  final int? cupoMaximo;
+
+  const QuoteItemConflictDetail({
+    required this.itemId,
+    required this.presentationId,
+    required this.presentationName,
+    required this.requestedQty,
+    required this.conversionFactor,
+    required this.requestedBaseUnits,
+    this.cupoMaximo,
+  });
+
+  factory QuoteItemConflictDetail.fromJson(Map<String, dynamic> json) {
+    return QuoteItemConflictDetail(
+      itemId: json['item_id'] ?? 0,
+      presentationId: json['presentation_id'] ?? 0,
+      presentationName: json['presentation_name'] ?? '',
+      requestedQty: json['requested_qty'] ?? 0,
+      conversionFactor: json['conversion_factor'] ?? 1,
+      requestedBaseUnits: json['requested_base_units'] ?? 0,
+      cupoMaximo: json['cupo_maximo'],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'item_id': itemId,
+    'presentation_id': presentationId,
+    'presentation_name': presentationName,
+    'requested_qty': requestedQty,
+    'conversion_factor': conversionFactor,
+    'requested_base_units': requestedBaseUnits,
+    'cupo_maximo': cupoMaximo,
+  };
 }
 
 class UnitChange {
@@ -675,5 +964,506 @@ class LedgerItem {
       detalle: json['detalle'] ?? '',
       saldoResultante: _parseDouble(json['saldo_resultante']),
     );
+  }
+}
+
+// ==========================================
+// 🔥 V27: MODELOS DE FIDELIZACIÓN Y REPUTACIÓN
+// ==========================================
+
+class ReputationTier {
+  final String key;
+  final String displayName;
+  final int minScore;
+  final int maxScore;
+  final Color primaryColor;
+  final Color badgeDarkColor;
+  final Color badgeLightColor;
+  final IconData icon;
+  final double creditFactor;
+
+  const ReputationTier({
+    required this.key,
+    required this.displayName,
+    required this.minScore,
+    required this.maxScore,
+    required this.primaryColor,
+    required this.badgeDarkColor,
+    required this.badgeLightColor,
+    required this.icon,
+    required this.creditFactor,
+  });
+
+  int get colorHex => primaryColor.toARGB32();
+  String get name => key;
+
+  String get badgeText {
+    switch (key) {
+      case 'DIAMANTE_VIP':
+        return '💎 Diamante VIP';
+      case 'ORO':
+        return '🏆 Oro';
+      case 'PLATA':
+        return '🥈 Plata';
+      case 'BRONCE':
+        return '🥉 Bronce';
+      case 'OBSERVACION':
+      default:
+        return '⚠️ Observación';
+    }
+  }
+
+  double get limiteCreditoSugerido {
+    switch (key) {
+      case 'DIAMANTE_VIP':
+        return 1500.0;
+      case 'ORO':
+        return 700.0;
+      case 'PLATA':
+        return 350.0;
+      case 'BRONCE':
+        return 150.0;
+      case 'OBSERVACION':
+      default:
+        return 0.0;
+    }
+  }
+
+  static const observacion = ReputationTier(
+    key: 'OBSERVACION',
+    displayName: 'En Observación',
+    minScore: 0,
+    maxScore: 399,
+    primaryColor: Color(0xFFEF4444),
+    badgeDarkColor: Color(0x33EF4444),
+    badgeLightColor: Color(0x25EF4444),
+    icon: Icons.warning_amber_rounded,
+    creditFactor: 0.0,
+  );
+
+  static const bronce = ReputationTier(
+    key: 'BRONCE',
+    displayName: 'Bronce',
+    minScore: 400,
+    maxScore: 599,
+    primaryColor: Color(0xFFCD7F32),
+    badgeDarkColor: Color(0x33CD7F32),
+    badgeLightColor: Color(0x25CD7F32),
+    icon: Icons.shield_outlined,
+    creditFactor: 1.0,
+  );
+
+  static const plata = ReputationTier(
+    key: 'PLATA',
+    displayName: 'Plata',
+    minScore: 600,
+    maxScore: 749,
+    primaryColor: Color(0xFFA8B2C1),
+    badgeDarkColor: Color(0x33A8B2C1),
+    badgeLightColor: Color(0x25A8B2C1),
+    icon: Icons.verified_outlined,
+    creditFactor: 2.0,
+  );
+
+  static const oro = ReputationTier(
+    key: 'ORO',
+    displayName: 'Oro',
+    minScore: 750,
+    maxScore: 899,
+    primaryColor: Color(0xFFFFB800),
+    badgeDarkColor: Color(0x33FFB800),
+    badgeLightColor: Color(0x25FFB800),
+    icon: Icons.military_tech_rounded,
+    creditFactor: 3.5,
+  );
+
+  static const diamanteVip = ReputationTier(
+    key: 'DIAMANTE_VIP',
+    displayName: 'Diamante VIP',
+    minScore: 900,
+    maxScore: 1000,
+    primaryColor: Color(0xFF00E5FF),
+    badgeDarkColor: Color(0x3300E5FF),
+    badgeLightColor: Color(0x2500E5FF),
+    icon: Icons.diamond_rounded,
+    creditFactor: 5.0,
+  );
+
+  static const List<ReputationTier> allTiers = [
+    diamanteVip,
+    oro,
+    plata,
+    bronce,
+    observacion,
+  ];
+
+  static ReputationTier fromScore(int score) {
+    if (score >= 900) return diamanteVip;
+    if (score >= 750) return oro;
+    if (score >= 600) return plata;
+    if (score >= 400) return bronce;
+    return observacion;
+  }
+
+  static ReputationTier fromKey(String? key) {
+    final clean = (key ?? 'PLATA').toUpperCase().trim();
+    switch (clean) {
+      case 'DIAMANTE_VIP':
+      case 'DIAMANTE':
+      case 'VIP':
+        return diamanteVip;
+      case 'ORO':
+        return oro;
+      case 'BRONCE':
+        return bronce;
+      case 'OBSERVACION':
+      case 'MOROSO':
+      case 'MALO':
+        return observacion;
+      case 'PLATA':
+      default:
+        return plata;
+    }
+  }
+
+  double calculateCreditLimit(List<SaleSummary> sales, int streak, double totalDebt) {
+    // Si está en observación o tiene deudas activas impagas, crédito es 0.0
+    if (creditFactor <= 0.0 || totalDebt > 0.01) return 0.0;
+
+    final validSales = sales.where((s) => !s.isArchived).toList();
+    if (validSales.isEmpty) {
+      return 50.0 * creditFactor;
+    }
+
+    double sum = 0.0;
+    for (var s in validSales) {
+      sum += s.trueTotal;
+    }
+    double avgTicket = sum / validSales.length;
+    if (avgTicket < 30.0) avgTicket = 30.0;
+
+    double punctualityBonus = 1.0 + (streak * 0.05).clamp(0.0, 0.4);
+    double limit = avgTicket * creditFactor * punctualityBonus;
+
+    // Redondear a múltiplos de 10
+    return ((limit / 10).round() * 10).toDouble();
+  }
+}
+
+class RewardGoalModel {
+  final int id;
+  final int negocioId;
+  final String nombre;
+  final int puntosRequeridos;
+  final String tipoBeneficio; // DESCUENTO_MONTO, DESCUENTO_PORCENTAJE, PRODUCTO_REGALO, CREDITO_PREFERENCIAL
+  final double valorBeneficio;
+  final String? descripcion;
+  final bool activo;
+  final bool esPredeterminada;
+  final String createdAt;
+
+  RewardGoalModel({
+    required this.id,
+    required this.negocioId,
+    required this.nombre,
+    required this.puntosRequeridos,
+    required this.tipoBeneficio,
+    required this.valorBeneficio,
+    this.descripcion,
+    this.activo = true,
+    this.esPredeterminada = false,
+    required this.createdAt,
+  });
+
+  String get titulo => nombre;
+  String get fechaCreacion => createdAt;
+
+  String get formattedBenefit {
+    switch (tipoBeneficio) {
+      case 'DESCUENTO_MONTO':
+        return 'S/ ${valorBeneficio.toStringAsFixed(2)} de Descuento';
+      case 'DESCUENTO_PORCENTAJE':
+        return '${valorBeneficio.round()}% de Descuento';
+      case 'PRODUCTO_REGALO':
+        return 'Producto de Regalo';
+      case 'CREDITO_PREFERENCIAL':
+        return 'Línea de Crédito S/ ${valorBeneficio.toStringAsFixed(2)}';
+      default:
+        return valorBeneficio.toString();
+    }
+  }
+
+  factory RewardGoalModel.fromJson(Map<String, dynamic> json) {
+    return RewardGoalModel(
+      id: json['id'] ?? 0,
+      negocioId: json['negocio_id'] ?? 0,
+      nombre: json['titulo'] ?? json['nombre'] ?? '',
+      puntosRequeridos: (json['puntos_requeridos'] as num?)?.toInt() ?? 0,
+      tipoBeneficio: json['tipo_beneficio'] ?? 'DESCUENTO_MONTO',
+      valorBeneficio: _parseDouble(json['valor_beneficio']),
+      descripcion: json['descripcion'],
+      activo: json['activo'] == 1 || json['activo'] == true,
+      esPredeterminada: json['es_predeterminada'] == 1 || json['es_predeterminada'] == true,
+      createdAt: json['created_at'] ?? '',
+    );
+  }
+
+  factory RewardGoalModel.fromMap(Map<String, dynamic> map) => RewardGoalModel.fromJson(map);
+
+  RewardGoalModel copyWith({
+    int? id,
+    int? negocioId,
+    String? nombre,
+    int? puntosRequeridos,
+    String? tipoBeneficio,
+    double? valorBeneficio,
+    String? descripcion,
+    bool? activo,
+    bool? esPredeterminada,
+    String? createdAt,
+  }) {
+    return RewardGoalModel(
+      id: id ?? this.id,
+      negocioId: negocioId ?? this.negocioId,
+      nombre: nombre ?? this.nombre,
+      puntosRequeridos: puntosRequeridos ?? this.puntosRequeridos,
+      tipoBeneficio: tipoBeneficio ?? this.tipoBeneficio,
+      valorBeneficio: valorBeneficio ?? this.valorBeneficio,
+      descripcion: descripcion ?? this.descripcion,
+      activo: activo ?? this.activo,
+      esPredeterminada: esPredeterminada ?? this.esPredeterminada,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  Map<String, dynamic> toSqlite() {
+    return {
+      'id': id == 0 ? null : id,
+      'negocio_id': negocioId,
+      'nombre': nombre,
+      'puntos_requeridos': puntosRequeridos,
+      'tipo_beneficio': tipoBeneficio,
+      'valor_beneficio': valorBeneficio,
+      'descripcion': descripcion,
+      'activo': activo ? 1 : 0,
+      'es_predeterminada': esPredeterminada ? 1 : 0,
+      'created_at': createdAt.isEmpty ? DateTime.now().toIso8601String() : createdAt,
+    };
+  }
+}
+
+class ClientRewardModel {
+  final int id;
+  final int negocioId;
+  final int clienteId;
+  final int metaId;
+  final int puntosConsumidos;
+  final String estado; // PENDIENTE_REVISION, APROBADA_NOTIFICADA, CANJEADA, DESCARTADA
+  final String tipoBeneficio;
+  final double valorBeneficio;
+  final String tituloRecompensa;
+  final String? descripcionRecompensa;
+  final String fechaDesbloqueo;
+  final String? fechaAprobacion;
+  final String? fechaCanje;
+  final int? ventaCanjeId;
+  final String? notaRevision;
+  final String? clienteNombre;
+  final String? clienteTelefono;
+
+  ClientRewardModel({
+    required this.id,
+    required this.negocioId,
+    required this.clienteId,
+    required this.metaId,
+    required this.puntosConsumidos,
+    this.estado = 'PENDIENTE_REVISION',
+    required this.tipoBeneficio,
+    required this.valorBeneficio,
+    required this.tituloRecompensa,
+    this.descripcionRecompensa,
+    required this.fechaDesbloqueo,
+    this.fechaAprobacion,
+    this.fechaCanje,
+    this.ventaCanjeId,
+    this.notaRevision,
+    this.clienteNombre,
+    this.clienteTelefono,
+  });
+
+  bool get isPendingReview => estado == 'PENDIENTE_REVISION';
+  bool get isApproved => estado == 'APROBADA_NOTIFICADA';
+  bool get isRedeemed => estado == 'CANJEADA';
+  bool get isDiscarded => estado == 'DESCARTADA';
+
+  String get metaTitulo => tituloRecompensa;
+
+  String get formattedBenefit {
+    switch (tipoBeneficio) {
+      case 'DESCUENTO_MONTO':
+        return 'S/ ${valorBeneficio.toStringAsFixed(2)} de Descuento';
+      case 'DESCUENTO_PORCENTAJE':
+        return '${valorBeneficio.round()}% de Descuento';
+      case 'PRODUCTO_REGALO':
+        return 'Producto de Regalo';
+      case 'CREDITO_PREFERENCIAL':
+        return 'Línea Preferencial S/ ${valorBeneficio.toStringAsFixed(2)}';
+      default:
+        return tituloRecompensa;
+    }
+  }
+
+  factory ClientRewardModel.fromJson(Map<String, dynamic> json) {
+    return ClientRewardModel(
+      id: json['id'] ?? 0,
+      negocioId: json['negocio_id'] ?? 0,
+      clienteId: json['cliente_id'] ?? 0,
+      metaId: json['meta_id'] ?? 0,
+      puntosConsumidos: (json['puntos_consumidos'] as num?)?.toInt() ?? 0,
+      estado: json['estado'] ?? 'PENDIENTE_REVISION',
+      tipoBeneficio: json['tipo_beneficio'] ?? 'DESCUENTO_MONTO',
+      valorBeneficio: _parseDouble(json['valor_beneficio']),
+      tituloRecompensa: json['meta_titulo'] ?? json['titulo_recompensa'] ?? 'Premio Desbloqueado',
+      descripcionRecompensa: json['descripcion_recompensa'],
+      fechaDesbloqueo: json['fecha_desbloqueo'] ?? '',
+      fechaAprobacion: json['fecha_aprobacion'],
+      fechaCanje: json['fecha_canje'],
+      ventaCanjeId: json['venta_canje_id'],
+      notaRevision: json['nota_revision'],
+      clienteNombre: json['cliente_nombre'] ?? json['nombre_completo'],
+      clienteTelefono: json['cliente_telefono'] ?? json['telefono'],
+    );
+  }
+
+  factory ClientRewardModel.fromMap(Map<String, dynamic> map) => ClientRewardModel.fromJson(map);
+
+  Map<String, dynamic> toSqlite() {
+    return {
+      'id': id == 0 ? null : id,
+      'negocio_id': negocioId,
+      'cliente_id': clienteId,
+      'meta_id': metaId,
+      'puntos_consumidos': puntosConsumidos,
+      'estado': estado,
+      'tipo_beneficio': tipoBeneficio,
+      'valor_beneficio': valorBeneficio,
+      'titulo_recompensa': tituloRecompensa,
+      'descripcion_recompensa': descripcionRecompensa,
+      'fecha_desbloqueo': fechaDesbloqueo.isEmpty ? DateTime.now().toIso8601String() : fechaDesbloqueo,
+      'fecha_aprobacion': fechaAprobacion,
+      'fecha_canje': fechaCanje,
+      'venta_canje_id': ventaCanjeId,
+      'nota_revision': notaRevision,
+    };
+  }
+
+  ClientRewardModel copyWith({
+    int? id,
+    int? negocioId,
+    int? clienteId,
+    int? metaId,
+    int? puntosConsumidos,
+    String? estado,
+    String? tipoBeneficio,
+    double? valorBeneficio,
+    String? tituloRecompensa,
+    String? descripcionRecompensa,
+    String? fechaDesbloqueo,
+    String? fechaAprobacion,
+    String? fechaCanje,
+    int? ventaCanjeId,
+    String? notaRevision,
+    String? clienteNombre,
+    String? clienteTelefono,
+  }) {
+    return ClientRewardModel(
+      id: id ?? this.id,
+      negocioId: negocioId ?? this.negocioId,
+      clienteId: clienteId ?? this.clienteId,
+      metaId: metaId ?? this.metaId,
+      puntosConsumidos: puntosConsumidos ?? this.puntosConsumidos,
+      estado: estado ?? this.estado,
+      tipoBeneficio: tipoBeneficio ?? this.tipoBeneficio,
+      valorBeneficio: valorBeneficio ?? this.valorBeneficio,
+      tituloRecompensa: tituloRecompensa ?? this.tituloRecompensa,
+      descripcionRecompensa: descripcionRecompensa ?? this.descripcionRecompensa,
+      fechaDesbloqueo: fechaDesbloqueo ?? this.fechaDesbloqueo,
+      fechaAprobacion: fechaAprobacion ?? this.fechaAprobacion,
+      fechaCanje: fechaCanje ?? this.fechaCanje,
+      ventaCanjeId: ventaCanjeId ?? this.ventaCanjeId,
+      notaRevision: notaRevision ?? this.notaRevision,
+      clienteNombre: clienteNombre ?? this.clienteNombre,
+      clienteTelefono: clienteTelefono ?? this.clienteTelefono,
+    );
+  }
+}
+
+class LoyaltyLedgerModel {
+  final int id;
+  final int negocioId;
+  final int clienteId;
+  final String tipoMovimiento; // GANANCIA_COMPRA, BONO_PAGO_PUNTUAL, AJUSTE_MANUAL, PERDIDA_MORA, REVERSION_ANULACION, CANJE_RECOMPENSA, RESTAURACION_RECHAZO
+  final int puntosDelta;
+  final int puntosSaldoResultante;
+  final int scoreDelta;
+  final int scoreResultante;
+  final String motivo;
+  final String? referenciaTipo;
+  final int? referenciaId;
+  final String fechaRegistro;
+
+  LoyaltyLedgerModel({
+    required this.id,
+    required this.negocioId,
+    required this.clienteId,
+    required this.tipoMovimiento,
+    required this.puntosDelta,
+    required this.puntosSaldoResultante,
+    required this.scoreDelta,
+    required this.scoreResultante,
+    required this.motivo,
+    this.referenciaTipo,
+    this.referenciaId,
+    required this.fechaRegistro,
+  });
+
+  bool get isPositive => puntosDelta >= 0;
+  int get saldoPuntosDespues => puntosSaldoResultante;
+  int get scoreReputacionDelta => scoreDelta;
+
+  factory LoyaltyLedgerModel.fromJson(Map<String, dynamic> json) {
+    return LoyaltyLedgerModel(
+      id: json['id'] ?? 0,
+      negocioId: json['negocio_id'] ?? 0,
+      clienteId: json['cliente_id'] ?? 0,
+      tipoMovimiento: json['tipo_movimiento'] ?? 'GANANCIA_COMPRA',
+      puntosDelta: (json['puntos_delta'] as num?)?.toInt() ?? 0,
+      puntosSaldoResultante: (json['puntos_saldo_resultante'] as num?)?.toInt() ?? 0,
+      scoreDelta: (json['score_delta'] as num?)?.toInt() ?? 0,
+      scoreResultante: (json['score_resultante'] as num?)?.toInt() ?? 500,
+      motivo: json['motivo'] ?? '',
+      referenciaTipo: json['referencia_tipo'],
+      referenciaId: json['referencia_id'],
+      fechaRegistro: json['fecha_registro'] ?? '',
+    );
+  }
+
+  factory LoyaltyLedgerModel.fromMap(Map<String, dynamic> map) => LoyaltyLedgerModel.fromJson(map);
+
+  Map<String, dynamic> toSqlite() {
+    return {
+      'id': id == 0 ? null : id,
+      'negocio_id': negocioId,
+      'cliente_id': clienteId,
+      'tipo_movimiento': tipoMovimiento,
+      'puntos_delta': puntosDelta,
+      'puntos_saldo_resultante': puntosSaldoResultante,
+      'score_delta': scoreDelta,
+      'score_resultante': scoreResultante,
+      'motivo': motivo,
+      'referencia_tipo': referenciaTipo,
+      'referencia_id': referenciaId,
+      'fecha_registro': fechaRegistro.isEmpty ? DateTime.now().toIso8601String() : fechaRegistro,
+    };
   }
 }

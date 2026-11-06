@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_loyalty_history_modal.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_full_stats_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_finance_actions_modal.dart';
@@ -379,29 +380,87 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
   }
 
   Widget _buildTrustBadge() {
-    Color color;
-    IconData icon;
-    String label = widget.client.nivelConfianza.toUpperCase();
-    switch (widget.client.nivelConfianza.toLowerCase()) {
-      case 'excelente': color = Colors.greenAccent; icon = Icons.star; break;
-      case 'regular': color = Colors.orangeAccent; icon = Icons.warning; break;
-      case 'moroso': color = Colors.redAccent; icon = Icons.block; break;
-      case 'bueno':
-      default: color = Colors.blueAccent; icon = Icons.thumb_up; break;
+    final provider = Provider.of<TrackingProvider>(context);
+    final debts = provider.currentClientDebts;
+
+    // 🛡️ Evaluación en tiempo real: Si tiene cuotas vencidas activas, alertar prioritariamente
+    int overdueCount = 0;
+    final today = DateTime.now();
+    final todayClean = DateTime(today.year, today.month, today.day);
+    for (var sale in debts) {
+      if (sale.isArchived) continue;
+      for (var c in sale.installments) {
+        if (c.status != 'pagado' && c.status != 'anulada') {
+          final due = DateTime.tryParse(c.dueDate);
+          if (due != null) {
+            final dueClean = DateTime(due.year, due.month, due.day);
+            if (dueClean.isBefore(todayClean)) {
+              overdueCount++;
+            }
+          }
+        }
+      }
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withAlpha(204),
-        borderRadius: BorderRadius.circular(16),
+
+    final bool hasOverdue = overdueCount > 0;
+    final tier = hasOverdue ? ReputationTier.observacion : widget.client.tier;
+    final tierColor = hasOverdue ? const Color(0xFFEF4444) : Color(tier.colorHex);
+    final String badgeLabel = hasOverdue
+        ? (overdueCount > 1 ? "⚠️ MOROSO" : "⚠️ CON RETRASO")
+        : tier.badgeText;
+
+    return InkWell(
+      onTap: () => ClientLoyaltyHistoryModal.show(
+        context,
+        client: widget.client,
+        onPointsChanged: widget.onFinanceActionCompleted,
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 13),
-          const SizedBox(width: 4),
-          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.4)),
-        ],
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: tierColor.withValues(alpha: 0.25),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: tierColor.withValues(alpha: 0.6), width: 1.2),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              badgeLabel,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(width: 1, height: 12, color: Colors.white30),
+            const SizedBox(width: 6),
+            Icon(Icons.stars_rounded, color: Colors.amber[300], size: 14),
+            const SizedBox(width: 3),
+            Text(
+              "${widget.client.puntosActuales} pts",
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 11.5,
+              ),
+            ),
+            if (widget.client.rachaPagosPuntuales > 0 && !hasOverdue) ...[
+              const SizedBox(width: 6),
+              Text(
+                "🔥 ${widget.client.rachaPagosPuntuales}",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -417,8 +476,9 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
     today = DateTime(today.year, today.month, today.day);
 
     for (var sale in debts) {
+      if (sale.isArchived) continue;
       for (var cuota in sale.installments) {
-        if (cuota.status != 'pagado') {
+        if (cuota.status != 'pagado' && cuota.status != 'anulada') {
           DateTime dueDate = DateTime.tryParse(cuota.dueDate) ?? DateTime.now();
           dueDate = DateTime(dueDate.year, dueDate.month, dueDate.day);
           if (dueDate.isBefore(today)) {

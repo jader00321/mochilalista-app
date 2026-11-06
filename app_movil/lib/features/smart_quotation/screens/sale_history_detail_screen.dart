@@ -195,6 +195,11 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
       
       try {
         await trackingProv.loadClients();
+        final cId = _saleData?['cliente_id'] as int?;
+        if (cId != null && cId > 0) {
+          await trackingProv.loadClientLedger(cId);
+          await trackingProv.loadClientDebts(cId);
+        }
       } catch (_) {}
       try {
         if (mounted) {

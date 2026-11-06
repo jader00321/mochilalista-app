@@ -18,6 +18,7 @@ import 'package:app_movil/features/scanner/screens/scan_screen.dart';
 import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart'; 
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/crm/client_tracking_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/crm/loyalty_center_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/matching_screen.dart'; 
 import 'package:app_movil/features/scanner/screens/invoice_review_screen.dart'; 
 import 'package:app_movil/features/scanner/screens/invoice_staging_screen.dart'; 
@@ -203,6 +204,7 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
       'quote_manual',
       'load_invoice',
       'clients',
+      'loyalty_rewards',
       'activity',
       'analytics',
       'commercial_radar',
@@ -359,6 +361,22 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
             ? _buildBadge("${trackingProv.clientCount}", Colors.purple)
             : null,
         onTapBuilder: (ctx, isDark) => () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => const ClientTrackingScreen())),
+      ),
+      'loyalty_rewards': _ActionCardDef(
+        id: 'loyalty_rewards',
+        title: "Fidelización",
+        subtitle: trackingProv.pendingRewardsCount > 0
+            ? "${trackingProv.pendingRewardsCount} por revisar"
+            : "Puntos y Premios",
+        icon: Icons.military_tech_rounded,
+        colorBuilder: (isDark) => isDark ? Colors.amber[400]! : Colors.amber[700]!,
+        badgeBuilder: (ctx, isDark) => trackingProv.pendingRewardsCount > 0
+            ? _buildBadge("${trackingProv.pendingRewardsCount}", Colors.redAccent)
+            : null,
+        onTapBuilder: (ctx, isDark) => () => Navigator.push(
+          ctx,
+          MaterialPageRoute(builder: (_) => const LoyaltyCenterScreen()),
+        ),
       ),
       'activity': _ActionCardDef(
         id: 'activity',

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:app_movil/core/utils/currency_formatter.dart';
 
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
@@ -10,6 +9,7 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_mod
 import 'package:app_movil/features/smart_quotation/widgets/crm/ledger_timeline_tab.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_profile_editor.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_stats_header.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/client_loyalty_history_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_sales_history_tab.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_quotations_tab.dart'; 
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
@@ -17,6 +17,7 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/client_delete_mod
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart'; 
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
 import 'package:app_movil/core/widgets/confirm_action_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/whatsapp_preview_modal.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/deep_nav_return_pill.dart'; 
 
@@ -65,12 +66,18 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
   Future<void> _refreshData() async {
     final prov = Provider.of<TrackingProvider>(context, listen: false);
     
+    // Sincronizar recálculo de reputación ante cuotas vencidas o anulaciones recientes
+    try {
+      await ClientService().recalculateClientReputation(_currentClient.id);
+    } catch (_) {}
+
     // Obtenemos los datos actualizados de SQLite y actualizamos la UI local
     final freshClient = await prov.getClientById(_currentClient.id);
     
     await prov.loadClientLedger(_currentClient.id);
     await prov.loadClientQuotations(_currentClient.id);
     await prov.loadClientDebts(_currentClient.id);
+    await prov.loadPendingRewardsCount();
 
     if (mounted && freshClient != null) {
       setState(() {
@@ -148,54 +155,45 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
   }
 
   Future<void> _launchWhatsApp(BuildContext context) async {
-    if (_currentClient.phone.isEmpty || _currentClient.phone == "000000000") {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Número no válido")));
+    final cleanPhone = _currentClient.phone.replaceAll(RegExp(r'\D'), '');
+    if (cleanPhone.replaceAll('0', '').isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Número no válido o no registrado")));
       return;
     }
     
-    ConfirmActionModal.show(
-      context,
-      title: "Enviar WhatsApp",
-      subtitle: "¿Deseas enviar un mensaje a ${_currentClient.fullName} al número ${_formatPhone(_currentClient.phone)}?",
-      icon: Icons.chat,
-      color: const Color(0xFF25D366),
-      onConfirm: () async {
-        String msg = "Hola ${_currentClient.fullName}, te saludamos de la tienda 👋.\n\n";
-        if (_currentClient.totalDebt > 0) {
-          msg += "Le escribimos para recordarle que tiene un saldo pendiente de ${AppCurrency.format(_currentClient.totalDebt)}.\n";
-          
-          final trackingProv = Provider.of<TrackingProvider>(context, listen: false);
-          int overdueCount = 0;
-          double overdueAmount = 0;
-          final today = DateTime.now();
-          for (var s in trackingProv.currentClientDebts) {
-            for (var c in s.installments) {
-              if (c.status != 'pagado') {
-                final due = DateTime.tryParse(c.dueDate);
-                if (due != null && due.isBefore(today)) {
-                  overdueCount++;
-                  overdueAmount += (c.amount - c.montoPagado);
-                }
-              }
-            }
-          }
-          if (overdueCount > 0) {
-            msg += "\n⚠️ Cuenta con $overdueCount cuota(s) vencida(s) por ${AppCurrency.format(overdueAmount)}.\n";
-          }
-          msg += "\nPuede realizar su abono mediante Yape, Plin o en tienda física. Si ya realizó su pago, por favor haga caso omiso a este mensaje. ¡Muchas gracias!";
-        } else {
-          msg += "Esperamos que se encuentre bien. ¡Estamos a su disposición para cualquier consulta!";
-        }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final trackingProv = Provider.of<TrackingProvider>(context, listen: false);
+    final List<Map<String, dynamic>> overdueCuotas = [];
+    final today = DateTime.now();
 
-        final cleanPhone = _currentClient.phone.replaceAll(RegExp(r'\D'), '');
-        final waPhone = cleanPhone.startsWith('51') ? cleanPhone : '51$cleanPhone';
-        final url = Uri.parse("https://wa.me/$waPhone?text=${Uri.encodeComponent(msg)}");
-        if (await canLaunchUrl(url)) {
-          await launchUrl(url, mode: LaunchMode.externalApplication);
-        } else {
-          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo abrir WhatsApp")));
+    for (var s in trackingProv.currentClientDebts) {
+      for (var c in s.installments) {
+        if (c.status != 'pagado') {
+          final due = DateTime.tryParse(c.dueDate);
+          if (due != null && due.isBefore(today)) {
+            overdueCuotas.add({
+              'id': c.id,
+              'numero_cuota': c.installmentNumber,
+              'monto': c.amount,
+              'monto_original': c.montoOriginal,
+              'mora_monto': c.moraMonto,
+              'mora_automatica': c.moraAutomatica ? 1 : 0,
+              'monto_pagado': c.montoPagado,
+              'fecha_vencimiento': c.dueDate,
+              'estado': c.status,
+            });
+          }
         }
-      },
+      }
+    }
+
+    WhatsAppPreviewModal.showOverdueSummary(
+      context: context,
+      overdueCuotas: overdueCuotas,
+      totalDebt: _currentClient.totalDebt,
+      clientName: _currentClient.fullName,
+      clientPhone: _currentClient.phone,
+      isDark: isDark,
     );
   }
 
@@ -287,6 +285,15 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                           "Navega entre 'Libro Contable', 'Compras' y 'Cotizaciones' para ver todo su historial.",
                     ),
                   ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.stars_rounded, size: 26, color: Colors.amber),
+                  tooltip: "Puntos y Fidelización",
+                  onPressed: () => ClientLoyaltyHistoryModal.show(
+                    context,
+                    client: _currentClient,
+                    onPointsChanged: _refreshData,
+                  ),
                 ),
                 IconButton(icon: const Icon(Icons.edit_note, size: 28), tooltip: "Editar Perfil", onPressed: () => _openEditor(context)),
                 IconButton(

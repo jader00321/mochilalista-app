@@ -15,6 +15,7 @@ import 'package:app_movil/features/smart_quotation/widgets/checkout/delivery_and
 import 'package:app_movil/features/smart_quotation/widgets/checkout/checkout_summary_card.dart';
 import 'package:app_movil/features/smart_quotation/widgets/checkout/checkout_action_footer.dart';
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 class _PhoneNumberFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
@@ -54,6 +55,10 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
   
   final _discountCtrl = TextEditingController(text: "0");
   
+  final ClientService _clientService = ClientService();
+  List<ClientRewardModel> _approvedRewards = [];
+  ClientRewardModel? _appliedReward;
+
   String? _saleNote;
   bool _isScheduleDirty = true;
 
@@ -77,7 +82,7 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
     await wbProvider.checkTrafficLight(widget.quotationId);
     final validation = wbProvider.getValidationFor(widget.quotationId);
     
-    if (validation != null && (!validation.canSell || validation.bundleChanges.any((b) => b.isCompositionChange || b.isDeleted || b.isDeactivated))) {
+    if (validation != null && (!validation.canSell || validation.sharedStockConflicts.isNotEmpty || validation.bundleChanges.any((b) => b.isCompositionChange || b.isDeleted || b.isDeactivated))) {
         if (mounted) {
            _showBlockModal();
            return;
@@ -93,6 +98,7 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
          final client = await sProvider.getClientById(q.clientId!);
          if (mounted && client != null) {
            setState(() => _selectedClient = client);
+           _loadClientRewards(client.id);
          }
       }
       
@@ -205,7 +211,37 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
 
     if (newClient != null) {
       setState(() => _selectedClient = newClient);
+      _loadClientRewards(newClient.id);
     }
+  }
+
+  Future<void> _loadClientRewards(int clientId) async {
+    try {
+      final list = await _clientService.getClientRewards(clientId, status: 'APROBADA_NOTIFICADA');
+      if (mounted) {
+        setState(() {
+          _approvedRewards = list;
+          _appliedReward = null;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _handleRewardSelected(ClientRewardModel? rw) {
+    setState(() {
+      _appliedReward = rw;
+      if (rw != null) {
+        if (rw.tipoBeneficio == 'DESCUENTO_MONTO') {
+          _discountCtrl.text = rw.valorBeneficio.toStringAsFixed(2);
+        } else if (rw.tipoBeneficio == 'DESCUENTO_PORCENTAJE') {
+          final sub = _quotation?.totalAmount ?? 0.0;
+          final calc = sub * (rw.valorBeneficio / 100.0);
+          _discountCtrl.text = calc.toStringAsFixed(2);
+        }
+      } else {
+        _discountCtrl.text = "0.00";
+      }
+    });
   }
 
   void _editClientDetails() async {
@@ -420,7 +456,10 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
             ClientSelectionCard(
               selectedClient: _selectedClient,
               onSearchOrAddTap: _openClientSheet,
-              onEditTap: _editClientDetails, 
+              onEditTap: _editClientDetails,
+              approvedRewards: _approvedRewards,
+              appliedReward: _appliedReward,
+              onRewardSelected: _handleRewardSelected,
             ),
             const SizedBox(height: 20),
 
@@ -479,6 +518,7 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
         selectedClient: _selectedClient,
         discount: discount,
         saleNote: _saleNote,
+        recompensaCanjeId: _appliedReward?.id,
         onAutoFixInstallments: (deudaExacta) {
           if (_installments.isEmpty) return;
           int numCuotas = _installments.length;

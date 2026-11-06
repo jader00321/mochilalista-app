@@ -176,19 +176,51 @@ class QuickSaleProvider with ChangeNotifier {
   /// 🔗 Valida la demanda acumulada en vivo para ítems que comparten pool de stock.
   /// Cumple estrictamente con la Regla 2: Aísla variantes compartidas (item.productId == prodId && item.usaStockCompartido)
   /// de variantes independientes en modo MIXTO o INDEPENDIENTE.
-  /// 🔗 Calcula el stock base restante del pool compartido descontando la demanda de todas las variantes del carrito
-  int getRemainingPoolStock(int productId, int initialPool) {
-    if (productId <= 0) return initialPool;
-    int currentDemand = 0;
+
+  /// 🔗 Retorna la cantidad de unidades base ocupadas en el carrito por OTRAS variantes
+  /// que compartan el pool de stock del mismo producto, excluyendo [excludePresentationId]
+  /// y excluyendo variantes con usaStockCompartido == false.
+  int getBaseOccupiedByOtherVariants(int productId, {int? excludePresentationId}) {
+    if (productId <= 0) return 0;
+    int occupied = 0;
     for (final item in _currentState.cart) {
-      if (item.productId == productId && item.usaStockCompartido) {
+      if (item.productId == productId &&
+          item.usaStockCompartido &&
+          item.presentationId != excludePresentationId) {
         final qty = _currentState.quantities[item.presentationId] ?? 0;
-        final f = item.conversionFactor > 0 ? item.conversionFactor : 1;
-        currentDemand += qty * f;
+        final factor = item.conversionFactor > 0 ? item.conversionFactor : 1;
+        occupied += qty * factor;
       }
     }
-    final remaining = initialPool - currentDemand;
-    return remaining > 0 ? remaining : 0;
+    return occupied;
+  }
+
+  /// 🔗 Retorna el stock base disponible para una línea en edición o consulta,
+  /// restando al pool compartido únicamente lo consumido por otras variantes.
+  int getAvailableBaseForLine(int productId, int totalSharedPool, {int? excludePresentationId}) {
+    final occupied = getBaseOccupiedByOtherVariants(productId, excludePresentationId: excludePresentationId);
+    final available = totalSharedPool - occupied;
+    return available > 0 ? available : 0;
+  }
+
+  /// 🔗 Retorna el máximo vendible (en unidades de presentación) para una variante dada
+  /// según el stock base disponible y su cupo máximo.
+  int getMaxVendibleForPresentation({
+    required int availableBase,
+    required int conversionFactor,
+    int? cupoMaximoVariante,
+  }) {
+    final safeFactor = conversionFactor > 0 ? conversionFactor : 1;
+    final physical = availableBase ~/ safeFactor;
+    if (cupoMaximoVariante != null) {
+      return physical < cupoMaximoVariante ? physical : cupoMaximoVariante;
+    }
+    return physical;
+  }
+
+  /// 🔗 Calcula el stock base restante del pool compartido descontando la demanda de todas las variantes del carrito
+  int getRemainingPoolStock(int productId, int initialPool, {int? excludePresentationId}) {
+    return getAvailableBaseForLine(productId, initialPool, excludePresentationId: excludePresentationId);
   }
 
   /// 🔗 Calcula cuántas unidades vendibles quedan disponibles para agregar al carrito en vivo
@@ -225,28 +257,19 @@ class QuickSaleProvider with ChangeNotifier {
   }) {
     final factor = presentation.unidadesPorVenta > 0 ? presentation.unidadesPorVenta : 1;
     if (presentation.usaStockCompartido) {
-      int pool = sharedStockPool ?? presentation.stockActual;
-      int currentDemand = 0;
-      for (final item in _currentState.cart) {
-        if (item.productId == productId &&
-            item.usaStockCompartido &&
-            item.presentationId != excludePresentationId) {
-          final qty = _currentState.quantities[item.presentationId] ?? 0;
-          final f = item.conversionFactor > 0 ? item.conversionFactor : 1;
-          currentDemand += qty * f;
-        }
-      }
-      final remainingPool = pool - currentDemand;
-      final physical = remainingPool > 0 ? (remainingPool ~/ factor) : 0;
-      if (presentation.cupoMaximoVariante != null) {
-        int inCart = 0;
-        if (presentation.id != excludePresentationId) {
-          inCart = _currentState.quantities[presentation.id] ?? 0;
-        }
-        final quotaRemaining = (presentation.cupoMaximoVariante! - inCart).clamp(0, presentation.cupoMaximoVariante!);
-        return physical < quotaRemaining ? physical : quotaRemaining;
-      }
-      return physical;
+      final pool = (sharedStockPool != null && sharedStockPool > 0)
+          ? sharedStockPool
+          : presentation.stockActual;
+      final availableBase = getAvailableBaseForLine(
+        productId,
+        pool,
+        excludePresentationId: excludePresentationId,
+      );
+      return getMaxVendibleForPresentation(
+        availableBase: availableBase,
+        conversionFactor: factor,
+        cupoMaximoVariante: presentation.cupoMaximoVariante,
+      );
     } else {
       int inCart = 0;
       if (presentation.id != excludePresentationId) {
@@ -266,6 +289,7 @@ class QuickSaleProvider with ChangeNotifier {
     required int targetQty,
     required String unitName,
     int? cupoMaximoVariante,
+    int? excludePresentationId,
   }) {
     if (!usaStockCompartido || productId <= 0) return null;
 
@@ -273,21 +297,17 @@ class QuickSaleProvider with ChangeNotifier {
       return "El cupo asignado para esta variante es de $cupoMaximoVariante $unitName.";
     }
 
-    int currentDemand = 0;
-    for (final item in _currentState.cart) {
-      if (item.productId == productId && item.usaStockCompartido && item.presentationId != presentationId) {
-        final qty = _currentState.quantities[item.presentationId] ?? 0;
-        final f = item.conversionFactor > 0 ? item.conversionFactor : 1;
-        currentDemand += qty * f;
-      }
-    }
-
     final int safeFactor = factor > 0 ? factor : 1;
-    final int newDemandForThisItem = targetQty * safeFactor;
-    final int totalDemand = currentDemand + newDemandForThisItem;
+    final int occupiedByOthers = getBaseOccupiedByOtherVariants(
+      productId,
+      excludePresentationId: excludePresentationId ?? presentationId,
+    );
 
-    if (totalDemand > sharedStockPool) {
-      final int remainingUnits = sharedStockPool - currentDemand;
+    final int availableBase = sharedStockPool - occupiedByOthers;
+    final int requestedBase = targetQty * safeFactor;
+
+    if (requestedBase > availableBase) {
+      final int remainingUnits = availableBase > 0 ? availableBase : 0;
       final int maxAvailableForThis = remainingUnits > 0 ? (remainingUnits ~/ safeFactor) : 0;
       return "Stock compartido insuficiente. Quedan $remainingUnits und. base disponibles (= $maxAvailableForThis $unitName).";
     }
@@ -403,8 +423,34 @@ class QuickSaleProvider with ChangeNotifier {
           }
           final existingQty = _currentState.quantities[product.presentationId] ?? 1;
           final maxStock = product.stock > 0 ? product.stock : 1;
-          final combinedQty = (existingQty + newQty).clamp(1, maxStock);
-          
+          final combinedQty = existingQty + newQty;
+
+          String? mergeWarning;
+          final int finalCombinedQty;
+
+          if (product.usaStockCompartido) {
+            final sharedWarning = _validateSharedStockDemand(
+              productId: product.productId,
+              presentationId: product.presentationId,
+              usaStockCompartido: true,
+              sharedStockPool: product.sharedStockPool,
+              factor: product.conversionFactor,
+              targetQty: combinedQty,
+              unitName: product.unit,
+              cupoMaximoVariante: product.cupoMaximoVariante,
+              excludePresentationId: oldPresentationId,
+            );
+            if (sharedWarning != null) return sharedWarning;
+            finalCombinedQty = combinedQty;
+          } else {
+            if (combinedQty > maxStock) {
+              finalCombinedQty = maxStock;
+              mergeWarning = "Se ajustó la cantidad al stock máximo disponible ($maxStock).";
+            } else {
+              finalCombinedQty = combinedQty;
+            }
+          }
+
           // Calcular el índice destino ajustado tras eliminar el ítem previo
           final targetIndex = existingTargetIndex > index ? existingTargetIndex - 1 : existingTargetIndex;
 
@@ -412,28 +458,52 @@ class QuickSaleProvider with ChangeNotifier {
           _currentState.cart.removeAt(index);
           _currentState.quantities.remove(oldPresentationId);
           _currentState.overridePrices.remove(oldPresentationId);
-          
+
           // Actualizar el ítem existente fusionado con sus datos más recientes
           _currentState.cart[targetIndex] = product;
-          _currentState.quantities[product.presentationId] = combinedQty;
+          _currentState.quantities[product.presentationId] = finalCombinedQty;
           if (newOverridePrice != null) {
             _currentState.overridePrices[product.presentationId] = newOverridePrice;
           } else {
             _currentState.overridePrices.remove(product.presentationId);
           }
           notifyListeners();
-
-          if (existingQty + newQty > maxStock) {
-            return "Se fusionaron las presentaciones. Cantidad ajustada al stock máximo disponible ($maxStock).";
-          }
-          return null;
+          return mergeWarning;
         }
 
-        // Si no existía previamente, removemos el id anterior de las estructuras
+        // Si no existía previamente, validamos excluyendo oldPresentationId
+        if (product.usaStockCompartido) {
+          final sharedWarning = _validateSharedStockDemand(
+            productId: product.productId,
+            presentationId: product.presentationId,
+            usaStockCompartido: true,
+            sharedStockPool: product.sharedStockPool,
+            factor: product.conversionFactor,
+            targetQty: newQty,
+            unitName: product.unit,
+            cupoMaximoVariante: product.cupoMaximoVariante,
+            excludePresentationId: oldPresentationId,
+          );
+          if (sharedWarning != null) return sharedWarning;
+        } else if (newQty > product.stock) {
+          return "Solo hay ${product.stock} unidades disponibles en stock.";
+        }
+
+        // Reemplazo atómico sin retención de demandas huérfanas
         _currentState.quantities.remove(oldPresentationId);
         _currentState.overridePrices.remove(oldPresentationId);
+        _currentState.cart[index] = product;
+        _currentState.quantities[product.presentationId] = newQty;
+        if (newOverridePrice != null) {
+          _currentState.overridePrices[product.presentationId] = newOverridePrice;
+        } else {
+          _currentState.overridePrices.remove(product.presentationId);
+        }
+        notifyListeners();
+        return null;
       }
 
+      // Misma presentación (solo cambió cantidad o precio)
       if (product.usaStockCompartido) {
         final sharedWarning = _validateSharedStockDemand(
           productId: product.productId,
@@ -444,6 +514,7 @@ class QuickSaleProvider with ChangeNotifier {
           targetQty: newQty,
           unitName: product.unit,
           cupoMaximoVariante: product.cupoMaximoVariante,
+          excludePresentationId: oldPresentationId,
         );
         if (sharedWarning != null) return sharedWarning;
       } else if (newQty > product.stock) {
@@ -675,6 +746,17 @@ class QuickSaleProvider with ChangeNotifier {
 
           int finalQty = requestedQty > pres.stockActual ? pres.stockActual : requestedQty;
 
+          final bool isShared = (prod.modoStock == 'COMPARTIDO') ||
+              (prod.modoStock == 'MIXTO' && pres.usaStockCompartido) ||
+              pres.usaStockCompartido;
+          final int pool = prod.stockCompartido > 0 ? prod.stockCompartido : pres.stockActual;
+          final int factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
+          final int canonicalStock = isShared
+              ? (pres.cupoMaximoVariante != null
+                  ? ((pool ~/ factor) < pres.cupoMaximoVariante! ? (pool ~/ factor) : pres.cupoMaximoVariante!)
+                  : (pool ~/ factor))
+              : (pres.stockActual ~/ factor);
+
           final matched = MatchedProduct(
             productId: prod.id, presentationId: pres.id!,
             fullName: "${prod.nombre} ${pres.nombreEspecifico ?? ''}".trim(),
@@ -682,9 +764,12 @@ class QuickSaleProvider with ChangeNotifier {
             brand: prod.marcaNombre, 
             price: pres.precioVentaFinal, 
             offerPrice: (pres.precioOferta != null && pres.precioOferta! > 0) ? pres.precioOferta : null,
-            stock: pres.stockActual, imageUrl: pres.imagenUrl ?? prod.imagenUrl,
+            stock: canonicalStock, imageUrl: pres.imagenUrl ?? prod.imagenUrl,
             unit: pres.unidadVenta ?? "Unidad", 
             conversionFactor: pres.unidadesPorVenta, 
+            usaStockCompartido: isShared,
+            sharedStockPool: pool,
+            cupoMaximoVariante: pres.cupoMaximoVariante,
           );
           
           if (_currentState.cart.any((p) => p.presentationId == pres.id)) {

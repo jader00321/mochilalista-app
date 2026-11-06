@@ -182,6 +182,22 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
       // Restaurar preferencias visuales guardadas preservando el título contextual
       _config = await PdfPreferencesService.applySavedPreferences(_config);
 
+      // Si es un préstamo o venta al crédito, reemplazar condiciones de cotización por términos de crédito/cobranza
+      if (_saleData != null) {
+        final bool isLoan = _saleData!['origen_venta'] == 'prestamo_personal';
+        final bool isCredit = !isLoan && (_saleData!['estado_pago'] == 'pendiente' || (_saleData!['cuotas'] != null && (_saleData!['cuotas'] as List).isNotEmpty));
+        if (isLoan || isCredit) {
+          if (_config.footerNote == null ||
+              _config.footerNote!.trim().isEmpty ||
+              _config.footerNote!.toLowerCase().contains("válida por") ||
+              _config.footerNote!.toLowerCase().contains("valida por") ||
+              _config.footerNote!.toLowerCase().contains("cotización") ||
+              _config.footerNote!.toLowerCase().contains("cotizacion")) {
+            _config.footerNote = "El pago puntual de cada cuota evita la generación de recargos por mora. Comprobante emitido para control y cobranza.";
+          }
+        }
+      }
+
       // Hidratación garantizada de imageUrl en ítems desde SQLite si faltara
       if (_quotation != null) {
         await _hydrateProductImages();

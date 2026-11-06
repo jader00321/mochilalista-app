@@ -389,6 +389,7 @@ class ProductRepository {
 
   Future<int> insertProduct(Map<String, dynamic> data) async {
     final db = await _dbHelper.database;
+    data['fecha_creacion'] ??= DateTime.now().toIso8601String();
     return await db.insert('productos', data);
   }
 
@@ -748,6 +749,7 @@ class ProductRepository {
     'descripcion',
     'imagen_url',
     'estado',
+    'fecha_creacion',
     'fecha_actualizacion',
     'modo_stock',
     'stock_compartido',
@@ -925,6 +927,7 @@ class ProductRepository {
       }
 
       // 5. Whitelist Canónico SQLite para la tabla productos (CERO columnas espurias)
+      productData['fecha_creacion'] ??= DateTime.now().toIso8601String();
       productData.removeWhere((key, _) => !_kProductoColumns.contains(key));
       int pId = await txn.insert('productos', productData);
 

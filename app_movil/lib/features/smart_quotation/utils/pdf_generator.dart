@@ -281,7 +281,9 @@ class PdfGenerator {
     }
 
     final bool isTicket = config.pageSize == PdfPageSize.ticket80;
-    final bool isLoan = saleData != null && saleData['origen_venta'] == 'prestamo_personal';
+    final bool isSale = saleData != null;
+    final bool isLoan = isSale && saleData['origen_venta'] == 'prestamo_personal';
+    final bool isCredit = isSale && !isLoan && (saleData['estado_pago'] == 'pendiente' || (saleData['cuotas'] != null && (saleData['cuotas'] as List).isNotEmpty));
 
     // 3. Generación Dual: pw.MultiPage (A4) vs pw.Page (Ticket Térmico 80mm)
     if (isTicket) {
@@ -307,7 +309,13 @@ class PdfGenerator {
                 ],
                 _buildTotalsSection(quotation, config, currency, colors, saleData, isTicket: true),
                 pw.SizedBox(height: 12),
-                _buildFooter(config, ownerInfo, isTicket: true),
+                _buildFooter(
+                  config, 
+                  ownerInfo, 
+                  isTicket: true,
+                  isLoan: isLoan,
+                  isCredit: isCredit,
+                ),
               ],
             );
           },
@@ -346,7 +354,13 @@ class PdfGenerator {
               ],
               _buildTotalsSection(quotation, config, currency, colors, saleData, isTicket: false),
               pw.Spacer(),
-              _buildFooter(config, ownerInfo, isTicket: false),
+              _buildFooter(
+                config, 
+                ownerInfo, 
+                isTicket: false,
+                isLoan: isLoan,
+                isCredit: isCredit,
+              ),
             ];
           },
         ),
@@ -389,7 +403,18 @@ class PdfGenerator {
 
     final String cleanClientName = cleanClientDisplayName(rawClientName);
     final bool hasRealClient = cleanClientName.isNotEmpty;
-    final String? clientPhone = isSale ? saleData['cliente_telefono'] : null;
+
+    // Extracción y sanitización estricta de teléfono del cliente (suprime 00000000, 000000000, ceros repetidos o vacíos)
+    String? clientPhone;
+    final String? rawPhone = isSale 
+        ? (saleData['cliente_telefono'] ?? (saleData['cliente_info'] != null ? saleData['cliente_info']['telefono'] : null))?.toString() 
+        : null;
+    if (rawPhone != null) {
+      final digits = rawPhone.replaceAll(RegExp(r'\D'), '');
+      if (digits.replaceAll('0', '').isNotEmpty && digits.length >= 6) {
+        clientPhone = rawPhone.trim();
+      }
+    }
 
     final bool isQuickSale = isSale && saleData['origen_venta'] == 'pos_rapido';
     final String? note = isSale && saleData['notas'] != null && saleData['notas'].toString().isNotEmpty 
@@ -765,7 +790,17 @@ class PdfGenerator {
     final double interesRate = (saleData['porcentaje_interes'] ?? 0.0).toDouble();
     final double totalWithInterest = (saleData['monto_total'] ?? 0.0).toDouble();
     final double abonoInicial = (saleData['abono_inicial'] ?? 0.0).toDouble();
-    final double debtWithInterest = totalWithInterest - abonoInicial;
+
+    // Obtener y consolidar mora_total
+    double moraTotal = (saleData['mora_total'] as num?)?.toDouble() ?? 0.0;
+    if (moraTotal <= 0 && saleData['cuotas'] != null) {
+      final list = saleData['cuotas'] as List;
+      moraTotal = list.fold(0.0, (acc, c) => acc + ((c['mora_monto'] as num?)?.toDouble() ?? 0.0));
+    }
+
+    // Regla de Oro: Proteger Capital e Interés Original ante recargos de mora
+    final double pureTotalWithInterest = (totalWithInterest - moraTotal) > 0 ? (totalWithInterest - moraTotal) : 0.0;
+    final double debtWithInterest = (pureTotalWithInterest - abonoInicial) > 0 ? (pureTotalWithInterest - abonoInicial) : 0.0;
     final double debtBase = (interesRate > 0 && debtWithInterest > 0)
         ? debtWithInterest / (1 + (interesRate / 100))
         : debtWithInterest;
@@ -793,6 +828,8 @@ class PdfGenerator {
           pw.Divider(color: PdfColors.grey400, thickness: 0.5),
           _buildPaymentRow("Capital Prestado:", AppCurrency.format(capitalNeto), isTicket: isTicket),
           _buildPaymentRow("Interés Aplicado ($rateLabel):", interestDisplay, isTicket: isTicket),
+          if (moraTotal > 0.01)
+            _buildPaymentRow("Recargo por Mora:", "+ ${AppCurrency.format(moraTotal)}", isBold: true, valueColor: colors['debt'], isTicket: isTicket),
           _buildPaymentRow("Total a Devolver:", AppCurrency.format(totalWithInterest), isBold: true, isTicket: isTicket),
           if (abonoInicial > 0.01)
             _buildPaymentRow("Abono Inicial:", AppCurrency.format(abonoInicial), isTicket: isTicket),
@@ -814,7 +851,7 @@ class PdfGenerator {
     final bool isSale = saleData != null;
     final bool isLoan = isSale && saleData['origen_venta'] == 'prestamo_personal';
 
-    // Cronograma de cuotas si existen
+    // Cronograma de cuotas si existen con taxonomía exacta de mora y vencimiento
     final List<dynamic>? cuotasRaw = isSale ? saleData['cuotas'] : null;
     pw.Widget? cuotasWidget;
     if (config.showInstallments && cuotasRaw != null && cuotasRaw.isNotEmpty) {
@@ -831,18 +868,89 @@ class PdfGenerator {
             pw.Text("PLAN DE CUOTAS (${cuotasRaw.length} cuotas)", style: pw.TextStyle(fontSize: isTicket ? 8 : 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
             pw.Divider(color: PdfColors.grey300, thickness: 0.5),
             ...cuotasRaw.map((c) {
-              final bool pagado = c['estado'] == 'pagado';
-              final String date = DateFormat('dd/MM/yyyy').format(DateTime.parse(c['fecha_vencimiento']));
+              final double cuotaMonto = (num.tryParse(c['monto'].toString()) ?? 0.0).toDouble();
+              final double cuotaPagado = (num.tryParse((c['monto_pagado'] ?? 0.0).toString()) ?? 0.0).toDouble();
+              final double saldoFalta = (cuotaMonto - cuotaPagado) > 0.001 ? (cuotaMonto - cuotaPagado) : 0.0;
+              final double moraMonto = (num.tryParse((c['mora_monto'] ?? 0.0).toString()) ?? 0.0).toDouble();
+              final double montoOriginal = (num.tryParse((c['monto_original'] ?? cuotaMonto).toString()) ?? cuotaMonto).toDouble();
+              final bool tieneMora = moraMonto > 0.01;
+              final bool pagado = c['estado'] == 'pagado' || (saldoFalta <= 0.01 && cuotaMonto > 0);
+
+              DateTime? dueDate;
+              try {
+                dueDate = DateTime.parse(c['fecha_vencimiento'].toString().split('T').first);
+              } catch (_) {}
+
+              final now = DateTime.now();
+              final today = DateTime(now.year, now.month, now.day);
+              final int daysOverdue = dueDate != null
+                  ? today.difference(DateTime(dueDate.year, dueDate.month, dueDate.day)).inDays
+                  : 0;
+              final bool isVencida = !pagado && daysOverdue > 0;
+              final String date = dueDate != null ? DateFormat('dd/MM/yyyy').format(dueDate) : c['fecha_vencimiento'].toString();
+
+              String statusText;
+              PdfColor statusColor;
+
+              if (pagado) {
+                statusText = "PAGADO";
+                statusColor = PdfColors.green700;
+              } else if (isVencida) {
+                statusColor = PdfColors.red700;
+                if (cuotaPagado > 0.01) {
+                  statusText = "VENCIDA ($daysOverdue d) | PAGO PARCIAL (Abonado: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})";
+                } else if (tieneMora) {
+                  statusText = "VENCIDA ($daysOverdue d) | CON MORA";
+                } else {
+                  statusText = "VENCIDA ($daysOverdue d)";
+                }
+              } else {
+                if (cuotaPagado > 0.01) {
+                  statusText = "PAGO PARCIAL (Abonado: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})";
+                  statusColor = PdfColors.orange800;
+                } else if (daysOverdue == 0) {
+                  statusText = "VENCE HOY";
+                  statusColor = PdfColors.amber800;
+                } else {
+                  statusText = "PENDIENTE";
+                  statusColor = PdfColors.orange700;
+                }
+              }
+
+              final String moraInfo = tieneMora 
+                  ? " (Orig: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(moraMonto)} = Total: ${AppCurrency.format(cuotaMonto)})" 
+                  : "";
+
               return pw.Padding(
-                padding: const pw.EdgeInsets.only(bottom: 2),
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text("Cuota ${c['numero_cuota']}: ${AppCurrency.format(c['monto'])}", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 9)),
-                    pw.Text("Vence: $date", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 9, color: PdfColors.grey700)),
-                    pw.Text(pagado ? "PAGADO" : "PENDIENTE", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 9, fontWeight: pw.FontWeight.bold, color: pagado ? PdfColors.green700 : PdfColors.orange700)),
-                  ],
-                ),
+                padding: const pw.EdgeInsets.only(bottom: 3),
+                child: isTicket 
+                    ? pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Row(
+                            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                            children: [
+                              pw.Text("Cuota ${c['numero_cuota']}: ${AppCurrency.format(cuotaMonto)}", style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                              pw.Text("Vence: $date", style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
+                            ],
+                          ),
+                          if (tieneMora)
+                            pw.Text(moraInfo.trim(), style: const pw.TextStyle(fontSize: 6.5, color: PdfColors.grey800)),
+                          pw.Text(statusText, style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold, color: statusColor)),
+                          pw.SizedBox(height: 2),
+                        ],
+                      )
+                    : pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Expanded(
+                            child: pw.Text("Cuota ${c['numero_cuota']}: ${AppCurrency.format(cuotaMonto)}$moraInfo", style: const pw.TextStyle(fontSize: 8.5)),
+                          ),
+                          pw.Text("Vence: $date", style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                          pw.SizedBox(width: 8),
+                          pw.Text(statusText, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: statusColor)),
+                        ],
+                      ),
               );
             }),
           ],
@@ -862,6 +970,15 @@ class PdfGenerator {
     final double debt = finalTotal - paidAmount > 0 ? finalTotal - paidAmount : 0.0;
     final bool showTransDetails = isSale && config.showTransactionDetails;
 
+    double moraTotalSale = 0.0;
+    if (isSale) {
+      moraTotalSale = (saleData['mora_total'] as num?)?.toDouble() ?? 0.0;
+      if (moraTotalSale <= 0 && saleData['cuotas'] != null) {
+        final list = saleData['cuotas'] as List;
+        moraTotalSale = list.fold(0.0, (acc, c) => acc + ((c['mora_monto'] as num?)?.toDouble() ?? 0.0));
+      }
+    }
+
     // Caja de totales principales
     final totalsBox = pw.Container(
       width: isTicket ? double.infinity : 250,
@@ -880,6 +997,17 @@ class PdfGenerator {
               children: [
                 pw.Text("Ahorro / Descuento:", style: pw.TextStyle(fontSize: isTicket ? 8 : 10)),
                 pw.Text("- ${AppCurrency.format(finalSavings)}", style: pw.TextStyle(fontSize: isTicket ? 8.5 : 10.5, fontWeight: pw.FontWeight.bold, color: colors['savings'])),
+              ],
+            ),
+            pw.SizedBox(height: 4),
+            pw.Divider(color: PdfColors.grey400, thickness: 0.5),
+          ],
+          if (moraTotalSale > 0.01) ...[
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text("Recargo por Mora:", style: pw.TextStyle(fontSize: isTicket ? 8 : 10, color: colors['debt'], fontWeight: pw.FontWeight.bold)),
+                pw.Text("+ ${AppCurrency.format(moraTotalSale)}", style: pw.TextStyle(fontSize: isTicket ? 8.5 : 10.5, fontWeight: pw.FontWeight.bold, color: colors['debt'])),
               ],
             ),
             pw.SizedBox(height: 4),
@@ -991,13 +1119,32 @@ class PdfGenerator {
   }
 
   /// Construye el pie de página (cuentas bancarias Yape/Plin, notas de validez y agradecimiento)
-  static pw.Widget _buildFooter(PdfConfig config, UserModel? user, {required bool isTicket}) {
+  static pw.Widget _buildFooter(
+    PdfConfig config, 
+    UserModel? user, {
+    required bool isTicket,
+    bool isLoan = false,
+    bool isCredit = false,
+  }) {
     final String? effectivePayment = _stripUnsupportedEmojis(
       (config.customPaymentInfo != null && config.customPaymentInfo!.trim().isNotEmpty)
           ? config.customPaymentInfo!.trim()
           : user?.business?.paymentInfo,
     );
-    final String? effectiveFooterNote = _stripUnsupportedEmojis(config.footerNote);
+    String? effectiveFooterNote = _stripUnsupportedEmojis(config.footerNote);
+
+    // Si es Préstamo o Venta a Crédito, erradica textos de cotización ("Válida por 7 días") y aplica términos de cobranza
+    if (isLoan || isCredit) {
+      if (effectiveFooterNote == null ||
+          effectiveFooterNote.trim().isEmpty ||
+          effectiveFooterNote.toLowerCase().contains("válida por") ||
+          effectiveFooterNote.toLowerCase().contains("valida por") ||
+          effectiveFooterNote.toLowerCase().contains("cotización") ||
+          effectiveFooterNote.toLowerCase().contains("cotizacion")) {
+        effectiveFooterNote = "El pago puntual de cada cuota evita la generación de recargos por mora. Comprobante emitido para control y cobranza.";
+      }
+    }
+
     final bool hasPaymentAccounts = config.showPaymentAccounts && (effectivePayment?.isNotEmpty ?? false);
     final bool hasFooterNote = effectiveFooterNote != null && effectiveFooterNote.trim().isNotEmpty;
 

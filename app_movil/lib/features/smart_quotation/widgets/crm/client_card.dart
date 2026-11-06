@@ -98,7 +98,7 @@ class ClientCard extends StatelessWidget {
 
     return Card(
       elevation: isDark ? 0 : 2,
-      margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
+      margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
       color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
@@ -115,34 +115,34 @@ class ClientCard extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Stack(
                     children: [
                       CircleAvatar(
-                        radius: 28,
+                        radius: 24,
                         backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
                         child: Text(
                           client.fullName.isNotEmpty ? client.fullName[0].toUpperCase() : "?", 
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: isDark ? Colors.white70 : Colors.black54),
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white70 : Colors.black54),
                         ),
                       ),
                       Positioned(
                         bottom: 0, right: 0,
                         child: Container(
-                          width: 16, height: 16, 
+                          width: 15, height: 15, 
                           decoration: BoxDecoration(
                             color: confidenceColor, 
                             shape: BoxShape.circle, 
-                            border: Border.all(color: cardColor, width: 2.5),
+                            border: Border.all(color: cardColor, width: 2),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 10),
                   
                   Expanded(
                     child: Column(
@@ -153,7 +153,7 @@ class ClientCard extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 client.fullName, 
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: textColor), 
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor), 
                                 maxLines: 1, 
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -177,44 +177,119 @@ class ClientCard extends StatelessWidget {
                               ),
                           ],
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 4),
 
                         // Contacto (Teléfono y DNI) siempre visible y sutil
-                        Row(
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 2,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Icon(Icons.phone_android, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                            const SizedBox(width: 4),
-                            Text(
-                              hasValidPhone ? _formatPhone(client.phone) : "Sin teléfono",
-                              style: TextStyle(
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.phone_android, size: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    hasValidPhone ? _formatPhone(client.phone) : "Sin teléfono",
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             if (client.docNumber != null && client.docNumber!.trim().isNotEmpty) ...[
-                              const SizedBox(width: 8),
-                              Text("•", style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 12)),
-                              const SizedBox(width: 8),
-                              Text(
-                                client.docNumber!.trim(),
-                                style: TextStyle(
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                  fontSize: 13,
+                              Text("•", style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 11)),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  client.docNumber!.trim(),
+                                  style: TextStyle(
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    fontSize: 12.5,
+                                  ),
                                 ),
                               ),
                             ],
                           ],
                         ),
+                        const SizedBox(height: 5),
+
+                        // 🏆 V27: Badge de Reputación, Puntos y Racha
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Color(client.tier.colorHex).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Color(client.tier.colorHex).withValues(alpha: 0.4)),
+                                ),
+                                child: Text(
+                                  client.tier.badgeText,
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(client.tier.colorHex),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.stars_rounded, size: 12, color: Colors.amber[700]),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      "${client.puntosActuales} pts",
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.amber[800],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (client.rachaPagosPuntuales > 0)
+                              Text(
+                                "🔥 ${client.rachaPagosPuntuales}",
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                          ],
+                        ),
 
                         // Etiquetas CRM
                         if (client.etiquetas.isNotEmpty) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Wrap(
                             spacing: 6,
                             runSpacing: 4,
                             children: client.etiquetas.take(2).map((e) => Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
                                 color: isDark ? Colors.purple.withValues(alpha: 0.15) : Colors.purple[50],
                                 borderRadius: BorderRadius.circular(6),
@@ -223,7 +298,7 @@ class ClientCard extends StatelessWidget {
                               child: Text(
                                 e,
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10.5,
                                   color: isDark ? Colors.purple[200] : Colors.purple[800],
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -236,9 +311,10 @@ class ClientCard extends StatelessWidget {
                   ),
 
                   if (client.totalDebt > 0.01) ...[
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -248,13 +324,16 @@ class ClientCard extends StatelessWidget {
                           ),
                           child: const Text(
                             "Deuda",
-                            style: TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.bold),
+                            style: TextStyle(fontSize: 10.5, color: Colors.redAccent, fontWeight: FontWeight.bold),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          AppCurrency.format(client.totalDebt),
-                          style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.redAccent, fontSize: 17),
+                        const SizedBox(height: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            AppCurrency.format(client.totalDebt),
+                            style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.redAccent, fontSize: 16),
+                          ),
                         ),
                       ],
                     ),
@@ -328,14 +407,18 @@ class _QuickActionButton extends StatelessWidget {
         onTap();
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20, color: color),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.bold)),
-          ],
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 4),
+              Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
       ),
     );

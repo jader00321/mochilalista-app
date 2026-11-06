@@ -35,6 +35,9 @@ class FinanceLoanDraft {
   final String frecuencia;
   final DateTime dueDate;
   final DateTime startDate;
+  final DateTime loanEmissionDate;
+  final double oneQuotaPaidAmount;
+  final String oneQuotaStatus;
   final Set<int> excludedWeekdays;
   final List<InstallmentModel> installments;
 
@@ -48,10 +51,14 @@ class FinanceLoanDraft {
     this.frecuencia = 'mensual',
     DateTime? dueDate,
     DateTime? startDate,
+    DateTime? loanEmissionDate,
+    this.oneQuotaPaidAmount = 0.0,
+    this.oneQuotaStatus = 'pendiente',
     Set<int>? excludedWeekdays,
     List<InstallmentModel>? installments,
   })  : dueDate = dueDate ?? DateTime.now().add(const Duration(days: 30)),
         startDate = startDate ?? DateTime.now(),
+        loanEmissionDate = loanEmissionDate ?? DateTime.now(),
         excludedWeekdays = excludedWeekdays != null
             ? Set<int>.from(excludedWeekdays)
             : {DateTime.sunday},
@@ -151,8 +158,15 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   String _loanMethod = "Efectivo";
   String _frecuencia = "mensual";
 
+  // Fecha de emisión / entrega del préstamo (desbloqueada desde 2015 para registros históricos)
+  DateTime _loanEmissionDate = DateTime.now();
+
   // Fecha de vencimiento para préstamo simple (1 cuota)
   DateTime _dueDate = DateTime.now().add(const Duration(days: 30));
+
+  // Estado y amortización previa para 1 cuota
+  double _oneQuotaPaidAmount = 0.0;
+  String _oneQuotaStatus = "pendiente";
 
   // Fraccionamiento en cuotas múltiples y motor de cascada
   bool _splitInQuotas = false;
@@ -286,6 +300,9 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
           frecuencia: _frecuencia,
           dueDate: _dueDate,
           startDate: _startDate,
+          loanEmissionDate: _loanEmissionDate,
+          oneQuotaPaidAmount: _oneQuotaPaidAmount,
+          oneQuotaStatus: _oneQuotaStatus,
           excludedWeekdays: _excludedWeekdays,
           installments: _installments,
         ),
@@ -311,6 +328,9 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         _frecuencia = draft.frecuencia;
         _dueDate = draft.dueDate;
         _startDate = draft.startDate;
+        _loanEmissionDate = draft.loanEmissionDate;
+        _oneQuotaPaidAmount = draft.oneQuotaPaidAmount;
+        _oneQuotaStatus = draft.oneQuotaStatus;
         _excludedWeekdays = Set<int>.from(draft.excludedWeekdays);
         _installments.clear();
         _installments.addAll(draft.installments);
@@ -324,6 +344,9 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         _frecuencia = 'mensual';
         _dueDate = DateTime.now().add(const Duration(days: 30));
         _startDate = DateTime.now();
+        _loanEmissionDate = DateTime.now();
+        _oneQuotaPaidAmount = 0.0;
+        _oneQuotaStatus = 'pendiente';
         _excludedWeekdays = {DateTime.sunday};
         _installments.clear();
       }
@@ -353,6 +376,9 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       _frecuencia = "mensual";
       _dueDate = DateTime.now().add(const Duration(days: 30));
       _startDate = DateTime.now();
+      _loanEmissionDate = DateTime.now();
+      _oneQuotaPaidAmount = 0.0;
+      _oneQuotaStatus = "pendiente";
       _excludedWeekdays = {DateTime.sunday};
       _installments.clear();
       _scheduleUpdateFeedback = null;
@@ -450,6 +476,31 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     }
   }
 
+  InstallmentModel _buildRecalculatedInstallment({
+    required int index,
+    required double amount,
+    required DateTime date,
+    required Map<int, double> existingPaid,
+  }) {
+    final double paid = existingPaid[index] ?? 0.0;
+    final double safePaid = paid > amount ? amount : paid;
+    String status = "pendiente";
+    if (safePaid >= amount && amount > 0) {
+      status = "pagado";
+    } else if (safePaid > 0) {
+      status = "parcial";
+    } else if (date.isBefore(DateTime.now())) {
+      status = "vencida";
+    }
+    return InstallmentModel(
+      installmentNumber: index,
+      amount: amount,
+      dueDate: DateFormat('yyyy-MM-dd').format(date),
+      status: status,
+      montoPagado: safePaid,
+    );
+  }
+
   void _recalculateMultipleInstallments({String? customFeedback}) {
     double amount = double.tryParse(_amountCtrl.text) ?? 0.0;
     if (amount <= 0) {
@@ -465,6 +516,10 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
 
     int numCuotas = int.tryParse(_numCuotasCtrl.text) ?? 2;
     if (numCuotas < 2) numCuotas = 2;
+
+    final Map<int, double> existingPaid = {
+      for (var c in _installments) c.installmentNumber: c.montoPagado
+    };
 
     double basePerQuota = finalDebt / numCuotas;
     _installments.clear();
@@ -506,11 +561,11 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
             : double.parse(basePerQuota.toStringAsFixed(2));
         accumulated += amt;
 
-        _installments.add(InstallmentModel(
-          installmentNumber: i,
+        _installments.add(_buildRecalculatedInstallment(
+          index: i,
           amount: amt,
-          dueDate: DateFormat('yyyy-MM-dd').format(quotaDate),
-          status: "pendiente",
+          date: quotaDate,
+          existingPaid: existingPaid,
         ));
       }
     } else if (_frecuencia == "semanal") {
@@ -573,11 +628,11 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
             : double.parse(basePerQuota.toStringAsFixed(2));
         accumulated += amt;
 
-        _installments.add(InstallmentModel(
-          installmentNumber: i,
+        _installments.add(_buildRecalculatedInstallment(
+          index: i,
           amount: amt,
-          dueDate: DateFormat('yyyy-MM-dd').format(quotaDate),
-          status: "pendiente",
+          date: quotaDate,
+          existingPaid: existingPaid,
         ));
       }
     } else if (_frecuencia == "quincenal") {
@@ -616,11 +671,11 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
             : double.parse(basePerQuota.toStringAsFixed(2));
         accumulated += amt;
 
-        _installments.add(InstallmentModel(
-          installmentNumber: i,
+        _installments.add(_buildRecalculatedInstallment(
+          index: i,
           amount: amt,
-          dueDate: DateFormat('yyyy-MM-dd').format(quotaDate),
-          status: "pendiente",
+          date: quotaDate,
+          existingPaid: existingPaid,
         ));
       }
     } else {
@@ -659,11 +714,11 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
             : double.parse(basePerQuota.toStringAsFixed(2));
         accumulated += amt;
 
-        _installments.add(InstallmentModel(
-          installmentNumber: i,
+        _installments.add(_buildRecalculatedInstallment(
+          index: i,
           amount: amt,
-          dueDate: DateFormat('yyyy-MM-dd').format(quotaDate),
-          status: "pendiente",
+          date: quotaDate,
+          existingPaid: existingPaid,
         ));
       }
     }
@@ -694,10 +749,13 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   }
 
   Future<void> _selectDueDate(BuildContext context) async {
+    final initial = _dueDate.isBefore(DateTime(2015, 1, 1))
+        ? DateTime(2015, 1, 1)
+        : _dueDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _dueDate,
-      firstDate: DateTime.now(),
+      initialDate: initial,
+      firstDate: DateTime(2015, 1, 1),
       lastDate: DateTime.now().add(const Duration(days: 730)),
       locale: const Locale('es', 'ES'),
       builder: (context, child) {
@@ -714,11 +772,14 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   }
 
   Future<void> _selectStartDate(BuildContext context) async {
+    final initial = _startDate.isBefore(DateTime(2015, 1, 1))
+        ? DateTime(2015, 1, 1)
+        : _startDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _startDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: initial,
+      firstDate: DateTime(2015, 1, 1),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
       locale: const Locale('es', 'ES'),
       builder: (context, child) {
         return Theme(
@@ -735,6 +796,41 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     }
   }
 
+  Future<void> _selectLoanEmissionDate(BuildContext context) async {
+    final initial = _loanEmissionDate.isBefore(DateTime(2015, 1, 1))
+        ? DateTime(2015, 1, 1)
+        : _loanEmissionDate;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2015, 1, 1),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      locale: const Locale('es', 'ES'),
+      builder: (context, child) {
+        return Theme(
+          data: widget.isDark ? ThemeData.dark() : ThemeData.light(),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != _loanEmissionDate) {
+      setState(() {
+        _loanEmissionDate = picked;
+        if (_startDate.isBefore(picked) ||
+            _startDate.difference(picked).inDays.abs() > 30) {
+          _startDate = picked;
+          if (_splitInQuotas) {
+            _recalculateMultipleInstallments();
+          }
+        }
+        if (_dueDate.isBefore(picked)) {
+          _dueDate = picked.add(const Duration(days: 30));
+        }
+      });
+      _saveCurrentDraft();
+    }
+  }
+
   Future<void> _editInstallmentDate(int index) async {
     final current =
         DateTime.tryParse(_installments[index].dueDate) ?? DateTime.now();
@@ -742,12 +838,13 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         ? _startDate
         : (DateTime.tryParse(_installments[index - 1].dueDate)
                 ?.add(const Duration(days: 1)) ??
-            DateTime.now());
+            _startDate);
+    final initialDate = current.isBefore(minDate) ? minDate : current;
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: current.isBefore(minDate) ? minDate : current,
-      firstDate: minDate,
+      initialDate: initialDate,
+      firstDate: DateTime(2015, 1, 1),
       lastDate: DateTime.now().add(const Duration(days: 730)),
       locale: const Locale('es', 'ES'),
       builder: (context, child) {
@@ -783,11 +880,23 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       }
 
       final current = _installments[fromIndex];
+      String status = current.status;
+      if (current.montoPagado >= current.amount && current.amount > 0) {
+        status = 'pagado';
+      } else if (current.montoPagado > 0) {
+        status = 'parcial';
+      } else if (validDate.isBefore(DateTime.now())) {
+        status = 'vencida';
+      } else {
+        status = 'pendiente';
+      }
+
       _installments[fromIndex] = InstallmentModel(
         installmentNumber: current.installmentNumber,
         amount: current.amount,
         dueDate: DateFormat('yyyy-MM-dd').format(validDate),
-        status: current.status,
+        status: status,
+        montoPagado: current.montoPagado,
       );
 
       DateTime prev = validDate;
@@ -801,11 +910,23 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         }
         prev = next;
         final c = _installments[i];
+        String cStatus = c.status;
+        if (c.montoPagado >= c.amount && c.amount > 0) {
+          cStatus = 'pagado';
+        } else if (c.montoPagado > 0) {
+          cStatus = 'parcial';
+        } else if (next.isBefore(DateTime.now())) {
+          cStatus = 'vencida';
+        } else {
+          cStatus = 'pendiente';
+        }
+
         _installments[i] = InstallmentModel(
           installmentNumber: c.installmentNumber,
           amount: c.amount,
           dueDate: DateFormat('yyyy-MM-dd').format(next),
-          status: c.status,
+          status: cStatus,
+          montoPagado: c.montoPagado,
         );
       }
       _scheduleUpdateFeedback =
@@ -813,6 +934,294 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       _feedbackTrigger++;
     });
     _saveCurrentDraft();
+  }
+
+  void _showInstallmentStatusDialog(int index) {
+    final current = _installments[index];
+    final amount = current.amount;
+    final TextEditingController paidCtrl = TextEditingController(
+      text: current.montoPagado > 0
+          ? current.montoPagado.toStringAsFixed(2)
+          : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor:
+                  widget.isDark ? const Color(0xFF23232F) : Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18)),
+              title: Text(
+                "Estado Cuota #${current.installmentNumber} (${AppCurrency.format(amount)})",
+                style: TextStyle(
+                  color: widget.isDark ? Colors.white : Colors.black87,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Si este préstamo es histórico o ya se amortizó parte de esta cuota, define su estado actual:",
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: widget.isDark
+                            ? Colors.grey[400]
+                            : Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ListTile(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      tileColor: current.montoPagado == 0
+                          ? (widget.isDark
+                              ? Colors.white10
+                              : Colors.grey[200])
+                          : Colors.transparent,
+                      leading: const Icon(Icons.schedule,
+                          color: Colors.amber),
+                      title: const Text("Pendiente / Sin Pagar",
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: const Text("Monto abonado: S/ 0.00",
+                          style: TextStyle(fontSize: 12)),
+                      onTap: () {
+                        setState(() {
+                          final d = DateTime.tryParse(current.dueDate) ??
+                              DateTime.now();
+                          _installments[index] = current.copyWith(
+                            montoPagado: 0.0,
+                            status: d.isBefore(DateTime.now())
+                                ? 'vencida'
+                                : 'pendiente',
+                          );
+                        });
+                        _saveCurrentDraft();
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    ListTile(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      tileColor: current.montoPagado >= amount
+                          ? (widget.isDark
+                              ? Colors.green.withValues(alpha: 0.2)
+                              : Colors.green.shade50)
+                          : Colors.transparent,
+                      leading: const Icon(Icons.check_circle,
+                          color: Colors.green),
+                      title: const Text("Ya Pagada Totalmente",
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(
+                          "Monto abonado: ${AppCurrency.format(amount)}",
+                          style: const TextStyle(fontSize: 12)),
+                      onTap: () {
+                        setState(() {
+                          _installments[index] = current.copyWith(
+                            montoPagado: amount,
+                            status: 'pagado',
+                          );
+                        });
+                        _saveCurrentDraft();
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    ListTile(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      tileColor: (current.montoPagado > 0 &&
+                              current.montoPagado < amount)
+                          ? (widget.isDark
+                              ? Colors.blue.withValues(alpha: 0.2)
+                              : Colors.blue.shade50)
+                          : Colors.transparent,
+                      leading: const Icon(Icons.payments_outlined,
+                          color: Colors.blue),
+                      title: const Text("Pago Parcial / Abono",
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: const Text(
+                          "Ingresa el monto pagado hasta la fecha",
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(
+                          left: 16, right: 16, top: 4, bottom: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: paidCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d*\.?\d{0,2}'))
+                              ],
+                              decoration: InputDecoration(
+                                prefixText: "S/ ",
+                                hintText: "0.00",
+                                filled: true,
+                                fillColor: widget.isDark
+                                    ? const Color(0xFF14141C)
+                                    : Colors.grey[100],
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide.none),
+                                contentPadding:
+                                    const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue[700],
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () {
+                              double p =
+                                  double.tryParse(paidCtrl.text) ?? 0.0;
+                              if (p > amount) p = amount;
+                              setState(() {
+                                final d = DateTime.tryParse(
+                                        current.dueDate) ??
+                                    DateTime.now();
+                                String st = 'pendiente';
+                                if (p >= amount && amount > 0) {
+                                  st = 'pagado';
+                                } else if (p > 0) {
+                                  st = 'parcial';
+                                } else {
+                                  st = d.isBefore(DateTime.now())
+                                      ? 'vencida'
+                                      : 'pendiente';
+                                }
+                                _installments[index] = current.copyWith(
+                                  montoPagado: p,
+                                  status: st,
+                                );
+                              });
+                              _saveCurrentDraft();
+                              Navigator.pop(ctx);
+                            },
+                            child: const Text("Aplicar"),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("Cerrar",
+                      style: TextStyle(color: Colors.grey)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showOneQuotaPartialDialog(double enteredAmount) {
+    final ctrl = TextEditingController(
+      text: _oneQuotaPaidAmount > 0
+          ? _oneQuotaPaidAmount.toStringAsFixed(2)
+          : '',
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor:
+            widget.isDark ? const Color(0xFF23232F) : Colors.white,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("Abono / Pago Parcial Histórico",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Indica el monto que ya fue amortizado de este préstamo de ${AppCurrency.format(enteredAmount)}:",
+              style: const TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
+              ],
+              decoration: InputDecoration(
+                prefixText: "S/ ",
+                hintText: "0.00",
+                filled: true,
+                fillColor: widget.isDark
+                    ? const Color(0xFF14141C)
+                    : Colors.grey[100],
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child:
+                const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange[800],
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              double p = double.tryParse(ctrl.text) ?? 0.0;
+              if (p > enteredAmount) p = enteredAmount;
+              setState(() {
+                _oneQuotaPaidAmount = p;
+                if (p >= enteredAmount && enteredAmount > 0) {
+                  _oneQuotaStatus = 'pagado';
+                } else if (p > 0) {
+                  _oneQuotaStatus = 'parcial';
+                } else {
+                  _oneQuotaStatus =
+                      _dueDate.isBefore(DateTime.now()) ? 'vencida' : 'pendiente';
+                }
+              });
+              _saveCurrentDraft();
+              Navigator.pop(ctx);
+            },
+            child: const Text("Guardar"),
+          ),
+        ],
+      ),
+    );
   }
 
   // =========================================================================
@@ -851,12 +1260,23 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       if (_splitInQuotas && _installments.isNotEmpty) {
         finalInstallments = List.from(_installments);
       } else {
+        String status = _oneQuotaStatus;
+        if (_oneQuotaPaidAmount >= amount && amount > 0) {
+          status = "pagado";
+        } else if (_oneQuotaPaidAmount > 0) {
+          status = "parcial";
+        } else if (_dueDate.isBefore(DateTime.now())) {
+          status = "vencida";
+        } else {
+          status = "pendiente";
+        }
         finalInstallments = [
           InstallmentModel(
             installmentNumber: 1,
             amount: amount,
             dueDate: DateFormat('yyyy-MM-dd').format(_dueDate),
-            status: "pendiente",
+            status: status,
+            montoPagado: _oneQuotaPaidAmount,
           ),
         ];
       }
@@ -900,6 +1320,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       interestRate: interestRate,
       metodoPago: _loanMethod,
       installments: installments,
+      loanDate: _loanEmissionDate,
     );
     if (!mounted) return;
     setState(() => _isLoading = false);
@@ -919,6 +1340,11 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     String motivo,
     List<InstallmentModel> installments,
   ) {
+    final double totalAmortizado =
+        installments.fold(0.0, (sum, c) => sum + c.montoPagado);
+    final double saldoDeudorInicial =
+        (finalDebt - totalAmortizado).clamp(0.0, double.infinity);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -953,6 +1379,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                _buildSummaryRow("Fecha Emisión:",
+                    _formatDateSpanish(_loanEmissionDate)),
                 _buildSummaryRow("Monto Base:", AppCurrency.format(amount)),
                 if (interestRate > 0)
                   _buildSummaryRow(
@@ -960,9 +1388,16 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                     AppCurrency.format(finalDebt - amount),
                   ),
                 const Divider(),
-                _buildSummaryRow("Total a Cobrar:",
+                _buildSummaryRow("Total Préstamo:",
                     AppCurrency.format(finalDebt),
                     isBold: true),
+                if (totalAmortizado > 0) ...[
+                  _buildSummaryRow("Amortizado Histórico:",
+                      AppCurrency.format(totalAmortizado)),
+                  _buildSummaryRow("Saldo Deudor Inicial:",
+                      AppCurrency.format(saldoDeudorInicial),
+                      isBold: true),
+                ],
                 const SizedBox(height: 8),
                 _buildSummaryRow("Motivo:", motivo),
                 _buildSummaryRow("Entrega en:", _loanMethod),
@@ -1015,14 +1450,30 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                                     : Colors.grey[700],
                               ),
                             ),
-                            Text(
-                              AppCurrency.format(c.amount),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: widget.isDark
-                                    ? Colors.white
-                                    : Colors.black87,
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  AppCurrency.format(c.amount),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: widget.isDark
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                if (c.montoPagado > 0)
+                                  Text(
+                                    c.montoPagado >= c.amount
+                                        ? "Pagada"
+                                        : "Abonado: ${AppCurrency.format(c.montoPagado)}",
+                                    style: const TextStyle(
+                                      fontSize: 10.5,
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ],
                         ),
@@ -1202,6 +1653,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                 ],
               ),
             ),
+            const SizedBox(height: 10),
 
             // TabBarView sin cortes
             Expanded(
@@ -1550,7 +2002,71 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
 
         const SizedBox(height: 20),
 
-        // Motivo / Detalle
+        // Fecha de Emisión / Entrega del Préstamo (desbloqueada desde 2015)
+        Text("Fecha de Emisión / Entrega",
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[600])),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: widget.isDark
+                ? const Color(0xFF14141C)
+                : Colors.grey[50],
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: widget.isDark
+                    ? Colors.white10
+                    : Colors.grey.shade300),
+          ),
+          child: InkWell(
+            onTap: () => _selectLoanEmissionDate(context),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_month_outlined,
+                    color: widget.isDark
+                        ? Colors.orange[300]
+                        : Colors.orange[700],
+                    size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Fecha de Entrega del Dinero",
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: widget.isDark
+                                ? Colors.grey[400]
+                                : Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _formatDateSpanish(_loanEmissionDate),
+                        style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.edit_calendar,
+                    color: widget.isDark
+                        ? Colors.orange[300]
+                        : Colors.orange[700],
+                    size: 20),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Motivo / Detalle (Wrap responsivo sin desbordes horizontales)
         Text("Motivo / Detalle",
             style: TextStyle(
                 fontSize: 14,
@@ -1632,7 +2148,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
 
         const SizedBox(height: 22),
 
-        // Fecha de vencimiento para 1 cuota
+        // Fecha de vencimiento para 1 cuota y estado histórico inicial
         if (!_splitInQuotas) ...[
           Container(
             padding: const EdgeInsets.all(14),
@@ -1688,6 +2204,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          _buildOneQuotaStatusCard(textColor, enteredAmount),
         ],
 
         const SizedBox(height: 14),
@@ -1997,31 +2515,86 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
           // Lista de cuotas generadas con soporte para edición y salto de fecha
           if (_installments.isNotEmpty) ...[
             const SizedBox(height: 18),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text("Cronograma Generado",
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: textColor)),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
+            Builder(builder: (context) {
+              final double totalSched = _installments.fold<double>(
+                  0.0, (sum, c) => sum + c.amount);
+              final double paidSched = _installments.fold<double>(
+                  0.0, (sum, c) => sum + c.montoPagado);
+              final double pendingSched =
+                  (totalSched - paidSched).clamp(0.0, double.infinity);
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Cronograma Generado",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: textColor)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          "Total: ${AppCurrency.format(totalSched)}",
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.orange),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    "Total: ${AppCurrency.format(_installments.fold<double>(0.0, (sum, c) => sum + c.amount))}",
-                    style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.orange),
-                  ),
-                ),
-              ],
-            ),
+                  if (paidSched > 0) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            "Ya Amortizado Histórico: ${AppCurrency.format(paidSched)}",
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            "Saldo Deudor Inicial: ${AppCurrency.format(pendingSched)}",
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              );
+            }),
             if (_scheduleUpdateFeedback != null) ...[
               const SizedBox(height: 8),
               AnimatedSwitcher(
@@ -2225,6 +2798,92 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                             ),
                           ),
                         ),
+                        // Badge de estado histórico interactivo
+                        Tooltip(
+                          message: "Tocar para cambiar estado (Pagada / Parcial / Pendiente)",
+                          child: InkWell(
+                            onTap: () => _showInstallmentStatusDialog(i),
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 3),
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                color: cuota.montoPagado >= cuota.amount &&
+                                        cuota.amount > 0
+                                    ? (widget.isDark
+                                        ? Colors.green.withValues(alpha: 0.25)
+                                        : Colors.green.shade100)
+                                    : cuota.montoPagado > 0
+                                        ? (widget.isDark
+                                            ? Colors.blue
+                                                .withValues(alpha: 0.25)
+                                            : Colors.blue.shade100)
+                                        : dueDate.isBefore(DateTime.now())
+                                            ? (widget.isDark
+                                                ? Colors.red
+                                                    .withValues(alpha: 0.25)
+                                                : Colors.red.shade100)
+                                            : (widget.isDark
+                                                ? Colors.white10
+                                                : Colors.grey[200]),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    cuota.montoPagado >= cuota.amount &&
+                                            cuota.amount > 0
+                                        ? Icons.check_circle_outline
+                                        : cuota.montoPagado > 0
+                                            ? Icons.timelapse
+                                            : dueDate.isBefore(DateTime.now())
+                                                ? Icons.error_outline
+                                                : Icons.pending_outlined,
+                                    size: 11,
+                                    color: cuota.montoPagado >= cuota.amount &&
+                                            cuota.amount > 0
+                                        ? Colors.green
+                                        : cuota.montoPagado > 0
+                                            ? Colors.blue
+                                            : dueDate.isBefore(DateTime.now())
+                                                ? Colors.redAccent
+                                                : (widget.isDark
+                                                    ? Colors.grey[400]
+                                                    : Colors.grey[700]),
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    cuota.montoPagado >= cuota.amount &&
+                                            cuota.amount > 0
+                                        ? "Pagada"
+                                        : cuota.montoPagado > 0
+                                            ? "S/ ${cuota.montoPagado.toStringAsFixed(0)}"
+                                            : dueDate.isBefore(DateTime.now())
+                                                ? "Vencida"
+                                                : "Pend.",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: cuota.montoPagado >=
+                                                  cuota.amount &&
+                                              cuota.amount > 0
+                                          ? Colors.green
+                                          : cuota.montoPagado > 0
+                                              ? Colors.blue
+                                              : dueDate.isBefore(DateTime.now())
+                                                  ? Colors.redAccent
+                                                  : (widget.isDark
+                                                      ? Colors.grey[400]
+                                                      : Colors.grey[700]),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                         Tooltip(
                           message: "Saltar día y recalcular siguientes",
                           child: InkWell(
@@ -2264,12 +2923,28 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                             ),
                           ),
                         ),
-                        Text(
-                          AppCurrency.format(cuota.amount),
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: textColor),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              AppCurrency.format(cuota.amount),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: textColor),
+                            ),
+                            if (cuota.montoPagado > 0 &&
+                                cuota.montoPagado < cuota.amount)
+                              Text(
+                                "Pend: ${AppCurrency.format(cuota.amount - cuota.montoPagado)}",
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.orange,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -2280,6 +2955,164 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
           ],
         ],
       ],
+    );
+  }
+
+  Widget _buildOneQuotaStatusCard(Color textColor, double enteredAmount) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: widget.isDark ? const Color(0xFF14141C) : Colors.grey[50],
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: widget.isDark ? Colors.white10 : Colors.grey.shade300,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Estado de Pago Inicial",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: widget.isDark ? Colors.grey[300] : Colors.grey[700],
+                ),
+              ),
+              if (_oneQuotaPaidAmount > 0)
+                Text(
+                  "Abonado: ${AppCurrency.format(_oneQuotaPaidAmount)}",
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "¿Este préstamo ya fue amortizado o pagado previamente?",
+            style: TextStyle(
+              fontSize: 11.5,
+              color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text("Pendiente / Vencida"),
+                selected: _oneQuotaPaidAmount == 0,
+                onSelected: (val) {
+                  if (val) {
+                    setState(() {
+                      _oneQuotaPaidAmount = 0.0;
+                      _oneQuotaStatus = _dueDate.isBefore(DateTime.now())
+                          ? 'vencida'
+                          : 'pendiente';
+                    });
+                    _saveCurrentDraft();
+                  }
+                },
+                selectedColor: Colors.orange.withValues(alpha: 0.25),
+                labelStyle: TextStyle(
+                  fontSize: 12,
+                  fontWeight: _oneQuotaPaidAmount == 0
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                  color: _oneQuotaPaidAmount == 0
+                      ? Colors.orange
+                      : (widget.isDark ? Colors.grey[300] : Colors.grey[700]),
+                ),
+              ),
+              ChoiceChip(
+                label: const Text("Ya Pagada"),
+                selected: enteredAmount > 0 &&
+                    _oneQuotaPaidAmount >= enteredAmount,
+                onSelected: (val) {
+                  if (val) {
+                    setState(() {
+                      _oneQuotaPaidAmount =
+                          enteredAmount > 0 ? enteredAmount : 0.0;
+                      _oneQuotaStatus = 'pagado';
+                    });
+                    _saveCurrentDraft();
+                  }
+                },
+                selectedColor: Colors.green.withValues(alpha: 0.25),
+                labelStyle: TextStyle(
+                  fontSize: 12,
+                  fontWeight: (enteredAmount > 0 &&
+                          _oneQuotaPaidAmount >= enteredAmount)
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                  color: (enteredAmount > 0 &&
+                          _oneQuotaPaidAmount >= enteredAmount)
+                      ? Colors.green
+                      : (widget.isDark ? Colors.grey[300] : Colors.grey[700]),
+                ),
+              ),
+              ChoiceChip(
+                label: const Text("Pago Parcial"),
+                selected: _oneQuotaPaidAmount > 0 &&
+                    _oneQuotaPaidAmount < enteredAmount,
+                onSelected: (val) {
+                  _showOneQuotaPartialDialog(enteredAmount);
+                },
+                selectedColor: Colors.blue.withValues(alpha: 0.25),
+                labelStyle: TextStyle(
+                  fontSize: 12,
+                  fontWeight: (_oneQuotaPaidAmount > 0 &&
+                          _oneQuotaPaidAmount < enteredAmount)
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                  color: (_oneQuotaPaidAmount > 0 &&
+                          _oneQuotaPaidAmount < enteredAmount)
+                      ? Colors.blue
+                      : (widget.isDark ? Colors.grey[300] : Colors.grey[700]),
+                ),
+              ),
+            ],
+          ),
+          if (enteredAmount > 0) ...[
+            const SizedBox(height: 8),
+            Divider(
+                height: 1,
+                color: widget.isDark ? Colors.white10 : Colors.grey[200]),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "Saldo Deudor Inicial:",
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  AppCurrency.format((enteredAmount - _oneQuotaPaidAmount)
+                      .clamp(0.0, double.infinity)),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: (enteredAmount - _oneQuotaPaidAmount) > 0
+                        ? Colors.orange
+                        : Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 

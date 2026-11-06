@@ -35,6 +35,16 @@ class PresentationSnapshot {
   final String? preRoundedPrice;
   final String? preRoundedMargen;
 
+  // 🛡️ Campos críticos de estrategia de stock y cachés de modo
+  final bool usaStockCompartido;
+  final int? cupoMaximoVariante;
+  final Map<String, dynamic>? savedPropioSnapshot;
+  final Map<String, dynamic>? savedCompartidoSnapshot;
+  final int? stockBaseOriginal;
+  final double? costoBaseOriginal;
+  final double? precioOfertaExacto;
+  final double? costoBaseUnitario;
+
   const PresentationSnapshot({
     required this.id,
     this.dbId,
@@ -66,6 +76,14 @@ class PresentationSnapshot {
     this.activeRoundingTarget,
     this.preRoundedPrice,
     this.preRoundedMargen,
+    this.usaStockCompartido = false,
+    this.cupoMaximoVariante,
+    this.savedPropioSnapshot,
+    this.savedCompartidoSnapshot,
+    this.stockBaseOriginal,
+    this.costoBaseOriginal,
+    this.precioOfertaExacto,
+    this.costoBaseUnitario,
   });
 
   factory PresentationSnapshot.fromControllerMap(Map<String, dynamic> map) {
@@ -105,6 +123,18 @@ class PresentationSnapshot {
       activeRoundingTarget: map['activeRoundingTarget'] as double?,
       preRoundedPrice: map['preRoundedPrice'] as String?,
       preRoundedMargen: map['preRoundedMargen'] as String?,
+      usaStockCompartido: map['usaStockCompartido'] == true,
+      cupoMaximoVariante: map['cupoMaximoVariante'] as int?,
+      savedPropioSnapshot: map['savedPropioSnapshot'] != null
+          ? Map<String, dynamic>.from(map['savedPropioSnapshot'] as Map)
+          : null,
+      savedCompartidoSnapshot: map['savedCompartidoSnapshot'] != null
+          ? Map<String, dynamic>.from(map['savedCompartidoSnapshot'] as Map)
+          : null,
+      stockBaseOriginal: map['stockBaseOriginal'] as int?,
+      costoBaseOriginal: (map['costoBaseOriginal'] as num?)?.toDouble(),
+      precioOfertaExacto: (map['precioOfertaExacto'] as num?)?.toDouble(),
+      costoBaseUnitario: (map['costoBaseUnitario'] as num?)?.toDouble(),
     );
   }
 
@@ -162,6 +192,10 @@ class PresentationSnapshot {
     if (cantCompra != other.cantCompra) return false;
     if (totalPago != other.totalPago) return false;
 
+    // 🛡️ Comparación de estrategia de variante
+    if (usaStockCompartido != other.usaStockCompartido) return false;
+    if (cupoMaximoVariante != other.cupoMaximoVariante) return false;
+
     return true;
   }
 }
@@ -183,6 +217,12 @@ class ProductEditSnapshot {
   final List<int> idsToDelete;
   final List<PresentationSnapshot> presentations;
 
+  // 🛡️ Estrategia global de stock del producto
+  final String modoStock;
+  final String baseCost;
+  final String stockCompartido;
+  final String stockIngreso;
+
   const ProductEditSnapshot({
     required this.name,
     required this.desc,
@@ -197,6 +237,10 @@ class ProductEditSnapshot {
     required this.generalState,
     required this.idsToDelete,
     required this.presentations,
+    this.modoStock = 'INDEPENDIENTE',
+    this.baseCost = '0.00',
+    this.stockCompartido = '0',
+    this.stockIngreso = '0',
   });
 
   static ProductEditSnapshot capture({
@@ -213,6 +257,10 @@ class ProductEditSnapshot {
     required int generalState,
     required List<int> idsToDelete,
     required List<Map<String, dynamic>> presentationControllers,
+    String modoStock = 'INDEPENDIENTE',
+    TextEditingController? baseCostCtrl,
+    TextEditingController? sharedStockCtrl,
+    TextEditingController? sharedIngresoCtrl,
   }) {
     return ProductEditSnapshot(
       name: nameCtrl.text.trim(),
@@ -230,6 +278,10 @@ class ProductEditSnapshot {
       presentations: List.unmodifiable(
         presentationControllers.map((m) => PresentationSnapshot.fromControllerMap(m)),
       ),
+      modoStock: modoStock,
+      baseCost: baseCostCtrl?.text.trim() ?? "0.00",
+      stockCompartido: sharedStockCtrl?.text.trim() ?? "0",
+      stockIngreso: sharedIngresoCtrl?.text.trim() ?? "0",
     );
   }
 
@@ -246,6 +298,20 @@ class ProductEditSnapshot {
     if (generalProviderId != other.generalProviderId) return false;
     if (generalProviderName != other.generalProviderName) return false;
     if (generalState != other.generalState) return false;
+
+    // 🛡️ Comparación de estrategia global de stock
+    if (modoStock != other.modoStock) return false;
+    final bc1 = double.tryParse(baseCost) ?? 0.0;
+    final bc2 = double.tryParse(other.baseCost) ?? 0.0;
+    if ((bc1 - bc2).abs() > 0.005) return false;
+
+    final sc1 = int.tryParse(stockCompartido) ?? 0;
+    final sc2 = int.tryParse(other.stockCompartido) ?? 0;
+    if (sc1 != sc2) return false;
+
+    final si1 = int.tryParse(stockIngreso) ?? 0;
+    final si2 = int.tryParse(other.stockIngreso) ?? 0;
+    if (si1 != si2) return false;
 
     if (idsToDelete.length != other.idsToDelete.length) return false;
     for (int i = 0; i < idsToDelete.length; i++) {
@@ -271,11 +337,20 @@ class ProductEditSnapshot {
     required List<Map<String, dynamic>> targetControllers,
     required Map<String, GlobalKey> targetKeys,
     required List<int> targetIdsToDelete,
+    TextEditingController? baseCostCtrl,
+    TextEditingController? sharedStockCtrl,
+    TextEditingController? sharedIngresoCtrl,
+    void Function(String)? onModoStockChanged,
   }) {
     nameCtrl.text = name;
     descCtrl.text = desc;
     imgUrlCtrl.text = imgUrl;
     parentBarcodeCtrl.text = barcode;
+
+    if (baseCostCtrl != null) baseCostCtrl.text = baseCost;
+    if (sharedIngresoCtrl != null) sharedIngresoCtrl.text = stockIngreso;
+    if (sharedStockCtrl != null) sharedStockCtrl.text = stockCompartido;
+    if (onModoStockChanged != null) onModoStockChanged(modoStock);
 
     targetIdsToDelete.clear();
     targetIdsToDelete.addAll(idsToDelete);
@@ -287,7 +362,7 @@ class ProductEditSnapshot {
     targetControllers.clear();
     targetKeys.clear();
 
-    // Reconstruir controladores desde el snapshot
+    // Reconstruir controladores desde el snapshot con integridad total
     for (var p in presentations) {
       final keyId = p.id.isNotEmpty ? p.id : UniqueKey().toString();
       targetKeys[keyId] = GlobalKey();
@@ -321,8 +396,22 @@ class ProductEditSnapshot {
         descuentoActivo: p.descuentoActivo,
         tipoDescuento: p.tipoDescuento,
         valorDescuento: p.valorDescuento,
+        usaStockCompartido: p.usaStockCompartido,
+        cupoMaximoVariante: p.cupoMaximoVariante,
+        stockBaseOriginal: p.stockBaseOriginal,
+        costoBaseOriginal: p.costoBaseOriginal,
+        precioOfertaExacto: p.precioOfertaExacto,
       );
 
+      if (p.savedPropioSnapshot != null) {
+        newMap['savedPropioSnapshot'] = Map<String, dynamic>.from(p.savedPropioSnapshot!);
+      }
+      if (p.savedCompartidoSnapshot != null) {
+        newMap['savedCompartidoSnapshot'] = Map<String, dynamic>.from(p.savedCompartidoSnapshot!);
+      }
+      if (p.costoBaseUnitario != null) {
+        newMap['costoBaseUnitario'] = p.costoBaseUnitario;
+      }
       newMap['activeRoundingTarget'] = p.activeRoundingTarget;
       newMap['preRoundedPrice'] = p.preRoundedPrice;
       newMap['preRoundedMargen'] = p.preRoundedMargen;
