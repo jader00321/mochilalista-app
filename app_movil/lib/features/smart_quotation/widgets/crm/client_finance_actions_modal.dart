@@ -109,11 +109,13 @@ class ClientFinanceDraftManager {
 class ClientFinanceActionsModal extends StatefulWidget {
   final ClientModel client;
   final bool isDark;
+  final int initialTab;
 
   const ClientFinanceActionsModal({
     super.key,
     required this.client,
     required this.isDark,
+    this.initialTab = 0,
   });
 
   /// Presenta el modal de operaciones financieras garantizando enableDrag: false
@@ -122,8 +124,11 @@ class ClientFinanceActionsModal extends StatefulWidget {
     BuildContext context, {
     required ClientModel client,
     required bool isDark,
+    int initialTab = 0,
     VoidCallback? onCompleted,
   }) {
+    ClientFinanceDraftManager.instance
+        .setActiveTab(client.id, initialTab.clamp(0, 1));
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -133,6 +138,7 @@ class ClientFinanceActionsModal extends StatefulWidget {
       builder: (ctx) => ClientFinanceActionsModal(
         client: client,
         isDark: isDark,
+        initialTab: initialTab,
       ),
     ).then((_) {
       onCompleted?.call();
@@ -191,7 +197,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   void initState() {
     super.initState();
     final draftMgr = ClientFinanceDraftManager.instance;
-    final initialTab = draftMgr.getActiveTab(widget.client.id);
+    final initialTab = widget.initialTab;
+    draftMgr.setActiveTab(widget.client.id, initialTab.clamp(0, 1));
 
     _tabController = TabController(
       length: 2,
@@ -237,7 +244,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
 
   void _onAmountChanged() {
     if (mounted) setState(() {});
-    if (_tabController.index == 1 && _splitInQuotas) {
+    if (_tabController.index == 0 && _splitInQuotas) {
       _recalculateMultipleInstallments();
     } else {
       _saveCurrentDraft();
@@ -245,13 +252,13 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   }
 
   void _onNumCuotasChanged() {
-    if (_tabController.index == 1 && _splitInQuotas) {
+    if (_tabController.index == 0 && _splitInQuotas) {
       _recalculateMultipleInstallments();
     }
   }
 
   void _onInterestChanged() {
-    if (_tabController.index == 1 && _splitInQuotas) {
+    if (_tabController.index == 0 && _splitInQuotas) {
       _recalculateMultipleInstallments();
     }
   }
@@ -270,7 +277,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   }
 
   // =========================================================================
-  // GESTIÓN DE BORRADORES
+  // GESTIÓN DE BORRADORES (Tab 0: Préstamo, Tab 1: Retiro)
   // =========================================================================
 
   void _saveCurrentDraft() {
@@ -280,14 +287,6 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   void _saveDraftByIndex(int tabIndex) {
     final draftMgr = ClientFinanceDraftManager.instance;
     if (tabIndex == 0) {
-      draftMgr.setWithdrawDraft(
-        widget.client.id,
-        FinanceWithdrawDraft(
-          amount: _amountCtrl.text,
-          method: _withdrawMethod,
-        ),
-      );
-    } else {
       draftMgr.setLoanDraft(
         widget.client.id,
         FinanceLoanDraft(
@@ -307,16 +306,20 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
           installments: _installments,
         ),
       );
+    } else {
+      draftMgr.setWithdrawDraft(
+        widget.client.id,
+        FinanceWithdrawDraft(
+          amount: _amountCtrl.text,
+          method: _withdrawMethod,
+        ),
+      );
     }
   }
 
   void _restoreDraftForTab(int tabIndex) {
     final draftMgr = ClientFinanceDraftManager.instance;
     if (tabIndex == 0) {
-      final draft = draftMgr.getWithdrawDraft(widget.client.id);
-      _amountCtrl.text = draft?.amount ?? '';
-      _withdrawMethod = draft?.method ?? 'Efectivo';
-    } else {
       final draft = draftMgr.getLoanDraft(widget.client.id);
       if (draft != null) {
         _amountCtrl.text = draft.amount;
@@ -350,6 +353,10 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         _excludedWeekdays = {DateTime.sunday};
         _installments.clear();
       }
+    } else {
+      final draft = draftMgr.getWithdrawDraft(widget.client.id);
+      _amountCtrl.text = draft?.amount ?? '';
+      _withdrawMethod = draft?.method ?? 'Efectivo';
     }
     if (mounted) setState(() {});
   }
@@ -357,15 +364,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   /// Limpia únicamente los datos y el borrador de la pestaña actualmente activa
   void _cleanActiveTab() {
     HapticFeedback.mediumImpact();
-    final isWithdraw = _tabController.index == 0;
-    if (isWithdraw) {
-      ClientFinanceDraftManager.instance
-          .clearWithdrawDraft(widget.client.id);
-      _amountCtrl.clear();
-      _withdrawMethod = "Efectivo";
-      CustomSnackBar.show(context,
-          message: "Formulario de Retiro restablecido", isError: false);
-    } else {
+    final isLoan = _tabController.index == 0;
+    if (isLoan) {
       ClientFinanceDraftManager.instance.clearLoanDraft(widget.client.id);
       _amountCtrl.clear();
       _noteCtrl.clear();
@@ -385,6 +385,13 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       _installmentShiftReasons.clear();
       CustomSnackBar.show(context,
           message: "Formulario de Préstamo restablecido", isError: false);
+    } else {
+      ClientFinanceDraftManager.instance
+          .clearWithdrawDraft(widget.client.id);
+      _amountCtrl.clear();
+      _withdrawMethod = "Efectivo";
+      CustomSnackBar.show(context,
+          message: "Formulario de Retiro restablecido", isError: false);
     }
     if (mounted) setState(() {});
   }
@@ -1236,7 +1243,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       return;
     }
 
-    if (_tabController.index == 0) {
+    if (_tabController.index == 1) {
       // Retiro de saldo
       if (amount > widget.client.saldoAFavor) {
         CustomSnackBar.show(context,
@@ -1246,7 +1253,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       }
       _executeSubmitWithdrawal(provider, amount);
     } else {
-      // Préstamo
+      // Préstamo (Tab 0)
       String motivo = _noteCtrl.text.trim();
       if (motivo.isEmpty) {
         motivo = "Préstamo personal";
@@ -1549,15 +1556,16 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     final provider = Provider.of<TrackingProvider>(context);
 
     double enteredAmount = double.tryParse(_amountCtrl.text) ?? 0.0;
-    bool isWithdrawTab = _tabController.index == 0;
+    bool isLoanTab = _tabController.index == 0;
+    bool isWithdrawTab = _tabController.index == 1;
     bool hasAvailableBalance = widget.client.saldoAFavor > 0.01;
 
     bool canSubmitWithdraw = isWithdrawTab &&
         hasAvailableBalance &&
         enteredAmount > 0 &&
         enteredAmount <= widget.client.saldoAFavor;
-    bool canSubmitLoan = !isWithdrawTab && enteredAmount > 0;
-    bool canSubmit = isWithdrawTab ? canSubmitWithdraw : canSubmitLoan;
+    bool canSubmitLoan = isLoanTab && enteredAmount > 0;
+    bool canSubmit = isLoanTab ? canSubmitLoan : canSubmitWithdraw;
 
     return InteractiveSheetWrapper(
       enableDragToDismiss: false,
@@ -1574,7 +1582,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       actions: [
         Tooltip(
           message:
-              isWithdrawTab ? "Limpiar retiro" : "Limpiar préstamo",
+              isLoanTab ? "Limpiar préstamo" : "Limpiar retiro",
           child: TextButton.icon(
             icon: const Icon(Icons.cleaning_services_outlined,
                 size: 16),
@@ -1583,7 +1591,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                     fontSize: 12, fontWeight: FontWeight.bold)),
             style: TextButton.styleFrom(
               foregroundColor:
-                  isWithdrawTab ? Colors.teal : Colors.orange[800],
+                  isLoanTab ? Colors.orange[800] : Colors.teal,
               padding: const EdgeInsets.symmetric(
                   horizontal: 8, vertical: 4),
               visualDensity: VisualDensity.compact,
@@ -1597,134 +1605,224 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         children: [
           const SizedBox(height: 8),
 
-            // TabBar con estilo blindado
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                color: widget.isDark
-                    ? Colors.white.withAlpha(12)
-                    : Colors.grey[200],
-                borderRadius: BorderRadius.circular(14),
+          // Selector de 2 tarjetas interactivas con subtítulos guía
+          _buildTopModeSelector(widget.isDark),
+
+          // Banner de Límite de Crédito Seguro Sugerido
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: widget.isDark ? const Color(0xFF282837) : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0),
               ),
-              child: TabBar(
-                controller: _tabController,
-                indicatorSize: TabBarIndicatorSize.tab,
-                dividerColor: Colors.transparent,
-                indicator: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: widget.isDark
-                      ? Colors.blueGrey[700]
-                      : Colors.blueGrey[800],
-                  boxShadow: [
-                    if (!widget.isDark)
-                      BoxShadow(
-                        color: Colors.black.withAlpha(25),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.shield_outlined, size: 16, color: Color(widget.client.tier.colorHex)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Límite de Crédito Sugerido (${widget.client.tier.badgeText}): ${AppCurrency.format(widget.client.tier.limiteCreditoSugerido)}",
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: widget.isDark ? Colors.grey[300] : const Color(0xFF334155),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+
+          // TabBarView sin cortes
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildLoanTab(textColor, enteredAmount),
+                _buildWithdrawTab(
+                    textColor, hasAvailableBalance, enteredAmount),
+              ],
+            ),
+          ),
+
+          // Bottom Action Bar
+          Container(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              InteractiveSheetWrapper.getEffectiveBottomPadding(
+                context,
+                minPadding: 28.0,
+              ),
+            ),
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              border: Border(
+                  top: BorderSide(
+                      color: widget.isDark
+                          ? Colors.white10
+                          : Colors.grey.shade200)),
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: canSubmit && !_isLoading
+                    ? () => _submitAction(provider)
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      isLoanTab ? Colors.orange[800] : Colors.teal,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  elevation: canSubmit ? 2 : 0,
+                  disabledBackgroundColor:
+                      widget.isDark ? Colors.white10 : Colors.grey[300],
+                  disabledForegroundColor:
+                      widget.isDark ? Colors.grey[600] : Colors.grey[500],
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      )
+                    : Text(
+                        isLoanTab
+                            ? "Registrar Préstamo"
+                            : "Confirmar Retiro",
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16),
                       ),
-                  ],
-                ),
-                labelColor: Colors.white,
-                unselectedLabelColor:
-                    widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                labelStyle: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 15),
-                tabs: const [
-                  Tab(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.output, size: 18),
-                        SizedBox(width: 8),
-                        Text("Retirar"),
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.account_balance, size: 18),
-                        SizedBox(width: 8),
-                        Text("Préstamo"),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ),
-            const SizedBox(height: 10),
+          ),
+        ],
+      ),
+    );
+  }
 
-            // TabBarView sin cortes
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildWithdrawTab(
-                      textColor, hasAvailableBalance, enteredAmount),
-                  _buildLoanTab(textColor, enteredAmount),
-                ],
-              ),
+  Widget _buildTopModeSelector(bool isDark) {
+    final isLoan = _tabController.index == 0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildSelectorCard(
+              title: "Otorgar Préstamo",
+              subtitle: "En cuotas o pago único con fechas",
+              icon: Icons.account_balance_rounded,
+              isSelected: isLoan,
+              activeColor: Colors.orange[800]!,
+              onTap: () {
+                if (_tabController.index != 0) {
+                  _tabController.animateTo(0);
+                }
+              },
+              isDark: isDark,
             ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _buildSelectorCard(
+              title: "Retirar Saldo",
+              subtitle: "Retiros de saldo a favor o cuenta",
+              icon: Icons.savings_outlined,
+              isSelected: !isLoan,
+              activeColor: Colors.teal,
+              onTap: () {
+                if (_tabController.index != 1) {
+                  _tabController.animateTo(1);
+                }
+              },
+              isDark: isDark,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            // Bottom Action Bar
-            Container(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                12,
-                20,
-                InteractiveSheetWrapper.getEffectiveBottomPadding(
-                  context,
-                  minPadding: 28.0,
+  Widget _buildSelectorCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool isSelected,
+    required Color activeColor,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? activeColor.withValues(alpha: isDark ? 0.22 : 0.12)
+              : (isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.shade100),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected
+                ? activeColor
+                : (isDark ? Colors.white12 : Colors.grey.shade300),
+            width: isSelected ? 1.8 : 1.0,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: isSelected ? activeColor : (isDark ? Colors.grey[400] : Colors.grey[600]),
                 ),
-              ),
-              decoration: BoxDecoration(
-                color: surfaceColor,
-                border: Border(
-                    top: BorderSide(
-                        color: widget.isDark
-                            ? Colors.white10
-                            : Colors.grey.shade200)),
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: canSubmit && !_isLoading
-                      ? () => _submitAction(provider)
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        isWithdrawTab ? Colors.teal : Colors.orange[800],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    elevation: canSubmit ? 2 : 0,
-                    disabledBackgroundColor:
-                        widget.isDark ? Colors.white10 : Colors.grey[300],
-                    disabledForegroundColor:
-                        widget.isDark ? Colors.grey[600] : Colors.grey[500],
+                const SizedBox(width: 6),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: isSelected
+                            ? (isDark ? Colors.white : activeColor)
+                            : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                      ),
+                    ),
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2),
-                        )
-                      : Text(
-                          isWithdrawTab
-                              ? "Confirmar Retiro"
-                              : "Registrar Préstamo",
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 10,
+                height: 1.2,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
-      );
+      ),
+    );
   }
 
   // =========================================================================
@@ -1813,29 +1911,31 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Saldo a Favor Disponible",
-                    style: TextStyle(
-                      color:
-                          widget.isDark ? Colors.teal[200] : Colors.teal[900],
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Saldo a Favor Disponible",
+                      style: TextStyle(
+                        color:
+                            widget.isDark ? Colors.teal[200] : Colors.teal[900],
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    AppCurrency.format(widget.client.saldoAFavor),
-                    style: TextStyle(
-                      color:
-                          widget.isDark ? Colors.teal[300] : Colors.teal[800],
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
+                    const SizedBox(height: 4),
+                    Text(
+                      AppCurrency.format(widget.client.saldoAFavor),
+                      style: TextStyle(
+                        color:
+                            widget.isDark ? Colors.teal[300] : Colors.teal[800],
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const Icon(Icons.account_balance_wallet,
                   color: Colors.teal, size: 36),

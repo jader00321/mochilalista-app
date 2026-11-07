@@ -27,7 +27,8 @@ class SaleRepository {
     try {
       final db = await _dbHelper.database;
       String query = '''
-        SELECT v.*, c.nombre_completo AS cliente_nombre, c.telefono AS cliente_telefono 
+        SELECT v.*, c.nombre_completo AS cliente_nombre, c.telefono AS cliente_telefono,
+        (SELECT COUNT(*) FROM cuotas q WHERE q.venta_id = v.id AND q.estado != 'pagado' AND (q.monto - COALESCE(q.monto_pagado, 0)) > 0.01 AND date(q.fecha_vencimiento) < date('now', 'localtime')) AS cuotas_vencidas_count
         FROM ventas v
         LEFT JOIN clientes c ON v.cliente_id = c.id
         WHERE v.negocio_id = ? AND v.is_archived = ?

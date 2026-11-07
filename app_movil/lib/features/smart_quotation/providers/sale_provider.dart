@@ -759,13 +759,20 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> updateInstallmentDate(int cuotaId, String newDate) async {
+  Future<bool> updateInstallmentDate(int cuotaId, String newDate, {int? saleId}) async {
     if (_negocioId == null) return false;
     _isLoading = true;
     notifyListeners();
 
     try {
-      return await _clientService.updateInstallmentDueDate(cuotaId, newDate);
+      final success = await _clientService.updateInstallmentDueDate(cuotaId, newDate);
+      if (success) {
+        final int? sId = saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
+        if (sId != null) {
+          await syncSaleInMemory(sId);
+        }
+      }
+      return success;
     } catch (e) {
       _handleException(e);
       return false;
@@ -956,6 +963,25 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
+  // ⚡ Sincronización reactiva de una venta en memoria (a 0ms)
+  Future<void> syncSaleInMemory(int saleId) async {
+    try {
+      final updated = await _salesService.getSaleModel(saleId);
+      if (updated != null) {
+        final idx = _salesHistory.indexWhere((s) => s.id == saleId);
+        if (idx != -1) {
+          _salesHistory[idx] = updated;
+        }
+        final mIdx = _masterSales.indexWhere((s) => s.id == saleId);
+        if (mIdx != -1) {
+          _masterSales[mIdx] = updated;
+        }
+        _applyTabFilterInMemory();
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
   // =========================================================================
   // ⚡ DELEGACIONES DEL MOTOR DE MOROSIDAD
   // =========================================================================
@@ -965,6 +991,7 @@ class SaleProvider with ChangeNotifier {
     required String tipo,
     required double valor,
     double? nuevoMontoTotal,
+    int? saleId,
   }) async {
     final success = await _salesService.aplicarMorosidadManual(
       cuotaId,
@@ -972,13 +999,27 @@ class SaleProvider with ChangeNotifier {
       valor: valor,
       nuevoMontoTotal: nuevoMontoTotal,
     );
-    if (success) notifyListeners();
+    if (success) {
+      final int? sId = saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
+      if (sId != null) {
+        await syncSaleInMemory(sId);
+      } else {
+        notifyListeners();
+      }
+    }
     return success;
   }
 
-  Future<bool> quitarMorosidad(int cuotaId) async {
+  Future<bool> quitarMorosidad(int cuotaId, {int? saleId}) async {
     final success = await _salesService.quitarMorosidad(cuotaId);
-    if (success) notifyListeners();
+    if (success) {
+      final int? sId = saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
+      if (sId != null) {
+        await syncSaleInMemory(sId);
+      } else {
+        notifyListeners();
+      }
+    }
     return success;
   }
 
@@ -990,6 +1031,7 @@ class SaleProvider with ChangeNotifier {
     String? tipo,
     double? valor,
     bool calcularDesdeVencimiento = true,
+    int? saleId,
   }) async {
     final success = await _salesService.configurarMorosidadAutomatica(
       cuotaId,
@@ -1000,7 +1042,14 @@ class SaleProvider with ChangeNotifier {
       valor: valor,
       calcularDesdeVencimiento: calcularDesdeVencimiento,
     );
-    if (success) notifyListeners();
+    if (success) {
+      final int? sId = saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
+      if (sId != null) {
+        await syncSaleInMemory(sId);
+      } else {
+        notifyListeners();
+      }
+    }
     return success;
   }
 

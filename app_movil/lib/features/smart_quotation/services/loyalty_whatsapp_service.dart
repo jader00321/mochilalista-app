@@ -128,24 +128,29 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
     return await launchWhatsApp(context, phone, msg);
   }
 
-  /// 📢 Plantilla 4: Difusor de Ofertas y Liquidación
-  static Future<bool> sendPromotionBroadcasterNotification({
-    required BuildContext context,
-    required String phone,
+  /// 📢 Genera el mensaje comercial formateado para difusión de promociones
+  static String buildPromotionMessage({
     required String clientName,
     required String businessName,
     required List<Map<String, dynamic>> products,
-  }) async {
+  }) {
     final buffer = StringBuffer();
     buffer.writeln('¡Hola, $clientName! 👋');
     buffer.writeln('En *$businessName* tenemos promociones exclusivas y liquidaciones especiales pensadas para ti:\n');
 
     for (int i = 0; i < products.length; i++) {
       final p = products[i];
-      final String name = p['name'] ?? 'Producto';
-      final String presentation = p['presentation'] != null ? ' (${p['presentation']})' : '';
-      final double regularPrice = (p['regular_price'] as num?)?.toDouble() ?? 0.0;
-      final double offerPrice = (p['offer_price'] as num?)?.toDouble() ?? 0.0;
+      final String name = p['nombre'] ?? p['name'] ?? 'Producto';
+      final String presentation = (p['presentation'] != null && (p['presentation'] as String).isNotEmpty)
+          ? ' (${p['presentation']})'
+          : '';
+      final double regularPrice = (p['precioRegular'] as num?)?.toDouble() ??
+          (p['regular_price'] as num?)?.toDouble() ??
+          0.0;
+      final double offerPrice = (p['precioEfectivo'] as num?)?.toDouble() ??
+          (p['precio_oferta'] as num?)?.toDouble() ??
+          (p['offer_price'] as num?)?.toDouble() ??
+          0.0;
       final double savings = (regularPrice - offerPrice).clamp(0.0, double.infinity);
 
       buffer.writeln('🔥 *${i + 1}. $name$presentation*');
@@ -158,8 +163,25 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
 
     buffer.writeln('⚡ _Precios válidos por tiempo limitado o hasta agotar existencias._');
     buffer.writeln('¿Deseas que te reservemos alguno para tu próximo pedido? ¡Escríbenos por aquí! 📦');
+    return buffer.toString().trim();
+  }
 
-    return await launchWhatsApp(context, phone, buffer.toString().trim());
+  /// 📢 Plantilla 4: Difusor de Ofertas y Liquidación
+  static Future<bool> sendPromotionBroadcasterNotification({
+    required BuildContext context,
+    required String phone,
+    required String clientName,
+    required String businessName,
+    required List<Map<String, dynamic>> products,
+    String? customMessage,
+  }) async {
+    final msg = customMessage ??
+        buildPromotionMessage(
+          clientName: clientName,
+          businessName: businessName,
+          products: products,
+        );
+    return await launchWhatsApp(context, phone, msg);
   }
 }
 

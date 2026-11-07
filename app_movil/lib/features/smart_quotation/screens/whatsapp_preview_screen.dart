@@ -611,16 +611,20 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
           final String date = dueDate != null ? DateFormat('dd/MM/yyyy').format(dueDate) : c['fecha_vencimiento'].toString();
 
           final String amountText = tieneMora
-              ? "*${AppCurrency.format(cuotaMonto)}* (Orig: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(moraMonto)} = Total: ${AppCurrency.format(cuotaMonto)})"
+              ? "*${AppCurrency.format(cuotaMonto)}* (Base: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(moraMonto)})"
               : "*${AppCurrency.format(cuotaMonto)}*";
 
           if (pagado) {
-            sb.writeln("✅ Cuota ${c['numero_cuota']}: $amountText (Vence: $date) - Pagado");
+            sb.writeln("✅ Cuota ${c['numero_cuota']}: $amountText (${daysOverdue > 0 ? 'Venció:' : 'Vence:'} $date) - Pagado");
           } else if (isVencida) {
+            final String vencioTag = tieneMora 
+                ? "- Venció: $date (hace $daysOverdue ${daysOverdue == 1 ? 'día' : 'días'})"
+                : "(Venció: $date) - Vencida hace $daysOverdue ${daysOverdue == 1 ? 'día' : 'días'}";
+
             if (cuotaPagado > 0.01) {
-              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText - Vencida hace $daysOverdue d • Pago Parcial (Abonado: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})");
+              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText $vencioTag • Pago Parcial (Abonado: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})");
             } else {
-              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText - Vencida hace $daysOverdue d");
+              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText $vencioTag");
             }
           } else {
             if (cuotaPagado > 0.01) {

@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/utils/smart_search_matcher.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/features/smart_quotation/services/loyalty_whatsapp_service.dart';
 import 'package:app_movil/features/smart_quotation/screens/crm/client_detail_screen.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/reward_review_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/meta_reward_editor_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/promotion_broadcast_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_loyalty_history_modal.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
-import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class LoyaltyCenterScreen extends StatefulWidget {
   final int initialTabIndex;
@@ -30,7 +32,14 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
   late TabController _tabController;
   final ClientService _clientService = ClientService();
 
+  final TextEditingController _reputationSearchCtrl = TextEditingController();
+  final TextEditingController _productSearchCtrl = TextEditingController();
+
   bool _isLoading = true;
+  bool _isHeaderVisible = true;
+  bool _showTab3Banner = true;
+  bool _isAudienceDockExpanded = false;
+
   List<ClientModel> _allClients = [];
   List<ClientRewardModel> _pendingRewards = [];
   List<ClientRewardModel> _pastRewards = [];
@@ -39,14 +48,16 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
 
   // Tab 1: Filtros de Reputación
   String _reputationSearchQuery = '';
-  String _selectedTierFilter = 'TODOS';
+  String _selectedTierFilter = 'TODOS'; // 'TODOS', 'CASI_EN_LA_META', o keys de tier
+  List<Map<String, dynamic>> _almostAtGoalList = [];
+  Map<int, Map<String, dynamic>> _almostAtGoalMap = {};
 
   // Tab 3: Avisos y Ofertas
   String _productSearchQuery = '';
   String _productFilterMode = 'ofertas'; // 'ofertas', 'baja_rotacion', 'todos'
   final Set<int> _selectedProductIds = {};
   String _audienceFilterTier = 'TODOS';
-  ClientModel? _selectedAudienceClient;
+  final Set<int> _deselectedAudienceClientIds = {};
 
   @override
   void initState() {
@@ -59,21 +70,28 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+    WidgetsBinding.instance.addPostFrameCallback((_) => loadData());
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _reputationSearchCtrl.dispose();
+    _productSearchCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData() => loadData();
+
+  Future<void> loadData() async {
     setState(() => _isLoading = true);
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final negocioId = auth.activeBusinessId ?? 1;
 
     try {
+      // 0. Sincronizar niveles de reputación para garantizar score 500-749 = PLATA
+      await _clientService.syncClientReputationTiers(negocioId);
+
       // 1. Cargar o sembrar metas si no existen
       var goals = await _clientService.getRewardGoals(negocioId, activeOnly: false);
       if (goals.isEmpty) {
@@ -86,10 +104,18 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
       // 2. Cargar clientes
       final clients = await _clientService.getAllClients(negocioId);
 
-      // 3. Cargar recompensas pendientes
+      // 3. Cargar clientes "Casi en la Meta" (>= 70% o faltan <= 50 pts)
+      final almostAtGoal = await _clientService.getClientsAlmostAtGoal(negocioId);
+      final almostMap = <int, Map<String, dynamic>>{};
+      for (var item in almostAtGoal) {
+        final client = item['client'] as ClientModel;
+        almostMap[client.id] = item;
+      }
+
+      // 4. Cargar recompensas pendientes
       final pending = await _clientService.getPendingReviewRewards(negocioId);
 
-      // 4. Cargar recompensas pasadas
+      // 5. Cargar recompensas pasadas
       final db = await _clientService.dbHelper.database;
       final pastRows = await db.rawQuery('''
         SELECT rc.*, c.nombre_completo AS cliente_nombre, c.telefono AS cliente_telefono,
@@ -104,7 +130,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
       ''', [negocioId]);
       final past = pastRows.map((r) => ClientRewardModel.fromMap(r)).toList();
 
-      // 5. Cargar productos con ofertas / stock para Tab 3
+      // 6. Cargar productos con ofertas / stock para Tab 3
       final prodRows = await db.rawQuery('''
         SELECT pp.id, p.nombre AS producto_nombre, pp.nombre_especifico,
                pp.precio_venta_final, pp.precio_oferta, pp.tipo_descuento,
@@ -115,6 +141,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         ORDER BY (pp.precio_oferta IS NOT NULL OR pp.valor_descuento > 0) DESC, pp.stock_actual ASC
         LIMIT 80
       ''', [negocioId]);
+
 
       final prods = prodRows.map((r) {
         final pVenta = (r['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
@@ -155,13 +182,16 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         setState(() {
           _goals = goals;
           _allClients = clients;
+          _almostAtGoalList = almostAtGoal;
+          _almostAtGoalMap = almostMap;
           _pendingRewards = pending;
           _pastRewards = past;
           _catalogProducts = prods;
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint("EXCEPCION EN _loadData: $e\n$stack");
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -169,19 +199,33 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
   // --- FILTROS TAB 1 (Reputación) ---
   List<ClientModel> get _filteredReputationClients {
     return _allClients.where((c) {
-      if (_selectedTierFilter != 'TODOS') {
-        if (c.nivelReputacion.toUpperCase() != _selectedTierFilter) {
+      if (_selectedTierFilter == 'CASI_EN_LA_META') {
+        if (!_almostAtGoalMap.containsKey(c.id)) {
+          return false;
+        }
+      } else if (_selectedTierFilter != 'TODOS') {
+        if (c.tier.key != _selectedTierFilter) {
           return false;
         }
       }
       if (_reputationSearchQuery.isNotEmpty) {
-        final q = _reputationSearchQuery.toLowerCase();
-        final matchesName = c.fullName.toLowerCase().contains(q);
-        final matchesPhone = c.phone.contains(q);
-        return matchesName || matchesPhone;
+        return SmartSearchMatcher.matches(
+          query: _reputationSearchQuery,
+          targets: [
+            c.fullName,
+            c.phone,
+            c.docNumber,
+            c.tier.displayName,
+            c.tier.key,
+          ],
+        );
       }
       return true;
     }).toList();
+  }
+
+  int _countByTier(String tierKey) {
+    return _allClients.where((c) => c.tier.key == tierKey).length;
   }
 
   // --- FILTROS TAB 3 (Productos y Difusión) ---
@@ -194,24 +238,44 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         return false;
       }
       if (_productSearchQuery.isNotEmpty) {
-        final q = _productSearchQuery.toLowerCase();
-        return (p['nombre'] as String).toLowerCase().contains(q);
+        return SmartSearchMatcher.matches(
+          query: _productSearchQuery,
+          targets: [
+            p['nombre'] as String?,
+          ],
+        );
       }
       return true;
     }).toList();
   }
 
-  List<ClientModel> get _targetAudienceClients {
+  int get _ofertasCount => _catalogProducts.where((p) => p['hasOffer'] as bool).length;
+  int get _bajaRotacionCount => _catalogProducts.where((p) => p['isLowStock'] as bool).length;
+
+  List<ClientModel> get _segmentClients {
     if (_audienceFilterTier == 'TODOS') return _allClients;
-    return _allClients.where((c) => c.nivelReputacion.toUpperCase() == _audienceFilterTier).toList();
+    return _allClients.where((c) => c.tier.key == _audienceFilterTier).toList();
+  }
+
+  List<ClientModel> get _finalAudienceClients {
+    final list = _segmentClients;
+    return list.where((c) => !_deselectedAudienceClientIds.contains(c.id)).toList();
   }
 
   // Métricas Ejecutivas del Negocio
   int get _totalActivePoints => _allClients.fold(0, (sum, c) => sum + c.puntosActuales);
   int get _vipAndGoldCount => _allClients.where((c) {
-        final t = c.nivelReputacion.toUpperCase();
+        final t = c.tier.key;
         return t == 'DIAMANTE_VIP' || t == 'ORO';
       }).length;
+
+  void _onScrollNotification(UserScrollNotification notification) {
+    if (notification.direction == ScrollDirection.reverse && _isHeaderVisible) {
+      setState(() => _isHeaderVisible = false);
+    } else if (notification.direction == ScrollDirection.forward && !_isHeaderVisible) {
+      setState(() => _isHeaderVisible = true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -223,9 +287,18 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text(
-          "Fidelización y Premios",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19),
+        titleSpacing: 16,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Fidelización y Premios",
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 17.5,
+              letterSpacing: -0.2,
+            ),
+          ),
         ),
         centerTitle: false,
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.amber[800],
@@ -233,6 +306,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         elevation: 0,
         actions: [
           IconButton(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
             icon: const Icon(Icons.refresh_rounded),
             tooltip: "Actualizar datos",
             onPressed: _loadData,
@@ -258,63 +332,127 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
           ),
           const SizedBox(width: 8),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3.5,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          tabs: [
-            const Tab(
-              icon: Icon(Icons.military_tech_rounded, size: 20),
-              text: "Reputación",
-            ),
-            Tab(
-              icon: Badge(
-                isLabelVisible: _pendingRewards.isNotEmpty,
-                label: Text('${_pendingRewards.length}'),
-                backgroundColor: Colors.redAccent,
-                child: const Icon(Icons.emoji_events_rounded, size: 20),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(46),
+          child: Container(
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark ? Colors.white10 : Colors.black12,
+                  width: 0.5,
+                ),
               ),
-              text: "Recompensas",
             ),
-            const Tab(
-              icon: Icon(Icons.campaign_rounded, size: 20),
-              text: "Avisos y Ofertas",
+            child: TabBar(
+              controller: _tabController,
+              indicatorColor: Colors.white,
+              indicatorWeight: 3.0,
+              indicatorSize: TabBarIndicatorSize.label,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+              tabs: [
+                const Tab(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.military_tech_outlined, size: 16),
+                        SizedBox(width: 4),
+                        Text("Reputación"),
+                      ],
+                    ),
+                  ),
+                ),
+                Tab(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Badge(
+                          isLabelVisible: _pendingRewards.isNotEmpty,
+                          label: Text('${_pendingRewards.length}'),
+                          backgroundColor: Colors.redAccent,
+                          child: const Icon(Icons.emoji_events_outlined, size: 16),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text("Recompensas"),
+                      ],
+                    ),
+                  ),
+                ),
+                const Tab(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.campaign_outlined, size: 16),
+                        SizedBox(width: 4),
+                        Text("Avisos y Ofertas"),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // Banner Resumen Ejecutivo Superior
-                _buildExecutiveHeader(isDark, cardColor, textColor),
-
-                // Contenido de las 3 Pestañas
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildReputationTab(isDark, cardColor, textColor),
-                      _buildRewardsAndGoalsTab(isDark, cardColor, textColor),
-                      _buildOffersBroadcasterTab(isDark, cardColor, textColor),
-                    ],
+          : NotificationListener<UserScrollNotification>(
+              onNotification: (n) {
+                _onScrollNotification(n);
+                return false;
+              },
+              child: Column(
+                children: [
+                  // Banner Resumen Ejecutivo Superior Retráctil
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    height: (_isHeaderVisible && _tabController.index != 2) ? 58.0 : 0.0,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        minHeight: 0,
+                        maxHeight: 58,
+                        alignment: Alignment.topCenter,
+                        child: _buildExecutiveHeader(isDark, cardColor, textColor),
+                      ),
+                    ),
                   ),
-                ),
-              ],
+
+                  // Contenido de las 3 Pestañas
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildReputationTab(isDark, cardColor, textColor),
+                        _buildRewardsAndGoalsTab(isDark, cardColor, textColor),
+                        _buildOffersBroadcasterTab(isDark, cardColor, textColor),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
     );
   }
 
   // =========================================================================
-  // CABECERA EJECUTIVA SUPERIOR
+  // CABECERA EJECUTIVA SUPERIOR ANTI-COLISIÓN (3 COLUMNAS PROPORCIONALES)
   // =========================================================================
   Widget _buildExecutiveHeader(bool isDark, Color cardColor, Color textColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: cardColor,
         border: Border(
@@ -324,33 +462,38 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildExecutiveMetric(
-            "Puntos en Circulación",
-            "$_totalActivePoints pts",
-            Icons.stars_rounded,
-            Colors.amber[700]!,
-            textColor,
-            isDark,
+          Expanded(
+            child: _buildExecutiveMetric(
+              "Puntos Activos",
+              "$_totalActivePoints pts",
+              Icons.stars_rounded,
+              Colors.amber[700]!,
+              textColor,
+              isDark,
+            ),
           ),
-          Container(height: 30, width: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-          _buildExecutiveMetric(
-            "Premios por Revisar",
-            "${_pendingRewards.length} pendientes",
-            Icons.notifications_active_rounded,
-            _pendingRewards.isNotEmpty ? Colors.redAccent : Colors.green,
-            textColor,
-            isDark,
+          Container(height: 28, width: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+          Expanded(
+            child: _buildExecutiveMetric(
+              "Por Revisar",
+              "${_pendingRewards.length} pendientes",
+              Icons.notifications_active_rounded,
+              _pendingRewards.isNotEmpty ? Colors.redAccent : Colors.green,
+              textColor,
+              isDark,
+            ),
           ),
-          Container(height: 30, width: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-          _buildExecutiveMetric(
-            "Clientes VIP / Oro",
-            "$_vipAndGoldCount clientes",
-            Icons.workspace_premium_rounded,
-            Colors.purpleAccent,
-            textColor,
-            isDark,
+          Container(height: 28, width: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+          Expanded(
+            child: _buildExecutiveMetric(
+              "Clientes VIP",
+              "$_vipAndGoldCount clientes",
+              Icons.diamond_outlined,
+              const Color(0xFF00E5FF),
+              textColor,
+              isDark,
+            ),
           ),
         ],
       ),
@@ -366,29 +509,41 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     bool isDark,
   ) {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: color),
+            Icon(icon, size: 13, color: color),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                  maxLines: 1,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: textColor,
+        const SizedBox(height: 2),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+            maxLines: 1,
           ),
         ),
       ],
@@ -405,42 +560,89 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
       children: [
         // Buscador y Chips de Niveles
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
           color: cardColor,
           child: Column(
             children: [
               TextField(
+                controller: _reputationSearchCtrl,
                 onChanged: (val) => setState(() => _reputationSearchQuery = val),
-                style: TextStyle(color: textColor, fontSize: 14),
+                style: TextStyle(color: textColor, fontSize: 13.5),
                 decoration: InputDecoration(
-                  hintText: "Buscar cliente por nombre o teléfono...",
+                  hintText: "Buscar por nombre, teléfono o nivel...",
                   prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  suffixIcon: _reputationSearchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18),
+                          onPressed: () {
+                            _reputationSearchCtrl.clear();
+                            setState(() => _reputationSearchQuery = '');
+                          },
+                        )
+                      : null,
                   filled: true,
                   fillColor: isDark ? Colors.white10 : Colors.grey.shade100,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 child: Row(
                   children: [
-                    _buildTierFilterChip('TODOS', 'Todos (${_allClients.length})', Colors.grey),
+                    _buildTierFilterChip(
+                      'TODOS',
+                      'Todos (${_allClients.length})',
+                      Icons.people_outline_rounded,
+                      Colors.grey,
+                    ),
                     const SizedBox(width: 6),
-                    _buildTierFilterChip('DIAMANTE_VIP', '💎 Diamante VIP', const Color(0xFF00B4D8)),
+                    _buildTierFilterChip(
+                      'CASI_EN_LA_META',
+                      'Casi en la Meta (${_almostAtGoalList.length})',
+                      Icons.track_changes_rounded,
+                      Colors.amber[800]!,
+                    ),
                     const SizedBox(width: 6),
-                    _buildTierFilterChip('ORO', '🏆 Oro', const Color(0xFFFFB703)),
+                    _buildTierFilterChip(
+                      'DIAMANTE_VIP',
+                      'Diamante VIP (${_countByTier('DIAMANTE_VIP')})',
+                      Icons.diamond_rounded,
+                      const Color(0xFF00E5FF),
+                    ),
                     const SizedBox(width: 6),
-                    _buildTierFilterChip('PLATA', '🥈 Plata', const Color(0xFFADB5BD)),
+                    _buildTierFilterChip(
+                      'ORO',
+                      'Oro (${_countByTier('ORO')})',
+                      Icons.military_tech_rounded,
+                      const Color(0xFFFFB800),
+                    ),
                     const SizedBox(width: 6),
-                    _buildTierFilterChip('BRONCE', '🥉 Bronce', const Color(0xFFD4A373)),
+                    _buildTierFilterChip(
+                      'PLATA',
+                      'Plata (${_countByTier('PLATA')})',
+                      Icons.verified_rounded,
+                      const Color(0xFFA8B2C1),
+                    ),
                     const SizedBox(width: 6),
-                    _buildTierFilterChip('OBSERVACION', '⚠️ Observación', const Color(0xFFEF476F)),
+                    _buildTierFilterChip(
+                      'BRONCE',
+                      'Bronce (${_countByTier('BRONCE')})',
+                      Icons.shield_outlined,
+                      const Color(0xFFCD7F32),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildTierFilterChip(
+                      'OBSERVACION',
+                      'Observación (${_countByTier('OBSERVACION')})',
+                      Icons.warning_amber_rounded,
+                      const Color(0xFFEF4444),
+                    ),
                   ],
                 ),
               ),
@@ -458,9 +660,22 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                       Icon(Icons.people_outline_rounded, size: 48, color: isDark ? Colors.grey[600] : Colors.grey[400]),
                       const SizedBox(height: 12),
                       Text(
-                        "No se encontraron clientes con este filtro",
-                        style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14),
+                        _reputationSearchQuery.isNotEmpty
+                            ? "No hay clientes que coincidan con la búsqueda"
+                            : "No se encontraron clientes con este filtro",
+                        style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13.5),
                       ),
+                      if (_reputationSearchQuery.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: () {
+                            _reputationSearchCtrl.clear();
+                            setState(() => _reputationSearchQuery = '');
+                          },
+                          icon: const Icon(Icons.clear_rounded, size: 16),
+                          label: const Text("Limpiar búsqueda"),
+                        ),
+                      ],
                     ],
                   ),
                 )
@@ -475,14 +690,19 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     );
   }
 
-  Widget _buildTierFilterChip(String key, String label, Color color) {
+  Widget _buildTierFilterChip(String key, String label, IconData icon, Color color) {
     final isSelected = _selectedTierFilter == key;
     return ChoiceChip(
+      avatar: Icon(
+        icon,
+        size: 14,
+        color: isSelected ? Colors.white : color,
+      ),
       label: Text(
         label,
         style: TextStyle(
-          fontSize: 12,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          fontSize: 11.5,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
           color: isSelected ? Colors.white : color,
         ),
       ),
@@ -502,6 +722,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     Color textColor,
   ) {
     final tier = client.tier;
+    final almostAtGoal = _almostAtGoalMap[client.id];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -523,7 +744,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
           ).then((_) => _loadData());
         },
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -531,12 +752,12 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
-                    radius: 24,
+                    radius: 22,
                     backgroundColor: Color(tier.colorHex).withValues(alpha: 0.15),
                     child: Text(
                       client.fullName.isNotEmpty ? client.fullName[0].toUpperCase() : "?",
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Color(tier.colorHex),
                       ),
@@ -554,7 +775,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                                 client.fullName,
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                                  fontSize: 15,
                                   color: textColor,
                                 ),
                                 maxLines: 1,
@@ -562,39 +783,53 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                               decoration: BoxDecoration(
-                                color: Color(tier.colorHex).withValues(alpha: 0.2),
+                                color: Color(tier.colorHex).withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Text(
-                                tier.badgeText,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(tier.colorHex),
-                                ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(tier.icon, size: 12, color: Color(tier.colorHex)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    tier.badgeText,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(tier.colorHex),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Row(
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 2,
                           children: [
-                            Icon(Icons.phone_rounded, size: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                            const SizedBox(width: 4),
-                            Text(
-                              client.phone.isNotEmpty ? client.phone : "Sin teléfono",
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
-                              ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.phone_rounded, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  client.phone.isNotEmpty ? client.phone : "Sin teléfono",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 10),
                             Text(
                               "Score: ${client.scoreReputacion}/1000",
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
                                 color: isDark ? Colors.grey[300] : Colors.grey[700],
                               ),
@@ -606,40 +841,122 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-              const SizedBox(height: 10),
 
-              // Fila de Indicadores: Puntos, Racha y Límite sugerido
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // Indicador de "Casi en la Meta" con botón de impulso WhatsApp
+              if (almostAtGoal != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.track_changes_rounded, size: 14, color: Colors.amber[800]),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          "A ${almostAtGoal['puntos_faltantes']} pts de: ${(almostAtGoal['goal'] as RewardGoalModel).nombre}",
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.amber[300] : Colors.amber[900],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () {
+                          final auth = Provider.of<AuthProvider>(context, listen: false);
+                          LoyaltyWhatsAppService.sendAlmostAtGoalNotification(
+                            context: context,
+                            phone: client.phone,
+                            clientName: client.fullName.split(' ').first,
+                            businessName: auth.businessName,
+                            goal: almostAtGoal['goal'] as RewardGoalModel,
+                            puntosFaltantes: almostAtGoal['puntos_faltantes'] as int,
+                            puntosActuales: client.puntosActuales,
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF25D366),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.send_rounded, size: 10, color: Colors.white),
+                              SizedBox(width: 3),
+                              Text(
+                                "Impulso",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 10),
+              Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+              const SizedBox(height: 8),
+
+              // Fila de Indicadores: Puntos, Racha y Límite sugerido (Wrap anti-desbordamiento 360dp)
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.stars_rounded, size: 16, color: Colors.amber[700]),
+                      Icon(Icons.stars_rounded, size: 15, color: Colors.amber[700]),
                       const SizedBox(width: 4),
                       Text(
                         "${client.puntosActuales} pts",
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                          fontSize: 12.5,
                           color: Colors.amber[800],
                         ),
                       ),
                       if (client.rachaPagosPuntuales > 0) ...[
-                        const SizedBox(width: 10),
-                        Text(
-                          "🔥 ${client.rachaPagosPuntuales} pagos a tiempo",
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.orange,
-                          ),
+                        const SizedBox(width: 8),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.local_fire_department_rounded, size: 13, color: Colors.orange),
+                            const SizedBox(width: 2),
+                            Text(
+                              "${client.rachaPagosPuntuales} a tiempo",
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.orange,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ],
                   ),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         "Límite Sug.: ",
@@ -667,7 +984,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                             color: isDark ? Colors.white10 : Colors.grey.shade100,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(Icons.history_rounded, size: 16, color: textColor),
+                          child: Icon(Icons.history_rounded, size: 15, color: textColor),
                         ),
                       ),
                     ],
@@ -689,25 +1006,29 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
       onRefresh: _loadData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // --- SECCIÓN 1: RECOMPENSAS PENDIENTES DE REVISIÓN ---
             Row(
               children: [
-                Icon(Icons.pending_actions_rounded, color: Colors.orange[700], size: 22),
+                Icon(Icons.pending_actions_rounded, color: Colors.orange[700], size: 20),
                 const SizedBox(width: 8),
-                Text(
-                  "Premios Desbloqueados por Revisar",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
+                Expanded(
+                  child: Text(
+                    "Premios Desbloqueados por Revisar",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 8),
-                if (_pendingRewards.isNotEmpty)
+                if (_pendingRewards.isNotEmpty) ...[
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
@@ -719,6 +1040,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                       style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ),
+                ],
               ],
             ),
             const SizedBox(height: 10),
@@ -726,7 +1048,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
             if (_pendingRewards.isEmpty)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF1B2A1E) : Colors.green.shade50,
                   borderRadius: BorderRadius.circular(16),
@@ -736,13 +1058,13 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.check_circle_rounded, color: Colors.green, size: 24),
-                    const SizedBox(width: 12),
+                    const Icon(Icons.check_circle_rounded, color: Colors.green, size: 22),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         "¡Todo al día! No hay recompensas pendientes de confirmación.",
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12.5,
                           color: isDark ? Colors.green[200] : Colors.green[900],
                           fontWeight: FontWeight.w600,
                         ),
@@ -754,26 +1076,33 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
             else
               ..._pendingRewards.map((rw) => _buildPendingRewardCard(rw, isDark, cardColor, textColor)),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 22),
 
             // --- SECCIÓN 2: CATÁLOGO DE METAS DEL NEGOCIO ---
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.emoji_events_rounded, color: Colors.amber[700], size: 22),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Catálogo de Metas",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.emoji_events_rounded, color: Colors.amber[700], size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Catálogo de Metas",
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () async {
                     final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -783,8 +1112,8 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                     );
                     if (res != null) _loadData();
                   },
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text("Nueva Meta", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  icon: const Icon(Icons.add, size: 15),
+                  label: const Text("Nueva Meta", style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.amber[700],
                     foregroundColor: Colors.white,
@@ -805,18 +1134,18 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
             else
               ..._goals.map((g) => _buildGoalCard(g, isDark, cardColor, textColor)),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 22),
 
             // --- SECCIÓN 3: HISTORIAL DE CANJES ---
             if (_pastRewards.isNotEmpty) ...[
               Row(
                 children: [
-                  Icon(Icons.history_rounded, color: isDark ? Colors.grey[400] : Colors.grey[700], size: 20),
+                  Icon(Icons.history_rounded, color: isDark ? Colors.grey[400] : Colors.grey[700], size: 19),
                   const SizedBox(width: 8),
                   Text(
                     "Historial Reciente de Premios",
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: textColor,
                     ),
@@ -840,7 +1169,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
   ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(18),
@@ -863,7 +1192,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                 child: Text(
                   rw.clienteNombre ?? 'Cliente',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: textColor,
                   ),
@@ -872,7 +1201,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
@@ -880,7 +1209,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                 child: const Text(
                   "POR REVISAR",
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.w900,
                     color: Colors.orange,
                   ),
@@ -891,31 +1220,31 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
           const SizedBox(height: 6),
           Row(
             children: [
-              Icon(Icons.card_giftcard_rounded, size: 16, color: Colors.amber[700]),
+              Icon(Icons.card_giftcard_rounded, size: 15, color: Colors.amber[700]),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   rw.metaTitulo,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                     color: isDark ? Colors.amber[300] : Colors.amber[900],
                   ),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             "Puntos reservados: ${rw.puntosConsumidos} pts • Desbloqueado: ${rw.fechaDesbloqueo.split('T').first}",
-            style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+            style: TextStyle(fontSize: 11.5, color: isDark ? Colors.grey[400] : Colors.grey[600]),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
-            height: 42,
+            height: 38,
             child: ElevatedButton.icon(
               onPressed: () async {
                 final client = _allClients.firstWhere(
@@ -936,10 +1265,10 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                   onActionCompleted: _loadData,
                 );
               },
-              icon: const Icon(Icons.rate_review_rounded, size: 18),
+              icon: const Icon(Icons.rate_review_rounded, size: 16),
               label: const Text(
                 "Revisar y Confirmar Premio",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.amber[700],
@@ -978,12 +1307,16 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
       case 'PRODUCTO_REGALO':
         icon = Icons.card_giftcard_rounded;
         iconColor = Colors.purple;
-        benefitLabel = "Producto o Regalo";
+        benefitLabel = goal.valorBeneficio > 0
+            ? "Producto de Regalo (${AppCurrency.format(goal.valorBeneficio)})"
+            : "Producto de Regalo";
         break;
       default:
         icon = Icons.credit_score_rounded;
         iconColor = Colors.amber;
-        benefitLabel = "Crédito Preferencial";
+        benefitLabel = goal.valorBeneficio > 0
+            ? "Crédito Extra de ${AppCurrency.format(goal.valorBeneficio)}"
+            : "Crédito Preferencial";
     }
 
     return Container(
@@ -997,6 +1330,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(10),
@@ -1012,7 +1346,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
@@ -1022,10 +1356,11 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                           fontWeight: FontWeight.bold,
                           color: textColor,
                         ),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
@@ -1052,21 +1387,27 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                     color: isDark ? Colors.grey[300] : Colors.grey[700],
                   ),
                 ),
-                if (goal.descripcion != null && goal.descripcion!.isNotEmpty)
+                if (goal.descripcion != null && goal.descripcion!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
                   Text(
                     goal.descripcion!,
                     style: TextStyle(
                       fontSize: 11,
                       color: isDark ? Colors.grey[400] : Colors.grey[600],
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                ],
               ],
             ),
           ),
+          const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.edit_outlined, size: 18),
+            tooltip: "Editar meta",
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             onPressed: () async {
               final auth = Provider.of<AuthProvider>(context, listen: false);
               final res = await MetaRewardEditorModal.show(
@@ -1106,7 +1447,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
           Icon(
             isRedeemed ? Icons.check_circle_outline_rounded : Icons.cancel_outlined,
             color: badgeColor,
-            size: 20,
+            size: 19,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1139,7 +1480,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
             child: Text(
               rw.estado,
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 9.5,
                 fontWeight: FontWeight.bold,
                 color: badgeColor,
               ),
@@ -1151,21 +1492,29 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
   }
 
   // =========================================================================
-  // TAB 3: AVISOS DE OFERTAS Y LIQUIDACIÓN
+  // TAB 3: AVISOS DE OFERTAS, AUDIENCIA Y DIFUSOR WHATSAPP
   // =========================================================================
   Widget _buildOffersBroadcasterTab(bool isDark, Color cardColor, Color textColor) {
     final products = _filteredCatalogProducts;
-    final audienceClients = _targetAudienceClients;
+    final audienceClients = _finalAudienceClients;
+    final bool canBroadcast = _selectedProductIds.isNotEmpty && audienceClients.isNotEmpty;
 
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Banner explicativo
+    String broadcastBtnText;
+    if (_selectedProductIds.isEmpty) {
+      broadcastBtnText = "Selecciona productos para difundir";
+    } else if (audienceClients.isEmpty) {
+      broadcastBtnText = "Sin clientes en este segmento";
+    } else {
+      broadcastBtnText = "Difundir Ofertas (${_selectedProductIds.length} prod. • ${audienceClients.length} clientes)";
+    }
+
+    return Column(
+      children: [
+        // Banner explicativo descartable
+        if (_showTab3Banner)
           Container(
-            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.blue.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(14),
@@ -1173,101 +1522,198 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
             ),
             child: Row(
               children: [
-                const Icon(Icons.campaign_rounded, color: Colors.blue, size: 22),
-                const SizedBox(width: 10),
+                const Icon(Icons.campaign_rounded, color: Colors.blue, size: 20),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    "Selecciona productos en oferta o liquidación y envíalos por WhatsApp con formato comercial.",
-                    style: TextStyle(fontSize: 12, color: isDark ? Colors.blue[200] : Colors.blue[900]),
+                    "Selecciona ofertas y envíalas por WhatsApp a tus clientes con formato comercial.",
+                    style: TextStyle(fontSize: 11.5, color: isDark ? Colors.blue[200] : Colors.blue[900]),
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  onPressed: () => setState(() => _showTab3Banner = false),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
 
-          // Paso 1: Filtro de Productos y Buscador
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        // Filtro y Acciones Rápidas de Productos
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+          child: Column(
             children: [
-              Text(
-                "1. Selecciona los Productos",
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textColor),
-              ),
-              Text(
-                "${_selectedProductIds.length} seleccionados",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber[800]),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          Row(
-            children: [
-              ChoiceChip(
-                label: const Text("🔥 Ofertas Activas"),
-                selected: _productFilterMode == 'ofertas',
-                selectedColor: Colors.orange.withValues(alpha: 0.2),
-                onSelected: (v) => setState(() => _productFilterMode = 'ofertas'),
-              ),
-              const SizedBox(width: 6),
-              ChoiceChip(
-                label: const Text("📦 Baja Rotación"),
-                selected: _productFilterMode == 'baja_rotacion',
-                selectedColor: Colors.purple.withValues(alpha: 0.2),
-                onSelected: (v) => setState(() => _productFilterMode = 'baja_rotacion'),
-              ),
-              const SizedBox(width: 6),
-              ChoiceChip(
-                label: const Text("Todos"),
-                selected: _productFilterMode == 'todos',
-                selectedColor: Colors.grey.withValues(alpha: 0.2),
-                onSelected: (v) => setState(() => _productFilterMode = 'todos'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          TextField(
-            onChanged: (val) => setState(() => _productSearchQuery = val),
-            style: TextStyle(color: textColor, fontSize: 13),
-            decoration: InputDecoration(
-              hintText: "Buscar producto...",
-              prefixIcon: const Icon(Icons.search, size: 18),
-              filled: true,
-              fillColor: isDark ? Colors.white10 : Colors.grey.shade100,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Lista de Productos Checkable
-          Container(
-            height: 190,
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-            ),
-            child: products.isEmpty
-                ? Center(
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
                     child: Text(
-                      "No se encontraron productos",
-                      style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                      "1. Selecciona los Productos",
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textColor),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  )
-                : ListView.builder(
-                    itemCount: products.length,
-                    itemBuilder: (ctx, i) {
-                      final p = products[i];
-                      final id = p['id'] as int;
-                      final isSelected = _selectedProductIds.contains(id);
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        if (_selectedProductIds.length == products.length) {
+                          _selectedProductIds.clear();
+                        } else {
+                          _selectedProductIds.addAll(products.map((p) => p['id'] as int));
+                        }
+                      });
+                    },
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: Text(
+                      _selectedProductIds.length == products.length && products.isNotEmpty
+                          ? "Limpiar selección"
+                          : "Seleccionar todos (${products.length})",
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.amber[800]),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
 
-                      return CheckboxListTile(
+              // Chips de Modo de Producto (Iconos vectoriales limpios sin emojis)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    ChoiceChip(
+                      avatar: const Icon(Icons.local_fire_department_rounded, size: 14, color: Colors.orange),
+                      label: Text("Ofertas Activas ($_ofertasCount)"),
+                      labelStyle: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: _productFilterMode == 'ofertas' ? FontWeight.bold : FontWeight.w500,
+                      ),
+                      selected: _productFilterMode == 'ofertas',
+                      selectedColor: Colors.orange.withValues(alpha: 0.2),
+                      onSelected: (v) => setState(() => _productFilterMode = 'ofertas'),
+                    ),
+                    const SizedBox(width: 6),
+                    ChoiceChip(
+                      avatar: const Icon(Icons.inventory_2_outlined, size: 14, color: Colors.purple),
+                      label: Text("Baja Rotación ($_bajaRotacionCount)"),
+                      labelStyle: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: _productFilterMode == 'baja_rotacion' ? FontWeight.bold : FontWeight.w500,
+                      ),
+                      selected: _productFilterMode == 'baja_rotacion',
+                      selectedColor: Colors.purple.withValues(alpha: 0.2),
+                      onSelected: (v) => setState(() => _productFilterMode = 'baja_rotacion'),
+                    ),
+                    const SizedBox(width: 6),
+                    ChoiceChip(
+                      avatar: const Icon(Icons.list_alt_rounded, size: 14, color: Colors.grey),
+                      label: Text("Todos (${_catalogProducts.length})"),
+                      labelStyle: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: _productFilterMode == 'todos' ? FontWeight.bold : FontWeight.w500,
+                      ),
+                      selected: _productFilterMode == 'todos',
+                      selectedColor: Colors.grey.withValues(alpha: 0.2),
+                      onSelected: (v) => setState(() => _productFilterMode = 'todos'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // Buscador de Productos
+              TextField(
+                controller: _productSearchCtrl,
+                onChanged: (val) => setState(() => _productSearchQuery = val),
+                style: TextStyle(color: textColor, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: "Buscar producto por nombre o descripción...",
+                  prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                  suffixIcon: _productSearchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 16),
+                          onPressed: () {
+                            _productSearchCtrl.clear();
+                            setState(() => _productSearchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: isDark ? Colors.white10 : Colors.grey.shade100,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Lista de Productos Expandida (Ocupa todo el espacio vertical disponible)
+        Expanded(
+          child: products.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.inventory_2_outlined, size: 40, color: isDark ? Colors.grey[600] : Colors.grey[400]),
+                      const SizedBox(height: 8),
+                      Text(
+                        _productSearchQuery.isNotEmpty
+                            ? "No hay productos que coincidan con la búsqueda"
+                            : "No hay productos con este filtro",
+                        style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                      ),
+                      if (_productSearchQuery.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        TextButton(
+                          onPressed: () {
+                            _productSearchCtrl.clear();
+                            setState(() => _productSearchQuery = '');
+                          },
+                          child: const Text("Limpiar búsqueda"),
+                        ),
+                      ],
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: products.length,
+                  itemBuilder: (ctx, i) {
+                    final p = products[i];
+                    final id = p['id'] as int;
+                    final isSelected = _selectedProductIds.contains(id);
+                    final regularPrice = p['precioRegular'] as double;
+                    final effectivePrice = p['precioEfectivo'] as double;
+                    final hasOffer = p['hasOffer'] as bool;
+                    final savings = (regularPrice - effectivePrice).clamp(0.0, double.infinity);
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      elevation: 0,
+                      color: cardColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: isSelected
+                              ? Colors.amber[700]!
+                              : (isDark ? Colors.white10 : Colors.grey.shade200),
+                          width: isSelected ? 1.5 : 1.0,
+                        ),
+                      ),
+                      child: CheckboxListTile(
                         dense: true,
                         value: isSelected,
                         activeColor: Colors.amber[700],
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
                         onChanged: (val) {
                           setState(() {
                             if (val == true) {
@@ -1284,151 +1730,273 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                             fontWeight: FontWeight.bold,
                             color: textColor,
                           ),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        subtitle: Row(
+                        subtitle: Wrap(
+                          spacing: 6,
+                          runSpacing: 2,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
-                              AppCurrency.format(p['precioEfectivo'] as double),
+                              AppCurrency.format(effectivePrice),
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 12.5,
                                 fontWeight: FontWeight.w900,
-                                color: (p['hasOffer'] as bool) ? Colors.green : textColor,
+                                color: hasOffer ? Colors.green[600] : textColor,
                               ),
                             ),
-                            if (p['hasOffer'] as bool) ...[
-                              const SizedBox(width: 6),
+                            if (hasOffer) ...[
                               Text(
-                                AppCurrency.format(p['precioRegular'] as double),
+                                AppCurrency.format(regularPrice),
                                 style: const TextStyle(
                                   fontSize: 11,
                                   decoration: TextDecoration.lineThrough,
                                   color: Colors.grey,
                                 ),
                               ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  "Ahorro ${AppCurrency.format(savings)}",
+                                  style: const TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                              ),
                             ],
-                            const Spacer(),
-                            Text(
-                              "Stock: ${p['stock']}",
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: (p['isLowStock'] as bool) ? Colors.red : Colors.grey,
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: (p['isLowStock'] as bool)
+                                    ? Colors.red.withValues(alpha: 0.15)
+                                    : (isDark ? Colors.white10 : Colors.grey[200]),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                "Stock: ${p['stock']}",
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: (p['isLowStock'] as bool)
+                                      ? Colors.red
+                                      : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      );
-                    },
+                      ),
+                    );
+                  },
+                ),
+        ),
+
+        // Dock Inferior Colapsable de Audiencia y Envío
+        _buildAudienceDock(isDark, cardColor, textColor, canBroadcast, broadcastBtnText),
+      ],
+    );
+  }
+
+  Widget _buildAudienceDock(
+    bool isDark,
+    Color cardColor,
+    Color textColor,
+    bool canBroadcast,
+    String broadcastBtnText,
+  ) {
+    final audienceClients = _finalAudienceClients;
+    final totalSegment = _segmentClients;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, -3),
+          ),
+        ],
+        border: Border(
+          top: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade200),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Barra de Resumen / Título del Dock (Tocar para expandir/colapsar)
+          InkWell(
+            onTap: () => setState(() => _isAudienceDockExpanded = !_isAudienceDockExpanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.groups_rounded,
+                    size: 18,
+                    color: Colors.blue[600],
                   ),
-          ),
-          const SizedBox(height: 18),
-
-          // Paso 2: Audiencia / Cliente Destino
-          Text(
-            "2. Selecciona la Audiencia",
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textColor),
-          ),
-          const SizedBox(height: 8),
-
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Row(
-              children: [
-                _buildAudienceChip('TODOS', 'Todos (${_allClients.length})'),
-                const SizedBox(width: 6),
-                _buildAudienceChip('DIAMANTE_VIP', '💎 Diamante VIP'),
-                const SizedBox(width: 6),
-                _buildAudienceChip('ORO', '🏆 Oro'),
-                const SizedBox(width: 6),
-                _buildAudienceChip('PLATA', '🥈 Frecuentes (Plata)'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Selector de Cliente Individual (opcional)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int?>(
-                isExpanded: true,
-                value: _selectedAudienceClient?.id,
-                hint: Text("Enviar a un cliente específico (opcional)", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                dropdownColor: isDark ? const Color(0xFF282836) : Colors.white,
-                items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text("Difusión a lista filtrada", style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "Audiencia: ${_audienceFilterTier == 'TODOS' ? 'Todos' : ReputationTier.fromKey(_audienceFilterTier).badgeText} (${audienceClients.length} clientes)",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  ...audienceClients.map((c) => DropdownMenuItem<int?>(
-                        value: c.id,
-                        child: Text("${c.fullName} (${c.tier.name})", style: const TextStyle(fontSize: 13)),
-                      )),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      "${_selectedProductIds.length} prod.",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber[800],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    _isAudienceDockExpanded ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_up_rounded,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
                 ],
-                onChanged: (val) {
-                  setState(() {
-                    if (val == null) {
-                      _selectedAudienceClient = null;
-                    } else {
-                      _selectedAudienceClient = audienceClients.firstWhere((c) => c.id == val);
-                    }
-                  });
-                },
               ),
             ),
           ),
-          const SizedBox(height: 20),
 
-          // Botón de Enviar Difusión por WhatsApp
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton.icon(
-              onPressed: _selectedProductIds.isEmpty
-                  ? null
-                  : () async {
-                      final selectedProductsList = _catalogProducts
-                          .where((p) => _selectedProductIds.contains(p['id']))
-                          .toList();
+          // Contenido Expandido del Dock
+          if (_isAudienceDockExpanded) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Chips de Niveles de Audiencia (con iconos vectoriales y conteo)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        _buildAudienceChip('TODOS', 'Todos (${_allClients.length})', Icons.people_outline_rounded),
+                        const SizedBox(width: 6),
+                        _buildAudienceChip('DIAMANTE_VIP', 'Diamante VIP (${_countByTier('DIAMANTE_VIP')})', Icons.diamond_rounded),
+                        const SizedBox(width: 6),
+                        _buildAudienceChip('ORO', 'Oro (${_countByTier('ORO')})', Icons.military_tech_rounded),
+                        const SizedBox(width: 6),
+                        _buildAudienceChip('PLATA', 'Plata (${_countByTier('PLATA')})', Icons.verified_rounded),
+                        const SizedBox(width: 6),
+                        _buildAudienceChip('BRONCE', 'Bronce (${_countByTier('BRONCE')})', Icons.shield_outlined),
+                        const SizedBox(width: 6),
+                        _buildAudienceChip('OBSERVACION', 'Observación (${_countByTier('OBSERVACION')})', Icons.warning_amber_rounded),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
 
-                      final target = _selectedAudienceClient ??
-                          (audienceClients.isNotEmpty ? audienceClients.first : null);
+                  // Lista seleccionable de clientes de la audiencia
+                  if (totalSegment.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        "No hay clientes registrados en este segmento.",
+                        style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                      ),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 140),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: totalSegment.length,
+                        itemBuilder: (ctx, idx) {
+                          final c = totalSegment[idx];
+                          final isIncluded = !_deselectedAudienceClientIds.contains(c.id);
 
-                      if (target == null) {
-                        CustomSnackBar.show(context, message: "No hay clientes en este segmento");
-                        return;
-                      }
-
-                      final auth = Provider.of<AuthProvider>(context, listen: false);
-                      final businessName = auth.businessName;
-
-                      await LoyaltyWhatsAppService.sendPromotionBroadcasterNotification(
-                        context: context,
-                        phone: target.phone,
-                        clientName: target.fullName,
-                        businessName: businessName,
-                        products: selectedProductsList,
-                      );
-                    },
-              icon: const Icon(Icons.send_rounded, size: 20),
-              label: Text(
-                _selectedAudienceClient != null
-                    ? "Enviar WhatsApp a ${_selectedAudienceClient!.fullName.split(' ').first}"
-                    : "Enviar Difusión WhatsApp (${_selectedProductIds.length} prod.)",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          return CheckboxListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            value: isIncluded,
+                            activeColor: const Color(0xFF25D366),
+                            title: Text(
+                              c.fullName,
+                              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+                            ),
+                            subtitle: Text(
+                              "${c.phone} • ${c.tier.badgeText} (${c.puntosActuales} pts)",
+                              style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                if (val == true) {
+                                  _deselectedAudienceClientIds.remove(c.id);
+                                } else {
+                                  _deselectedAudienceClientIds.add(c.id);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF25D366),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
+            ),
+          ],
+
+          // Botón de Envío Difusión WhatsApp
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+            child: SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton.icon(
+                onPressed: canBroadcast
+                    ? () {
+                        final auth = Provider.of<AuthProvider>(context, listen: false);
+                        final selectedProductsList = _catalogProducts
+                            .where((p) => _selectedProductIds.contains(p['id']))
+                            .toList();
+
+                        PromotionBroadcastModal.show(
+                          context,
+                          businessName: auth.businessName,
+                          selectedProducts: selectedProductsList,
+                          targetClients: audienceClients,
+                        );
+                      }
+                    : null,
+                icon: const Icon(Icons.send_rounded, size: 18),
+                label: Text(
+                  broadcastBtnText,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF25D366),
+                  disabledBackgroundColor: isDark ? Colors.white10 : Colors.grey.shade300,
+                  foregroundColor: Colors.white,
+                  disabledForegroundColor: isDark ? Colors.white38 : Colors.grey.shade500,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
               ),
             ),
           ),
@@ -1437,23 +2005,30 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     );
   }
 
-  Widget _buildAudienceChip(String key, String label) {
-    final isSelected = _audienceFilterTier == key && _selectedAudienceClient == null;
+  Widget _buildAudienceChip(String key, String label, IconData icon) {
+    final isSelected = _audienceFilterTier == key;
     return ChoiceChip(
+      avatar: Icon(
+        icon,
+        size: 13,
+        color: isSelected ? Colors.white : Colors.blue[600],
+      ),
       label: Text(
         label,
         style: TextStyle(
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected ? Colors.white : (Theme.of(context).brightness == Brightness.dark ? Colors.white70 : Colors.black87),
         ),
       ),
       selected: isSelected,
-      selectedColor: Colors.blue.withValues(alpha: 0.2),
+      selectedColor: Colors.blue[600],
+      backgroundColor: Colors.blue.withValues(alpha: 0.12),
       onSelected: (val) {
         if (val) {
           setState(() {
             _audienceFilterTier = key;
-            _selectedAudienceClient = null;
+            _deselectedAudienceClientIds.clear();
           });
         }
       },

@@ -384,14 +384,16 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
                             color: Colors.blueAccent,
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            _isCustomizing
-                                ? 'Ocultar personalización de premio'
-                                : '¿Deseas cambiar o personalizar este beneficio?',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blueAccent,
+                          Expanded(
+                            child: Text(
+                              _isCustomizing
+                                  ? 'Ocultar personalización de premio'
+                                  : '¿Deseas cambiar o personalizar este beneficio?',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueAccent,
+                              ),
                             ),
                           ),
                         ],

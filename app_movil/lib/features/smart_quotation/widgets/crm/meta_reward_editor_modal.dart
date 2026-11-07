@@ -4,6 +4,7 @@ import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class MetaRewardEditorModal extends StatefulWidget {
   final int negocioId;
@@ -15,7 +16,8 @@ class MetaRewardEditorModal extends StatefulWidget {
     this.goal,
   });
 
-  static Future<RewardGoalModel?> show(BuildContext context, {
+  static Future<RewardGoalModel?> show(
+    BuildContext context, {
     required int negocioId,
     RewardGoalModel? goal,
   }) {
@@ -81,18 +83,73 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
     _titleCtrl = TextEditingController(text: g?.nombre ?? '');
     _descCtrl = TextEditingController(text: g?.descripcion ?? '');
     _pointsCtrl = TextEditingController(text: g != null ? '${g.puntosRequeridos}' : '100');
-    _valueCtrl = TextEditingController(text: g != null ? g.valorBeneficio.toStringAsFixed(g.valorBeneficio.truncateToDouble() == g.valorBeneficio ? 0 : 2) : '10');
+    _valueCtrl = TextEditingController(
+      text: g != null
+          ? (g.valorBeneficio.truncateToDouble() == g.valorBeneficio
+              ? g.valorBeneficio.toInt().toString()
+              : g.valorBeneficio.toStringAsFixed(2))
+          : '10',
+    );
     _benefitType = g?.tipoBeneficio ?? 'DESCUENTO_MONTO';
     _isActive = g != null ? g.activo : true;
+
+    _titleCtrl.addListener(_onFieldChanged);
+    _descCtrl.addListener(_onFieldChanged);
+    _pointsCtrl.addListener(_onFieldChanged);
+    _valueCtrl.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _titleCtrl.removeListener(_onFieldChanged);
+    _descCtrl.removeListener(_onFieldChanged);
+    _pointsCtrl.removeListener(_onFieldChanged);
+    _valueCtrl.removeListener(_onFieldChanged);
+
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _pointsCtrl.dispose();
     _valueCtrl.dispose();
     super.dispose();
+  }
+
+  String get _benefitValueLabel {
+    switch (_benefitType) {
+      case 'DESCUENTO_PORCENTAJE':
+        return 'Porcentaje (%)';
+      case 'DESCUENTO_MONTO':
+        return 'Descuento (S/)';
+      case 'PRODUCTO_REGALO':
+        return 'Valor Ref. Regalo (S/)';
+      case 'CREDITO_PREFERENCIAL':
+      default:
+        return 'Monto Crédito (S/)';
+    }
+  }
+
+  String? get _benefitPrefix {
+    switch (_benefitType) {
+      case 'DESCUENTO_MONTO':
+      case 'PRODUCTO_REGALO':
+      case 'CREDITO_PREFERENCIAL':
+        return 'S/ ';
+      case 'DESCUENTO_PORCENTAJE':
+      default:
+        return null;
+    }
+  }
+
+  String? get _benefitSuffix {
+    switch (_benefitType) {
+      case 'DESCUENTO_PORCENTAJE':
+        return '%';
+      default:
+        return null;
+    }
   }
 
   Future<void> _save() async {
@@ -158,6 +215,9 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
     );
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.92,
+      ),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
@@ -230,7 +290,7 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Campo: Título de la meta
+                  // 1. Campo: Título de la meta
                   Text(
                     'Título del Premio',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
@@ -253,7 +313,56 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Puntos Requeridos y Valor del Beneficio
+                  // 2. Tipo de Beneficio Comercial (Primero para condicionar el valor)
+                  Text(
+                    'Tipo de Beneficio Comercial',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? Colors.white10 : Colors.grey.shade200,
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: _benefitType,
+                        dropdownColor: isDark ? const Color(0xFF282836) : Colors.white,
+                        items: _benefitTypes.map((t) {
+                          return DropdownMenuItem<String>(
+                            value: t['key'] as String,
+                            child: Row(
+                              children: [
+                                Icon(t['icon'] as IconData, color: t['color'] as Color, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    t['label'] as String,
+                                    style: TextStyle(fontSize: 14, color: textColor),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _benefitType = val);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 3. Fila Adaptativa: Puntos Requeridos y Valor del Beneficio
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -298,9 +407,7 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _benefitType == 'DESCUENTO_PORCENTAJE'
-                                  ? 'Porcentaje (%)'
-                                  : (_benefitType == 'DESCUENTO_MONTO' ? 'Descuento (S/)' : 'Valor Estimado'),
+                              _benefitValueLabel,
                               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
                             ),
                             const SizedBox(height: 6),
@@ -310,8 +417,8 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
                               style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.bold),
                               decoration: InputDecoration(
                                 hintText: '10',
-                                prefixText: _benefitType == 'DESCUENTO_MONTO' ? 'S/ ' : null,
-                                suffixText: _benefitType == 'DESCUENTO_PORCENTAJE' ? '%' : null,
+                                prefixText: _benefitPrefix,
+                                suffixText: _benefitSuffix,
                                 filled: true,
                                 fillColor: cardColor,
                                 border: OutlineInputBorder(
@@ -331,55 +438,9 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
-
-                  // Tipo de Beneficio
-                  Text(
-                    'Tipo de Beneficio Comercial',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        value: _benefitType,
-                        dropdownColor: isDark ? const Color(0xFF282836) : Colors.white,
-                        items: _benefitTypes.map((t) {
-                          return DropdownMenuItem<String>(
-                            value: t['key'] as String,
-                            child: Row(
-                              children: [
-                                Icon(t['icon'] as IconData, color: t['color'] as Color, size: 20),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    t['label'] as String,
-                                    style: TextStyle(fontSize: 14, color: textColor),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _benefitType = val);
-                          }
-                        },
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 16),
 
-                  // Descripción o Nota opcional
+                  // 4. Descripción o Nota opcional
                   Text(
                     'Descripción / Términos (Opcional)',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
@@ -401,12 +462,15 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Estado: Activo / Inactivo
+                  // 5. Estado: Activo / Inactivo
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: cardColor,
                       borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? Colors.white10 : Colors.grey.shade200,
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -437,6 +501,25 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 20),
+
+                  // 6. Live Preview Card en Tiempo Real
+                  Row(
+                    children: [
+                      const Icon(Icons.visibility_rounded, size: 16, color: Colors.amber),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Vista Previa en Tiempo Real',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.amber[300] : Colors.amber[900],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _buildLivePreviewCard(isDark, cardColor, textColor),
                   const SizedBox(height: 24),
 
                   // Botón Guardar
@@ -469,6 +552,132 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLivePreviewCard(bool isDark, Color cardColor, Color textColor) {
+    IconData icon;
+    Color iconColor;
+    final value = double.tryParse(_valueCtrl.text.trim().replaceAll(',', '.')) ?? 0.0;
+    final points = int.tryParse(_pointsCtrl.text.trim()) ?? 0;
+    final title = _titleCtrl.text.trim().isNotEmpty ? _titleCtrl.text.trim() : 'Título de la Meta';
+    final desc = _descCtrl.text.trim();
+
+    String benefitLabel;
+    switch (_benefitType) {
+      case 'DESCUENTO_MONTO':
+        icon = Icons.attach_money_rounded;
+        iconColor = Colors.green;
+        benefitLabel = 'Descuento de ${AppCurrency.format(value)}';
+        break;
+      case 'DESCUENTO_PORCENTAJE':
+        icon = Icons.percent_rounded;
+        iconColor = Colors.blue;
+        benefitLabel = '${value.toStringAsFixed(0)}% de Descuento';
+        break;
+      case 'PRODUCTO_REGALO':
+        icon = Icons.card_giftcard_rounded;
+        iconColor = Colors.purple;
+        benefitLabel = value > 0 ? 'Producto de Regalo (${AppCurrency.format(value)})' : 'Producto de Regalo';
+        break;
+      default:
+        icon = Icons.credit_score_rounded;
+        iconColor = Colors.amber;
+        benefitLabel = value > 0 ? 'Crédito Extra de ${AppCurrency.format(value)}' : 'Crédito Preferencial';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.amber.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.amber.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$points pts',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.amber[800],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  benefitLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.grey[300] : Colors.grey[700],
+                  ),
+                ),
+                if (desc.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    desc,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

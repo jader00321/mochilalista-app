@@ -211,8 +211,16 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
           const SizedBox(height: 10),
           Row(
             children: [
-              _buildTrustBadge(),
-              const Spacer(),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: _buildTrustBadge(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               ScaleTransition(
                 scale: _pulseAnimation,
                 child: _buildFullStatsButton(context),
@@ -304,20 +312,21 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                       context,
                       client: widget.client,
                       isDark: widget.isDark,
+                      initialTab: 0,
                       onCompleted: widget.onFinanceActionCompleted,
                     );
                   },
-                  icon: const Icon(Icons.account_balance_wallet, size: 16),
+                  icon: const Icon(Icons.account_balance_rounded, size: 16),
                   label: const Text(
-                    "Finanzas",
+                    "+ Préstamo",
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: widget.isDark
-                        ? Colors.blueGrey[800]
-                        : Colors.blueGrey[700],
+                        ? const Color(0xFF0F766E)
+                        : const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -406,7 +415,7 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
     final tier = hasOverdue ? ReputationTier.observacion : widget.client.tier;
     final tierColor = hasOverdue ? const Color(0xFFEF4444) : Color(tier.colorHex);
     final String badgeLabel = hasOverdue
-        ? (overdueCount > 1 ? "⚠️ MOROSO" : "⚠️ CON RETRASO")
+        ? (overdueCount > 1 ? "MOROSO" : "CON RETRASO")
         : tier.badgeText;
 
     return InkWell(
@@ -426,6 +435,10 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (hasOverdue) ...[
+              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 14),
+              const SizedBox(width: 4),
+            ],
             Text(
               badgeLabel,
               style: const TextStyle(
@@ -450,8 +463,10 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
             ),
             if (widget.client.rachaPagosPuntuales > 0 && !hasOverdue) ...[
               const SizedBox(width: 6),
+              const Icon(Icons.local_fire_department_rounded, color: Colors.orangeAccent, size: 14),
+              const SizedBox(width: 2),
               Text(
-                "🔥 ${widget.client.rachaPagosPuntuales}",
+                "${widget.client.rachaPagosPuntuales}",
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,

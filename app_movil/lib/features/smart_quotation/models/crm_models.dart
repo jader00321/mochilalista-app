@@ -65,7 +65,7 @@ class ClientModel {
     this.lastPayments = const [],
   });
 
-  ReputationTier get tier => ReputationTier.fromKey(nivelReputacion);
+  ReputationTier get tier => ReputationTier.fromScore(scoreReputacion);
 
   double get suggestedCreditLimit {
     return tier.calculateCreditLimit(lastSales, rachaPagosPuntuales, totalDebt);
@@ -110,7 +110,9 @@ class ClientModel {
       puntosHistoricos: (json['puntos_historicos'] as num?)?.toInt() ?? 0,
       rachaPagosPuntuales: (json['racha_pagos_puntuales'] as num?)?.toInt() ?? 0,
       scoreReputacion: (json['score_reputacion'] as num?)?.toInt() ?? 500,
-      nivelReputacion: json['nivel_reputacion'] ?? "PLATA",
+      nivelReputacion: json['score_reputacion'] != null 
+          ? ReputationTier.fromScore((json['score_reputacion'] as num).toInt()).key 
+          : (json['nivel_reputacion'] ?? "PLATA"),
       lastSales: (json['ultimas_ventas'] as List?)?.map((e) => SaleSummary.fromJson(e)).toList() ?? [],
       lastPayments: (json['ultimos_pagos'] as List?)?.map((e) => PaymentModel.fromJson(e)).toList() ?? [],
     );
@@ -462,6 +464,7 @@ class SaleModel {
   final double abonoInicial;
   final double porcentajeInteres;
   final double moraTotal;
+  final int cuotasVencidasCount;
   final String saleDate;
   final String? motivoAnulacion;
   final String? notes; // Add notes field
@@ -525,6 +528,7 @@ class SaleModel {
     this.abonoInicial = 0.0,
     this.porcentajeInteres = 0.0,
     this.moraTotal = 0.0,
+    this.cuotasVencidasCount = 0,
     required this.saleDate,
     this.motivoAnulacion,
     this.notes,
@@ -552,6 +556,7 @@ class SaleModel {
       abonoInicial: _parseDouble(json['abono_inicial']),
       porcentajeInteres: _parseDouble(json['porcentaje_interes']),
       moraTotal: _parseDouble(json['mora_total']),
+      cuotasVencidasCount: (json['cuotas_vencidas_count'] as num?)?.toInt() ?? 0,
       saleDate: json['fecha_venta'] ?? "",
       motivoAnulacion: json['motivo_anulacion'],
       notes: json['notas'] ?? json['nota_prestamo'],
@@ -591,6 +596,7 @@ class SaleModel {
     map['abono_inicial'] = abonoInicial;
     map['porcentaje_interes'] = porcentajeInteres;
     map['mora_total'] = moraTotal;
+    map['cuotas_vencidas_count'] = cuotasVencidasCount;
     return map;
   }
 
@@ -614,6 +620,7 @@ class SaleModel {
     double? abonoInicial,
     double? porcentajeInteres,
     double? moraTotal,
+    int? cuotasVencidasCount,
     String? saleDate,
     String? motivoAnulacion,
     String? notes,
@@ -639,6 +646,7 @@ class SaleModel {
       abonoInicial: abonoInicial ?? this.abonoInicial,
       porcentajeInteres: porcentajeInteres ?? this.porcentajeInteres,
       moraTotal: moraTotal ?? this.moraTotal,
+      cuotasVencidasCount: cuotasVencidasCount ?? this.cuotasVencidasCount,
       saleDate: saleDate ?? this.saleDate,
       motivoAnulacion: motivoAnulacion ?? this.motivoAnulacion,
       notes: notes ?? this.notes,
@@ -1000,16 +1008,16 @@ class ReputationTier {
   String get badgeText {
     switch (key) {
       case 'DIAMANTE_VIP':
-        return '💎 Diamante VIP';
+        return 'Diamante VIP';
       case 'ORO':
-        return '🏆 Oro';
+        return 'Oro';
       case 'PLATA':
-        return '🥈 Plata';
+        return 'Plata';
       case 'BRONCE':
-        return '🥉 Bronce';
+        return 'Bronce';
       case 'OBSERVACION':
       default:
-        return '⚠️ Observación';
+        return 'Observación';
     }
   }
 
@@ -1033,7 +1041,7 @@ class ReputationTier {
     key: 'OBSERVACION',
     displayName: 'En Observación',
     minScore: 0,
-    maxScore: 399,
+    maxScore: 349,
     primaryColor: Color(0xFFEF4444),
     badgeDarkColor: Color(0x33EF4444),
     badgeLightColor: Color(0x25EF4444),
@@ -1044,8 +1052,8 @@ class ReputationTier {
   static const bronce = ReputationTier(
     key: 'BRONCE',
     displayName: 'Bronce',
-    minScore: 400,
-    maxScore: 599,
+    minScore: 350,
+    maxScore: 499,
     primaryColor: Color(0xFFCD7F32),
     badgeDarkColor: Color(0x33CD7F32),
     badgeLightColor: Color(0x25CD7F32),
@@ -1056,12 +1064,12 @@ class ReputationTier {
   static const plata = ReputationTier(
     key: 'PLATA',
     displayName: 'Plata',
-    minScore: 600,
+    minScore: 500,
     maxScore: 749,
     primaryColor: Color(0xFFA8B2C1),
     badgeDarkColor: Color(0x33A8B2C1),
     badgeLightColor: Color(0x25A8B2C1),
-    icon: Icons.verified_outlined,
+    icon: Icons.verified_rounded,
     creditFactor: 2.0,
   );
 
@@ -1100,8 +1108,8 @@ class ReputationTier {
   static ReputationTier fromScore(int score) {
     if (score >= 900) return diamanteVip;
     if (score >= 750) return oro;
-    if (score >= 600) return plata;
-    if (score >= 400) return bronce;
+    if (score >= 500) return plata;
+    if (score >= 350) return bronce;
     return observacion;
   }
 

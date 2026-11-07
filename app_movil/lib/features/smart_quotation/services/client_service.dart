@@ -5,6 +5,7 @@ import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/core/utils/app_logger.dart';
+import 'package:app_movil/core/utils/smart_search_matcher.dart';
 import 'package:app_movil/features/smart_quotation/repositories/client_repository.dart';
 import 'package:app_movil/features/smart_quotation/services/sales_service.dart';
 
@@ -415,9 +416,63 @@ class ClientService {
   Future<bool> updateInstallmentDueDate(int cuotaId, String newDate) async {
     try {
       final db = await dbHelper.database;
-      await db.update('cuotas', {'fecha_vencimiento': newDate}, where: 'id = ?', whereArgs: [cuotaId]);
+      final cRows = await db.query('cuotas', where: 'id = ?', whereArgs: [cuotaId]);
+      if (cRows.isEmpty) return false;
+      final cuota = cRows.first;
+      final int ventaId = cuota['venta_id'] as int;
+      final double montoOriginal = (cuota['monto_original'] as num?)?.toDouble() 
+          ?? (cuota['monto'] as num).toDouble();
+      final double moraMonto = (cuota['mora_monto'] as num?)?.toDouble() ?? 0.0;
+
+      final now = DateTime.now();
+      final todayNorm = DateTime(now.year, now.month, now.day);
+      final DateTime? parsedNewDate = DateTime.tryParse(newDate.split('T').first);
+      final bool isFutureOrToday = parsedNewDate != null && !parsedNewDate.isBefore(todayNorm);
+
+      int? clienteId;
+      await db.transaction((txn) async {
+        if (isFutureOrToday && (moraMonto > 0.001 || (cuota['monto'] as num).toDouble() > montoOriginal)) {
+          // 🛡️ Salvaguarda: Cuota reprogramada en plazo resetea mora para no cobrar mora anticipada
+          await txn.update('cuotas', {
+            'fecha_vencimiento': newDate,
+            'monto': montoOriginal,
+            'mora_monto': 0.0,
+            'mora_porcentaje': 0.0,
+            'mora_periodos_acumulados': 0,
+            'mora_fecha_inicio': newDate,
+          }, where: 'id = ?', whereArgs: [cuotaId]);
+
+          final sumRes = await txn.rawQuery(
+            'SELECT SUM(monto) as total, SUM(mora_monto) as total_mora FROM cuotas WHERE venta_id = ?', 
+            [ventaId]
+          );
+          final double nuevoVentaTotal = (sumRes.first['total'] as num?)?.toDouble() ?? montoOriginal;
+          final double totalMoraVenta = (sumRes.first['total_mora'] as num?)?.toDouble() ?? 0.0;
+
+          await txn.update('ventas', {
+            'monto_total': nuevoVentaTotal,
+            'mora_total': totalMoraVenta,
+          }, where: 'id = ?', whereArgs: [ventaId]);
+        } else {
+          await txn.update('cuotas', {
+            'fecha_vencimiento': newDate,
+            if (isFutureOrToday) 'mora_fecha_inicio': newDate,
+          }, where: 'id = ?', whereArgs: [cuotaId]);
+        }
+
+        final vRows = await txn.query('ventas', columns: ['cliente_id'], where: 'id = ?', whereArgs: [ventaId]);
+        if (vRows.isNotEmpty) {
+          clienteId = vRows.first['cliente_id'] as int?;
+        }
+      });
+
+      if (clienteId != null) {
+        await recalculateClientDebt(clienteId!);
+        await recalculateClientReputation(clienteId!);
+      }
       return true;
-    } catch (e) {
+    } catch (e, stack) {
+      AppLogger.error('ClientService.updateInstallmentDueDate', e, stack);
       return false;
     }
   }
@@ -774,10 +829,10 @@ class ClientService {
       // Determinación del nivel: si tiene cuotas vencidas activas, siempre pasa a OBSERVACIÓN / moroso
       String nivel;
       String legacyConfianza;
-      if (cuotasVencidasActivas > 0 || finalScore < 400) {
+      if (cuotasVencidasActivas > 0 || finalScore < 350) {
         nivel = 'OBSERVACION';
         legacyConfianza = 'moroso';
-      } else if (finalScore < 600) {
+      } else if (finalScore < 500) {
         nivel = 'BRONCE';
         legacyConfianza = 'regular';
       } else if (finalScore < 750) {
@@ -1062,6 +1117,49 @@ class ClientService {
     }
   }
 
+  /// Obtiene la siguiente meta alcanzable para un cliente según sus puntos actuales
+  Future<Map<String, dynamic>?> getNextGoalForClient(int clientId, int negocioId) async {
+    try {
+      final db = await dbHelper.database;
+      final clientRow = await db.query(
+        'clientes',
+        columns: ['puntos_actuales'],
+        where: 'id = ?',
+        whereArgs: [clientId],
+        limit: 1,
+      );
+      if (clientRow.isEmpty) return null;
+      int currentPoints = (clientRow.first['puntos_actuales'] as num?)?.toInt() ?? 0;
+
+      final goals = await getRewardGoals(negocioId, activeOnly: true);
+      if (goals.isEmpty) return null;
+
+      for (var g in goals) {
+        if (g.puntosRequeridos > currentPoints) {
+          int faltantes = g.puntosRequeridos - currentPoints;
+          double progress = (currentPoints / g.puntosRequeridos).clamp(0.0, 1.0);
+          return {
+            'goal': g,
+            'puntos_actuales': currentPoints,
+            'puntos_requeridos': g.puntosRequeridos,
+            'puntos_faltantes': faltantes,
+            'progreso': progress,
+          };
+        }
+      }
+      final maxGoal = goals.last;
+      return {
+        'goal': maxGoal,
+        'puntos_actuales': currentPoints,
+        'puntos_requeridos': maxGoal.puntosRequeridos,
+        'puntos_faltantes': 0,
+        'progreso': 1.0,
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Aprueba una recompensa pendiente y la deja lista para canje / notificada
   Future<bool> approveReward(
     int rewardId, {
@@ -1166,14 +1264,16 @@ class ClientService {
   }
 
   /// Agrega un movimiento manual de puntos o score
-  Future<void> addManualLoyaltyMovement(
+  Future<List<ClientRewardModel>> addManualLoyaltyMovement(
     int clientId,
     int negocioId, {
     required int pointsDelta,
     required String motivo,
     int scoreDelta = 0,
+    int? usuarioId,
   }) async {
     final db = await dbHelper.database;
+    List<ClientRewardModel> unlocked = [];
     await db.transaction((txn) async {
       await txn.rawUpdate(
         'UPDATE clientes SET puntos_actuales = MAX(0, puntos_actuales + ?), puntos_historicos = MAX(0, puntos_historicos + ?) WHERE id = ?',
@@ -1182,13 +1282,14 @@ class ClientService {
 
       final cRow = await txn.query(
         'clientes',
-        columns: ['puntos_actuales', 'score_reputacion'],
+        columns: ['puntos_actuales', 'score_reputacion', 'nombre_completo'],
         where: 'id = ?',
         whereArgs: [clientId],
         limit: 1,
       );
       int pResult = (cRow.first['puntos_actuales'] as num?)?.toInt() ?? 0;
       int sResult = (cRow.first['score_reputacion'] as num?)?.toInt() ?? 500;
+      String cName = cRow.first['nombre_completo'] as String? ?? 'Cliente';
 
       await txn.insert('historial_puntos_reputacion', {
         'negocio_id': negocioId,
@@ -1205,9 +1306,39 @@ class ClientService {
       });
 
       // Evaluar si con estos puntos desbloquea metas
-      await evaluateAndUnlockRewardGoals(txn, clientId, negocioId);
+      if (pointsDelta > 0) {
+        unlocked = await evaluateAndUnlockRewardGoals(
+          txn,
+          clientId,
+          negocioId,
+          usuarioId: usuarioId,
+          clientName: cName,
+        );
+      }
     });
     await recalculateClientReputation(clientId);
+    return unlocked;
+  }
+
+  /// Sincroniza el campo nivel_reputacion en SQLite según el score_reputacion actual de cada cliente.
+  /// Esto asegura que clientes con score 500–749 (como Huk y Bmk) se almacenen y sincronicen como 'PLATA'.
+  Future<void> syncClientReputationTiers(int negocioId) async {
+    try {
+      final db = await dbHelper.database;
+      await db.rawUpdate('''
+        UPDATE clientes 
+        SET nivel_reputacion = CASE 
+          WHEN score_reputacion >= 900 THEN 'DIAMANTE_VIP'
+          WHEN score_reputacion >= 750 THEN 'ORO'
+          WHEN score_reputacion >= 500 THEN 'PLATA'
+          WHEN score_reputacion >= 350 THEN 'BRONCE'
+          ELSE 'OBSERVACION'
+        END
+        WHERE negocio_id = ?
+      ''', [negocioId]);
+    } catch (e, stack) {
+      AppLogger.error('ClientService.syncClientReputationTiers', e, stack);
+    }
   }
 
   /// Obtiene clientes filtrados por nivel de fidelización y búsqueda opcional
@@ -1217,6 +1348,7 @@ class ClientService {
     String? searchQuery,
   }) async {
     try {
+      await syncClientReputationTiers(negocioId);
       final db = await dbHelper.database;
       String where = 'negocio_id = ?';
       List<dynamic> args = [negocioId];
@@ -1226,12 +1358,6 @@ class ClientService {
         args.add(tierKey);
       }
 
-      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
-        where += ' AND (${ClientRepository.sqlUnaccent("nombre_completo")} LIKE ? OR telefono LIKE ?)';
-        final term = '%${ClientRepository.normalizeDart(searchQuery)}%';
-        args.addAll([term, '%$searchQuery%']);
-      }
-
       final rows = await db.query(
         'clientes',
         where: where,
@@ -1239,16 +1365,30 @@ class ClientService {
         orderBy: 'score_reputacion DESC, puntos_actuales DESC',
       );
 
-      return rows.map((r) => ClientModel.fromJson(r)).toList();
+      var clients = rows.map((r) => ClientModel.fromJson(r)).toList();
+      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+        clients = clients.where((c) => SmartSearchMatcher.matches(
+          query: searchQuery,
+          targets: [
+            c.fullName,
+            c.phone,
+            c.docNumber,
+            c.tier.displayName,
+            c.tier.key,
+          ],
+        )).toList();
+      }
+      return clients;
     } catch (e) {
       return [];
     }
   }
 
   /// Identifica clientes que están cerca de una meta (impulso de compra comercial)
+  /// Se considera "Casi en la Meta" si ha alcanzado >= 70% de la meta o le faltan <= 50 puntos.
   Future<List<Map<String, dynamic>>> getClientsAlmostAtGoal(
     int negocioId, {
-    double minPercent = 0.80,
+    double minPercent = 0.70,
     double maxPercent = 0.99,
   }) async {
     try {
@@ -1270,12 +1410,13 @@ class ClientService {
           int req = (m['puntos_requeridos'] as num).toInt();
           if (pts < req) {
             double progress = pts / req;
-            if (progress >= minPercent && progress <= maxPercent) {
+            int faltantes = req - pts;
+            if ((progress >= minPercent && progress <= maxPercent) || (faltantes <= 50 && faltantes > 0)) {
               results.add({
                 'client': ClientModel.fromJson(c),
                 'goal': RewardGoalModel.fromJson(m),
                 'puntos_actuales': pts,
-                'puntos_faltantes': req - pts,
+                'puntos_faltantes': faltantes,
                 'porcentaje': (progress * 100).round(),
               });
               break; // Solo sugerir la meta más próxima

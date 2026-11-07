@@ -288,6 +288,15 @@ class TrackingProvider with ChangeNotifier {
     await loadClients();
   }
 
+  Future<void> refreshClientData(int clientId) async {
+    if (_negocioId == null) return;
+    await loadClients();
+    await loadClientLedger(clientId);
+    await loadClientDebts(clientId);
+    await loadPendingRewardsCount();
+    notifyListeners();
+  }
+
   Future<bool> registerPayment(int clientId, double amount, String method, {int? ventaId, int? cuotaId, bool guardarVuelto = false, bool isAutomatic = false}) async {
     if (_negocioId == null || _usuarioId == null) return false;
     _isLoading = true;

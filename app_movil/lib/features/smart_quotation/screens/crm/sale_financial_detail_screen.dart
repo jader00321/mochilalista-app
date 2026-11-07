@@ -11,6 +11,9 @@ import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_s
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/cuota_morosidad_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/whatsapp_preview_modal.dart'; 
+import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/whatsapp_preview_screen.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart'; 
 
 class SaleFinancialDetailScreen extends StatefulWidget {
   final int saleId;
@@ -219,6 +222,39 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
         title: Text(isLoan ? "Detalle del Préstamo #${_saleData?['numero_secuencial'] ?? widget.saleId}" : "Detalle de Venta #${_saleData?['numero_secuencial'] ?? widget.saleId}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
+            tooltip: "Ver PDF",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PdfPreviewScreen(
+                    quotationId: _saleData?['cotizacion_id'] ?? 0,
+                    saleId: widget.saleId,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.chat, color: Color(0xFF25D366)),
+            tooltip: "Enviar WhatsApp",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => WhatsAppPreviewScreen(
+                    quotationId: _saleData?['cotizacion_id'] ?? 0,
+                    saleId: widget.saleId,
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadData,
@@ -408,129 +444,267 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                           children: [
                             Container(
                               padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.grey[50], borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16))),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF14141C) : Colors.grey[50],
+                                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                              ),
                               child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text("Total Cuota: ${AppCurrency.format(cMonto)}", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textColor)),
-                                          if (cMoraMonto > 0.01) ...[
-                                            const SizedBox(height: 2),
-                                            Text("Base: ${AppCurrency.format(cMontoOriginal)}  •  Mora: +${AppCurrency.format(cMoraMonto)}", style: TextStyle(fontSize: 12, color: Colors.amber[800])),
-                                          ],
-                                          const SizedBox(height: 4),
-                                          Text("Abonado: ${AppCurrency.format(cPagado)}", style: TextStyle(fontSize: 14, color: isDark ? Colors.green[400] : Colors.green)),
-                                          const SizedBox(height: 4),
-                                          Text("Falta Pagar: ${AppCurrency.format(cSaldo)}", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.red[300] : Colors.red)),
-                                        ],
+                                  // Tabla Financiera Limpia de 4 Filas
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isDark ? Colors.white10 : Colors.grey.shade200,
                                       ),
-                                      if (!isPaid)
-                                        IconButton(
-                                          icon: Icon(Icons.edit_calendar, color: isDark ? Colors.blue[300] : Colors.blue),
-                                          tooltip: "Editar Fecha de Vencimiento",
-                                          onPressed: () async {
-                                            final newDate = await showDatePicker(
-                                              context: context,
-                                              initialDate: dueDate,
-                                              firstDate: DateTime.now().subtract(const Duration(days: 60)),
-                                              lastDate: DateTime.now().add(const Duration(days: 365)),
-                                              builder: (context, child) {
-                                                return Theme(
-                                                  data: isDark ? ThemeData.dark().copyWith(
-                                                    colorScheme: ColorScheme.dark(primary: Colors.blue[300]!, onPrimary: Colors.black, surface: const Color(0xFF23232F), onSurface: Colors.white),
-                                                  ) : ThemeData.light().copyWith(
-                                                    colorScheme: ColorScheme.light(primary: Colors.blue[800]!, onPrimary: Colors.white, surface: Colors.white, onSurface: Colors.black),
-                                                  ),
-                                                  child: child!,
-                                                );
-                                              },
-                                            );
-                                            if (newDate != null && newDate.isAtSameMomentAs(dueDate) == false) {
-                                              setState(() => _isLoading = true);
-                                              if (!context.mounted) return;
-                                              final provider = Provider.of<SaleProvider>(context, listen: false);
-                                              final success = await provider.updateInstallmentDate(c['id'] as int, newDate.toIso8601String());
-                                              if (success) {
-                                                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fecha actualizada exitosamente"), backgroundColor: Colors.green));
-                                                await _loadData();
-                                              } else {
-                                                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al actualizar la fecha"), backgroundColor: Colors.red));
-                                                setState(() => _isLoading = false);
-                                              }
-                                            }
-                                          },
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        _buildFinancialRow("Monto Base:", AppCurrency.format(cMontoOriginal), isDark: isDark),
+                                        const SizedBox(height: 6),
+                                        _buildFinancialRow(
+                                          "Recargo por Mora:",
+                                          cMoraMonto > 0.01 ? "+ ${AppCurrency.format(cMoraMonto)}" : "S/ 0.00",
+                                          valueColor: cMoraMonto > 0.01 ? (isDark ? Colors.redAccent : Colors.red) : null,
+                                          isDark: isDark,
                                         ),
-                                    ],
+                                        const SizedBox(height: 6),
+                                        _buildFinancialRow(
+                                          "Monto Abonado:",
+                                          AppCurrency.format(cPagado),
+                                          valueColor: isDark ? Colors.greenAccent : Colors.green.shade700,
+                                          isDark: isDark,
+                                        ),
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(vertical: 6),
+                                          child: Divider(height: 1, thickness: 0.8),
+                                        ),
+                                        _buildFinancialRow(
+                                          "Saldo Exigible Cuota:",
+                                          AppCurrency.format(cSaldo),
+                                          isBold: true,
+                                          valueColor: cSaldo <= 0.02
+                                              ? (isDark ? Colors.greenAccent : Colors.green)
+                                              : (isDark ? Colors.redAccent : Colors.red),
+                                          isDark: isDark,
+                                        ),
+                                      ],
+                                    ),
                                   ),
+
                                   if (!isPaid) ...[
                                     const SizedBox(height: 12),
-                                    Divider(height: 1, thickness: 0.8, color: isDark ? Colors.white12 : Colors.grey.shade300),
-                                    const SizedBox(height: 10),
+                                    // Barra unificada de 4 acciones simétricas
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
                                       children: [
-                                        // Botón Morosidad
-                                        InkWell(
-                                          borderRadius: BorderRadius.circular(8),
-                                          onTap: () {
-                                            CuotaMorosidadModal.show(
-                                              context: context,
-                                              cuota: c,
-                                              isDark: isDark,
-                                              onSaved: _loadData,
-                                            );
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: (cMoraMonto > 0.01 ? Colors.amber : Colors.orange).withValues(alpha: 0.15),
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: (cMoraMonto > 0.01 ? Colors.amber : Colors.orange).withValues(alpha: 0.4)),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(Icons.tune, size: 14, color: Colors.amber[800]),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  cMoraMonto > 0.01 ? "Mora: +${AppCurrency.format(cMoraMonto)}" : "+ Mora",
-                                                  style: TextStyle(color: Colors.amber[800], fontSize: 12, fontWeight: FontWeight.bold),
+                                        // 1. [📅 Fecha]
+                                        Expanded(
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(8),
+                                            onTap: () async {
+                                              final newDate = await showDatePicker(
+                                                context: context,
+                                                initialDate: dueDate,
+                                                firstDate: DateTime.now().subtract(const Duration(days: 60)),
+                                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                                                builder: (context, child) {
+                                                  return Theme(
+                                                    data: isDark
+                                                        ? ThemeData.dark().copyWith(
+                                                            colorScheme: ColorScheme.dark(
+                                                              primary: Colors.blue[300]!,
+                                                              onPrimary: Colors.black,
+                                                              surface: const Color(0xFF23232F),
+                                                              onSurface: Colors.white,
+                                                            ),
+                                                          )
+                                                        : ThemeData.light().copyWith(
+                                                            colorScheme: ColorScheme.light(
+                                                              primary: Colors.blue[800]!,
+                                                              onPrimary: Colors.white,
+                                                              surface: Colors.white,
+                                                              onSurface: Colors.black,
+                                                            ),
+                                                          ),
+                                                    child: child!,
+                                                  );
+                                                },
+                                              );
+                                              if (newDate != null && newDate.isAtSameMomentAs(dueDate) == false) {
+                                                setState(() => _isLoading = true);
+                                                if (!context.mounted) return;
+                                                final provider = Provider.of<SaleProvider>(context, listen: false);
+                                                final success = await provider.updateInstallmentDate(
+                                                  c['id'] as int,
+                                                  newDate.toIso8601String(),
+                                                  saleId: widget.saleId,
+                                                );
+                                                if (success) {
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text("Fecha actualizada exitosamente"), backgroundColor: Colors.green),
+                                                    );
+                                                  }
+                                                  await _loadData();
+                                                } else {
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text("Error al actualizar la fecha"), backgroundColor: Colors.red),
+                                                    );
+                                                  }
+                                                  setState(() => _isLoading = false);
+                                                }
+                                              }
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue.withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: Colors.blue.withValues(alpha: 0.3), width: 0.8),
+                                              ),
+                                              child: FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                child: Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(Icons.calendar_month, size: 13, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      "Fecha",
+                                                      style: TextStyle(
+                                                        color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                              ],
+                                              ),
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
+                                        const SizedBox(width: 6),
 
-                                        // Botón Recordar por WhatsApp con Estudio
-                                        InkWell(
-                                          borderRadius: BorderRadius.circular(8),
-                                          onTap: () {
-                                            WhatsAppPreviewModal.showCuotaReminder(
-                                              context: context,
-                                              cuota: c,
-                                              clientName: _saleData?['cliente_nombre'] ?? (_saleData?['cliente_info']?['nombre_completo']),
-                                              clientPhone: _saleData?['cliente_telefono'] ?? (_saleData?['cliente_info']?['telefono']),
-                                              isDark: isDark,
-                                            );
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF25D366).withValues(alpha: 0.15),
-                                              borderRadius: BorderRadius.circular(8),
+                                        // 2. [⚙️ Mora / 🛡️ Prog. Mora]
+                                        Expanded(
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(8),
+                                            onTap: () {
+                                              CuotaMorosidadModal.show(
+                                                context: context,
+                                                cuota: c,
+                                                isDark: isDark,
+                                                onSaved: _loadData,
+                                              );
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+                                              decoration: BoxDecoration(
+                                                color: (cMoraMonto > 0.01 ? Colors.redAccent : (daysDiff < 0 ? Colors.orange : Colors.blueGrey)).withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: (cMoraMonto > 0.01 ? Colors.redAccent : (daysDiff < 0 ? Colors.orange : Colors.blueGrey)).withValues(alpha: 0.3),
+                                                  width: 0.8,
+                                                ),
+                                              ),
+                                              child: FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                child: Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      cMoraMonto > 0.01 ? Icons.timer_outlined : (daysDiff < 0 ? Icons.tune : Icons.shield_outlined),
+                                                      size: 13,
+                                                      color: cMoraMonto > 0.01 ? Colors.redAccent : (daysDiff < 0 ? Colors.orange[800] : (isDark ? Colors.cyanAccent : Colors.teal)),
+                                                    ),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      cMoraMonto > 0.01 ? "Mora" : (daysDiff < 0 ? "Mora" : "Prog. Mora"),
+                                                      style: TextStyle(
+                                                        color: cMoraMonto > 0.01 ? Colors.redAccent : (daysDiff < 0 ? Colors.orange[800] : (isDark ? Colors.cyanAccent : Colors.teal)),
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
                                             ),
-                                            child: const Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(Icons.chat_bubble_outline, size: 14, color: Color(0xFF25D366)),
-                                                SizedBox(width: 4),
-                                                Text("Recordar", style: TextStyle(color: Color(0xFF25D366), fontSize: 12, fontWeight: FontWeight.bold)),
-                                              ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+
+                                        // 3. [💬 Recordar]
+                                        Expanded(
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(8),
+                                            onTap: () {
+                                              WhatsAppPreviewModal.showCuotaReminder(
+                                                context: context,
+                                                cuota: c,
+                                                clientName: _saleData?['cliente_nombre'] ?? (_saleData?['cliente_info']?['nombre_completo']),
+                                                clientPhone: _saleData?['cliente_telefono'] ?? (_saleData?['cliente_info']?['telefono']),
+                                                isDark: isDark,
+                                                operationTitle: isLoan ? "Préstamo" : "Venta a Crédito",
+                                              );
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF25D366).withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.3), width: 0.8),
+                                              ),
+                                              child: const FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                child: Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(Icons.chat_bubble_outline, size: 13, color: Color(0xFF25D366)),
+                                                    SizedBox(width: 3),
+                                                    Text("Recordar", style: TextStyle(color: Color(0xFF25D366), fontSize: 11, fontWeight: FontWeight.bold)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+
+                                        // 4. [💵 Cobrar]
+                                        Expanded(
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(8),
+                                            onTap: () => _openCuotaPayment(c),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+                                              decoration: BoxDecoration(
+                                                color: Colors.teal.withValues(alpha: 0.15),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: Colors.teal.withValues(alpha: 0.3), width: 0.8),
+                                              ),
+                                              child: FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                child: Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(Icons.payments_outlined, size: 13, color: isDark ? Colors.tealAccent[400] : Colors.teal.shade800),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      "Cobrar",
+                                                      style: TextStyle(
+                                                        color: isDark ? Colors.tealAccent[400] : Colors.teal.shade800,
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -720,5 +894,66 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildFinancialRow(
+    String label,
+    String value, {
+    Color? valueColor,
+    bool isBold = false,
+    required bool isDark,
+  }) {
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final labelColor = isDark ? Colors.grey[400] : Colors.grey[700];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            color: labelColor,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isBold ? 14 : 12.5,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            color: valueColor ?? textColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openCuotaPayment(Map<String, dynamic> c) async {
+    final int? clientId = _saleData?['cliente_id'] as int? ?? _saleData?['cliente_info']?['id'] as int?;
+    if (clientId == null || clientId <= 0) return;
+    final saleProv = Provider.of<SaleProvider>(context, listen: false);
+    final client = await saleProv.getClientById(clientId);
+    if (client != null && mounted) {
+      final double cuotaMonto = (num.tryParse(c['monto'].toString()) ?? 0.0).toDouble();
+      final double cuotaPagado = (num.tryParse((c['monto_pagado'] ?? 0.0).toString()) ?? 0.0).toDouble();
+      final double saldoCuota = cuotaMonto - cuotaPagado;
+
+      showModalBottomSheet(
+        context: context,
+        useSafeArea: true,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => PaymentEntryModal(
+          client: client,
+          initialTargetType: 'cuota',
+          initialTargetId: c['id'] as int?,
+          initialAmount: saldoCuota > 0.01 ? saldoCuota : cuotaMonto,
+          onPaymentSuccess: () {
+            _loadData();
+            saleProv.silentRefresh();
+          },
+        ),
+      );
+    }
   }
 }

@@ -918,7 +918,7 @@ class PdfGenerator {
               }
 
               final String moraInfo = tieneMora 
-                  ? " (Orig: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(moraMonto)} = Total: ${AppCurrency.format(cuotaMonto)})" 
+                  ? " (Base: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(moraMonto)})" 
                   : "";
 
               return pw.Padding(
@@ -931,7 +931,7 @@ class PdfGenerator {
                             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                             children: [
                               pw.Text("Cuota ${c['numero_cuota']}: ${AppCurrency.format(cuotaMonto)}", style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                              pw.Text("Vence: $date", style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
+                              pw.Text("${isVencida ? 'Venció:' : 'Vence:'} $date", style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
                             ],
                           ),
                           if (tieneMora)
@@ -946,7 +946,7 @@ class PdfGenerator {
                           pw.Expanded(
                             child: pw.Text("Cuota ${c['numero_cuota']}: ${AppCurrency.format(cuotaMonto)}$moraInfo", style: const pw.TextStyle(fontSize: 8.5)),
                           ),
-                          pw.Text("Vence: $date", style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                          pw.Text("${isVencida ? 'Venció:' : 'Vence:'} $date", style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
                           pw.SizedBox(width: 8),
                           pw.Text(statusText, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: statusColor)),
                         ],

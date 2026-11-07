@@ -9,7 +9,6 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_mod
 import 'package:app_movil/features/smart_quotation/widgets/crm/ledger_timeline_tab.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_profile_editor.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_stats_header.dart';
-import 'package:app_movil/features/smart_quotation/widgets/crm/client_loyalty_history_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_sales_history_tab.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_quotations_tab.dart'; 
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
@@ -23,8 +22,13 @@ import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
 
 class ClientDetailScreen extends StatefulWidget {
   final ClientModel client;
+  final bool autoRefreshOnLoad;
 
-  const ClientDetailScreen({super.key, required this.client});
+  const ClientDetailScreen({
+    super.key,
+    required this.client,
+    this.autoRefreshOnLoad = true,
+  });
 
   @override
   State<ClientDetailScreen> createState() => _ClientDetailScreenState();
@@ -51,9 +55,11 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
       }
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshData();
-    });
+    if (widget.autoRefreshOnLoad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _refreshData();
+      });
+    }
   }
 
   @override
@@ -282,33 +288,71 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                     InfoTip(
                       icon: Icons.receipt_long_outlined,
                       text:
-                          "Navega entre 'Libro Contable', 'Compras' y 'Cotizaciones' para ver todo su historial.",
+                          "Navega entre 'Estado de Cuenta', 'Compras' y 'Listas / Cotiz.' para ver todo su historial.",
                     ),
                   ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.stars_rounded, size: 26, color: Colors.amber),
-                  tooltip: "Puntos y Fidelización",
-                  onPressed: () => ClientLoyaltyHistoryModal.show(
-                    context,
-                    client: _currentClient,
-                    onPointsChanged: _refreshData,
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+                  tooltip: "Más opciones",
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
+                  color: isDark ? const Color(0xFF23232F) : Colors.white,
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _openEditor(context);
+                    } else if (value == 'delete') {
+                      ClientDeleteModal.show(
+                        context: context,
+                        clientName: _currentClient.fullName,
+                        isDark: isDark,
+                        onConfirm: _handleDelete,
+                      );
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_rounded,
+                              size: 18,
+                              color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                          const SizedBox(width: 10),
+                          Text(
+                            "Editar datos del cliente",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.delete_outline_rounded,
+                              size: 18, color: Colors.redAccent),
+                          const SizedBox(width: 10),
+                          const Text(
+                            "Eliminar cliente",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                IconButton(icon: const Icon(Icons.edit_note, size: 28), tooltip: "Editar Perfil", onPressed: () => _openEditor(context)),
-                IconButton(
-                  icon: const Icon(Icons.delete_forever, size: 28), 
-                  tooltip: "Eliminar Cliente", 
-                  color: Colors.red[300],
-                  onPressed: () {
-                    ClientDeleteModal.show(
-                      context: context, 
-                      clientName: _currentClient.fullName, 
-                      isDark: isDark, 
-                      onConfirm: _handleDelete
-                    );
-                  }
-                )
+                const SizedBox(width: 4),
               ],
             ),
             
@@ -324,31 +368,44 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
               ),
             ),
             
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _SliverAppBarDelegate(
-                  TabBar(
-                    controller: _tabController,
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.center,
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    labelColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                    unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
-                    indicatorColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                    indicatorWeight: 3,
-                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
-                    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
-                    tabs: const [
-                      Tab(text: "Estado de Cuenta"),
-                      Tab(text: "Historial de Compras"),
-                      Tab(text: "Listas Pendientes"),
-                    ],
-                  ),
-                  surfaceColor,
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _SliverAppBarDelegate(
+                TabBar(
+                  controller: _tabController,
+                  isScrollable: false,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                  labelColor: isDark ? Colors.blue[300] : Colors.blue[800],
+                  unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
+                  indicatorColor: isDark ? Colors.blue[300] : Colors.blue[800],
+                  indicatorWeight: 3,
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  tabs: const [
+                    Tab(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text("Estado de Cuenta"),
+                      ),
+                    ),
+                    Tab(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text("Compras"),
+                      ),
+                    ),
+                    Tab(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text("Listas / Cotiz."),
+                      ),
+                    ),
+                  ],
                 ),
+                surfaceColor,
               ),
+            ),
           ];
         },
         body: Container(

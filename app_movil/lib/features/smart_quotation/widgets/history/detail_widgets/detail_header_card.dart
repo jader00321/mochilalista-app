@@ -49,13 +49,43 @@ class DetailHeaderCard extends StatelessWidget {
           
           // 🔥 TÍTULO DE LA VENTA / PRÉSTAMO EN EL DETALLE
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               saleName, 
               style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[800], fontSize: 24, fontWeight: FontWeight.w900), 
               textAlign: TextAlign.center
             ),
           ),
+
+          if (isLoan && ((num.tryParse(saleData['porcentaje_interes']?.toString() ?? '0') ?? 0.0).toDouble() > 0))
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              margin: const EdgeInsets.only(bottom: 6),
+              decoration: BoxDecoration(
+                color: Colors.orange.withAlpha((0.2 * 255).toInt()), 
+                borderRadius: BorderRadius.circular(12), 
+                border: Border.all(color: Colors.orange.withAlpha((0.5 * 255).toInt()))
+              ),
+              child: Text(
+                "Interés aplicado: ${(num.tryParse(saleData['porcentaje_interes']?.toString() ?? '0') ?? 0.0).toDouble().toStringAsFixed(1)}%", 
+                style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)
+              ),
+            ),
+
+          if ((num.tryParse((saleData['mora_total'] ?? 0.0).toString()) ?? 0.0).toDouble() > 0.01)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.red.withAlpha((0.2 * 255).toInt()), 
+                borderRadius: BorderRadius.circular(12), 
+                border: Border.all(color: Colors.red.withAlpha((0.5 * 255).toInt()))
+              ),
+              child: Text(
+                "Mora acumulada: + ${AppCurrency.format((num.tryParse((saleData['mora_total'] ?? 0.0).toString()) ?? 0.0).toDouble())}", 
+                style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)
+              ),
+            ),
              
           // 💰 MONTO PRINCIPAL GIGANTE BLINDADO CONTRA DESBORDAMIENTOS (FittedBox)
           FittedBox(

@@ -206,13 +206,13 @@ class SalePaymentTimeline extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                "Vence: $dateFormatted",
+                                "${isVencido ? 'Venció:' : 'Vence:'} $dateFormatted",
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
-                                  color: textColor,
+                                  color: isVencido ? (isDark ? Colors.red[300] : Colors.red[800]) : textColor,
                                 ),
                               ),
                             ),
@@ -285,169 +285,196 @@ class SalePaymentTimeline extends StatelessWidget {
 
                         const SizedBox(height: 10),
 
-                        // NIVEL 2: Badge de Estado y Botones de Acción
-                        SizedBox(
-                          width: double.infinity,
-                          child: Wrap(
-                            alignment: WrapAlignment.spaceBetween,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              // Badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: badgeBg,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: badgeBorder, width: 0.8),
+                        // NIVEL 2: Badge de Estado
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: badgeBg,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: badgeBorder, width: 0.8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(badgeIcon, size: 12, color: badgeColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  badgeLabel,
+                                  style: TextStyle(
+                                    color: badgeColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.3,
+                                  ),
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(badgeIcon, size: 12, color: badgeColor),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      badgeLabel,
-                                      style: TextStyle(
-                                        color: badgeColor,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.3,
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // NIVEL 3: Fila de Botones Simétricos de Acción
+                        if (!cuotaPagada) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              // Botón 1: Mora / Prog. Mora
+                              Expanded(
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: () {
+                                    CuotaMorosidadModal.show(
+                                      context: context,
+                                      cuota: c,
+                                      isDark: isDark,
+                                      onSaved: () {
+                                        onPaymentSuccess?.call();
+                                        Provider.of<SaleProvider>(context, listen: false).silentRefresh();
+                                      },
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: tieneMora
+                                          ? Colors.redAccent.withValues(alpha: 0.15)
+                                          : (isVencido ? Colors.orange.withValues(alpha: 0.15) : Colors.blueGrey.withValues(alpha: 0.15)),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: tieneMora
+                                            ? Colors.redAccent.withValues(alpha: 0.3)
+                                            : (isVencido ? Colors.orange.withValues(alpha: 0.3) : Colors.blueGrey.withValues(alpha: 0.3)),
+                                        width: 0.8,
                                       ),
                                     ),
-                                  ],
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            tieneMora
+                                                ? Icons.timer_outlined
+                                                : (isVencido ? Icons.add_circle_outline : Icons.shield_outlined),
+                                            size: 14,
+                                            color: tieneMora
+                                                ? Colors.redAccent
+                                                : (isVencido ? Colors.orange[800] : (isDark ? Colors.cyanAccent : Colors.teal)),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            tieneMora
+                                                ? "Mora (+S/ ${moraMonto.toStringAsFixed(2)})"
+                                                : (isVencido ? "Mora" : "Prog. Mora"),
+                                            style: TextStyle(
+                                              color: tieneMora
+                                                  ? Colors.redAccent
+                                                  : (isVencido ? Colors.orange[800] : (isDark ? Colors.cyanAccent : Colors.teal)),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+
+                              // Botón 2: Recordar
+                              Expanded(
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: () {
+                                    WhatsAppPreviewModal.showCuotaReminder(
+                                      context: context,
+                                      cuota: c,
+                                      clientName: clientName,
+                                      clientPhone: clientPhone,
+                                      isDark: isDark,
+                                      operationTitle: isLoan ? "Préstamo" : "Venta a Crédito",
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: const Color(0xFF25D366).withValues(alpha: 0.3),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    child: const FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.chat, size: 14, color: Color(0xFF25D366)),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            "Recordar",
+                                            style: TextStyle(
+                                              color: Color(0xFF25D366),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
 
-                              // Acciones si está pendiente
-                              if (!cuotaPagada)
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 6,
-                                  alignment: WrapAlignment.end,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    // Botón + Mora / Mora
-                                    InkWell(
-                                      borderRadius: BorderRadius.circular(8),
-                                      onTap: () {
-                                        CuotaMorosidadModal.show(
-                                          context: context,
-                                          cuota: c,
-                                          isDark: isDark,
-                                          onSaved: () {
-                                            onPaymentSuccess?.call();
-                                            Provider.of<SaleProvider>(context, listen: false).silentRefresh();
-                                          },
-                                        );
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                                        decoration: BoxDecoration(
-                                          color: tieneMora
-                                              ? Colors.redAccent.withValues(alpha: 0.15)
-                                              : Colors.orange.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(8),
+                              // Botón 3: Cobrar
+                              if (clientId != null && clientId! > 0) ...[
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: () => _openCuotaPayment(context, c),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.teal.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: (isDark ? Colors.tealAccent : Colors.teal).withValues(alpha: 0.3),
+                                          width: 0.8,
                                         ),
+                                      ),
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
                                         child: Row(
-                                          mainAxisSize: MainAxisSize.min,
+                                          mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
                                             Icon(
-                                              tieneMora ? Icons.timer_outlined : Icons.add_circle_outline,
+                                              Icons.payments_outlined,
                                               size: 14,
-                                              color: tieneMora ? Colors.redAccent : Colors.orange[800],
+                                              color: isDark ? Colors.tealAccent[400] : Colors.teal.shade800,
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
-                                              tieneMora ? "Mora" : "+ Mora",
+                                              "Cobrar",
                                               style: TextStyle(
-                                                color: tieneMora ? Colors.redAccent : Colors.orange[800],
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-
-                                    // Botón Recordar (Estudio Seguro de WhatsApp)
-                                    InkWell(
-                                      borderRadius: BorderRadius.circular(8),
-                                      onTap: () {
-                                        WhatsAppPreviewModal.showCuotaReminder(
-                                          context: context,
-                                          cuota: c,
-                                          clientName: clientName,
-                                          clientPhone: clientPhone,
-                                          isDark: isDark,
-                                          operationTitle: isLoan ? "Préstamo" : "Venta a Crédito",
-                                        );
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF25D366).withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.chat, size: 14, color: Color(0xFF25D366)),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              "Recordar",
-                                              style: TextStyle(
-                                                color: Color(0xFF25D366),
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-
-                                    // Botón Cobrar
-                                    if (clientId != null && clientId! > 0)
-                                      InkWell(
-                                        borderRadius: BorderRadius.circular(8),
-                                        onTap: () => _openCuotaPayment(context, c),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                                          decoration: BoxDecoration(
-                                            color: Colors.teal.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.payments_outlined,
-                                                size: 14,
                                                 color: isDark ? Colors.tealAccent[400] : Colors.teal.shade800,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
                                               ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                "Cobrar",
-                                                style: TextStyle(
-                                                  color: isDark ? Colors.tealAccent[400] : Colors.teal.shade800,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                  ],
+                                    ),
+                                  ),
                                 ),
+                              ],
                             ],
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   );

@@ -142,7 +142,7 @@ class _WhatsAppPreviewModalState extends State<WhatsAppPreviewModal> {
       }
 
       if (moraMonto > 0.01) {
-        sb.writeln("▪ Total Cuota: *${AppCurrency.format(totalCuota)}* (Orig: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(moraMonto)} = Total: ${AppCurrency.format(totalCuota)})");
+        sb.writeln("▪ Total Cuota: *${AppCurrency.format(totalCuota)}* (Base: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(moraMonto)})");
       } else {
         sb.writeln("▪ Total Cuota: *${AppCurrency.format(totalCuota)}*");
       }
@@ -178,25 +178,30 @@ class _WhatsAppPreviewModalState extends State<WhatsAppPreviewModal> {
         final due = c['fecha_vencimiento'] ?? c['dueDate'] ?? '';
         final falta = (monto - pagado) > 0 ? (monto - pagado) : 0.0;
         final String moraDetail = mora > 0.01 
-            ? " (Orig: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(mora)} = Total: ${AppCurrency.format(monto)})" 
+            ? " (Base: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(mora)})" 
             : "";
 
         final DateTime? dueDt = DateTime.tryParse(due.toString().split('T').first);
+        final String dueFmt = dueDt != null ? DateFormat('dd/MM/yyyy').format(dueDt) : due.toString().split('T').first;
         final int daysOver = dueDt != null 
             ? DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day).difference(DateTime(dueDt.year, dueDt.month, dueDt.day)).inDays 
             : 0;
 
+        final String vencioTag = mora > 0.01
+            ? "- Venció: $dueFmt (hace $daysOver ${daysOver == 1 ? 'día' : 'días'})"
+            : "(Venció: $dueFmt) - Vencida hace $daysOver ${daysOver == 1 ? 'día' : 'días'}";
+
         if (pagado > 0.01) {
           if (daysOver > 0) {
-            sb.writeln("🔴 Cuota #$numCuota: *${AppCurrency.format(monto)}*$moraDetail - Vencida hace $daysOver d • Pago Parcial (Abonado: ${AppCurrency.format(pagado)} | Falta: ${AppCurrency.format(falta)})");
+            sb.writeln("🔴 Cuota #$numCuota: *${AppCurrency.format(monto)}*$moraDetail $vencioTag • Pago Parcial (Abonado: ${AppCurrency.format(pagado)} | Falta: ${AppCurrency.format(falta)})");
           } else {
-            sb.writeln("🟠 Cuota #$numCuota: *${AppCurrency.format(monto)}*$moraDetail (Vence: ${due.toString().split('T').first}) - Pago Parcial (Abonado: ${AppCurrency.format(pagado)} | Falta: ${AppCurrency.format(falta)})");
+            sb.writeln("🟠 Cuota #$numCuota: *${AppCurrency.format(monto)}*$moraDetail (Vence: $dueFmt) - Pago Parcial (Abonado: ${AppCurrency.format(pagado)} | Falta: ${AppCurrency.format(falta)})");
           }
         } else {
           if (daysOver > 0) {
-            sb.writeln("🔴 Cuota #$numCuota: *${AppCurrency.format(monto)}*$moraDetail - Vencida hace $daysOver d");
+            sb.writeln("🔴 Cuota #$numCuota: *${AppCurrency.format(monto)}*$moraDetail $vencioTag");
           } else {
-            sb.writeln("⏳ Cuota #$numCuota: *${AppCurrency.format(monto)}*$moraDetail (Vence: ${due.toString().split('T').first})");
+            sb.writeln("⏳ Cuota #$numCuota: *${AppCurrency.format(monto)}*$moraDetail (Vence: $dueFmt) - Pendiente");
           }
         }
       }

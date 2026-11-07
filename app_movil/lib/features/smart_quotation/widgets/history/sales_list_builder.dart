@@ -82,7 +82,7 @@ class _SalesListBuilderState extends State<SalesListBuilder> {
                   final IconData originBadgeIcon;
 
                   if (sale.isLoan) {
-                    originBadgeText = "Préstamo Personal";
+                    originBadgeText = "Préstamo";
                     originBadgeColor = isDark ? Colors.amber[400]! : Colors.amber[800]!;
                     originAvatarIcon = Icons.account_balance_wallet_rounded;
                     originBadgeIcon = Icons.account_balance_wallet_outlined;
@@ -105,18 +105,12 @@ class _SalesListBuilderState extends State<SalesListBuilder> {
                       ? clientName 
                       : (sale.isLoan ? "Cliente no registrado" : "Cliente eventual");
 
-                  // 📝 Subtítulo contextual (Evitar redundancia con etiqueta de origen)
+                  // 📝 Subtítulo contextual (Muestra motivo real sin textos destructivos)
                   final String subtitleText;
                   if (sale.isLoan) {
                     final note = sale.notes?.trim() ?? "";
                     if (note.isNotEmpty) {
-                      String cleaned = note.replaceAll(RegExp(r'pr[eé]stamo\s+personal(\s+para|\s*[-:]|\s+de)?\s*', caseSensitive: false), '').trim();
-                      final lowerCleaned = cleaned.toLowerCase();
-                      if (cleaned.isNotEmpty && lowerCleaned != "personal" && lowerCleaned != "préstamo" && lowerCleaned != "prestamo") {
-                        subtitleText = cleaned[0].toUpperCase() + cleaned.substring(1);
-                      } else {
-                        subtitleText = "Sin motivo especificado";
-                      }
+                      subtitleText = note;
                     } else {
                       subtitleText = "Sin motivo especificado";
                     }
@@ -342,6 +336,24 @@ class _SalesListBuilderState extends State<SalesListBuilder> {
                                         ? (isDark ? Colors.blue[300]! : Colors.blue) 
                                         : (isDark ? Colors.purple[300]! : Colors.purple), 
                                     icon: Icons.local_shipping_outlined, 
+                                    isDark: isDark,
+                                  ),
+
+                                // Badge de Cuotas Vencidas (en préstamos y créditos)
+                                if (!sale.isArchived && sale.cuotasVencidasCount > 0)
+                                  _Badge(
+                                    text: "${sale.cuotasVencidasCount} ${sale.cuotasVencidasCount == 1 ? 'vencida' : 'vencidas'}",
+                                    color: isDark ? Colors.red[300]! : Colors.red[700]!,
+                                    icon: Icons.warning_amber_rounded,
+                                    isDark: isDark,
+                                  ),
+
+                                // Badge de Mora Activa
+                                if (!sale.isArchived && sale.moraTotal > 0.01)
+                                  _Badge(
+                                    text: "+${AppCurrency.format(sale.moraTotal)} mora",
+                                    color: isDark ? Colors.amber[300]! : Colors.amber[800]!,
+                                    icon: Icons.timer_outlined,
                                     isDark: isDark,
                                   ),
                               ],

@@ -1442,6 +1442,21 @@ class SalesService {
       final cuota = cRows.first;
       final int ventaId = cuota['venta_id'] as int;
 
+      // 🛡️ Regla Estricta: Prohibido aplicar mora directa si la cuota aún no vence (fecha_vencimiento >= hoy)
+      final String? dueDateStr = cuota['fecha_vencimiento']?.toString();
+      if (dueDateStr != null && dueDateStr.isNotEmpty) {
+        final DateTime? dueDate = DateTime.tryParse(dueDateStr.split('T').first);
+        if (dueDate != null) {
+          final now = DateTime.now();
+          final todayNorm = DateTime(now.year, now.month, now.day);
+          final dueDateNorm = DateTime(dueDate.year, dueDate.month, dueDate.day);
+          if (!dueDateNorm.isBefore(todayNorm)) {
+            debugPrint("Rechazado: La cuota aún no vence (vence: $dueDateStr). No se puede aplicar mora directa.");
+            return false;
+          }
+        }
+      }
+
       final double montoOriginal = (cuota['monto_original'] as num?)?.toDouble() 
           ?? (cuota['monto'] as num).toDouble();
 
@@ -1617,6 +1632,44 @@ class SalesService {
           ? fechaVencimiento
           : (referenceDate ?? DateTime.now()).toIso8601String().split('T').first;
 
+      final now = referenceDate ?? DateTime.now();
+      final todayNorm = DateTime(now.year, now.month, now.day);
+      final DateTime? parsedDueDate = DateTime.tryParse(fechaVencimiento.split('T').first);
+      final bool isUnexpired = parsedDueDate != null && !parsedDueDate.isBefore(todayNorm);
+
+      if (isUnexpired) {
+        // 🛡️ Regla Estricta: Cuota en plazo NO suma dinero ahora. Guarda la regla programada intacta.
+        final double montoOriginal = (cuota['monto_original'] as num?)?.toDouble() 
+            ?? (cuota['monto'] as num).toDouble();
+
+        await db.update('cuotas', {
+          'monto': montoOriginal,
+          'mora_monto': 0.0,
+          'mora_porcentaje': 0.0,
+          'mora_automatica': 1,
+          'mora_frecuencia': freq,
+          'mora_intervalo_dias': interval,
+          'mora_tipo': t,
+          'mora_valor': val,
+          'mora_fecha_inicio': fechaInicio,
+          'mora_periodos_acumulados': 0,
+        }, where: 'id = ?', whereArgs: [cuotaId]);
+
+        final sumRes = await db.rawQuery(
+          'SELECT SUM(monto) as total, SUM(mora_monto) as total_mora FROM cuotas WHERE venta_id = ?', 
+          [ventaId]
+        );
+        final double nuevoVentaTotal = (sumRes.first['total'] as num?)?.toDouble() ?? montoOriginal;
+        final double totalMoraVenta = (sumRes.first['total_mora'] as num?)?.toDouble() ?? 0.0;
+
+        await db.update('ventas', {
+          'monto_total': nuevoVentaTotal,
+          'mora_total': totalMoraVenta,
+        }, where: 'id = ?', whereArgs: [ventaId]);
+
+        return true;
+      }
+
       await db.update('cuotas', {
         'mora_automatica': 1,
         'mora_frecuencia': freq,
@@ -1742,5 +1795,42 @@ class SalesService {
     } catch (e) {
       debugPrint("Error evaluando morosidad periódica: $e");
     }
+  }
+
+  /// Obtiene un modelo SaleModel individual actualizado con conteo de cuotas vencidas
+  Future<SaleModel?> getSaleModel(int saleId) async {
+    try {
+      final db = await dbHelper.database;
+      final rows = await db.rawQuery('''
+        SELECT v.*, c.nombre_completo AS cliente_nombre, c.telefono AS cliente_telefono,
+        (SELECT COUNT(*) FROM cuotas q WHERE q.venta_id = v.id AND q.estado != 'pagado' AND (q.monto - COALESCE(q.monto_pagado, 0)) > 0.01 AND date(q.fecha_vencimiento) < date('now', 'localtime')) AS cuotas_vencidas_count
+        FROM ventas v
+        LEFT JOIN clientes c ON v.cliente_id = c.id
+        WHERE v.id = ?
+        LIMIT 1
+      ''', [saleId]);
+      if (rows.isEmpty) return null;
+      var map = Map<String, dynamic>.from(rows.first);
+      if (map['cliente_nombre'] != null) {
+        map['cliente_info'] = {
+          'nombre_completo': map['cliente_nombre'],
+          'telefono': map['cliente_telefono'],
+        };
+      }
+      return SaleModel.fromJson(map);
+    } catch (e) {
+      debugPrint("Error al obtener SaleModel: $e");
+      return null;
+    }
+  }
+
+  /// Obtiene el venta_id asociado a una cuota
+  Future<int?> getVentaIdFromCuota(int cuotaId) async {
+    try {
+      final db = await dbHelper.database;
+      final rows = await db.query('cuotas', columns: ['venta_id'], where: 'id = ?', whereArgs: [cuotaId], limit: 1);
+      if (rows.isNotEmpty) return rows.first['venta_id'] as int?;
+    } catch (_) {}
+    return null;
   }
 }

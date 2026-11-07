@@ -253,14 +253,14 @@ void main() {
 
       // Verificaciones en Tarjetas de Historial:
       // 1. Badges superiores de Origen Explícito (elegante sin emojis)
-      expect(find.text("Préstamo Personal"), findsOneWidget);
+      expect(find.text("Préstamo"), findsOneWidget);
       expect(find.text("Cotización Vendida"), findsOneWidget);
 
       // 2. Cliente Freddy visible en ambos (¡El préstamo NO debe ocultar a Freddy!)
       expect(find.text("Freddy"), findsNWidgets(2));
 
-      // 3. Subtítulo del préstamo no repite 'Préstamo personal'
-      expect(find.text("Mercadería"), findsOneWidget);
+      // 3. Subtítulo del préstamo muestra el motivo real guardado
+      expect(find.text("Préstamo personal para mercadería"), findsOneWidget);
 
       // 4. Verdad contable en Recibo #1: Debe decir PAGO PARCIAL · Debe S/ 18.57 (JAMÁS PAGADO)
       expect(find.text("PAGO PARCIAL · Debe S/ 18.57"), findsOneWidget);

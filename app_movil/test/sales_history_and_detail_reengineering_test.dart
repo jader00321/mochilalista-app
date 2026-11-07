@@ -80,7 +80,7 @@ void main() {
       expect(find.textContaining("21/10/2026"), findsOneWidget);
 
       // 3. Origen elegante SIN emojis
-      expect(find.text("Préstamo Personal"), findsOneWidget);
+      expect(find.text("Préstamo"), findsOneWidget);
       expect(find.text("Cotización Vendida"), findsOneWidget);
       expect(find.textContaining("🏦"), findsNothing);
       expect(find.textContaining("📋"), findsNothing);
@@ -471,17 +471,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Debe mostrar "Sin motivo especificado" para los casos 1, 2 y 3 (exactamente 3 veces)
-      expect(find.text("Sin motivo especificado"), findsNWidgets(3));
+      // Debe mostrar "Sin motivo especificado" para el caso 3 sin observación
+      expect(find.text("Sin motivo especificado"), findsOneWidget);
 
-      // Debe mostrar la observación limpia "Mercadería" para el caso 4
-      expect(find.text("Mercadería"), findsOneWidget);
-
-      // NO debe repetirse el texto "Préstamo personal" como subtítulo redundante debajo del cliente
-      // (Sólo debe figurar en el badge superior como "Préstamo Personal" en mayúsculas estilo Title)
-      final allSubtitleMatches = find.byWidgetPredicate((widget) =>
-          widget is Text && widget.data == "Préstamo personal");
-      expect(allSubtitleMatches, findsNothing);
+      // Debe mostrar el motivo real registrado para cada préstamo (sin regex destructivo)
+      expect(find.text("Préstamo personal"), findsOneWidget);
+      expect(find.text("préstamo personal"), findsOneWidget);
+      expect(find.text("Préstamo personal para mercadería"), findsOneWidget);
     });
 
     testWidgets('PUNTO 2: DetailHeaderCard usa FittedBox y AppCurrency; SaleActionBottomSheet usa InteractiveSheetWrapper y AppCurrency', (tester) async {
