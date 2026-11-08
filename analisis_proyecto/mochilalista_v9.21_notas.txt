@@ -1,0 +1,155 @@
+================================================================================
+                    MOCHILALISTA APP - NOTAS DE VERSION V9.21
+================================================================================
+Version: 9.21.0+71
+Nombre del Paquete: mochilalista_v9.21
+Fecha: 8 de Noviembre de 2026
+Compilacion: Release APK (mochilalista_v9.21.apk)
+Plataforma: Android (Flutter SDK ^3.9.0)
+Arquitectura: 100% Local-First Offline SQLite con reactividad a 0ms
+Calidad de Codigo: 0 Errores | 0 Advertencias | 0 Infos | 100% Tests Aprobados
+Repositorio: Rama dev/mejoras-v9.0-comercializacion-seguridad (Sincronizado)
+Destino: C:\Users\vjuli\Documents\v-app-offline apks\mochilalista_v9.21.apk
+
+===============================================================================
+RESUMEN EJECUTIVO DE LA ACTUALIZACION
+===============================================================================
+La version 9.21 de MochilaLista incorpora una profunda auditoria contable y un
+refinamiento integral de la experiencia de usuario (UX) en tres componentes
+criticos de la operacion diaria:
+
+1. MOTOR CONTABLE FIFO Y CARROUSEL DINAMICO EN "REGISTRAR ABONO":
+   - Prelacion cronologica estricta (fecha_vencimiento ASC): las amortizaciones
+     liquidan primero las cuotas mas antiguas vencidas antes de cubrir cuotas
+     de creditos o prestamos mas recientes.
+   - Cascada inteligente en Pago Especifico: al ingresar un importe mayor a la
+     cuota seleccionada, se cancela al 100% dicha cuota y el excedente se abona
+     automaticamente a las cuotas siguientes del mismo credito/prestamo.
+   - Carrusel ergonomico de 5 sugerencias de pago rapido (Cuota Ant., Deuda Venc.,
+     Total, 50% Deuda, 25% Deuda) con seleccion visual activa.
+   - Extincion y paridad contable en SQLite: las cuotas canceladas pasan a
+     estado 'pagado', desactivan la mora automatica (mora_automatica = 0) y
+     resuelven su alerta en el Centro de Notificaciones.
+
+2. ESTUDIO DE WHATSAPP DINAMICO, 4 PLANTILLAS Y CHIPS MODULARES:
+   - Sincronizacion a 0ms de la deuda exigible real incluyendo recargos por mora
+     vigentes (ej. S/ 3,173.00 exactos).
+   - Soporte para 4 plantillas contextuales tanto en cuotas individuales como en
+     estados de cuenta agrupados: Cobranza/Desglose, Recordatorio Amable, Aviso
+     Preventivo y Aviso de Morosidad.
+   - 3 chips modulares toggleables para encender o apagar secciones al instante:
+     [Desglose Cuotas], [Detalle Mora] y [Cuentas de Abono].
+   - Cabecera compacta de una sola linea y estructura anti-desborde para
+     pantallas de alta densidad o teclados abiertos.
+
+3. DETALLE DE FACTURAS ESCANEADAS, VISOR ZOOMABLE Y EXPORTACION SEGURA:
+   - Eliminacion de iconos duplicados en el AppBar para una jerarquia visual limpia.
+   - Visor de imagen a pantalla completa con soporte de doble toque, pellizco y
+     zoom extendido hasta 6x sin deprecaciones de Matrix4.
+   - Deteccion en disco en tiempo real: los botones indican '✓ Foto Guardada' y
+     '✓ PDF Guardado' si los archivos ya existen en Descargas.
+   - Hoja modal interactiva anti-duplicados: permite abrir, compartir o volver
+     a descargar el comprobante sin descargas innecesarias.
+   - Modal de confirmacion con proteccion del formato (.PDF/.JPG), vibracion
+     haptica segura y boton nativo de Compartir (SharePlus).
+
+===============================================================================
+DETALLE TECNICO DE MEJORAS Y ARQUITECTURA
+===============================================================================
+
+1. MOTOR CONTABLE DE ABONOS Y UX FINANCIERA (ClientService & PaymentEntryModal)
+-------------------------------------------------------------------------------
+- Orden Cronologico Estricto FIFO:
+  * Las cuotas pendientes de todas las ventas y prestamos activos del cliente
+    se unifican y ordenan por 'fecha_vencimiento ASC' (con desempate por
+    numero_cuota y venta_id).
+  * Paridad total 1:1 entre lo previsualizado en GeneralPreviewTab y la ejecucion
+    final de transacciones en ClientService.registerPayment.
+  * Extincion de cuotas al saldo <= 0.01: transicion inmediata a 'pagado',
+    apagado de bandera 'mora_automatica = 0' y notificacion sincronizada.
+
+- Cascada de Excedentes en Pago Especifico:
+  * Cuando se amortiza una cuota especifica con un monto superior al adeudado,
+    el saldo sobrante amortiza de forma descendente las cuotas posteriores de ese
+    mismo compromiso financiero.
+  * Tarjeta de Live Preview reactiva que muestra en tiempo real como se
+    distribuira el excedente antes de procesar el pago.
+
+- Carrusel Horizontal de 5 Botones Rapidos:
+  * 'Cuota Ant.': Cuota vencida mas antigua (ej. S/ 300.00).
+  * 'Deuda Venc.': Suma acumulada de todas las cuotas vencidas con mora.
+  * 'Total': Deuda global exigible del cliente.
+  * '50% Deuda': Mitad exacta del total.
+  * '25% Deuda': Cuarta parte del total.
+  * Formato en carrusel scrollable con altura fija de 52dp y padding vertical
+    de 4dp (0.0px overflow).
+  * Auto-dismiss del teclado virtual al interactuar fuera del campo de monto.
+
+
+2. ESTUDIO DE WHATSAPP ASISTIDO (WhatsAppPreviewModal & ClientDetailScreen)
+-------------------------------------------------------------------------------
+- Sincronizacion de Deuda Exigible:
+  * Calculo inmediato a 0ms de moras acumuladas y saldos vigentes (resolviendo
+    discrepancias donde se omitia la mora de cuotas vencidas).
+  * Encabezado compacto horizontal: 'Cliente: [Nombre] | WhatsApp: [Numero]'.
+
+- 4 Plantillas Contextuales de Mensajeria:
+  * 1. Cobranza / Desglose: Notificacion formal con desglose completo de cuotas,
+       numeros de recibo, montos individuales y fecha limite.
+  * 2. Recordatorio Amable: Mensaje de cortesia para pagos proximos a vencer.
+  * 3. Aviso Preventivo: Alerta previa a 24-48 horas del vencimiento.
+  * 4. Aviso de Morosidad: Recordatorio de cobro de recargo y aviso de regularizacion.
+
+- 3 Chips Modulares Toggleables:
+  * Permiten insertar o suprimir dinamicamente del mensaje:
+    a) El listado linea por linea de cuotas.
+    b) El detalle del recargo por mora aplicado.
+    c) Los numeros de cuenta bancaria y billeteras digitales (Yape, Plin).
+  * Contenedor con SingleChildScrollView para evitar desbordes visuales.
+
+
+3. DETALLE DE FACTURA ESCANEADA Y EXPORTACION (InvoiceDetailScreen)
+-------------------------------------------------------------------------------
+- Limpieza y Jerarquia Visual:
+  * AppBar con titulo claro 'Factura #[ID]', eliminando iconos redundantes.
+  * Mantenimiento de botones prioritarios en el cuerpo de la pantalla:
+    'Descargar Foto' y 'Reporte PDF'.
+
+- Visor de Foto a Pantalla Completa:
+  * Apertura al pulsar la miniatura de la factura con InteractiveViewer.
+  * Doble toque inteligente implementado con 'Matrix4.diagonal3Values' y
+    'setTranslationRaw', admitiendo zoom suave desde 1.0x hasta 6.0x.
+
+- Deteccion Persistente de Archivos y Prevencion de Duplicados:
+  * Consulta defensiva con timeout de 300ms a getDownloadsDirectory.
+  * Si el archivo ya existe en Descargas, los botones principales muestran
+    '✓ Foto Guardada' o '✓ PDF Guardado'.
+  * Al pulsar un archivo ya guardado, se despliega una hoja modal inferior que
+    ofrece: 'Abrir Archivo', 'Compartir' o 'Volver a Descargar'.
+
+- Modal de Descarga Exitosa (DownloadFeedbackModal):
+  * Badge visual que preserva intacta la extension (.PDF o .JPG).
+  * Proteccion defensiva en vibraciones hapticas (150ms timeout).
+  * Acceso directo a 'Compartir' usando Share.shareXFiles nativo de Android.
+
+
+4. AUDITORIA DE CODIGO, TESTS Y CONTROL DE CALIDAD
+-------------------------------------------------------------------------------
+- Flutter Analyze:
+  * 0 errores, 0 warnings, 0 infos en toda la base de codigo (lib/ y test/).
+  * Correccion de lints 'body_might_complete_normally_catch_error' en SharePlus.
+  * Correccion de llamadas obsoletas Matrix4.translate / Matrix4.scale.
+  * Llaves obligatorias en estructuras de control de flujo 'if'.
+
+- Suite de Pruebas Adversariales:
+  * 8/8 pruebas automatizadas aprobadas con exito en
+    'test/abonos_whatsapp_facturas_adversarial_test.dart':
+    1. Paridad y orden FIFO estricto (fecha_vencimiento ASC).
+    2. Extincion de cuota saldada y desactivacion de mora automatica.
+    3. Cascada inteligente de excedente en Pago Especifico.
+    4. Sincronizacion de carrusel de 5 etiquetas y seleccion animada.
+    5. Sincronizacion de deuda exigible con morosidad y 4 plantillas.
+    6. Toggles de chips modulares en Estudio de WhatsApp.
+    7. Verificacion de AppBar sin duplicados, visor zoomable y deteccion de archivos.
+    8. DownloadFeedbackModal con extension protegida y boton de compartir.
+================================================================================
