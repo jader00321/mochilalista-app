@@ -190,7 +190,7 @@ void main() {
       };
       await tester.pumpWidget(buildModalApp(cuota: cuotaMoraPeriodica, mockProvider: mockProvider));
       await tester.pumpAndSettle();
-      expect(find.text('⚡ MORA PERIÓDICA ACTIVA: +S/ 5.00 cada 7 días'), findsOneWidget);
+      expect(find.text('MORA PERIÓDICA ACTIVA: +S/ 5.00 cada 7 días'), findsOneWidget);
 
       // Estado 4: Cuota no vencida (mora programada)
       final futureDate = DateFormat('yyyy-MM-dd').format(DateTime.now().add(const Duration(days: 7)));
@@ -206,7 +206,7 @@ void main() {
       };
       await tester.pumpWidget(buildModalApp(cuota: cuotaNoVencida, mockProvider: mockProvider));
       await tester.pumpAndSettle();
-      expect(find.text('🛡️ MORA PROGRAMADA SI VENCE'), findsOneWidget);
+      expect(find.text('MORA PROGRAMADA SI VENCE'), findsOneWidget);
     });
 
     testWidgets('V3: Condonación Directa de Mora con botón [Quitar Mora]', (tester) async {
@@ -372,19 +372,19 @@ void main() {
       await tester.tap(find.text('Automático Periódico'));
       await tester.pumpAndSettle();
 
-      // Con 6 días vencido y frecuencia semanal (7 días): 0 periodos acumulados (+S/ 0.00), próximo recargo en 1 día
-      expect(find.textContaining('venció hace 6 días'), findsWidgets);
-      expect(find.textContaining('0 periodos (+S/ 0.00)'), findsOneWidget);
-      expect(find.textContaining('El 1.er recargo (+S/ 5.00) se aplicará mañana'), findsOneWidget);
+      // Con 6 días vencido y frecuencia semanal (7 días): 0 ciclos cumplidos, próximo recargo en 1 día
+      expect(find.textContaining('6 días de atraso'), findsWidgets);
+      expect(find.textContaining('0 ciclos cumplidos'), findsWidgets);
+      expect(find.textContaining('Siguiente recargo (+S/ 5.00): en 1 día'), findsOneWidget);
 
       // Cambiar frecuencia a Diario (1 día)
       final diarioChip = find.text('Diario (1 día)');
       await tester.tap(diarioChip);
       await tester.pumpAndSettle();
 
-      // 6 días vencido con frecuencia diaria: 6 periodos acumulados (+S/ 30.00 -> Total cuota: S/ 330.00)
-      expect(find.textContaining('6 periodos acumulados (+S/ 30.00'), findsOneWidget);
-      expect(find.textContaining('Total cuota: S/ 330.00'), findsOneWidget);
+      // 6 días vencido con frecuencia diaria: 6 ciclos cumplidos (+S/ 30.00 de mora)
+      expect(find.textContaining('6 ciclos cumplidos'), findsWidgets);
+      expect(find.textContaining('+S/ 30.00 de mora hoy'), findsOneWidget);
 
       // Caso cuota en plazo (futura)
       final sevenDaysFuture = DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month, now.day).add(const Duration(days: 7)));
@@ -485,6 +485,11 @@ void main() {
     });
 
     testWidgets('V8: Refinamiento de Mensaje en Editor WhatsApp y Modal', (tester) async {
+      final d13Ago = DateTime.now().subtract(const Duration(days: 13));
+      final d6Ago = DateTime.now().subtract(const Duration(days: 6));
+      final d13Fmt = DateFormat('dd/MM/yyyy').format(d13Ago);
+      final d6Fmt = DateFormat('dd/MM/yyyy').format(d6Ago);
+
       final cuotaVencidaSinMora = {
         'id': 1,
         'numero_cuota': 1,
@@ -492,7 +497,7 @@ void main() {
         'monto_original': 300.0,
         'mora_monto': 0.0,
         'monto_pagado': 0.0,
-        'fecha_vencimiento': '2026-10-24',
+        'fecha_vencimiento': DateFormat('yyyy-MM-dd').format(d13Ago),
       };
 
       final cuotaVencidaConMora = {
@@ -502,7 +507,7 @@ void main() {
         'monto_original': 300.0,
         'mora_monto': 5.0,
         'monto_pagado': 0.0,
-        'fecha_vencimiento': '2026-10-31',
+        'fecha_vencimiento': DateFormat('yyyy-MM-dd').format(d6Ago),
       };
 
       // 1. Probar WhatsAppPreviewModal para cuota individual con mora
@@ -543,9 +548,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verificar cuota vencida sin mora (limpio sin guion redundante)
-      expect(find.textContaining('Cuota #1: *S/ 300.00* (Venció: 24/10/2026) - Vencida hace 13 días'), findsOneWidget);
+      expect(find.textContaining('Cuota #1: *S/ 300.00* (Venció: $d13Fmt) - *Vencida (hace 13 días)*'), findsOneWidget);
       // Verificar cuota vencida con mora
-      expect(find.textContaining('Cuota #2: *S/ 305.00* (Base: S/ 300.00 + Mora: S/ 5.00) - Venció: 31/10/2026 (hace 6 días)'), findsOneWidget);
+      expect(find.textContaining('Cuota #2: *S/ 305.00* (Base: S/ 300.00 + Mora: S/ 5.00) (Venció: $d6Fmt) - *Vencida (hace 6 días)*'), findsOneWidget);
       // Verificar que no imprima el guion redundante '- (Venció:'
       expect(find.textContaining('- (Venció:'), findsNothing);
     });

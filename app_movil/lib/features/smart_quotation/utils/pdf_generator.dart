@@ -8,6 +8,7 @@ import 'package:app_movil/core/models/user_model.dart';
 import 'package:app_movil/features/smart_quotation/models/pdf_config_model.dart'; 
 import 'package:app_movil/features/smart_quotation/utils/pdf_image_helper.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/utils/cuota_date_helper.dart';
 import 'package:printing/printing.dart';
 
 /// 🖨️ MOTOR GENERADOR DE DOCUMENTOS PDF (MULTI-SITUACIÓN Y DUAL-FORMAT A4/TICKET 80mm)
@@ -391,9 +392,17 @@ class PdfGenerator {
     final String docNumber = isSale 
         ? (saleData['id'] ?? 0).toString().padLeft(6, '0') 
         : q.id.toString().padLeft(6, '0');
-    final String docDate = isSale && saleData['fecha_venta'] != null 
-        ? fmt.format(DateTime.parse(saleData['fecha_venta'])) 
-        : fmt.format(DateTime.parse(q.createdAt));
+    DateTime parsedDocDate;
+    try {
+      parsedDocDate = isSale && saleData['fecha_venta'] != null 
+          ? (CuotaDateHelper.parseFlexible(saleData['fecha_venta']) ?? DateTime.parse(saleData['fecha_venta']))
+          : (CuotaDateHelper.parseFlexible(q.createdAt) ?? DateTime.parse(q.createdAt));
+    } catch (_) {
+      parsedDocDate = DateTime.now();
+    }
+    final String docDate = (parsedDocDate.hour == 0 && parsedDocDate.minute == 0)
+        ? DateFormat('dd/MM/yyyy').format(parsedDocDate)
+        : fmt.format(parsedDocDate);
 
     // Resolución limpia del nombre del cliente real (sin códigos internos)
     String? rawClientName = config.customClientName;
@@ -475,7 +484,7 @@ class PdfGenerator {
             ),
           if (config.showBusinessInfo) ...[
             pw.Text(bizName.toUpperCase(), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13, color: colors['primary']), textAlign: pw.TextAlign.center),
-            if (config.includeShopRuc && bizRuc != null) pw.Text("RUC: $bizRuc", style: const pw.TextStyle(fontSize: 8)),
+            if (config.includeShopRuc && bizRuc != null && bizRuc.trim().isNotEmpty) pw.Text("RUC: $bizRuc", style: const pw.TextStyle(fontSize: 8)),
             if (config.includeShopAddress && bizAddress != null) pw.Text(bizAddress, style: const pw.TextStyle(fontSize: 8), textAlign: pw.TextAlign.center),
             if (config.includeOwnerPhone && bizPhone != null) pw.Text("Tel: $bizPhone", style: const pw.TextStyle(fontSize: 8)),
           ],
@@ -524,7 +533,7 @@ class PdfGenerator {
               children: [
                 pw.Text(bizName.toUpperCase(), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 15, color: colors['primary'])),
                 pw.SizedBox(height: 3),
-                if (config.includeShopRuc && bizRuc != null) pw.Text("RUC: $bizRuc", style: const pw.TextStyle(fontSize: 9)),
+                if (config.includeShopRuc && bizRuc != null && bizRuc.trim().isNotEmpty) pw.Text("RUC: $bizRuc", style: const pw.TextStyle(fontSize: 9)),
                 if (config.includeShopAddress && bizAddress != null) pw.Text(bizAddress, style: const pw.TextStyle(fontSize: 9)),
                 if (config.includeOwnerPhone && bizPhone != null) pw.Text("Tel: $bizPhone", style: const pw.TextStyle(fontSize: 9)),
               ],
@@ -876,29 +885,20 @@ class PdfGenerator {
               final bool tieneMora = moraMonto > 0.01;
               final bool pagado = c['estado'] == 'pagado' || (saldoFalta <= 0.01 && cuotaMonto > 0);
 
-              DateTime? dueDate;
-              try {
-                dueDate = DateTime.parse(c['fecha_vencimiento'].toString().split('T').first);
-              } catch (_) {}
-
-              final now = DateTime.now();
-              final today = DateTime(now.year, now.month, now.day);
-              final int daysOverdue = dueDate != null
-                  ? today.difference(DateTime(dueDate.year, dueDate.month, dueDate.day)).inDays
-                  : 0;
-              final bool isVencida = !pagado && daysOverdue > 0;
-              final String date = dueDate != null ? DateFormat('dd/MM/yyyy').format(dueDate) : c['fecha_vencimiento'].toString();
+              final dateInfo = CuotaDateHelper.evaluate(c['fecha_vencimiento']);
+              final int daysOverdue = dateInfo.daysOverdue;
+              final bool isVencida = !pagado && dateInfo.isPast;
 
               String statusText;
               PdfColor statusColor;
 
               if (pagado) {
-                statusText = "PAGADO";
+                statusText = "PAGADA";
                 statusColor = PdfColors.green700;
               } else if (isVencida) {
                 statusColor = PdfColors.red700;
                 if (cuotaPagado > 0.01) {
-                  statusText = "VENCIDA ($daysOverdue d) | PAGO PARCIAL (Abonado: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})";
+                  statusText = "VENCIDA ($daysOverdue d) | PAGO PARCIAL (Abonó: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})";
                 } else if (tieneMora) {
                   statusText = "VENCIDA ($daysOverdue d) | CON MORA";
                 } else {
@@ -906,9 +906,9 @@ class PdfGenerator {
                 }
               } else {
                 if (cuotaPagado > 0.01) {
-                  statusText = "PAGO PARCIAL (Abonado: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})";
+                  statusText = "PAGO PARCIAL (Abonó: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})";
                   statusColor = PdfColors.orange800;
-                } else if (daysOverdue == 0) {
+                } else if (dateInfo.isToday) {
                   statusText = "VENCE HOY";
                   statusColor = PdfColors.amber800;
                 } else {
@@ -931,7 +931,7 @@ class PdfGenerator {
                             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                             children: [
                               pw.Text("Cuota ${c['numero_cuota']}: ${AppCurrency.format(cuotaMonto)}", style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
-                              pw.Text("${isVencida ? 'Venció:' : 'Vence:'} $date", style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
+                              pw.Text(dateInfo.fullLabel, style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
                             ],
                           ),
                           if (tieneMora)
@@ -946,7 +946,7 @@ class PdfGenerator {
                           pw.Expanded(
                             child: pw.Text("Cuota ${c['numero_cuota']}: ${AppCurrency.format(cuotaMonto)}$moraInfo", style: const pw.TextStyle(fontSize: 8.5)),
                           ),
-                          pw.Text("${isVencida ? 'Venció:' : 'Vence:'} $date", style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                          pw.Text(dateInfo.fullLabel, style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
                           pw.SizedBox(width: 8),
                           pw.Text(statusText, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: statusColor)),
                         ],

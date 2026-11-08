@@ -12,6 +12,7 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/client_stats_head
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_sales_history_tab.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_quotations_tab.dart'; 
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/services/sales_service.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_delete_modal.dart';
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart'; 
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
@@ -72,18 +73,20 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
   Future<void> _refreshData() async {
     final prov = Provider.of<TrackingProvider>(context, listen: false);
     
-    // Sincronizar recálculo de reputación ante cuotas vencidas o anulaciones recientes
+    // Sincronizar recálculo de morosidad periódica y reputación ante cuotas vencidas o anulaciones recientes
     try {
+      await SalesService().evaluarMorosidadPeriodica(clienteId: _currentClient.id);
       await ClientService().recalculateClientReputation(_currentClient.id);
     } catch (_) {}
 
-    // Obtenemos los datos actualizados de SQLite y actualizamos la UI local
-    final freshClient = await prov.getClientById(_currentClient.id);
-    
+    // ⚡ Cargar deudas y evaluar morosidad periódica ANTES de obtener el cliente fresco
+    await prov.loadClientDebts(_currentClient.id);
     await prov.loadClientLedger(_currentClient.id);
     await prov.loadClientQuotations(_currentClient.id);
-    await prov.loadClientDebts(_currentClient.id);
     await prov.loadPendingRewardsCount();
+
+    // Obtenemos los datos actualizados de SQLite y actualizamos la UI local con la morosidad al día
+    final freshClient = await prov.getClientById(_currentClient.id);
 
     if (mounted && freshClient != null) {
       setState(() {
@@ -413,7 +416,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
           child: TabBarView(
             controller: _tabController,
             children: [
-              RefreshIndicator(onRefresh: _refreshData, child: const LedgerTimelineTab()), 
+              RefreshIndicator(onRefresh: _refreshData, child: LedgerTimelineTab(clientId: _currentClient.id, onRefresh: _refreshData)), 
               RefreshIndicator(onRefresh: _refreshData, child: ClientSalesHistoryTab(client: _currentClient, isDark: isDark, onRefresh: _refreshData)),   
               RefreshIndicator(onRefresh: _refreshData, child: ClientQuotationsTab(isDark: isDark, onRefresh: _refreshData)), 
             ],

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
@@ -127,13 +128,17 @@ class ClientService {
       List<LedgerItem> ledger = [];
 
       final sales = await db.rawQuery('''
-        SELECT id, numero_secuencial, origen_venta, fecha_venta, monto_total
-        FROM ventas 
-        WHERE cliente_id = ? AND (is_archived IS NULL OR is_archived = 0)
+        SELECT v.id, v.numero_secuencial, v.origen_venta, v.fecha_venta, v.monto_total, 
+               COALESCE(v.mora_total, 0.0) as mora_total, v.nota_prestamo, v.created_at,
+               (SELECT COUNT(c.id) FROM cuotas c WHERE c.venta_id = v.id) as cuotas_count
+        FROM ventas v 
+        WHERE v.cliente_id = ? AND (v.is_archived IS NULL OR v.is_archived = 0)
       ''', [clientId]);
       
       final payments = await db.rawQuery('''
-        SELECT p.*, c.numero_cuota, v.origen_venta as pago_origen_venta, v.numero_secuencial as venta_numero_secuencial 
+        SELECT p.*, c.numero_cuota, v.origen_venta as pago_origen_venta, 
+               v.numero_secuencial as venta_numero_secuencial, v.id as v_id,
+               v.fecha_venta as v_fecha_venta
         FROM pagos p 
         LEFT JOIN cuotas c ON p.cuota_id = c.id 
         LEFT JOIN ventas v ON p.venta_id = v.id
@@ -142,66 +147,150 @@ class ClientService {
           AND (p.nota IS NULL OR p.nota NOT LIKE '%[ANULADO%')
       ''', [clientId]);
 
+      List<Map<String, dynamic>> eventos = [];
+      try {
+        eventos = await db.rawQuery('''
+          SELECT e.*, v.numero_secuencial as venta_numero_secuencial
+          FROM eventos_financieros_cliente e
+          LEFT JOIN ventas v ON e.venta_id = v.id
+          WHERE e.cliente_id = ?
+        ''', [clientId]);
+      } catch (_) {}
+
       List<Map<String, dynamic>> combined = [];
+
       for (var s in sales) {
         final displayId = s['numero_secuencial'] ?? s['id'];
-        String label = s['origen_venta'] == 'prestamo_personal' 
-            ? 'Préstamo #$displayId' 
-            : 'Venta #$displayId';
-        String subtipo = s['origen_venta'] == 'prestamo_personal' ? 'prestamo' : 'venta';
-        combined.add({'id_ref': s['id'], 'tipo': 'cargo', 'subtipo': subtipo, 'fecha': s['fecha_venta'], 'monto': s['monto_total'], 'detalle': label, 'affects_debt': true});
+        final bool isLoan = s['origen_venta'] == 'prestamo_personal';
+        final String label = isLoan ? 'Préstamo #$displayId' : 'Venta #$displayId';
+        final String subtipo = isLoan ? 'prestamo' : 'venta';
+        final double montoTotal = (s['monto_total'] as num).toDouble();
+        final double moraTotal = (s['mora_total'] as num?)?.toDouble() ?? 0.0;
+        final double montoBase = (montoTotal - moraTotal) > 0 ? (montoTotal - moraTotal) : montoTotal;
+        final int cCount = (s['cuotas_count'] as num?)?.toInt() ?? 1;
+
+        combined.add({
+          'id_ref': s['id'],
+          'tipo': 'cargo',
+          'subtipo': subtipo,
+          'fecha': s['fecha_venta'],
+          'created_at': s['created_at'] ?? s['fecha_venta'],
+          'monto': montoTotal,
+          'monto_base': montoBase,
+          'mora_monto': moraTotal,
+          'detalle': label,
+          'nota': s['nota_prestamo'],
+          'cuotas_count': cCount,
+          'affects_debt': true,
+          'venta_id': s['id'],
+          'can_edit': isLoan,
+          'can_delete': isLoan,
+          'tie_breaker': 1, // Cargos primero en acumulación
+          'seq_id': s['id'],
+        });
       }
+
       for (var p in payments) {
-        String detail = 'Pago en ${p['metodo_pago']}';
+        final bool isLoan = p['pago_origen_venta'] == 'prestamo_personal';
+        final String entityName = isLoan ? 'Préstamo' : 'Venta';
+        final displayVentaId = p['venta_numero_secuencial'] ?? p['venta_id'];
+        final String metodoPago = p['metodo_pago']?.toString() ?? 'Efectivo';
+        final int? cuotaNum = (p['numero_cuota'] as num?)?.toInt();
+        final String? rawNota = p['nota']?.toString();
+
         String subtipo = 'pago';
         bool affectsDebt = true;
-        
-        // Si el pago no está vinculado a una venta (ej. Saldo a favor, abono desvinculado, retiro), no afecta la deuda histórica.
-        if (p['venta_id'] == null || p['nota'] == 'Conversión a Saldo a favor' || p['metodo_pago'] == 'devolucion' || p['metodo_pago'] == 'retiro_saldo') {
+        if (p['venta_id'] == null || rawNota == 'Conversión a Saldo a favor' || metodoPago == 'devolucion' || metodoPago == 'retiro_saldo') {
           affectsDebt = false;
         }
 
-        if (p['metodo_pago'] == 'saldo_a_favor') {
-          detail = 'Pago con Saldo a Favor';
-        } else if (p['metodo_pago'] == 'devolucion') {
-          detail = p['nota']?.toString() ?? 'Devolución';
+        String cleanTitle;
+        if (metodoPago == 'devolucion') {
+          cleanTitle = rawNota ?? 'Devolución';
           subtipo = 'devolucion';
-        } else if (p['metodo_pago'] == 'retiro_saldo') {
-          detail = p['nota']?.toString() ?? 'Retiro de Saldo a favor';
+        } else if (metodoPago == 'retiro_saldo') {
+          cleanTitle = rawNota ?? 'Retiro de Saldo a favor';
           subtipo = 'retiro_saldo';
-        }
-        
-        bool isLoan = p['pago_origen_venta'] == 'prestamo_personal';
-        String entityName = isLoan ? 'Préstamo' : 'Venta';
-        final displayVentaId = p['venta_numero_secuencial'] ?? p['venta_id'];
-        
-        if (p['nota'] != null && p['nota'].toString().isNotEmpty && p['metodo_pago'] != 'devolucion' && p['metodo_pago'] != 'retiro_saldo') {
-           detail = '${p['nota']} (${p['metodo_pago']})';
-           
-           // 🔥 FASE 3: Identificar de qué venta es el Abono Inicial
-           String notaLower = p['nota'].toString().toLowerCase();
-           if (notaLower.contains('abono inicial') || notaLower.contains('pago adelantado') || notaLower.contains('conversión a saldo a favor')) {
-             if (p['venta_id'] != null && !notaLower.contains('conversión a saldo a favor')) {
-               detail += ' de $entityName #$displayVentaId';
-             } else if (notaLower.contains('conversión a saldo a favor')) {
-               detail = 'Conversión a Saldo a favor';
-             }
-           }
-        } else if (p['numero_cuota'] != null && p['metodo_pago'] != 'devolucion' && p['metodo_pago'] != 'retiro_saldo') {
-           detail += ' (Cuota ${p['numero_cuota']} de $entityName #$displayVentaId)';
-        } else if (p['cuota_id'] != null && p['metodo_pago'] != 'devolucion' && p['metodo_pago'] != 'retiro_saldo') {
-           detail += ' (Cuota, $entityName #$displayVentaId)';
-        } else if (p['venta_id'] != null && p['metodo_pago'] != 'devolucion' && p['metodo_pago'] != 'retiro_saldo') {
-           detail += ' ($entityName #$displayVentaId)';
+        } else if (metodoPago == 'saldo_a_favor') {
+          cleanTitle = 'Pago con Saldo a Favor';
+        } else if (cuotaNum != null) {
+          final bool isHist = rawNota != null && rawNota.toLowerCase().contains('histórico');
+          cleanTitle = isHist
+              ? 'Abono Histórico • Cuota #$cuotaNum ($entityName #$displayVentaId)'
+              : 'Abono • Cuota #$cuotaNum ($entityName #$displayVentaId)';
+        } else if (rawNota != null && rawNota.isNotEmpty) {
+          cleanTitle = rawNota;
+        } else if (p['venta_id'] != null) {
+          cleanTitle = 'Abono • $entityName #$displayVentaId';
+        } else {
+          cleanTitle = 'Abono a cuenta';
         }
 
-        combined.add({'id_ref': p['id'], 'tipo': 'abono', 'subtipo': subtipo, 'fecha': p['fecha_pago'], 'monto': p['monto'], 'detalle': detail, 'affects_debt': affectsDebt});
+        combined.add({
+          'id_ref': p['id'],
+          'tipo': 'abono',
+          'subtipo': subtipo,
+          'fecha': p['fecha_pago'],
+          'created_at': p['created_at'] ?? p['fecha_pago'],
+          'monto': (p['monto'] as num).toDouble(),
+          'detalle': cleanTitle,
+          'metodo_pago': metodoPago,
+          'nota': rawNota,
+          'cuota_numero': cuotaNum,
+          'venta_id': p['venta_id'],
+          'cuota_id': p['cuota_id'],
+          'pago_id': p['id'],
+          'affects_debt': affectsDebt,
+          'can_edit': true,
+          'can_delete': true,
+          'tie_breaker': 2, // Abonos después del cargo en acumulación
+          'seq_id': p['id'],
+          'parent_venta_id': p['venta_id'],
+        });
       }
 
+      for (var ev in eventos) {
+        final tEv = ev['tipo_evento']?.toString() ?? 'evento';
+        combined.add({
+          'id_ref': ev['id'],
+          'tipo': 'evento',
+          'subtipo': tEv,
+          'tipo_evento': tEv,
+          'fecha': ev['fecha_evento'],
+          'created_at': ev['fecha_evento'],
+          'monto': (ev['monto_impacto'] as num?)?.toDouble() ?? 0.0,
+          'detalle': ev['titulo']?.toString() ?? 'Evento Financiero',
+          'nota': ev['descripcion']?.toString(),
+          'venta_id': ev['venta_id'],
+          'cuota_id': ev['cuota_id'],
+          'evento_id': ev['id'],
+          'affects_debt': false,
+          'can_edit': false,
+          'can_delete': true,
+          'tie_breaker': 3,
+          'seq_id': ev['id'],
+        });
+      }
+
+      // Ordenamiento de recencia operativa: de más antiguo a más reciente para acumulación de saldo
       combined.sort((a, b) {
-        DateTime dateA = DateTime.tryParse(a['fecha'] ?? "") ?? DateTime.fromMillisecondsSinceEpoch(0);
-        DateTime dateB = DateTime.tryParse(b['fecha'] ?? "") ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return dateA.compareTo(dateB);
+        DateTime dateA = DateTime.tryParse(a['created_at']?.toString() ?? a['fecha']?.toString() ?? "") ?? DateTime.fromMillisecondsSinceEpoch(0);
+        DateTime dateB = DateTime.tryParse(b['created_at']?.toString() ?? b['fecha']?.toString() ?? "") ?? DateTime.fromMillisecondsSinceEpoch(0);
+        int dateCmp = dateA.compareTo(dateB);
+        if (dateCmp != 0) return dateCmp;
+
+        int pVentaA = (a['parent_venta_id'] ?? a['venta_id'] ?? 0) as int;
+        int pVentaB = (b['parent_venta_id'] ?? b['venta_id'] ?? 0) as int;
+        if (pVentaA != 0 && pVentaA == pVentaB) {
+          int tbA = (a['tie_breaker'] as int?) ?? 1;
+          int tbB = (b['tie_breaker'] as int?) ?? 1;
+          int tbCmp = tbA.compareTo(tbB);
+          if (tbCmp != 0) return tbCmp;
+        }
+
+        int idA = (a['seq_id'] as int?) ?? 0;
+        int idB = (b['seq_id'] as int?) ?? 0;
+        return idA.compareTo(idB);
       });
 
       double runningBalance = 0.0;
@@ -217,12 +306,306 @@ class ClientService {
         if (runningBalance < 0.01) runningBalance = 0.0;
 
         ledger.add(LedgerItem(
-          idRef: item['id_ref'], tipo: item['tipo'], subtipo: item['subtipo'], fecha: DateTime.parse(item['fecha']),
-          monto: monto, detalle: item['detalle'], saldoResultante: runningBalance
+          idRef: item['id_ref'],
+          tipo: item['tipo'],
+          subtipo: item['subtipo'],
+          fecha: DateTime.tryParse(item['fecha']?.toString() ?? "") ?? DateTime.now(),
+          monto: monto,
+          detalle: item['detalle'],
+          saldoResultante: runningBalance,
+          ventaId: item['venta_id'],
+          cuotaId: item['cuota_id'],
+          pagoId: item['pago_id'],
+          eventoId: item['evento_id'],
+          montoBase: item['monto_base'] != null ? (item['monto_base'] as num).toDouble() : null,
+          moraMonto: item['mora_monto'] != null ? (item['mora_monto'] as num).toDouble() : null,
+          metodoPago: item['metodo_pago'],
+          nota: item['nota'],
+          cuotaNumero: item['cuota_numero'],
+          entidadRef: item['detalle'],
+          canEdit: item['can_edit'] ?? false,
+          canDelete: item['can_delete'] ?? false,
+          tipoEvento: item['tipo_evento'],
+          fechaOperacion: DateTime.tryParse(item['created_at']?.toString() ?? ""),
         ));
       }
+
+      // Invertir para que la operación MÁS RECIENTE registrada esté siempre en la CIMA de la lista
       return ledger.reversed.toList(); 
     } catch (e) { return []; }
+  }
+
+  /// ✏️ Edita un abono/pago existente recalculando en cascada cuotas, ventas y deuda del cliente
+  Future<bool> editarPago(
+    int pagoId, {
+    required double nuevoMonto,
+    required String nuevoMetodoPago,
+    DateTime? nuevaFechaPago,
+    String? nuevaNota,
+  }) async {
+    try {
+      final db = await dbHelper.database;
+      int? clienteId;
+      int? ventaId;
+      int? cuotaId;
+
+      await db.transaction((txn) async {
+        final pRows = await txn.query('pagos', where: 'id = ?', whereArgs: [pagoId]);
+        if (pRows.isEmpty) throw Exception("Pago no encontrado");
+        final oldPago = pRows.first;
+        final double montoAnterior = (oldPago['monto'] as num).toDouble();
+        clienteId = oldPago['cliente_id'] as int?;
+        ventaId = oldPago['venta_id'] as int?;
+        cuotaId = oldPago['cuota_id'] as int?;
+        final int negocioId = (oldPago['negocio_id'] as int?) ?? 1;
+
+        final updateData = <String, dynamic>{
+          'monto': nuevoMonto,
+          'metodo_pago': nuevoMetodoPago,
+          if (nuevaNota != null) 'nota': nuevaNota,
+          if (nuevaFechaPago != null) 'fecha_pago': nuevaFechaPago.toIso8601String(),
+        };
+
+        await txn.update('pagos', updateData, where: 'id = ?', whereArgs: [pagoId]);
+
+        // Sincronizar cuota vinculada si existe
+        if (cuotaId != null) {
+          final sumCuota = await txn.rawQuery('''
+            SELECT COALESCE(SUM(monto), 0.0) as pagado 
+            FROM pagos 
+            WHERE cuota_id = ? AND (nota IS NULL OR nota NOT LIKE '%[ANULADO%')
+          ''', [cuotaId]);
+          final double cuotaPagado = (sumCuota.first['pagado'] as num?)?.toDouble() ?? 0.0;
+
+          final cData = await txn.query('cuotas', where: 'id = ?', whereArgs: [cuotaId]);
+          if (cData.isNotEmpty) {
+            final double cMonto = (cData.first['monto'] as num).toDouble();
+            final String dueDate = cData.first['fecha_vencimiento']?.toString() ?? '';
+            final todayStr = DateTime.now().toIso8601String().split('T').first;
+
+            String newStatus = 'pendiente';
+            if (cuotaPagado >= cMonto && cMonto > 0) {
+              newStatus = 'pagado';
+            } else if (cuotaPagado > 0) {
+              newStatus = 'parcial';
+            } else if (dueDate.isNotEmpty && dueDate.split('T').first.compareTo(todayStr) < 0) {
+              newStatus = 'vencida';
+            }
+
+            await txn.update('cuotas', {
+              'monto_pagado': cuotaPagado,
+              'estado': newStatus,
+            }, where: 'id = ?', whereArgs: [cuotaId]);
+          }
+        }
+
+        // Sincronizar venta vinculada si existe
+        if (ventaId != null) {
+          final sumVenta = await txn.rawQuery('''
+            SELECT COALESCE(SUM(monto), 0.0) as pagado 
+            FROM pagos 
+            WHERE venta_id = ? AND (nota IS NULL OR nota NOT LIKE '%[ANULADO%')
+          ''', [ventaId]);
+          final double ventaPagado = (sumVenta.first['pagado'] as num?)?.toDouble() ?? 0.0;
+
+          final vData = await txn.query('ventas', where: 'id = ?', whereArgs: [ventaId]);
+          if (vData.isNotEmpty) {
+            final double vTotal = (vData.first['monto_total'] as num).toDouble();
+            String vStatus = 'pendiente';
+            if (ventaPagado >= vTotal && vTotal > 0) {
+              vStatus = 'pagado';
+            } else if (ventaPagado > 0) {
+              vStatus = 'parcial';
+            }
+
+            await txn.update('ventas', {
+              'monto_pagado': ventaPagado,
+              'estado_pago': vStatus,
+            }, where: 'id = ?', whereArgs: [ventaId]);
+          }
+        }
+
+        // Registrar evento de auditoría
+        await txn.insert('eventos_financieros_cliente', {
+          'negocio_id': negocioId,
+          'cliente_id': clienteId ?? 0,
+          'venta_id': ventaId,
+          'cuota_id': cuotaId,
+          'pago_id': pagoId,
+          'tipo_evento': 'abono_editado',
+          'titulo': 'Abono editado',
+          'descripcion': 'Monto corregido de S/ ${montoAnterior.toStringAsFixed(2)} a S/ ${nuevoMonto.toStringAsFixed(2)} ($nuevoMetodoPago)',
+          'monto_anterior': montoAnterior,
+          'monto_nuevo': nuevoMonto,
+          'monto_impacto': nuevoMonto - montoAnterior,
+          'fecha_evento': DateTime.now().toIso8601String(),
+        });
+      });
+
+      if (clienteId != null) {
+        await recalculateClientDebt(clienteId!);
+        await recalculateClientSaldoAFavor(clienteId!);
+        await recalculateClientReputation(clienteId!);
+      }
+      return true;
+    } catch (e) {
+      debugPrint("Error al editar pago: $e");
+      return false;
+    }
+  }
+
+  /// 🗑️ Revierte o elimina limpiamente un abono de la cuenta del cliente
+  Future<bool> revertirPago(int pagoId) async {
+    try {
+      final db = await dbHelper.database;
+      int? clienteId;
+      int? ventaId;
+      int? cuotaId;
+
+      await db.transaction((txn) async {
+        final pRows = await txn.query('pagos', where: 'id = ?', whereArgs: [pagoId]);
+        if (pRows.isEmpty) throw Exception("Pago no encontrado");
+        final oldPago = pRows.first;
+        final double montoAnterior = (oldPago['monto'] as num).toDouble();
+        clienteId = oldPago['cliente_id'] as int?;
+        ventaId = oldPago['venta_id'] as int?;
+        cuotaId = oldPago['cuota_id'] as int?;
+        final int negocioId = (oldPago['negocio_id'] as int?) ?? 1;
+
+        // Borrado limpio del pago en SQLite
+        await txn.delete('pagos', where: 'id = ?', whereArgs: [pagoId]);
+
+        // Sincronizar cuota
+        if (cuotaId != null) {
+          final sumCuota = await txn.rawQuery('''
+            SELECT COALESCE(SUM(monto), 0.0) as pagado 
+            FROM pagos 
+            WHERE cuota_id = ? AND (nota IS NULL OR nota NOT LIKE '%[ANULADO%')
+          ''', [cuotaId]);
+          final double cuotaPagado = (sumCuota.first['pagado'] as num?)?.toDouble() ?? 0.0;
+
+          final cData = await txn.query('cuotas', where: 'id = ?', whereArgs: [cuotaId]);
+          if (cData.isNotEmpty) {
+            final double cMonto = (cData.first['monto'] as num).toDouble();
+            final String dueDate = cData.first['fecha_vencimiento']?.toString() ?? '';
+            final todayStr = DateTime.now().toIso8601String().split('T').first;
+
+            String newStatus = 'pendiente';
+            if (cuotaPagado >= cMonto && cMonto > 0) {
+              newStatus = 'pagado';
+            } else if (cuotaPagado > 0) {
+              newStatus = 'parcial';
+            } else if (dueDate.isNotEmpty && dueDate.split('T').first.compareTo(todayStr) < 0) {
+              newStatus = 'vencida';
+            }
+
+            await txn.update('cuotas', {
+              'monto_pagado': cuotaPagado,
+              'estado': newStatus,
+            }, where: 'id = ?', whereArgs: [cuotaId]);
+          }
+        }
+
+        // Sincronizar venta
+        if (ventaId != null) {
+          final sumVenta = await txn.rawQuery('''
+            SELECT COALESCE(SUM(monto), 0.0) as pagado 
+            FROM pagos 
+            WHERE venta_id = ? AND (nota IS NULL OR nota NOT LIKE '%[ANULADO%')
+          ''', [ventaId]);
+          final double ventaPagado = (sumVenta.first['pagado'] as num?)?.toDouble() ?? 0.0;
+
+          final vData = await txn.query('ventas', where: 'id = ?', whereArgs: [ventaId]);
+          if (vData.isNotEmpty) {
+            final double vTotal = (vData.first['monto_total'] as num).toDouble();
+            String vStatus = 'pendiente';
+            if (ventaPagado >= vTotal && vTotal > 0) {
+              vStatus = 'pagado';
+            } else if (ventaPagado > 0) {
+              vStatus = 'parcial';
+            }
+
+            await txn.update('ventas', {
+              'monto_pagado': ventaPagado,
+              'estado_pago': vStatus,
+            }, where: 'id = ?', whereArgs: [ventaId]);
+          }
+        }
+
+        // Registrar evento de auditoría
+        await txn.insert('eventos_financieros_cliente', {
+          'negocio_id': negocioId,
+          'cliente_id': clienteId ?? 0,
+          'venta_id': ventaId,
+          'cuota_id': cuotaId,
+          'tipo_evento': 'abono_anulado',
+          'titulo': 'Abono anulado / revertido',
+          'descripcion': 'Se eliminó el abono de S/ ${montoAnterior.toStringAsFixed(2)}. La deuda del cliente aumentó correspondientemente.',
+          'monto_anterior': montoAnterior,
+          'monto_nuevo': 0.0,
+          'monto_impacto': montoAnterior,
+          'fecha_evento': DateTime.now().toIso8601String(),
+        });
+      });
+
+      if (clienteId != null) {
+        await recalculateClientDebt(clienteId!);
+        await recalculateClientSaldoAFavor(clienteId!);
+        await recalculateClientReputation(clienteId!);
+      }
+      return true;
+    } catch (e) {
+      debugPrint("Error al revertir pago: $e");
+      return false;
+    }
+  }
+
+  /// 🗑️ Revierte o elimina una venta o préstamo completo creado por error
+  Future<bool> revertirVentaOPrestamo(int ventaId) async {
+    try {
+      final db = await dbHelper.database;
+      int? clienteId;
+
+      await db.transaction((txn) async {
+        final vRows = await txn.query('ventas', where: 'id = ?', whereArgs: [ventaId]);
+        if (vRows.isEmpty) throw Exception("Venta o préstamo no encontrado");
+        final venta = vRows.first;
+        clienteId = venta['cliente_id'] as int?;
+
+        // Eliminar pagos asociados
+        await txn.delete('pagos', where: 'venta_id = ?', whereArgs: [ventaId]);
+        // Eliminar cuotas
+        await txn.delete('cuotas', where: 'venta_id = ?', whereArgs: [ventaId]);
+        // Eliminar items de venta
+        await txn.delete('venta_items', where: 'venta_id = ?', whereArgs: [ventaId]);
+        // Eliminar eventos financieros asociados
+        await txn.delete('eventos_financieros_cliente', where: 'venta_id = ?', whereArgs: [ventaId]);
+        // Eliminar la venta
+        await txn.delete('ventas', where: 'id = ?', whereArgs: [ventaId]);
+      });
+
+      if (clienteId != null) {
+        await recalculateClientDebt(clienteId!);
+        await recalculateClientSaldoAFavor(clienteId!);
+        await recalculateClientReputation(clienteId!);
+      }
+      return true;
+    } catch (e) {
+      debugPrint("Error al revertir préstamo/venta: $e");
+      return false;
+    }
+  }
+
+  /// 🗑️ Elimina un evento financiero de auditoría para dejar el historial 100% limpio (Vista Cliente)
+  Future<bool> eliminarEventoFinanciero(int eventoId) async {
+    try {
+      final db = await dbHelper.database;
+      await db.delete('eventos_financieros_cliente', where: 'id = ?', whereArgs: [eventoId]);
+      return true;
+    } catch (e) {
+      debugPrint("Error al eliminar evento financiero: $e");
+      return false;
+    }
   }
 
   Future<List<SmartQuotationModel>> getPendingQuotations(int clientId) async {
@@ -460,6 +843,14 @@ class ClientService {
           }, where: 'id = ?', whereArgs: [cuotaId]);
         }
 
+        if (isFutureOrToday) {
+          // 🔔 V31: Resolver/limpiar inmediatamente la alerta de cuota vencida al reprogramarla a fecha futura
+          await txn.update('notificaciones', {
+            'is_resolved': 1,
+            'fecha_resolucion': DateTime.now().toIso8601String(),
+          }, where: "objeto_relacionado_tipo = 'cuota' AND objeto_relacionado_id = ? AND dedup_key LIKE 'cuota_vencida_%'", whereArgs: [cuotaId]);
+        }
+
         final vRows = await txn.query('ventas', columns: ['cliente_id'], where: 'id = ?', whereArgs: [ventaId]);
         if (vRows.isNotEmpty) {
           clienteId = vRows.first['cliente_id'] as int?;
@@ -543,19 +934,56 @@ class ClientService {
            }
         }
 
-        // Priorizar cuotas (Cascada Inteligente)
+        // Priorizar cuotas (Cascada Inteligente y FIFO Canónico)
         cuotasPendientes.sort((a, b) {
-           int scoreA = 0;
-           int scoreB = 0;
            if (cuotaId != null) {
-              if (a['id'] == cuotaId) scoreA += 100;
-              if (b['id'] == cuotaId) scoreB += 100;
+              final bool isTargetA = a['id'] == cuotaId;
+              final bool isTargetB = b['id'] == cuotaId;
+              if (isTargetA && !isTargetB) return -1;
+              if (!isTargetA && isTargetB) return 1;
+
+              // Cascada dentro del mismo préstamo/venta
+              final targetVentaId = cuotasPendientes.firstWhere((c) => c['id'] == cuotaId, orElse: () => <String, dynamic>{})['venta_id'];
+              final bool isSameVentaA = a['venta_id'] == targetVentaId;
+              final bool isSameVentaB = b['venta_id'] == targetVentaId;
+              if (isSameVentaA && !isSameVentaB) return -1;
+              if (!isSameVentaA && isSameVentaB) return 1;
+
+              if (isSameVentaA && isSameVentaB) {
+                 final numCuotaA = (a['numero_cuota'] as num?)?.toInt() ?? 0;
+                 final numCuotaB = (b['numero_cuota'] as num?)?.toInt() ?? 0;
+                 final cuotaComp = numCuotaA.compareTo(numCuotaB);
+                 if (cuotaComp != 0) return cuotaComp;
+              }
+           } else if (ventaId != null) {
+              final bool isVentaA = a['venta_id'] == ventaId;
+              final bool isVentaB = b['venta_id'] == ventaId;
+              if (isVentaA && !isVentaB) return -1;
+              if (!isVentaA && isVentaB) return 1;
+
+              if (isVentaA && isVentaB) {
+                 final numCuotaA = (a['numero_cuota'] as num?)?.toInt() ?? 0;
+                 final numCuotaB = (b['numero_cuota'] as num?)?.toInt() ?? 0;
+                 final cuotaComp = numCuotaA.compareTo(numCuotaB);
+                 if (cuotaComp != 0) return cuotaComp;
+              }
            }
-           if (ventaId != null) {
-              if (a['venta_id'] == ventaId) scoreA += 10;
-              if (b['venta_id'] == ventaId) scoreB += 10;
-           }
-           return scoreB.compareTo(scoreA); // Mayor score primero
+
+           // Distribución Automática (o cuotas secundarias fuera de la venta objetivo):
+           // Orden cronológico estricto por fecha de vencimiento ASC
+           final dateAStr = a['fecha_vencimiento']?.toString() ?? '';
+           final dateBStr = b['fecha_vencimiento']?.toString() ?? '';
+           final dateA = DateTime.tryParse(dateAStr) ?? DateTime(2099);
+           final dateB = DateTime.tryParse(dateBStr) ?? DateTime(2099);
+           final dateComp = dateA.compareTo(dateB);
+           if (dateComp != 0) return dateComp;
+
+           final numCuotaA = (a['numero_cuota'] as num?)?.toInt() ?? 0;
+           final numCuotaB = (b['numero_cuota'] as num?)?.toInt() ?? 0;
+           final cuotaComp = numCuotaA.compareTo(numCuotaB);
+           if (cuotaComp != 0) return cuotaComp;
+
+           return ((a['venta_id'] as num?)?.toInt() ?? 0).compareTo((b['venta_id'] as num?)?.toInt() ?? 0);
         });
 
         // 1. Pagar cuotas
@@ -579,6 +1007,14 @@ class ClientService {
               }
               await txn.update('cuotas', cUpdates, where: 'id = ?', whereArgs: [cId]);
               await txn.insert('pagos', {'negocio_id': negocioId, 'creado_por_usuario_id': usuarioId, 'cliente_id': clientId, 'venta_id': vId, 'cuota_id': cId, 'monto': abonoCents / 100.0, 'metodo_pago': method, 'fecha_pago': DateTime.now().toIso8601String()});
+
+              // 🔔 V31: Resolver la alerta de cuota vencida al pagar
+              if (cStatus == 'pagado') {
+                await txn.update('notificaciones', {
+                  'is_resolved': 1,
+                  'fecha_resolucion': DateTime.now().toIso8601String(),
+                }, where: "objeto_relacionado_tipo = 'cuota' AND objeto_relacionado_id = ?", whereArgs: [cId]);
+              }
 
               if (cStatus == 'pagado') {
                  final cRows = await txn.query('clientes', columns: ['nombre_completo', 'puntos_actuales', 'puntos_historicos', 'racha_pagos_puntuales', 'score_reputacion'], where: 'id = ?', whereArgs: [clientId], limit: 1);
@@ -625,19 +1061,46 @@ class ClientService {
                     }, where: 'id = ?', whereArgs: [clientId]);
                  }
 
+                 final vRows = await txn.query('ventas', columns: ['numero_secuencial', 'origen_venta', 'monto_total', 'monto_pagado'], where: 'id = ?', whereArgs: [vId], limit: 1);
+                 final bool isLoan = vRows.isNotEmpty && vRows.first['origen_venta'] == 'prestamo_personal';
+                 final String folio = vRows.isNotEmpty 
+                     ? (isLoan ? 'Préstamo #${vRows.first['numero_secuencial'] ?? vId}' : 'Recibo #${vRows.first['numero_secuencial'] ?? vId}')
+                     : 'Operación #$vId';
+                 final int cuotaNum = (cRow['numero_cuota'] as num?)?.toInt() ?? 1;
+                 final double abonoMonto = abonoCents / 100.0;
+                 final double saldoRestante = ((cMontoCents - newPagadoCents) / 100.0).clamp(0.0, double.infinity);
+
+                 final String notifTitle = "Cuota Pagada • $cName";
+                 final String saldoTxt = "¡Deuda de cuota liquidada!";
+                 final String baseMsg = "$cName canceló S/ ${abonoMonto.toStringAsFixed(2)} de la Cuota #$cuotaNum ($folio). $saldoTxt";
+                 final String fullMsg = isPunctual ? "$baseMsg (+25 pts de bono puntual)." : baseMsg;
+
                  await txn.insert('notificaciones', {
                     'user_id': usuarioId,
                     'negocio_id': negocioId,
-                    'titulo': "Cuota Pagada",
-                    'mensaje': isPunctual
-                        ? "El cliente $cName canceló a tiempo la cuota (+25 pts de bono)."
-                        : "El cliente $cName acaba de cancelar la cuota.",
+                    'dedup_key': 'pago_cuota_${cId}_${DateTime.now().millisecondsSinceEpoch}',
+                    'titulo': notifTitle,
+                    'mensaje': fullMsg,
                     'tipo': 'exito',
+                    'nivel_prioridad': 'informativa',
                     'prioridad': 'Media',
                     'leida': 0,
+                    'is_resolved': 1,
                     'objeto_relacionado_tipo': 'cuota',
                     'objeto_relacionado_id': cId,
-                    'fecha_creacion': DateTime.now().toIso8601String()
+                    'metadata_json': jsonEncode({
+                       'cliente_id': clientId,
+                       'cliente_nombre': cName,
+                       'cuota_id': cId,
+                       'cuota_numero': cuotaNum,
+                       'venta_id': vId,
+                       'folio_operacion': folio,
+                       'es_prestamo': isLoan,
+                       'monto_pagado': abonoMonto,
+                       'saldo_restante': saldoRestante,
+                    }),
+                    'fecha_creacion': DateTime.now().toIso8601String(),
+                    'fecha_resolucion': DateTime.now().toIso8601String(),
                  });
               }
            }
@@ -955,15 +1418,25 @@ class ClientService {
               await txn.insert('notificaciones', {
                 'user_id': usuarioId,
                 'negocio_id': negocioId,
-                'titulo': "🎁 ¡Premio Desbloqueado!",
+                'dedup_key': 'recompensa_meta_$newRewardId',
+                'titulo': "Premio Desbloqueado • $name",
                 'mensaje': "$name alcanzó la meta '${m['nombre']}' y espera tu confirmación.",
                 'tipo': 'alerta',
+                'nivel_prioridad': 'informativa',
                 'prioridad': 'Alta',
                 'leida': 0,
+                'is_resolved': 0,
                 'objeto_relacionado_tipo': 'recompensa',
                 'objeto_relacionado_id': newRewardId,
+                'metadata_json': jsonEncode({
+                  'cliente_id': clientId,
+                  'cliente_nombre': name,
+                  'meta_id': metaId,
+                  'meta_nombre': m['nombre'],
+                  'recompensa_id': newRewardId,
+                }),
                 'fecha_creacion': now,
-              });
+              }, conflictAlgorithm: ConflictAlgorithm.replace);
             }
 
             unlockedRewards.add(ClientRewardModel(
@@ -986,6 +1459,42 @@ class ClientService {
       AppLogger.error('ClientService.evaluateAndUnlockRewardGoals', e, stack);
     }
     return unlockedRewards;
+  }
+
+  /// Evalúa retroactivamente a todos los clientes del negocio que posean puntos actuales > 0
+  /// contra las metas de recompensas activas (ordenadas de menor a mayor requerimiento).
+  /// Si un cliente califica y aún no tiene la meta en PENDIENTE_REVISION o APROBADA_NOTIFICADA,
+  /// se desbloquea automáticamente reservando los puntos correspondientes.
+  Future<List<ClientRewardModel>> evaluateAllClientsForActiveGoals(int negocioId, {int? usuarioId}) async {
+    List<ClientRewardModel> allUnlocked = [];
+    try {
+      final db = await dbHelper.database;
+      final clients = await db.query(
+        'clientes',
+        columns: ['id', 'puntos_actuales', 'nombre_completo'],
+        where: 'negocio_id = ? AND puntos_actuales > 0',
+        whereArgs: [negocioId],
+      );
+      if (clients.isEmpty) return [];
+
+      await db.transaction((txn) async {
+        for (var c in clients) {
+          int clientId = c['id'] as int;
+          String clientName = (c['nombre_completo'] as String?) ?? 'Cliente';
+          final unlocked = await evaluateAndUnlockRewardGoals(
+            txn,
+            clientId,
+            negocioId,
+            usuarioId: usuarioId,
+            clientName: clientName,
+          );
+          allUnlocked.addAll(unlocked);
+        }
+      });
+    } catch (e, stack) {
+      AppLogger.error('ClientService.evaluateAllClientsForActiveGoals', e, stack);
+    }
+    return allUnlocked;
   }
 
   /// Obtiene el catálogo de metas de recompensas del negocio
@@ -1143,7 +1652,9 @@ class ClientService {
             'puntos_actuales': currentPoints,
             'puntos_requeridos': g.puntosRequeridos,
             'puntos_faltantes': faltantes,
+            'missing': faltantes,
             'progreso': progress,
+            'progress': progress,
           };
         }
       }
@@ -1153,7 +1664,9 @@ class ClientService {
         'puntos_actuales': currentPoints,
         'puntos_requeridos': maxGoal.puntosRequeridos,
         'puntos_faltantes': 0,
+        'missing': 0,
         'progreso': 1.0,
+        'progress': 1.0,
       };
     } catch (e) {
       return null;
@@ -1385,10 +1898,10 @@ class ClientService {
   }
 
   /// Identifica clientes que están cerca de una meta (impulso de compra comercial)
-  /// Se considera "Casi en la Meta" si ha alcanzado >= 70% de la meta o le faltan <= 50 puntos.
+  /// Regla matemática estricta: Requiere puntosActuales > 0 y avance >= 50% de la meta.
   Future<List<Map<String, dynamic>>> getClientsAlmostAtGoal(
     int negocioId, {
-    double minPercent = 0.70,
+    double minPercent = 0.50,
     double maxPercent = 0.99,
   }) async {
     try {
@@ -1406,12 +1919,15 @@ class ClientService {
 
       for (var c in clients) {
         int pts = (c['puntos_actuales'] as num?)?.toInt() ?? 0;
+        // Un cliente con 0 puntos JAMÁS entra en "Casi en la Meta"
+        if (pts <= 0) continue;
+
         for (var m in metas) {
           int req = (m['puntos_requeridos'] as num).toInt();
           if (pts < req) {
             double progress = pts / req;
             int faltantes = req - pts;
-            if ((progress >= minPercent && progress <= maxPercent) || (faltantes <= 50 && faltantes > 0)) {
+            if (progress >= minPercent && progress <= maxPercent) {
               results.add({
                 'client': ClientModel.fromJson(c),
                 'goal': RewardGoalModel.fromJson(m),

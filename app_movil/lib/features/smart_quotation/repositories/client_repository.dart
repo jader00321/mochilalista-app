@@ -15,14 +15,16 @@ class ClientRepository {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getClientSales(int clientId, {int limit = 5}) async {
+  Future<List<Map<String, dynamic>>> getClientSales(int clientId, {int limit = 50}) async {
     try {
       final db = await _dbHelper.database;
       return await db.rawQuery('''
-        SELECT v.*, (SELECT COUNT(id) FROM venta_items WHERE venta_id = v.id) as items_count 
+        SELECT v.*, 
+          COALESCE(v.mora_total, 0.0) as mora_total,
+          (SELECT COUNT(id) FROM venta_items WHERE venta_id = v.id) as items_count 
         FROM ventas v 
-        WHERE v.cliente_id = ? AND v.is_archived = 0
-        ORDER BY v.fecha_venta DESC 
+        WHERE v.cliente_id = ? AND (v.is_archived IS NULL OR v.is_archived = 0)
+        ORDER BY v.id DESC, v.fecha_venta DESC 
         LIMIT ?
       ''', [clientId, limit]);
     } catch (e, stack) {
@@ -31,10 +33,16 @@ class ClientRepository {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getClientPayments(int clientId, {int limit = 5}) async {
+  Future<List<Map<String, dynamic>>> getClientPayments(int clientId, {int limit = 50}) async {
     try {
       final db = await _dbHelper.database;
-      return await db.query('pagos', where: 'cliente_id = ?', whereArgs: [clientId], orderBy: 'fecha_pago DESC', limit: limit);
+      return await db.query(
+        'pagos', 
+        where: 'cliente_id = ?', 
+        whereArgs: [clientId], 
+        orderBy: 'id DESC, fecha_pago DESC', 
+        limit: limit,
+      );
     } catch (e, stack) {
       AppLogger.error('ClientRepository.getClientPayments', e, stack);
       return [];

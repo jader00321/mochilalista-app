@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'dart:convert';
+import 'package:open_filex/open_filex.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'package:app_movil/features/scanner/providers/invoice_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
@@ -31,6 +34,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   InvoiceModel? _invoice;
   bool _isLoading = true;
 
+  // 📁 Estado persistente de archivos descargados localmente
+  File? _downloadedPhotoFile;
+  File? _downloadedPdfFile;
+
   // 🔥 Control del Toggle del visor de Auditoría
   bool _showRawJson = false;
 
@@ -46,13 +53,17 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     _scrollController.addListener(() {
       if (_scrollController.hasClients) {
         if (_scrollController.offset > 300) {
-          if (!_showScrollToTop) setState(() => _showScrollToTop = true);
+          if (!_showScrollToTop) {
+            setState(() => _showScrollToTop = true);
+          }
         } else {
-          if (_showScrollToTop) setState(() => _showScrollToTop = false);
+          if (_showScrollToTop) {
+            setState(() => _showScrollToTop = false);
+          }
         }
       }
     });
-    
+
     _splitController = MultiSplitViewController(
       areas: [
         Area(size: 0.25, min: 0.15), // Imagen de la factura
@@ -80,17 +91,35 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       linked = await invcProv.getLinkedPresentations(widget.invoiceId);
     }
 
+    // 🔍 Detección de archivos ya existentes en Descargas
+    File? existingPhoto;
+    File? existingPdf;
+    if (invoice != null) {
+      existingPhoto = await InvoiceFileService.findExistingInvoiceFile(
+        displayId: invoice.displayId,
+        isPdfReport: false,
+      );
+      existingPdf = await InvoiceFileService.findExistingInvoiceFile(
+        displayId: invoice.displayId,
+        isPdfReport: true,
+      );
+    }
+
     if (mounted) {
       setState(() {
         _invoice = invoice;
         _linkedPresentations = linked;
+        _downloadedPhotoFile = existingPhoto;
+        _downloadedPdfFile = existingPdf;
         _isLoading = false;
       });
     }
   }
 
   void _showStatusDialog(bool isDark) {
-    if (_invoice == null) return;
+    if (_invoice == null) {
+      return;
+    }
 
     String tempStatus = _invoice!.estado;
     final List<String> opciones = ['procesando', 'revision', 'completado'];
@@ -175,7 +204,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setModalState) {
-          final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: kMinDefensiveBottomClearance);
+          final effectiveBottom =
+              InteractiveSheetWrapper.getEffectiveBottomPadding(
+                context,
+                minPadding: kMinDefensiveBottomClearance,
+              );
           final filtered = invProv.providers
               .where(
                 (p) =>
@@ -238,7 +271,9 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                     const SizedBox(height: 16),
                     Expanded(
                       child: ListView.separated(
-                        padding: EdgeInsets.only(bottom: effectiveBottom + kModalScrollBottomClearance),
+                        padding: EdgeInsets.only(
+                          bottom: effectiveBottom + kModalScrollBottomClearance,
+                        ),
                         physics: const BouncingScrollPhysics(),
                         itemCount: filtered.length,
                         separatorBuilder: (_, __) => Divider(
@@ -287,7 +322,9 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     );
     if (success && mounted) {
       await _loadInvoiceDetails();
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       CustomSnackBar.show(
         context,
         message: "Factura actualizada con éxito",
@@ -323,50 +360,349 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     return encoder.convert(jsonInput);
   }
 
-  Future<void> _downloadScannedImage([String? providerName]) async {
-    if (_invoice == null) return;
+  void _showAlreadyDownloadedSheet({
+    required File file,
+    required bool isPdf,
+    required Future<void> Function() onReDownload,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fileName = file.path.split(Platform.pathSeparator).last;
+    final dotIndex = fileName.lastIndexOf('.');
+    final baseName = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
+    final extension = dotIndex > 0
+        ? fileName.substring(dotIndex).toUpperCase()
+        : '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return InteractiveSheetWrapper(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+              border: Border.all(
+                color: isDark ? Colors.white12 : Colors.grey.shade200,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white24 : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check_circle_rounded,
+                        color: Colors.greenAccent,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isPdf
+                                ? 'Reporte PDF ya descargado'
+                                : 'Foto ya descargada',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1E293B),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'El archivo ya se encuentra en tu carpeta Descargas',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white10 : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isPdf
+                            ? Icons.picture_as_pdf_rounded
+                            : Icons.image_rounded,
+                        size: 20,
+                        color: isPdf ? Colors.redAccent : Colors.blueAccent,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          baseName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF1E293B),
+                          ),
+                        ),
+                      ),
+                      if (extension.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isPdf
+                                ? Colors.redAccent.withValues(alpha: 0.15)
+                                : Colors.blueAccent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: isPdf
+                                  ? Colors.redAccent
+                                  : Colors.blueAccent,
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            extension,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: isPdf
+                                  ? Colors.redAccent
+                                  : Colors.blueAccent,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDark
+                        ? Colors.blue.shade700
+                        : Colors.blue.shade800,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: const Text(
+                    'Abrir Archivo',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    OpenFilex.open(file.path);
+                  },
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(
+                      color: isDark ? Colors.tealAccent : Colors.teal.shade700,
+                    ),
+                    foregroundColor: isDark
+                        ? Colors.tealAccent
+                        : Colors.teal.shade800,
+                  ),
+                  icon: const Icon(Icons.share_rounded, size: 18),
+                  label: const Text(
+                    'Compartir Archivo',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    try {
+                      await SharePlus.instance.share(
+                        ShareParams(
+                          files: [XFile(file.path)],
+                          text: isPdf
+                              ? 'Reporte PDF Factura #${_invoice?.displayId}'
+                              : 'Foto Factura #${_invoice?.displayId}',
+                        ),
+                      );
+                    } catch (_) {
+                      try {
+                        // ignore: deprecated_member_use
+                        await Share.shareXFiles([XFile(file.path)]);
+                      } catch (_) {}
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: isDark
+                        ? Colors.grey[400]
+                        : Colors.grey[600],
+                  ),
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Volver a Descargar (reemplazar)'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    onReDownload();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleScannedImageAction([String? providerName]) async {
+    if (_invoice == null) {
+      return;
+    }
     if (_invoice!.imagenUrl.trim().isEmpty ||
         _invoice!.imagenUrl == 'local_ia_scan' ||
         _invoice!.imagenUrl == 'null') {
       CustomSnackBar.show(
         context,
-        message: "Esta factura no cuenta con una imagen original disponible para descargar.",
+        message:
+            "Esta factura no cuenta con una imagen original disponible para descargar.",
         isError: true,
       );
       return;
     }
 
+    if (_downloadedPhotoFile != null && await _downloadedPhotoFile!.exists()) {
+      _showAlreadyDownloadedSheet(
+        file: _downloadedPhotoFile!,
+        isPdf: false,
+        onReDownload: () => _executeDownloadImage(providerName),
+      );
+      return;
+    }
+
+    await _executeDownloadImage(providerName);
+  }
+
+  Future<void> _executeDownloadImage(String? providerName) async {
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
-    final String resolvedProviderName = (providerName != null && providerName.isNotEmpty && providerName != "Sin proveedor")
+    final String resolvedProviderName =
+        (providerName != null &&
+            providerName.isNotEmpty &&
+            providerName != "Sin proveedor")
         ? providerName
         : invProv.getProviderName(_invoice!.proveedorId);
 
-    await DownloadFeedbackModal.show(
+    final file = await DownloadFeedbackModal.show(
       context,
       title: "Descargando Imagen",
-      loadingMessage: "Guardando foto de comprobante en la carpeta Descargas...",
+      loadingMessage:
+          "Guardando foto de comprobante en la carpeta Descargas...",
       downloadTask: () => InvoiceFileService.saveScannedImageToDownloads(
         sourcePath: _invoice!.imagenUrl,
         displayId: _invoice!.displayId,
         providerName: resolvedProviderName,
       ),
     );
+
+    if (file != null && mounted) {
+      setState(() {
+        _downloadedPhotoFile = file;
+      });
+    }
   }
 
-  Future<void> _downloadPdfReport(String? providerName, {String? providerRuc}) async {
-    if (_invoice == null) return;
+  Future<void> _handlePdfReportAction(
+    String? providerName, {
+    String? providerRuc,
+  }) async {
+    if (_invoice == null) {
+      return;
+    }
+
+    if (_downloadedPdfFile != null && await _downloadedPdfFile!.exists()) {
+      _showAlreadyDownloadedSheet(
+        file: _downloadedPdfFile!,
+        isPdf: true,
+        onReDownload: () =>
+            _executeDownloadPdf(providerName, providerRuc: providerRuc),
+      );
+      return;
+    }
+
+    await _executeDownloadPdf(providerName, providerRuc: providerRuc);
+  }
+
+  Future<void> _executeDownloadPdf(
+    String? providerName, {
+    String? providerRuc,
+  }) async {
     final auth = Provider.of<AuthProvider>(context, listen: false).user;
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
-    final String resolvedProviderName = (providerName != null && providerName.isNotEmpty && providerName != "Sin proveedor")
+    final String resolvedProviderName =
+        (providerName != null &&
+            providerName.isNotEmpty &&
+            providerName != "Sin proveedor")
         ? providerName
         : invProv.getProviderName(_invoice!.proveedorId);
-    final provider = invProv.providers.where((p) => p.id == _invoice!.proveedorId).firstOrNull;
+    final provider = invProv.providers
+        .where((p) => p.id == _invoice!.proveedorId)
+        .firstOrNull;
     final String? resolvedProviderRuc = providerRuc ?? provider?.ruc;
 
-    await DownloadFeedbackModal.show(
+    final file = await DownloadFeedbackModal.show(
       context,
       title: "Generando Reporte PDF",
-      loadingMessage: "Estructurando auditoría y datos extraídos en formato ejecutivo...",
+      loadingMessage:
+          "Estructurando auditoría y datos extraídos en formato ejecutivo...",
       downloadTask: () => InvoicePdfReportService.generateAndSavePdfReport(
         invoice: _invoice!,
         providerName: resolvedProviderName,
@@ -374,6 +710,111 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         currentUser: auth,
         linkedPresentations: _linkedPresentations,
       ),
+    );
+
+    if (file != null && mounted) {
+      setState(() {
+        _downloadedPdfFile = file;
+      });
+    }
+  }
+
+  void _openFullscreenPhotoViewer(BuildContext context) {
+    if (_invoice == null ||
+        _invoice!.imagenUrl.trim().isEmpty ||
+        _invoice!.imagenUrl == 'local_ia_scan' ||
+        _invoice!.imagenUrl == 'null') {
+      return;
+    }
+
+    final TransformationController transformController =
+        TransformationController();
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.95),
+      builder: (ctx) {
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.black45,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(
+                Icons.close_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+            title: Text(
+              "Comprobante #${_invoice!.displayId}",
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(
+                  Icons.restart_alt_rounded,
+                  color: Colors.white,
+                ),
+                tooltip: "Restaurar Zoom",
+                onPressed: () => transformController.value = Matrix4.identity(),
+              ),
+              if (_downloadedPhotoFile != null)
+                IconButton(
+                  icon: const Icon(Icons.share_rounded, color: Colors.white),
+                  tooltip: "Compartir Foto",
+                  onPressed: () async {
+                    try {
+                      await SharePlus.instance.share(
+                        ShareParams(
+                          files: [XFile(_downloadedPhotoFile!.path)],
+                          text:
+                              'Comprobante #${_invoice!.displayId} - MochilaLista',
+                        ),
+                      );
+                    } catch (_) {
+                      try {
+                        // ignore: deprecated_member_use
+                        await Share.shareXFiles([
+                          XFile(_downloadedPhotoFile!.path),
+                        ]);
+                      } catch (_) {}
+                    }
+                  },
+                ),
+            ],
+          ),
+          body: Center(
+            child: GestureDetector(
+              onDoubleTapDown: (details) {
+                if (transformController.value != Matrix4.identity()) {
+                  transformController.value = Matrix4.identity();
+                } else {
+                  final position = details.localPosition;
+                  final matrix = Matrix4.diagonal3Values(2.5, 2.5, 1.0)
+                    ..setTranslationRaw(
+                        -position.dx * 1.5, -position.dy * 1.5, 0.0);
+                  transformController.value = matrix;
+                }
+              },
+              child: InteractiveViewer(
+                transformationController: transformController,
+                minScale: 1.0,
+                maxScale: 6.0,
+                child: UniversalImage(
+                  path: _invoice!.imagenUrl,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -401,7 +842,9 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
     final statusColor = _getStatusColor(_invoice!.estado, isDark);
     final providerName = invProv.getProviderName(_invoice!.proveedorId);
-    final provider = invProv.providers.where((p) => p.id == _invoice!.proveedorId).firstOrNull;
+    final provider = invProv.providers
+        .where((p) => p.id == _invoice!.proveedorId)
+        .firstOrNull;
     final String? providerRuc = provider?.ruc;
 
     // Obtener los ítems extraídos del JSON (facturas escaneadas con IA)
@@ -425,16 +868,6 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.download_rounded),
-            tooltip: "Descargar Imagen Escaneada",
-            onPressed: () => _downloadScannedImage(providerName),
-          ),
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: "Descargar Reporte PDF",
-            onPressed: () => _downloadPdfReport(providerName, providerRuc: providerRuc),
-          ),
           const InfoTooltipButton(
             title: "Detalle y Auditoría de Factura",
             description:
@@ -503,6 +936,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
             builder: (BuildContext context, Area area) {
               if (area.index == 0) {
                 // ZONA 1: VISOR DE IMAGEN
+                final bool hasImage =
+                    _invoice!.imagenUrl.trim().isNotEmpty &&
+                    _invoice!.imagenUrl != 'local_ia_scan' &&
+                    _invoice!.imagenUrl != 'null';
+
                 return Container(
                   color: Colors.black,
                   child: Stack(
@@ -511,7 +949,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                         minScale: 1.0,
                         maxScale: 5.0,
                         child: Center(
-                          child: _invoice!.imagenUrl == 'local_ia_scan'
+                          child: !hasImage
                               ? Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -531,34 +969,57 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                                     ),
                                   ],
                                 )
-                              : UniversalImage(
-                                  path: _invoice!.imagenUrl,
-                                  fit: BoxFit.contain,
+                              : GestureDetector(
+                                  onTap: () =>
+                                      _openFullscreenPhotoViewer(context),
+                                  child: UniversalImage(
+                                    path: _invoice!.imagenUrl,
+                                    fit: BoxFit.contain,
+                                  ),
                                 ),
                         ),
                       ),
-                      Positioned(
-                        bottom: 12,
-                        right: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            "🔍 Zoom interactivo",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                      if (hasImage)
+                        Positioned(
+                          bottom: 12,
+                          right: 12,
+                          child: GestureDetector(
+                            onTap: () => _openFullscreenPhotoViewer(context),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.75),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.white24,
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.fullscreen_rounded,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    "Pantalla Completa",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 );
@@ -591,17 +1052,25 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                               Row(
                                 children: [
                                   Icon(
-                                    isManualInvoice ? Icons.edit_note_rounded : Icons.document_scanner_outlined,
+                                    isManualInvoice
+                                        ? Icons.edit_note_rounded
+                                        : Icons.document_scanner_outlined,
                                     size: 14,
-                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    isManualInvoice ? "Factura Manual" : "Escaneada con IA",
+                                    isManualInvoice
+                                        ? "Factura Manual"
+                                        : "Escaneada con IA",
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
-                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      color: isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
                                     ),
                                   ),
                                 ],
@@ -735,54 +1204,94 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              icon: const Icon(Icons.download_rounded, size: 18),
-                              label: const Text(
-                                "Descargar Foto",
-                                style: TextStyle(
+                              icon: _downloadedPhotoFile != null
+                                  ? const Icon(
+                                      Icons.check_circle_rounded,
+                                      size: 18,
+                                      color: Colors.green,
+                                    )
+                                  : const Icon(
+                                      Icons.download_rounded,
+                                      size: 18,
+                                    ),
+                              label: Text(
+                                _downloadedPhotoFile != null
+                                    ? "✓ Foto Guardada"
+                                    : "Descargar Foto",
+                                style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
                                 ),
                               ),
                               style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.blue.withValues(alpha: 0.5)
-                                      : Colors.blue.shade300,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
                                 ),
-                                foregroundColor: isDark
-                                    ? Colors.blue[300]
-                                    : Colors.blue[800],
+                                side: BorderSide(
+                                  color: _downloadedPhotoFile != null
+                                      ? Colors.green.shade600
+                                      : (isDark
+                                            ? Colors.blue.withValues(alpha: 0.5)
+                                            : Colors.blue.shade300),
+                                ),
+                                foregroundColor: _downloadedPhotoFile != null
+                                    ? (isDark
+                                          ? Colors.greenAccent
+                                          : Colors.green.shade800)
+                                    : (isDark
+                                          ? Colors.blue[300]
+                                          : Colors.blue[800]),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              onPressed: () => _downloadScannedImage(providerName),
+                              onPressed: () =>
+                                  _handleScannedImageAction(providerName),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton.icon(
-                              icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
-                              label: const Text(
-                                "Reporte PDF",
-                                style: TextStyle(
+                              icon: _downloadedPdfFile != null
+                                  ? const Icon(
+                                      Icons.check_circle_rounded,
+                                      size: 18,
+                                      color: Colors.white,
+                                    )
+                                  : const Icon(
+                                      Icons.picture_as_pdf_rounded,
+                                      size: 18,
+                                    ),
+                              label: Text(
+                                _downloadedPdfFile != null
+                                    ? "✓ PDF Guardado"
+                                    : "Reporte PDF",
+                                style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
                                 ),
                               ),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: isDark
-                                    ? Colors.teal.shade700
-                                    : Colors.teal.shade800,
+                                backgroundColor: _downloadedPdfFile != null
+                                    ? (isDark
+                                          ? Colors.green.shade800
+                                          : Colors.green.shade700)
+                                    : (isDark
+                                          ? Colors.teal.shade700
+                                          : Colors.teal.shade800),
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 elevation: 2,
                               ),
-                              onPressed: () => _downloadPdfReport(providerName, providerRuc: providerRuc),
+                              onPressed: () => _handlePdfReportAction(
+                                providerName,
+                                providerRuc: providerRuc,
+                              ),
                             ),
                           ),
                         ],
@@ -1052,349 +1561,677 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                               onHorizontalDragEnd: (details) {
                                 if (details.primaryVelocity! > 0) {
                                   // Swipe Right -> View Details
-                                  if (_showRawJson) setState(() => _showRawJson = false);
+                                  if (_showRawJson) {
+                                    setState(() => _showRawJson = false);
+                                  }
                                 } else if (details.primaryVelocity! < 0) {
                                   // Swipe Left -> View JSON
-                                  if (!_showRawJson) setState(() => _showRawJson = true);
+                                  if (!_showRawJson) {
+                                    setState(() => _showRawJson = true);
+                                  }
                                 }
                               },
                               child: AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 400),
                                 switchInCurve: Curves.easeOutCubic,
                                 switchOutCurve: Curves.easeInCubic,
-                                transitionBuilder: (Widget child, Animation<double> animation) {
-                                  return FadeTransition(
-                                    opacity: animation,
-                                    child: SlideTransition(
-                                      position: Tween<Offset>(
-                                        begin: const Offset(0.05, 0),
-                                        end: Offset.zero,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
-                                  );
-                                },
+                                transitionBuilder:
+                                    (
+                                      Widget child,
+                                      Animation<double> animation,
+                                    ) {
+                                      return FadeTransition(
+                                        opacity: animation,
+                                        child: SlideTransition(
+                                          position: Tween<Offset>(
+                                            begin: const Offset(0.05, 0),
+                                            end: Offset.zero,
+                                          ).animate(animation),
+                                          child: child,
+                                        ),
+                                      );
+                                    },
                                 child: Builder(
                                   key: ValueKey<bool>(_showRawJson),
                                   builder: (context) {
-                                  if (_showRawJson) {
-                                    return Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: isDark
-                                            ? const Color(0xFF0D0D14)
-                                            : Colors.grey[900],
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        _formatJson(_invoice!.datosCrudosIaJson),
-                                        style: const TextStyle(
-                                          fontFamily: 'monospace',
-                                          color: Colors.greenAccent,
-                                          fontSize: 11,
-                                          height: 1.5,
-                                        ),
-                                      ),
-                                    );
-                                  } else if (extractedItems.isEmpty && _linkedPresentations.isEmpty) {
-                                    return Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(24),
-                                      decoration: BoxDecoration(
-                                        color: isDark
-                                            ? Colors.white10
-                                            : Colors.grey[50],
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
+                                    if (_showRawJson) {
+                                      return Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
                                           color: isDark
-                                              ? Colors.transparent
-                                              : Colors.grey.shade300,
+                                              ? const Color(0xFF0D0D14)
+                                              : Colors.grey[900],
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                         ),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Icon(
-                                            Icons.inventory_2_outlined,
-                                            size: 40,
+                                        child: Text(
+                                          _formatJson(
+                                            _invoice!.datosCrudosIaJson,
+                                          ),
+                                          style: const TextStyle(
+                                            fontFamily: 'monospace',
+                                            color: Colors.greenAccent,
+                                            fontSize: 11,
+                                            height: 1.5,
+                                          ),
+                                        ),
+                                      );
+                                    } else if (extractedItems.isEmpty &&
+                                        _linkedPresentations.isEmpty) {
+                                      return Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(24),
+                                        decoration: BoxDecoration(
+                                          color: isDark
+                                              ? Colors.white10
+                                              : Colors.grey[50],
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          border: Border.all(
                                             color: isDark
-                                                ? Colors.grey[600]
-                                                : Colors.grey[400],
-                                          ),
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            "Sin ítems registrados",
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              color: isDark
-                                                  ? Colors.grey[400]
-                                                  : Colors.grey[600],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            "Esta factura no tiene productos extraídos o vinculados.",
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: isDark
-                                                  ? Colors.grey[500]
-                                                  : Colors.grey[500],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  } else if (extractedItems.isEmpty && _linkedPresentations.isNotEmpty) {
-                                    // =========================================================
-                                    // 🔧 TAREA 1.4: Vista para facturas manuales
-                                    // Mostrar las presentaciones vinculadas por factura_carga_id
-                                    // =========================================================
-                                    return Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                          decoration: BoxDecoration(
-                                            color: isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal[50],
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.edit_note_rounded, size: 16, color: isDark ? Colors.teal[300] : Colors.teal[700]),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  "${_linkedPresentations.length} presentaciones vinculadas manualmente",
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: isDark ? Colors.teal[200] : Colors.teal[800],
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
+                                                ? Colors.transparent
+                                                : Colors.grey.shade300,
                                           ),
                                         ),
-                                        const SizedBox(height: 12),
-                                        ListView.separated(
-                                          shrinkWrap: true,
-                                          physics: const NeverScrollableScrollPhysics(),
-                                          itemCount: _linkedPresentations.length,
-                                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                                          itemBuilder: (ctx, i) {
-                                            final pres = _linkedPresentations[i];
-                                            final pCosto = (pres['precio_costo'] as num?)?.toDouble();
-                                            final pVenta = (pres['precio_venta'] as num?)?.toDouble();
-                                            final stock = (pres['cantidad_stock'] as num?)?.toDouble();
-                                            return Container(
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: isDark ? Colors.white10 : Colors.grey[50],
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(
-                                                  color: isDark ? Colors.transparent : Colors.grey.shade300,
-                                                ),
+                                        child: Column(
+                                          children: [
+                                            Icon(
+                                              Icons.inventory_2_outlined,
+                                              size: 40,
+                                              color: isDark
+                                                  ? Colors.grey[600]
+                                                  : Colors.grey[400],
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              "Sin ítems registrados",
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                                color: isDark
+                                                    ? Colors.grey[400]
+                                                    : Colors.grey[600],
                                               ),
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    pres['producto_nombre'] ?? "Producto",
-                                                    style: TextStyle(
-                                                      fontSize: 13,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: isDark ? Colors.white : Colors.black87,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    pres['presentacion_nombre'] ?? "Presentación",
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              "Esta factura no tiene productos extraídos o vinculados.",
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isDark
+                                                    ? Colors.grey[500]
+                                                    : Colors.grey[500],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    } else if (extractedItems.isEmpty &&
+                                        _linkedPresentations.isNotEmpty) {
+                                      // =========================================================
+                                      // 🔧 TAREA 1.4: Vista para facturas manuales
+                                      // Mostrar las presentaciones vinculadas por factura_carga_id
+                                      // =========================================================
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 8,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? Colors.teal.withValues(
+                                                      alpha: 0.15,
+                                                    )
+                                                  : Colors.teal[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.edit_note_rounded,
+                                                  size: 16,
+                                                  color: isDark
+                                                      ? Colors.teal[300]
+                                                      : Colors.teal[700],
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    "${_linkedPresentations.length} presentaciones vinculadas manualmente",
                                                     style: TextStyle(
                                                       fontSize: 12,
-                                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: isDark
+                                                          ? Colors.teal[200]
+                                                          : Colors.teal[800],
                                                     ),
                                                   ),
-                                                  const SizedBox(height: 8),
-                                                  Wrap(
-                                                    spacing: 12,
-                                                    runSpacing: 8,
-                                                    children: [
-                                                      if (pCosto != null)
-                                                        _auditTag("Costo", "S/ ${pCosto.toStringAsFixed(2)}", isDark),
-                                                      if (pVenta != null)
-                                                        _auditTag("Venta", "S/ ${pVenta.toStringAsFixed(2)}", isDark),
-                                                      if (stock != null)
-                                                        _auditTag("Stock", stock.toStringAsFixed(stock.truncateToDouble() == stock ? 0 : 1), isDark),
-                                                      if (pres['unidad_medida'] != null)
-                                                        _auditTag("UMP", pres['unidad_medida'].toString(), isDark),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ],
-                                    );
-                                  } else {
-                                    return ListView.separated(
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      itemCount: extractedItems.length,
-                                      separatorBuilder: (_, __) =>
-                                          const SizedBox(height: 12),
-                                      itemBuilder: (ctx, i) {
-                                        final item = extractedItems[i];
-                                        final String itemDesc = item['descripcion_detectada']?.toString().trim() ?? "Sin descripción";
-                                        final String? parent = item['producto_padre_estimado']?.toString().trim();
-                                        final String? variant = item['variante_detectada']?.toString().trim();
-                                        final String? brand = item['marca_detectada']?.toString().trim();
-                                        final String? code = (item['codigo_detectada'] ?? item['codigo_detectado'])?.toString().trim();
-                                        final String? uSale = item['unidad_venta']?.toString().trim();
-
-                                        return Container(
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            color: isDark
-                                                ? Colors.white10
-                                                : Colors.grey[50],
-                                            borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(
-                                              color: isDark
-                                                  ? Colors.transparent
-                                                  : Colors.grey.shade300,
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                                    decoration: BoxDecoration(
-                                                      color: (isDark ? Colors.blue[900] : Colors.blue[50])?.withValues(alpha: 0.8),
-                                                      borderRadius: BorderRadius.circular(6),
-                                                      border: Border.all(
-                                                        color: (isDark ? Colors.blue[700] : Colors.blue[200])!,
-                                                        width: 0.8,
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      '#${(i + 1).toString().padLeft(2, '0')}',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        fontWeight: FontWeight.w800,
-                                                        color: isDark ? Colors.blue[200] : Colors.blue[800],
-                                                      ),
-                                                    ),
+                                          const SizedBox(height: 12),
+                                          ListView.separated(
+                                            shrinkWrap: true,
+                                            physics:
+                                                const NeverScrollableScrollPhysics(),
+                                            itemCount:
+                                                _linkedPresentations.length,
+                                            separatorBuilder: (_, __) =>
+                                                const SizedBox(height: 8),
+                                            itemBuilder: (ctx, i) {
+                                              final pres =
+                                                  _linkedPresentations[i];
+                                              final pCosto =
+                                                  (pres['precio_costo'] as num?)
+                                                      ?.toDouble();
+                                              final pVenta =
+                                                  (pres['precio_venta'] as num?)
+                                                      ?.toDouble();
+                                              final stock =
+                                                  (pres['cantidad_stock']
+                                                          as num?)
+                                                      ?.toDouble();
+                                              return Container(
+                                                padding: const EdgeInsets.all(
+                                                  12,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: isDark
+                                                      ? Colors.white10
+                                                      : Colors.grey[50],
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  border: Border.all(
+                                                    color: isDark
+                                                        ? Colors.transparent
+                                                        : Colors.grey.shade300,
                                                   ),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Text(
-                                                      itemDesc.isEmpty ? "Sin descripción" : itemDesc,
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      pres['producto_nombre'] ??
+                                                          "Producto",
                                                       style: TextStyle(
                                                         fontSize: 13,
-                                                        fontWeight: FontWeight.bold,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                         color: isDark
                                                             ? Colors.white
                                                             : Colors.black87,
                                                       ),
                                                     ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Wrap(
-                                                spacing: 12,
-                                                runSpacing: 8,
-                                                children: [
-                                                  if (parent != null && parent.isNotEmpty && parent != 'N/A')
-                                                    _auditTag("Padre", parent, isDark),
-                                                  if (variant != null && variant.isNotEmpty && variant != 'N/A')
-                                                    _auditTag("Variante", variant, isDark),
-                                                  if (brand != null && brand.isNotEmpty && brand != 'N/A')
-                                                    _auditTag("Marca", brand, isDark),
-                                                  if (code != null && code.isNotEmpty && code != 'N/A')
-                                                    _auditTag("Código", code, isDark),
-                                                  if (uSale != null && uSale.isNotEmpty)
-                                                    _auditTag("U. Venta", uSale, isDark),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 12),
-                                              Builder(builder: (context) {
-                                                double totalPago = num.tryParse(item['total_pago_lote']?.toString() ?? '0')?.toDouble() ?? 0.0;
-                                                double cantidadUmp = num.tryParse(item['cantidad_ump_comprada']?.toString() ?? '1')?.toDouble() ?? 1.0;
-                                                int unidadesLote = int.tryParse(item['unidades_por_lote']?.toString() ?? '1') ?? 1;
-                                                double precioUmp = num.tryParse(item['precio_ump_proveedor']?.toString() ?? '0')?.toDouble() ?? 0.0;
-                                                double costoUnitarioReal = (cantidadUmp > 0 && unidadesLote > 0) 
-                                                    ? totalPago / (cantidadUmp * unidadesLote) 
-                                                    : 0.0;
-                                                String ump = item['ump_compra'] ?? 'UND';
-                                                
-                                                return Container(
-                                                  padding: const EdgeInsets.all(12),
-                                                  decoration: BoxDecoration(
-                                                    color: isDark ? Colors.black26 : Colors.white,
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    border: Border.all(
-                                                      color: isDark ? Colors.white10 : Colors.grey.shade200,
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      pres['presentacion_nombre'] ??
+                                                          "Presentación",
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: isDark
+                                                            ? Colors.grey[400]
+                                                            : Colors.grey[600],
+                                                      ),
                                                     ),
-                                                  ),
-                                                  child: Column(
-                                                    children: [
-                                                      Row(
-                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                        children: [
-                                                          Text("Compra:", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                                                          const SizedBox(width: 8),
-                                                          Flexible(child: Text("$cantidadUmp $ump (x$unidadesLote)", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                                                        ],
-                                                      ),
-                                                      const SizedBox(height: 4),
-                                                      Row(
-                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                        children: [
-                                                          Text("Precio UMP ($ump):", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                                                          const SizedBox(width: 8),
-                                                          Flexible(child: Text("S/ ${precioUmp.toStringAsFixed(2)}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                                                        ],
-                                                      ),
-                                                      const SizedBox(height: 4),
-                                                      Row(
-                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                        children: [
-                                                          Text("Costo Unitario Real:", style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                                                          const SizedBox(width: 8),
-                                                          Flexible(child: Text("S/ ${costoUnitarioReal.toStringAsFixed(3)}", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.orange[300] : Colors.orange[800]), textAlign: TextAlign.right)),
-                                                        ],
-                                                      ),
-                                                      const Divider(height: 16),
-                                                      Row(
-                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                        children: [
-                                                          Text("Total Pagado:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[300] : Colors.grey[800])),
-                                                          Text("S/ ${totalPago.toStringAsFixed(2)}", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: isDark ? Colors.green[400] : Colors.green[700])),
-                                                        ],
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                              }),
-                                            ],
+                                                    const SizedBox(height: 8),
+                                                    Wrap(
+                                                      spacing: 12,
+                                                      runSpacing: 8,
+                                                      children: [
+                                                        if (pCosto != null)
+                                                          _auditTag(
+                                                            "Costo",
+                                                            "S/ ${pCosto.toStringAsFixed(2)}",
+                                                            isDark,
+                                                          ),
+                                                        if (pVenta != null)
+                                                          _auditTag(
+                                                            "Venta",
+                                                            "S/ ${pVenta.toStringAsFixed(2)}",
+                                                            isDark,
+                                                          ),
+                                                        if (stock != null)
+                                                          _auditTag(
+                                                            "Stock",
+                                                            stock.toStringAsFixed(
+                                                              stock.truncateToDouble() ==
+                                                                      stock
+                                                                  ? 0
+                                                                  : 1,
+                                                            ),
+                                                            isDark,
+                                                          ),
+                                                        if (pres['unidad_medida'] !=
+                                                            null)
+                                                          _auditTag(
+                                                            "UMP",
+                                                            pres['unidad_medida']
+                                                                .toString(),
+                                                            isDark,
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
                                           ),
-                                        );
-                                      },
-                                    );
-                                  }
-                                },
+                                        ],
+                                      );
+                                    } else {
+                                      return ListView.separated(
+                                        shrinkWrap: true,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        itemCount: extractedItems.length,
+                                        separatorBuilder: (_, __) =>
+                                            const SizedBox(height: 12),
+                                        itemBuilder: (ctx, i) {
+                                          final item = extractedItems[i];
+                                          final String itemDesc =
+                                              item['descripcion_detectada']
+                                                  ?.toString()
+                                                  .trim() ??
+                                              "Sin descripción";
+                                          final String? parent =
+                                              item['producto_padre_estimado']
+                                                  ?.toString()
+                                                  .trim();
+                                          final String? variant =
+                                              item['variante_detectada']
+                                                  ?.toString()
+                                                  .trim();
+                                          final String? brand =
+                                              item['marca_detectada']
+                                                  ?.toString()
+                                                  .trim();
+                                          final String? code =
+                                              (item['codigo_detectada'] ??
+                                                      item['codigo_detectado'])
+                                                  ?.toString()
+                                                  .trim();
+                                          final String? uSale =
+                                              item['unidad_venta']
+                                                  ?.toString()
+                                                  .trim();
+
+                                          return Container(
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? Colors.white10
+                                                  : Colors.grey[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: isDark
+                                                    ? Colors.transparent
+                                                    : Colors.grey.shade300,
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 7,
+                                                            vertical: 3,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            (isDark
+                                                                    ? Colors
+                                                                          .blue[900]
+                                                                    : Colors
+                                                                          .blue[50])
+                                                                ?.withValues(
+                                                                  alpha: 0.8,
+                                                                ),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              6,
+                                                            ),
+                                                        border: Border.all(
+                                                          color: (isDark
+                                                              ? Colors.blue[700]
+                                                              : Colors
+                                                                    .blue[200])!,
+                                                          width: 0.8,
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        '#${(i + 1).toString().padLeft(2, '0')}',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                          color: isDark
+                                                              ? Colors.blue[200]
+                                                              : Colors
+                                                                    .blue[800],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Text(
+                                                        itemDesc.isEmpty
+                                                            ? "Sin descripción"
+                                                            : itemDesc,
+                                                        style: TextStyle(
+                                                          fontSize: 13,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: isDark
+                                                              ? Colors.white
+                                                              : Colors.black87,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Wrap(
+                                                  spacing: 12,
+                                                  runSpacing: 8,
+                                                  children: [
+                                                    if (parent != null &&
+                                                        parent.isNotEmpty &&
+                                                        parent != 'N/A')
+                                                      _auditTag(
+                                                        "Padre",
+                                                        parent,
+                                                        isDark,
+                                                      ),
+                                                    if (variant != null &&
+                                                        variant.isNotEmpty &&
+                                                        variant != 'N/A')
+                                                      _auditTag(
+                                                        "Variante",
+                                                        variant,
+                                                        isDark,
+                                                      ),
+                                                    if (brand != null &&
+                                                        brand.isNotEmpty &&
+                                                        brand != 'N/A')
+                                                      _auditTag(
+                                                        "Marca",
+                                                        brand,
+                                                        isDark,
+                                                      ),
+                                                    if (code != null &&
+                                                        code.isNotEmpty &&
+                                                        code != 'N/A')
+                                                      _auditTag(
+                                                        "Código",
+                                                        code,
+                                                        isDark,
+                                                      ),
+                                                    if (uSale != null &&
+                                                        uSale.isNotEmpty)
+                                                      _auditTag(
+                                                        "U. Venta",
+                                                        uSale,
+                                                        isDark,
+                                                      ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 12),
+                                                Builder(
+                                                  builder: (context) {
+                                                    double totalPago =
+                                                        num.tryParse(
+                                                          item['total_pago_lote']
+                                                                  ?.toString() ??
+                                                              '0',
+                                                        )?.toDouble() ??
+                                                        0.0;
+                                                    double cantidadUmp =
+                                                        num.tryParse(
+                                                          item['cantidad_ump_comprada']
+                                                                  ?.toString() ??
+                                                              '1',
+                                                        )?.toDouble() ??
+                                                        1.0;
+                                                    int unidadesLote =
+                                                        int.tryParse(
+                                                          item['unidades_por_lote']
+                                                                  ?.toString() ??
+                                                              '1',
+                                                        ) ??
+                                                        1;
+                                                    double precioUmp =
+                                                        num.tryParse(
+                                                          item['precio_ump_proveedor']
+                                                                  ?.toString() ??
+                                                              '0',
+                                                        )?.toDouble() ??
+                                                        0.0;
+                                                    double costoUnitarioReal =
+                                                        (cantidadUmp > 0 &&
+                                                            unidadesLote > 0)
+                                                        ? totalPago /
+                                                              (cantidadUmp *
+                                                                  unidadesLote)
+                                                        : 0.0;
+                                                    String ump =
+                                                        item['ump_compra'] ??
+                                                        'UND';
+
+                                                    return Container(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            12,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: isDark
+                                                            ? Colors.black26
+                                                            : Colors.white,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              8,
+                                                            ),
+                                                        border: Border.all(
+                                                          color: isDark
+                                                              ? Colors.white10
+                                                              : Colors
+                                                                    .grey
+                                                                    .shade200,
+                                                        ),
+                                                      ),
+                                                      child: Column(
+                                                        children: [
+                                                          Row(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .spaceBetween,
+                                                            children: [
+                                                              Text(
+                                                                "Compra:",
+                                                                style: TextStyle(
+                                                                  fontSize: 11,
+                                                                  color: isDark
+                                                                      ? Colors
+                                                                            .grey[400]
+                                                                      : Colors
+                                                                            .grey[600],
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              Flexible(
+                                                                child: Text(
+                                                                  "$cantidadUmp $ump (x$unidadesLote)",
+                                                                  style: const TextStyle(
+                                                                    fontSize:
+                                                                        11,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
+                                                                  ),
+                                                                  textAlign:
+                                                                      TextAlign
+                                                                          .right,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          const SizedBox(
+                                                            height: 4,
+                                                          ),
+                                                          Row(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .spaceBetween,
+                                                            children: [
+                                                              Text(
+                                                                "Precio UMP ($ump):",
+                                                                style: TextStyle(
+                                                                  fontSize: 11,
+                                                                  color: isDark
+                                                                      ? Colors
+                                                                            .grey[400]
+                                                                      : Colors
+                                                                            .grey[600],
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              Flexible(
+                                                                child: Text(
+                                                                  "S/ ${precioUmp.toStringAsFixed(2)}",
+                                                                  style: const TextStyle(
+                                                                    fontSize:
+                                                                        11,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
+                                                                  ),
+                                                                  textAlign:
+                                                                      TextAlign
+                                                                          .right,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          const SizedBox(
+                                                            height: 4,
+                                                          ),
+                                                          Row(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .spaceBetween,
+                                                            children: [
+                                                              Text(
+                                                                "Costo Unitario Real:",
+                                                                style: TextStyle(
+                                                                  fontSize: 11,
+                                                                  color: isDark
+                                                                      ? Colors
+                                                                            .grey[400]
+                                                                      : Colors
+                                                                            .grey[600],
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              Flexible(
+                                                                child: Text(
+                                                                  "S/ ${costoUnitarioReal.toStringAsFixed(3)}",
+                                                                  style: TextStyle(
+                                                                    fontSize:
+                                                                        11,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
+                                                                    color:
+                                                                        isDark
+                                                                        ? Colors
+                                                                              .orange[300]
+                                                                        : Colors
+                                                                              .orange[800],
+                                                                  ),
+                                                                  textAlign:
+                                                                      TextAlign
+                                                                          .right,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          const Divider(
+                                                            height: 16,
+                                                          ),
+                                                          Row(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .spaceBetween,
+                                                            children: [
+                                                              Text(
+                                                                "Total Pagado:",
+                                                                style: TextStyle(
+                                                                  fontSize: 12,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  color: isDark
+                                                                      ? Colors
+                                                                            .grey[300]
+                                                                      : Colors
+                                                                            .grey[800],
+                                                                ),
+                                                              ),
+                                                              Text(
+                                                                "S/ ${totalPago.toStringAsFixed(2)}",
+                                                                style: TextStyle(
+                                                                  fontSize: 16,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w900,
+                                                                  color: isDark
+                                                                      ? Colors
+                                                                            .green[400]
+                                                                      : Colors
+                                                                            .green[700],
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    }
+                                  },
+                                ),
                               ),
-                             ),
                             ),
                           ],
                         ),

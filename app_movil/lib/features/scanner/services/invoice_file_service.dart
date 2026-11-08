@@ -255,4 +255,60 @@ class InvoiceFileService {
 
     return savedFile;
   }
+
+  /// Busca si ya existe en las carpetas de descargas un archivo previo para la factura dada
+  static Future<File?> findExistingInvoiceFile({
+    required String displayId,
+    required bool isPdfReport,
+  }) async {
+    try {
+      final List<Directory> dirsToCheck = [];
+      try {
+        final publicDir = await getPublicDownloadsDirectory()
+            .timeout(const Duration(milliseconds: 300));
+        dirsToCheck.add(publicDir);
+      } catch (_) {}
+      try {
+        final extDir = await getExternalStorageDirectory()
+            .timeout(const Duration(milliseconds: 300));
+        if (extDir != null) {
+          dirsToCheck.add(Directory('${extDir.path}/Descargas_MochilaLista'));
+        }
+      } catch (_) {}
+      try {
+        final docsDir = await getApplicationDocumentsDirectory()
+            .timeout(const Duration(milliseconds: 300));
+        dirsToCheck.add(Directory('${docsDir.path}/Descargas_MochilaLista'));
+      } catch (_) {}
+
+      final prefix = isPdfReport ? 'Factura_${displayId}_Reporte_' : 'Factura_${displayId}_';
+
+      for (final dir in dirsToCheck) {
+        if (!dir.existsSync()) continue;
+        final entities = dir.listSync();
+        for (final entity in entities) {
+          if (entity is File) {
+            final name = entity.path.split(Platform.pathSeparator).last;
+            if (isPdfReport) {
+              if (name.startsWith(prefix) && name.toLowerCase().endsWith('.pdf')) {
+                return entity;
+              }
+            } else {
+              if (name.startsWith(prefix) &&
+                  !name.contains('_Reporte_') &&
+                  (name.toLowerCase().endsWith('.jpg') ||
+                   name.toLowerCase().endsWith('.png') ||
+                   name.toLowerCase().endsWith('.webp') ||
+                   name.toLowerCase().endsWith('.jpeg'))) {
+                return entity;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error buscando archivo existente: $e');
+    }
+    return null;
+  }
 }

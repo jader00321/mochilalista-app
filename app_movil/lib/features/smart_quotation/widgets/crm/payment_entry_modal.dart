@@ -155,6 +155,44 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
     return oldestAmount;
   }
 
+  double _getTotalOverdueAmount(TrackingProvider provider) {
+    double total = 0.0;
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    for (var sale in provider.currentClientDebts) {
+      for (var cuota in sale.installments) {
+        if (cuota.status != 'pagado') {
+          final due = DateTime.tryParse(cuota.dueDate);
+          if (due != null && due.isBefore(todayStart)) {
+            total += (cuota.amount - cuota.montoPagado);
+          }
+        }
+      }
+    }
+    return total;
+  }
+
+  double? _getNextUpcomingInstallmentAmount(TrackingProvider provider) {
+    DateTime? earliestFuture;
+    double? nextAmt;
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    for (var sale in provider.currentClientDebts) {
+      for (var cuota in sale.installments) {
+        if (cuota.status != 'pagado') {
+          final due = DateTime.tryParse(cuota.dueDate);
+          if (due != null && !due.isBefore(todayStart)) {
+            if (earliestFuture == null || due.isBefore(earliestFuture)) {
+              earliestFuture = due;
+              nextAmt = cuota.amount - cuota.montoPagado;
+            }
+          }
+        }
+      }
+    }
+    return nextAmt;
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<TrackingProvider>(context);
@@ -176,97 +214,104 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
     bool canSubmit = enteredAmount > 0 && hasTarget && !_isLoading;
 
     final oldestInstallmentAmt = _getOldestInstallmentAmount(provider);
+    final totalOverdueAmt = _getTotalOverdueAmount(provider);
+    final nextInstallmentAmt = _getNextUpcomingInstallmentAmount(provider);
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.92, 
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        bottom: true,
-        maintainBottomViewPadding: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-          // Drag handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.withAlpha(76),
-                borderRadius: BorderRadius.circular(2),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.92, 
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          bottom: true,
+          maintainBottomViewPadding: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            // Drag handle
+            Center(
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withAlpha(76),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
 
-          // Header Bar (Título y Deuda)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Registrar Abono",
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        "Deuda Total: ${AppCurrency.format(widget.client.totalDebt)}",
-                        style: TextStyle(
-                          color: isDark ? Colors.red[300] : Colors.red[700],
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
+            // Header Bar (Título y Deuda)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Registrar Abono",
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.close, size: 26, color: textColor),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-
-          // ==================== CABECERA DINÁMICA RETRÁCTIL CON ALTURA FLUIDA ====================
-          AnimatedSize(
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOutCubic,
-            clipBehavior: Clip.hardEdge,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 240),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              child: (isSpecificTab && _isHeaderCollapsed)
-                  ? KeyedSubtree(
-                      key: const ValueKey('collapsed_mini_header'),
-                      child: _buildCollapsedStickyMiniHeader(enteredAmount, textColor, isDark),
-                    )
-                  : KeyedSubtree(
-                      key: const ValueKey('expanded_header_inputs'),
-                      child: _buildExpandedHeaderInputs(
-                        enteredAmount,
-                        targetDebt,
-                        oldestInstallmentAmt,
-                        textColor,
-                        isDark,
-                      ),
+                        const SizedBox(height: 2),
+                        Text(
+                          "Deuda Total: ${AppCurrency.format(widget.client.totalDebt)}",
+                          style: TextStyle(
+                            color: isDark ? Colors.red[300] : Colors.red[700],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, size: 26, color: textColor),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
-          ),
+
+            // ==================== CABECERA DINÁMICA RETRÁCTIL CON ALTURA FLUIDA ====================
+            AnimatedSize(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              clipBehavior: Clip.hardEdge,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 240),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: (isSpecificTab && _isHeaderCollapsed)
+                    ? KeyedSubtree(
+                        key: const ValueKey('collapsed_mini_header'),
+                        child: _buildCollapsedStickyMiniHeader(enteredAmount, textColor, isDark),
+                      )
+                    : KeyedSubtree(
+                        key: const ValueKey('expanded_header_inputs'),
+                        child: _buildExpandedHeaderInputs(
+                          enteredAmount,
+                          targetDebt,
+                          oldestInstallmentAmt,
+                          totalOverdueAmt,
+                          nextInstallmentAmt,
+                          textColor,
+                          isDark,
+                        ),
+                      ),
+              ),
+            ),
 
           // ==================== TAB BAR CON PROTECCIÓN ANTI-TRUNCAMIENTO ====================
           Container(
@@ -422,7 +467,8 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
         ],
       ),
     ),
-  );
+  ),
+);
 }
 
   /// Mini-Header Compacto (< 48px) que maximiza el 85% de la pantalla en Pago Específico
@@ -550,7 +596,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
     );
   }
 
-  /// Tarjeta compacta de monto rápido para distribuir en 1 sola fila con Expanded
+  /// Tarjeta compacta de monto rápido con animación suave e indicador activo de selección
   Widget _buildQuickAmountCard({
     required String label,
     required double amount,
@@ -559,37 +605,61 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
     required VoidCallback onTap,
     bool isWarning = false,
   }) {
+    final double entered = double.tryParse(_amountCtrl.text) ?? 0.0;
+    final bool isSelected = entered > 0 && (entered - amount).abs() < 0.01;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: isWarning
-              ? (isDark ? Colors.orange.withValues(alpha: 0.12) : Colors.orange.shade50)
-              : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100),
+          color: isSelected
+              ? (isDark ? const Color(0xFF2E7D32).withValues(alpha: 0.25) : Colors.green.shade50)
+              : (isWarning
+                  ? (isDark ? Colors.orange.withValues(alpha: 0.12) : Colors.orange.shade50)
+                  : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100)),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isWarning
-                ? Colors.orange.withValues(alpha: 0.35)
-                : (isDark ? Colors.white12 : Colors.grey.shade300),
+            color: isSelected
+                ? (isDark ? Colors.greenAccent : const Color(0xFF2E7D32))
+                : (isWarning
+                    ? Colors.orange.withValues(alpha: 0.35)
+                    : (isDark ? Colors.white12 : Colors.grey.shade300)),
+            width: isSelected ? 1.8 : 1.0,
           ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                color: isWarning
-                    ? (isDark ? Colors.orange[300] : Colors.orange[900])
-                    : (isDark ? Colors.grey[400] : Colors.grey[700]),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isSelected) ...[
+                  Icon(
+                    Icons.check_rounded,
+                    size: 11,
+                    color: isDark ? Colors.greenAccent : const Color(0xFF2E7D32),
+                  ),
+                  const SizedBox(width: 3),
+                ],
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                    color: isSelected
+                        ? (isDark ? Colors.greenAccent : const Color(0xFF2E7D32))
+                        : (isWarning
+                            ? (isDark ? Colors.orange[300] : Colors.orange[900])
+                            : (isDark ? Colors.grey[400] : Colors.grey[700])),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
             const SizedBox(height: 1),
             FittedBox(
@@ -599,7 +669,9 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w800,
-                  color: color,
+                  color: isSelected
+                      ? (isDark ? Colors.greenAccent : const Color(0xFF2E7D32))
+                      : color,
                 ),
               ),
             ),
@@ -609,11 +681,13 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
     );
   }
 
-  /// Cabecera Extendida con Input, Chips Rápidos en 1 Fila y Métodos de Pago en 1 Fila
+  /// Cabecera Extendida con Input, Carrusel de Chips Rápidos y Métodos de Pago en 1 Fila
   Widget _buildExpandedHeaderInputs(
     double enteredAmount,
     double targetDebt,
     double? oldestInstallmentAmt,
+    double totalOverdueAmt,
+    double? nextInstallmentAmt,
     Color textColor,
     bool isDark,
   ) {
@@ -622,10 +696,11 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Campo Monto
+          // Campo Monto con auto-unfocus al tocar fuera
           TextField(
             controller: _amountCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 24,
@@ -650,49 +725,85 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
 
           const SizedBox(height: 8),
 
-          // Chips de Monto Rápido en 1 Sola Fila Horizontal Equitativa
-          Row(
-            children: [
-              Expanded(
-                child: _buildQuickAmountCard(
-                  label: "Total",
-                  amount: widget.client.totalDebt,
-                  color: isDark ? Colors.green[300]! : const Color(0xFF2E7D32),
-                  isDark: isDark,
-                  onTap: () {
-                    _amountCtrl.text = widget.client.totalDebt.toStringAsFixed(2);
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (oldestInstallmentAmt != null && oldestInstallmentAmt > 0) ...[
-                Expanded(
-                  child: _buildQuickAmountCard(
-                    label: "Cuota Ant.",
-                    amount: oldestInstallmentAmt,
-                    color: isDark ? Colors.orange[300]! : Colors.orange[800]!,
+          // Chips de Monto Rápido en Carrusel Horizontal de 1 Sola Línea con auto-detección
+          SizedBox(
+            height: 52,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _buildQuickAmountCard(
+                    label: "Total",
+                    amount: widget.client.totalDebt,
+                    color: isDark ? Colors.green[300]! : const Color(0xFF2E7D32),
                     isDark: isDark,
-                    isWarning: true,
                     onTap: () {
-                      _amountCtrl.text = oldestInstallmentAmt.toStringAsFixed(2);
+                      _amountCtrl.text = widget.client.totalDebt.toStringAsFixed(2);
                     },
                   ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: _buildQuickAmountCard(
-                  label: "50% Deuda",
-                  amount: widget.client.totalDebt / 2,
-                  color: isDark ? Colors.blue[300]! : Colors.blue[800]!,
-                  isDark: isDark,
-                  onTap: () {
-                    final half = widget.client.totalDebt / 2;
-                    _amountCtrl.text = half.toStringAsFixed(2);
-                  },
-                ),
+                  const SizedBox(width: 8),
+                  if (oldestInstallmentAmt != null && oldestInstallmentAmt > 0) ...[
+                    _buildQuickAmountCard(
+                      label: "Cuota Ant.",
+                      amount: oldestInstallmentAmt,
+                      color: isDark ? Colors.orange[300]! : Colors.orange[800]!,
+                      isDark: isDark,
+                      isWarning: true,
+                      onTap: () {
+                        _amountCtrl.text = oldestInstallmentAmt.toStringAsFixed(2);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (totalOverdueAmt > 0.01) ...[
+                    _buildQuickAmountCard(
+                      label: "Total Vencido",
+                      amount: totalOverdueAmt,
+                      color: isDark ? Colors.red[300]! : Colors.red[800]!,
+                      isDark: isDark,
+                      isWarning: true,
+                      onTap: () {
+                        _amountCtrl.text = totalOverdueAmt.toStringAsFixed(2);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (nextInstallmentAmt != null && nextInstallmentAmt > 0) ...[
+                    _buildQuickAmountCard(
+                      label: "Próxima Cuota",
+                      amount: nextInstallmentAmt,
+                      color: isDark ? Colors.blue[300]! : Colors.blue[800]!,
+                      isDark: isDark,
+                      onTap: () {
+                        _amountCtrl.text = nextInstallmentAmt.toStringAsFixed(2);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  _buildQuickAmountCard(
+                    label: "50% Deuda",
+                    amount: widget.client.totalDebt / 2,
+                    color: isDark ? Colors.cyan[300]! : Colors.cyan[800]!,
+                    isDark: isDark,
+                    onTap: () {
+                      final half = widget.client.totalDebt / 2;
+                      _amountCtrl.text = half.toStringAsFixed(2);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _buildQuickAmountCard(
+                    label: "Deuda Total",
+                    amount: widget.client.totalDebt,
+                    color: isDark ? Colors.green[300]! : const Color(0xFF2E7D32),
+                    isDark: isDark,
+                    onTap: () {
+                      _amountCtrl.text = widget.client.totalDebt.toStringAsFixed(2);
+                    },
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
 
           const SizedBox(height: 10),
@@ -944,6 +1055,72 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                 ),
         ),
 
+        // Previsualización dinámica de cascada inteligente en Pago Específico con excedente
+        Builder(
+          builder: (ctx) {
+            if (_selectedTargetType != 'cuota' || _selectedTargetId == null) return const SizedBox.shrink();
+            final double entered = double.tryParse(_amountCtrl.text) ?? 0.0;
+            InstallmentModel? targetCuota;
+            SaleModel? targetSale;
+            for (var s in debts) {
+              for (var c in s.installments) {
+                if (c.id == _selectedTargetId) {
+                  targetCuota = c;
+                  targetSale = s;
+                  break;
+                }
+              }
+              if (targetCuota != null) break;
+            }
+            if (targetCuota == null || targetSale == null) return const SizedBox.shrink();
+            final double faltaTarget = targetCuota.amount - targetCuota.montoPagado;
+            if (entered <= faltaTarget + 0.01) return const SizedBox.shrink();
+
+            final double surplus = entered - faltaTarget;
+            final subsequentCuotas = targetSale.installments
+                .where((c) => c.status != 'pagado' && c.id != targetCuota!.id && c.installmentNumber > targetCuota.installmentNumber)
+                .toList();
+            subsequentCuotas.sort((a, b) => a.installmentNumber.compareTo(b.installmentNumber));
+
+            String cascadeInfo;
+            if (subsequentCuotas.isNotEmpty) {
+              final nextC = subsequentCuotas.first;
+              final double faltaNext = nextC.amount - nextC.montoPagado;
+              final double nextApplied = surplus >= faltaNext ? faltaNext : surplus;
+              final bool nextLiquidada = (faltaNext - nextApplied) <= 0.01;
+              cascadeInfo = "Cancela Cuota ${targetCuota.installmentNumber} (${AppCurrency.format(faltaTarget)}) y amortiza ${AppCurrency.format(nextApplied)} a Cuota ${nextC.installmentNumber}${nextLiquidada ? ' (Liquidada)' : ''} del mismo préstamo/venta.";
+            } else {
+              cascadeInfo = "Cancela Cuota ${targetCuota.installmentNumber} (${AppCurrency.format(faltaTarget)}) y el remanente de ${AppCurrency.format(surplus)} queda como saldo a favor o vuelto.";
+            }
+
+            return Container(
+              margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1B281B) : Colors.green.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: isDark ? Colors.greenAccent.withValues(alpha: 0.3) : Colors.green.shade300),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.auto_awesome, color: isDark ? Colors.greenAccent : Colors.green.shade800, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      cascadeInfo,
+                      style: TextStyle(
+                        color: isDark ? Colors.green[200] : Colors.green[900],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+
         // Lista de Deudas con Cuotas
         Expanded(
           child: ListView.builder(
@@ -1066,25 +1243,42 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange[100],
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      "Vence: ${DateFormat('dd/MM').format(DateTime.parse(cuota.dueDate))}",
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: isDark ? Colors.orange[300] : Colors.orange[900],
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                                  Builder(
+                                    builder: (_) {
+                                      final now = DateTime.now();
+                                      final todayStart = DateTime(now.year, now.month, now.day);
+                                      final due = DateTime.tryParse(cuota.dueDate);
+                                      final bool isVencida = due != null && due.isBefore(todayStart);
+
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: isVencida
+                                              ? (isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red[100])
+                                              : (isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange[100]),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          isVencida
+                                              ? "Venció: ${DateFormat('dd/MM').format(due)}"
+                                              : "Vence: ${due != null ? DateFormat('dd/MM').format(due) : cuota.dueDate}",
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isVencida
+                                                ? (isDark ? Colors.red[300] : Colors.red[900])
+                                                : (isDark ? Colors.orange[300] : Colors.orange[900]),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ],
                               ),
                               subtitle: Text(
-                                "Pendiente: ${AppCurrency.format(faltaCuota)}",
+                                cuota.tieneMora
+                                    ? "Pendiente: ${AppCurrency.format(faltaCuota)} (incl. +${AppCurrency.format(cuota.moraMonto)} mora)"
+                                    : "Pendiente: ${AppCurrency.format(faltaCuota)}",
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   color: isDark ? Colors.green[300] : Colors.green[800],

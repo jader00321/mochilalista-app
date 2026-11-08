@@ -34,42 +34,84 @@ class GeneralPreviewTab extends StatelessWidget {
       );
     }
 
-    List<Widget> impactPreview = [];
-    double remaining = amount;
+    final List<_PendingDebtItem> items = [];
 
     for (var sale in debts) {
-      if (remaining <= 0.01) break;
-
       String entityName = sale.origenVenta == 'prestamo_personal' ? 'Préstamo' : 'Venta';
 
       if (sale.installments.isNotEmpty) {
         for (var cuota in sale.installments) {
-          if (remaining <= 0.01) break;
           if (cuota.status != 'pagado') {
             double falta = cuota.amount - cuota.montoPagado;
-            double aplicado = remaining >= falta ? falta : remaining;
-            remaining -= aplicado;
-            bool saldado = (falta - aplicado) <= 0.01;
-
-            impactPreview.add(_buildImpactRow(
-              saldado, 
-              saldado ? "Cancela Cuota ${cuota.installmentNumber} ($entityName #${sale.displayId})" : "Abono parcial a Cuota ${cuota.installmentNumber} ($entityName #${sale.displayId})", 
-              aplicado, isDark
-            ));
+            if (falta > 0.001) {
+              final due = DateTime.tryParse(cuota.dueDate) ?? DateTime(2099);
+              items.add(_PendingDebtItem(
+                dueDate: due,
+                installmentNumber: cuota.installmentNumber,
+                saleId: sale.id,
+                entityName: entityName,
+                displayId: sale.displayId,
+                falta: falta,
+                isInstallment: true,
+              ));
+            }
           }
         }
       } else {
         double falta = sale.trueTotalAmount - sale.paidAmount;
-        double aplicado = remaining >= falta ? falta : remaining;
-        remaining -= aplicado;
-        bool saldado = (falta - aplicado) <= 0.01;
-
-        impactPreview.add(_buildImpactRow(
-          saldado, 
-          saldado ? "Cancela $entityName #${sale.displayId} al contado" : "Abono parcial a $entityName #${sale.displayId}", 
-          aplicado, isDark
-        ));
+        if (falta > 0.001) {
+          final due = DateTime.tryParse(sale.deliveryDate ?? sale.saleDate) ?? DateTime(2099);
+          items.add(_PendingDebtItem(
+            dueDate: due,
+            installmentNumber: 1,
+            saleId: sale.id,
+            entityName: entityName,
+            displayId: sale.displayId,
+            falta: falta,
+            isInstallment: false,
+          ));
+        }
       }
+    }
+
+    // Ordenamiento cronológico estricto por fecha de vencimiento ASC (FIFO Canónico)
+    items.sort((a, b) {
+      final compDate = a.dueDate.compareTo(b.dueDate);
+      if (compDate != 0) return compDate;
+
+      final compCuota = a.installmentNumber.compareTo(b.installmentNumber);
+      if (compCuota != 0) return compCuota;
+
+      return a.saleId.compareTo(b.saleId);
+    });
+
+    List<Widget> impactPreview = [];
+    double remaining = amount;
+
+    for (var item in items) {
+      if (remaining <= 0.01) break;
+
+      double aplicado = remaining >= item.falta ? item.falta : remaining;
+      remaining -= aplicado;
+      bool saldado = (item.falta - aplicado) <= 0.01;
+
+      String desc;
+      if (item.isInstallment) {
+        desc = saldado
+            ? "Cancela Cuota ${item.installmentNumber} (${item.entityName} #${item.displayId})"
+            : "Abono parcial a Cuota ${item.installmentNumber} (${item.entityName} #${item.displayId})";
+      } else {
+        desc = saldado
+            ? "Cancela ${item.entityName} #${item.displayId} al contado"
+            : "Abono parcial a ${item.entityName} #${item.displayId}";
+      }
+
+      impactPreview.add(_buildImpactRow(
+        saldado, 
+        desc, 
+        aplicado, 
+        isDark,
+      ));
     }
 
     return ListView(
@@ -101,4 +143,24 @@ class GeneralPreviewTab extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PendingDebtItem {
+  final DateTime dueDate;
+  final int installmentNumber;
+  final int saleId;
+  final String entityName;
+  final String displayId;
+  final double falta;
+  final bool isInstallment;
+
+  _PendingDebtItem({
+    required this.dueDate,
+    required this.installmentNumber,
+    required this.saleId,
+    required this.entityName,
+    required this.displayId,
+    required this.falta,
+    required this.isInstallment,
+  });
 }

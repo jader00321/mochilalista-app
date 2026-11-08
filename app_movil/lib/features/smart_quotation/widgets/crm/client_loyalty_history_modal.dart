@@ -906,10 +906,10 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
       );
     }
 
-    if (_nextGoalData != null) {
+    if (_nextGoalData != null && _nextGoalData!['goal'] != null) {
       final meta = _nextGoalData!['goal'] as RewardGoalModel;
-      final int missing = _nextGoalData!['missing'] as int;
-      final double progress = (_nextGoalData!['progress'] as double).clamp(0.0, 1.0);
+      final int missing = (_nextGoalData!['puntos_faltantes'] ?? _nextGoalData!['missing'] as num?)?.toInt() ?? 0;
+      final double progress = ((_nextGoalData!['progreso'] ?? _nextGoalData!['progress'] as num?)?.toDouble() ?? 0.0).clamp(0.0, 1.0);
 
       return Container(
         margin: const EdgeInsets.only(top: 10),

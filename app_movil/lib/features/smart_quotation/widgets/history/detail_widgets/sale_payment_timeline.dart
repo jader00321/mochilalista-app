@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/utils/cuota_date_helper.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/cuota_morosidad_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/whatsapp_preview_modal.dart';
 
@@ -104,21 +104,9 @@ class SalePaymentTimeline extends StatelessWidget {
                   final bool tieneMora = moraMonto > 0.01;
                   final bool cuotaPagada = c['estado'] == 'pagado' || (saldoFalta <= 0.01 && cuotaMonto > 0);
 
-                  DateTime? dueDate;
-                  try {
-                    dueDate = DateTime.parse(c['fecha_vencimiento'].toString().split('T').first);
-                  } catch (_) {}
-
-                  final now = DateTime.now();
-                  final today = DateTime(now.year, now.month, now.day);
-                  final int daysDiff = dueDate != null
-                      ? today.difference(DateTime(dueDate.year, dueDate.month, dueDate.day)).inDays
-                      : 0;
-                  final bool isVencido = !cuotaPagada && daysDiff > 0;
-
-                  final String dateFormatted = dueDate != null
-                      ? DateFormat('dd/MM/yyyy').format(dueDate)
-                      : c['fecha_vencimiento'].toString();
+                  final dateInfo = CuotaDateHelper.evaluate(c['fecha_vencimiento']);
+                  final bool isVencido = !cuotaPagada && dateInfo.isPast;
+                  final int daysDiff = dateInfo.daysOverdue;
 
                   String badgeLabel;
                   IconData badgeIcon;
@@ -127,31 +115,25 @@ class SalePaymentTimeline extends StatelessWidget {
                   Color badgeColor;
 
                   if (cuotaPagada) {
-                    badgeLabel = "PAGADO";
-                    badgeIcon = Icons.check_circle;
+                    badgeLabel = "PAGADA";
+                    badgeIcon = Icons.check_circle_rounded;
                     badgeBg = isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50;
                     badgeBorder = isDark ? Colors.green.shade700 : Colors.green.shade200;
                     badgeColor = isDark ? Colors.green.shade300 : Colors.green.shade800;
                   } else if (isVencido) {
-                    badgeIcon = Icons.error_outline;
+                    badgeIcon = Icons.error_outline_rounded;
                     badgeBg = isDark ? Colors.red.withValues(alpha: 0.2) : Colors.red.shade50;
                     badgeBorder = isDark ? Colors.red.shade700 : Colors.red.shade200;
                     badgeColor = isDark ? Colors.red.shade300 : Colors.red.shade800;
-                    if (cuotaPagado > 0.01) {
-                      badgeLabel = "VENCIDA ($daysDiff d) • PAGO PARCIAL";
-                    } else if (tieneMora) {
-                      badgeLabel = "VENCIDA ($daysDiff d) • CON MORA";
-                    } else {
-                      badgeLabel = "VENCIDA ($daysDiff d)";
-                    }
+                    badgeLabel = "VENCIDA ($daysDiff d)";
                   } else {
                     if (cuotaPagado > 0.01) {
                       badgeLabel = "PAGO PARCIAL";
-                      badgeIcon = Icons.timelapse;
+                      badgeIcon = Icons.timelapse_rounded;
                       badgeBg = isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade50;
                       badgeBorder = isDark ? Colors.orange.shade700 : Colors.orange.shade200;
                       badgeColor = isDark ? Colors.orange.shade300 : Colors.orange.shade900;
-                    } else if (daysDiff == 0) {
+                    } else if (dateInfo.isToday) {
                       badgeLabel = "VENCE HOY";
                       badgeIcon = Icons.notification_important_outlined;
                       badgeBg = isDark ? Colors.amber.withValues(alpha: 0.2) : Colors.amber.shade50;
@@ -159,10 +141,10 @@ class SalePaymentTimeline extends StatelessWidget {
                       badgeColor = isDark ? Colors.amber.shade300 : Colors.amber.shade900;
                     } else {
                       badgeLabel = "PENDIENTE";
-                      badgeIcon = Icons.hourglass_top;
-                      badgeBg = isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade50;
-                      badgeBorder = isDark ? Colors.orange.shade700 : Colors.orange.shade200;
-                      badgeColor = isDark ? Colors.orange.shade300 : Colors.orange.shade900;
+                      badgeIcon = Icons.hourglass_top_rounded;
+                      badgeBg = isDark ? Colors.blueGrey.withValues(alpha: 0.2) : Colors.blueGrey.shade50;
+                      badgeBorder = isDark ? Colors.blueGrey.shade700 : Colors.blueGrey.shade200;
+                      badgeColor = isDark ? Colors.blueGrey.shade300 : Colors.blueGrey.shade800;
                     }
                   }
 
@@ -206,7 +188,7 @@ class SalePaymentTimeline extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                "${isVencido ? 'Venció:' : 'Vence:'} $dateFormatted",
+                                dateInfo.fullLabel,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -228,89 +210,106 @@ class SalePaymentTimeline extends StatelessWidget {
                           ],
                         ),
 
-                        // Desglose si tiene mora o abono parcial
-                        if (tieneMora || cuotaPagado > 0.01) ...[
-                          const SizedBox(height: 6),
-                          Row(
+                        const SizedBox(height: 8),
+
+                        // NIVEL 2: Badges de Estado, Modo y Desglose Financiero en Wrap
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              const SizedBox(width: 34),
-                              Expanded(
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 4,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
+                              // Badge de Estado Principal
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: badgeBg,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: badgeBorder, width: 0.8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    if (tieneMora) ...[
-                                      Text(
-                                        "Orig: ${AppCurrency.format(montoOriginal)} • + Mora: ${AppCurrency.format(moraMonto)}",
-                                        style: const TextStyle(
-                                          fontSize: 11.5,
-                                          color: Colors.redAccent,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                    Icon(badgeIcon, size: 12, color: badgeColor),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      badgeLabel,
+                                      style: TextStyle(
+                                        color: badgeColor,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.3,
                                       ),
-                                      if (moraAuto)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                          decoration: BoxDecoration(
-                                            color: Colors.amber.withValues(alpha: 0.2),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            "⚡ Auto",
-                                            style: TextStyle(
-                                              fontSize: 9.5,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.amber[800],
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                    if (cuotaPagado > 0.01 && !cuotaPagada) ...[
-                                      Text(
-                                        "Abonado: ${AppCurrency.format(cuotaPagado)} • Falta: ${AppCurrency.format(saldoFalta)}",
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          color: isDark ? Colors.orange[200] : Colors.orange[900],
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ],
                                 ),
                               ),
-                            ],
-                          ),
-                        ],
 
-                        const SizedBox(height: 10),
-
-                        // NIVEL 2: Badge de Estado
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: badgeBg,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: badgeBorder, width: 0.8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(badgeIcon, size: 12, color: badgeColor),
-                                const SizedBox(width: 4),
-                                Text(
-                                  badgeLabel,
-                                  style: TextStyle(
-                                    color: badgeColor,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.3,
+                              // Badge de Mora Automática (si aplica)
+                              if (moraAuto && tieneMora)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3.5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.amber.withValues(alpha: 0.5), width: 0.8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.bolt_rounded, size: 12, color: isDark ? Colors.amber[300] : Colors.amber[800]),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        "Auto",
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.amber[300] : Colors.amber[800],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
+
+                              // Píldora de Desglose de Mora
+                              if (tieneMora)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                  decoration: BoxDecoration(
+                                    color: (isDark ? Colors.redAccent : Colors.red).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: (isDark ? Colors.redAccent : Colors.red).withValues(alpha: 0.25), width: 0.8),
+                                  ),
+                                  child: Text(
+                                    "Base: ${AppCurrency.format(montoOriginal)} • + Mora: ${AppCurrency.format(moraMonto)}",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark ? Colors.red[300] : Colors.red[800],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+
+                              // Píldora de Abono Parcial
+                              if (cuotaPagado > 0.01 && !cuotaPagada)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.orange.withValues(alpha: 0.3), width: 0.8),
+                                  ),
+                                  child: Text(
+                                    "Abonado: ${AppCurrency.format(cuotaPagado)} • Falta: ${AppCurrency.format(saldoFalta)}",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark ? Colors.orange[200] : Colors.orange[900],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
 
@@ -365,7 +364,7 @@ class SalePaymentTimeline extends StatelessWidget {
                                           const SizedBox(width: 4),
                                           Text(
                                             tieneMora
-                                                ? "Mora (+S/ ${moraMonto.toStringAsFixed(2)})"
+                                                ? "Mora"
                                                 : (isVencido ? "Mora" : "Prog. Mora"),
                                             style: TextStyle(
                                               color: tieneMora

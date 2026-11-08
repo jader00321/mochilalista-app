@@ -17,6 +17,7 @@ import 'package:app_movil/core/models/user_model.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/utils/cuota_date_helper.dart';
 
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
@@ -587,8 +588,6 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       final List<dynamic>? cuotasRaw = _saleData?['cuotas'];
       if (cuotasRaw != null && cuotasRaw.isNotEmpty) {
         sb.writeln("📅 *CRONOGRAMA DE PAGOS* (${cuotasRaw.length} Cuotas)");
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
 
         for (var c in cuotasRaw) {
           final double cuotaMonto = (num.tryParse(c['monto'].toString()) ?? 0.0).toDouble();
@@ -599,40 +598,30 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
           final bool tieneMora = moraMonto > 0.01;
           final bool pagado = c['estado'] == 'pagado' || (saldoFalta <= 0.01 && cuotaMonto > 0);
 
-          DateTime? dueDate;
-          try {
-            dueDate = DateTime.parse(c['fecha_vencimiento'].toString().split('T').first);
-          } catch (_) {}
-
-          final int daysOverdue = dueDate != null
-              ? today.difference(DateTime(dueDate.year, dueDate.month, dueDate.day)).inDays
-              : 0;
-          final bool isVencida = !pagado && daysOverdue > 0;
-          final String date = dueDate != null ? DateFormat('dd/MM/yyyy').format(dueDate) : c['fecha_vencimiento'].toString();
+          final dateInfo = CuotaDateHelper.evaluate(c['fecha_vencimiento']);
+          final int daysOverdue = dateInfo.daysOverdue;
+          final bool isVencida = !pagado && dateInfo.isPast;
 
           final String amountText = tieneMora
               ? "*${AppCurrency.format(cuotaMonto)}* (Base: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(moraMonto)})"
               : "*${AppCurrency.format(cuotaMonto)}*";
 
           if (pagado) {
-            sb.writeln("✅ Cuota ${c['numero_cuota']}: $amountText (${daysOverdue > 0 ? 'Venció:' : 'Vence:'} $date) - Pagado");
+            sb.writeln("✅ Cuota ${c['numero_cuota']}: $amountText (${dateInfo.fullLabel}) - *Pagada*");
           } else if (isVencida) {
-            final String vencioTag = tieneMora 
-                ? "- Venció: $date (hace $daysOverdue ${daysOverdue == 1 ? 'día' : 'días'})"
-                : "(Venció: $date) - Vencida hace $daysOverdue ${daysOverdue == 1 ? 'día' : 'días'}";
-
+            final String vencidaStatus = "- *Vencida (hace $daysOverdue ${daysOverdue == 1 ? 'día' : 'días'})*";
             if (cuotaPagado > 0.01) {
-              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText $vencioTag • Pago Parcial (Abonado: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})");
+              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText (Abonó: ${AppCurrency.format(cuotaPagado)} • Falta: ${AppCurrency.format(saldoFalta)}) (${dateInfo.fullLabel}) $vencidaStatus");
             } else {
-              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText $vencioTag");
+              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText (${dateInfo.fullLabel}) $vencidaStatus");
             }
           } else {
             if (cuotaPagado > 0.01) {
-              sb.writeln("🟠 Cuota ${c['numero_cuota']}: $amountText (Vence: $date) - Pago Parcial (Abonado: ${AppCurrency.format(cuotaPagado)} | Falta: ${AppCurrency.format(saldoFalta)})");
-            } else if (daysOverdue == 0) {
-              sb.writeln("⏳ Cuota ${c['numero_cuota']}: $amountText (Vence: Hoy) - Por vencer");
+              sb.writeln("🟠 Cuota ${c['numero_cuota']}: $amountText (Abonó: ${AppCurrency.format(cuotaPagado)} • Falta: ${AppCurrency.format(saldoFalta)}) (${dateInfo.fullLabel}) - *Pago Parcial*");
+            } else if (dateInfo.isToday) {
+              sb.writeln("⏳ Cuota ${c['numero_cuota']}: $amountText (${dateInfo.fullLabel}) - *Vence Hoy*");
             } else {
-              sb.writeln("⏳ Cuota ${c['numero_cuota']}: $amountText (Vence: $date) - Pendiente");
+              sb.writeln("⏳ Cuota ${c['numero_cuota']}: $amountText (${dateInfo.fullLabel}) - *Pendiente*");
             }
           }
         }

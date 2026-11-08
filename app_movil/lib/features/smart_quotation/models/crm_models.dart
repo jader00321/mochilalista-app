@@ -258,6 +258,8 @@ class SaleSummary {
   final String estadoPago;
   final bool isArchived;
   final String? motivoAnulacion;
+  final double moraTotal;
+  final double montoOriginal;
 
   SaleSummary({
     required this.id, 
@@ -273,13 +275,14 @@ class SaleSummary {
     this.estadoPago = "pagado",
     this.isArchived = false,
     this.motivoAnulacion,
+    this.moraTotal = 0.0,
+    this.montoOriginal = 0.0,
   });
 
   String get displayId => sequentialNumber != null ? "$sequentialNumber" : "$id";
 
   double get trueTotal {
-    // El monto_total (total) ahora ya incluye el interés desde la base de datos
-    // por lo que no es necesario volver a sumarlo dinámicamente.
+    // El monto_total (total) ahora ya incluye el interés y la mora desde la base de datos
     return total;
   }
 
@@ -298,6 +301,8 @@ class SaleSummary {
       estadoPago: json['estado_pago'] ?? "pagado",
       isArchived: json['is_archived'] == 1 || json['is_archived'] == true,
       motivoAnulacion: json['motivo_anulacion'],
+      moraTotal: _parseDouble(json['mora_total']),
+      montoOriginal: _parseDouble(json['monto_original']),
     );
   }
 }
@@ -945,12 +950,26 @@ class StockWarning {
 
 class LedgerItem {
   final int idRef;
-  final String tipo; 
-  final String? subtipo;
+  final String tipo; // 'cargo', 'abono', 'evento'
+  final String? subtipo; // 'prestamo', 'venta', 'pago', 'mora', 'reprogramacion', 'ajuste', 'devolucion', 'retiro_saldo'
   final DateTime fecha;
   final double monto;
   final String detalle;
   final double saldoResultante;
+  final int? ventaId;
+  final int? cuotaId;
+  final int? pagoId;
+  final int? eventoId;
+  final double? montoBase;
+  final double? moraMonto;
+  final String? metodoPago;
+  final String? nota;
+  final int? cuotaNumero;
+  final String? entidadRef;
+  final bool canEdit;
+  final bool canDelete;
+  final String? tipoEvento;
+  final DateTime? fechaOperacion;
 
   LedgerItem({
     required this.idRef,
@@ -960,6 +979,20 @@ class LedgerItem {
     required this.monto,
     required this.detalle,
     required this.saldoResultante,
+    this.ventaId,
+    this.cuotaId,
+    this.pagoId,
+    this.eventoId,
+    this.montoBase,
+    this.moraMonto,
+    this.metodoPago,
+    this.nota,
+    this.cuotaNumero,
+    this.entidadRef,
+    this.canEdit = false,
+    this.canDelete = false,
+    this.tipoEvento,
+    this.fechaOperacion,
   });
 
   factory LedgerItem.fromJson(Map<String, dynamic> json) {
@@ -971,7 +1004,93 @@ class LedgerItem {
       monto: _parseDouble(json['monto']),
       detalle: json['detalle'] ?? '',
       saldoResultante: _parseDouble(json['saldo_resultante']),
+      ventaId: json['venta_id'],
+      cuotaId: json['cuota_id'],
+      pagoId: json['pago_id'],
+      eventoId: json['evento_id'],
+      montoBase: json['monto_base'] != null ? _parseDouble(json['monto_base']) : null,
+      moraMonto: json['mora_monto'] != null ? _parseDouble(json['mora_monto']) : null,
+      metodoPago: json['metodo_pago'],
+      nota: json['nota'],
+      cuotaNumero: json['cuota_numero'],
+      entidadRef: json['entidad_ref'],
+      canEdit: json['can_edit'] == true || json['can_edit'] == 1,
+      canDelete: json['can_delete'] == true || json['can_delete'] == 1,
+      tipoEvento: json['tipo_evento'],
+      fechaOperacion: json['fecha_operacion'] != null ? DateTime.tryParse(json['fecha_operacion']) : null,
     );
+  }
+}
+
+class ClienteEventoFinancieroModel {
+  final int id;
+  final int negocioId;
+  final int clienteId;
+  final int? ventaId;
+  final int? cuotaId;
+  final int? pagoId;
+  final String tipoEvento;
+  final String titulo;
+  final String? descripcion;
+  final double? montoAnterior;
+  final double? montoNuevo;
+  final double montoImpacto;
+  final String fechaEvento;
+  final String? metadata;
+
+  ClienteEventoFinancieroModel({
+    required this.id,
+    required this.negocioId,
+    required this.clienteId,
+    this.ventaId,
+    this.cuotaId,
+    this.pagoId,
+    required this.tipoEvento,
+    required this.titulo,
+    this.descripcion,
+    this.montoAnterior,
+    this.montoNuevo,
+    this.montoImpacto = 0.0,
+    required this.fechaEvento,
+    this.metadata,
+  });
+
+  factory ClienteEventoFinancieroModel.fromJson(Map<String, dynamic> json) {
+    return ClienteEventoFinancieroModel(
+      id: json['id'] ?? 0,
+      negocioId: json['negocio_id'] ?? 0,
+      clienteId: json['cliente_id'] ?? 0,
+      ventaId: json['venta_id'],
+      cuotaId: json['cuota_id'],
+      pagoId: json['pago_id'],
+      tipoEvento: json['tipo_evento'] ?? 'evento',
+      titulo: json['titulo'] ?? '',
+      descripcion: json['descripcion'],
+      montoAnterior: json['monto_anterior'] != null ? _parseDouble(json['monto_anterior']) : null,
+      montoNuevo: json['monto_nuevo'] != null ? _parseDouble(json['monto_nuevo']) : null,
+      montoImpacto: _parseDouble(json['monto_impacto']),
+      fechaEvento: json['fecha_evento'] ?? '',
+      metadata: json['metadata'],
+    );
+  }
+
+  Map<String, dynamic> toSqlite() {
+    return {
+      if (id != 0) 'id': id,
+      'negocio_id': negocioId,
+      'cliente_id': clienteId,
+      'venta_id': ventaId,
+      'cuota_id': cuotaId,
+      'pago_id': pagoId,
+      'tipo_evento': tipoEvento,
+      'titulo': titulo,
+      'descripcion': descripcion,
+      'monto_anterior': montoAnterior,
+      'monto_nuevo': montoNuevo,
+      'monto_impacto': montoImpacto,
+      'fecha_evento': fechaEvento,
+      'metadata': metadata,
+    };
   }
 }
 

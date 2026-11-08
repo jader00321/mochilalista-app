@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/core/database/local_db.dart';
@@ -331,30 +332,77 @@ class SalesService {
               'fecha_registro': DateTime.now().toIso8601String(),
             });
             
-            if (newStock <= stockAlerta && item['product_id'] != null) {
-               String prodName = item['nombre_producto'] ?? item['product_name'] ?? 'Producto';
-               final existNotif = await txn.query('notificaciones', where: 'negocio_id = ? AND objeto_relacionado_tipo = ? AND objeto_relacionado_id = ?', whereArgs: [negocioId, 'producto', item['product_id']]);
-               if (existNotif.isNotEmpty) {
-                   await txn.update('notificaciones', {
-                       'titulo': '⚠️ Stock Bajo: $prodName',
-                       'mensaje': 'Una venta reciente provocó que el stock cayera por debajo del nivel de alerta configurado. Toca para ver el estado actual y reabastecer.',
-                       'leida': 0,
-                       'fecha_creacion': DateTime.now().toIso8601String()
-                   }, where: 'id = ?', whereArgs: [existNotif.first['id']]);
-               } else {
-                   await txn.insert('notificaciones', {
-                       'user_id': usuarioId,
-                       'negocio_id': negocioId,
-                       'titulo': '⚠️ Stock Bajo: $prodName',
-                       'mensaje': 'Una venta reciente provocó que el stock cayera por debajo del nivel de alerta configurado. Toca para ver el estado actual y reabastecer.',
-                       'tipo': 'alerta',
-                       'prioridad': 'Alta',
-                       'leida': 0,
-                       'objeto_relacionado_tipo': 'producto',
-                       'objeto_relacionado_id': item['product_id'],
-                       'fecha_creacion': DateTime.now().toIso8601String()
-                   });
-               }
+            if (prodId > 0) {
+              final prodRows = await txn.query('productos', columns: ['fecha_creacion', 'modo_stock', 'stock_compartido', 'nombre'], where: 'id = ?', whereArgs: [prodId], limit: 1);
+              if (prodRows.isNotEmpty) {
+                final pRow = prodRows.first;
+                final fcStr = pRow['fecha_creacion'] as String?;
+                final created = fcStr != null ? DateTime.tryParse(fcStr) : null;
+                final isGracePeriod = created != null && DateTime.now().difference(created).inDays < 7;
+
+                if (isGracePeriod) {
+                  // 🛡️ Plazo de gracia de 7 días activo: silenciar y limpiar alertas de stock
+                  await txn.delete('notificaciones', where: "negocio_id = ? AND objeto_relacionado_tipo = 'producto' AND objeto_relacionado_id = ?", whereArgs: [negocioId, prodId]);
+                } else if (newStock <= stockAlerta) {
+                  final String prodName = pRow['nombre'] as String? ?? item['nombre_producto'] ?? item['product_name'] ?? 'Producto';
+                  final bool isShared = pRow['modo_stock'] == 'COMPARTIDO' || pRow['modo_stock'] == 'MIXTO';
+                  
+                  final bool isAgotado = newStock <= 0;
+                  final String dedupKey = isShared 
+                      ? 'stock_compartido_$prodId' 
+                      : (isAgotado ? 'stock_agotado_$prodId' : 'stock_bajo_$prodId');
+                  final String nivelPrioridad = isAgotado ? 'critica' : 'preventiva';
+                  final String title = isShared 
+                      ? (isAgotado ? '🚨 Stock Compartido Agotado: $prodName' : '⚠️ Stock Compartido Bajo: $prodName')
+                      : (isAgotado ? '🚨 Producto Agotado: $prodName' : '⚠️ Stock Bajo: $prodName');
+                  final String content = isShared 
+                      ? (isAgotado 
+                          ? 'El pozo común de $prodName se agotó por completo (0 und.). Todas sus presentaciones asociadas están sin stock.' 
+                          : 'El pozo común de $prodName cayó a $newStock und. (Nivel de alerta: $stockAlerta und.). Afecta a sus presentaciones asociadas.')
+                      : (isAgotado 
+                          ? '$prodName se ha agotado por completo (0 und.). Toca para reabastecer el inventario.' 
+                          : 'Quedan solo $newStock und. de $prodName (Nivel de alerta: $stockAlerta und.). Toca para reabastecer.');
+
+                  final metaJson = jsonEncode({
+                    'product_id': prodId,
+                    'producto_nombre': prodName,
+                    'stock_actual': newStock,
+                    'stock_umbral': stockAlerta,
+                    'es_compartido': isShared,
+                  });
+
+                  final existNotif = await txn.query('notificaciones', where: 'negocio_id = ? AND dedup_key = ?', whereArgs: [negocioId, dedupKey], limit: 1);
+                  if (existNotif.isNotEmpty) {
+                    await txn.update('notificaciones', {
+                      'titulo': title,
+                      'mensaje': content,
+                      'nivel_prioridad': nivelPrioridad,
+                      'prioridad': isAgotado ? 'Alta' : 'Media',
+                      'leida': 0,
+                      'is_resolved': 0,
+                      'fecha_resolucion': null,
+                      'metadata_json': metaJson,
+                    }, where: 'id = ?', whereArgs: [existNotif.first['id']]);
+                  } else {
+                    await txn.insert('notificaciones', {
+                      'user_id': usuarioId,
+                      'negocio_id': negocioId,
+                      'dedup_key': dedupKey,
+                      'titulo': title,
+                      'mensaje': content,
+                      'tipo': 'alerta',
+                      'nivel_prioridad': nivelPrioridad,
+                      'prioridad': isAgotado ? 'Alta' : 'Media',
+                      'leida': 0,
+                      'is_resolved': 0,
+                      'objeto_relacionado_tipo': 'producto',
+                      'objeto_relacionado_id': prodId,
+                      'metadata_json': metaJson,
+                      'fecha_creacion': DateTime.now().toIso8601String(),
+                    });
+                  }
+                }
+              }
             }
           }
 
@@ -856,6 +904,21 @@ class SalesService {
         await txn.update('cuotas', {
           'estado': 'anulada',
         }, where: 'venta_id = ?', whereArgs: [saleId]);
+
+        // 7. 🔔 V31: Limpieza atómica de notificaciones asociadas a la venta y sus cuotas (0ms)
+        final cRows = await txn.query('cuotas', columns: ['id'], where: 'venta_id = ?', whereArgs: [saleId]);
+        final cIds = cRows.map((c) => c['id'] as int).toList();
+        if (cIds.isNotEmpty) {
+          final placeholders = List.filled(cIds.length, '?').join(',');
+          await txn.update('notificaciones', {
+            'is_resolved': 1,
+            'fecha_resolucion': DateTime.now().toIso8601String(),
+          }, where: "objeto_relacionado_tipo = 'cuota' AND objeto_relacionado_id IN ($placeholders)", whereArgs: cIds);
+        }
+        await txn.update('notificaciones', {
+          'is_resolved': 1,
+          'fecha_resolucion': DateTime.now().toIso8601String(),
+        }, where: "objeto_relacionado_tipo = 'venta' AND objeto_relacionado_id = ?", whereArgs: [saleId]);
 
         // 8. 🏆 V27: Revertir recompensas canjeadas en esta venta de vuelta a 'APROBADA_NOTIFICADA'
         try {
@@ -1514,6 +1577,7 @@ class SalesService {
         await clientService.recalculateClientDebt(clienteId!);
         await clientService.recalculateClientReputation(clienteId!);
       }
+      await syncCuotaNotification(cuotaId);
       return true;
     } catch (e) {
       debugPrint("Error aplicando morosidad manual: $e");
@@ -1565,6 +1629,7 @@ class SalesService {
         await clientService.recalculateClientDebt(clienteId!);
         await clientService.recalculateClientReputation(clienteId!);
       }
+      await syncCuotaNotification(cuotaId);
       return true;
     } catch (e) {
       debugPrint("Error al quitar morosidad: $e");
@@ -1711,6 +1776,7 @@ class SalesService {
 
       Set<int> updatedVentas = {};
       Set<int> updatedClientes = {};
+      Set<int> updatedCuotas = {};
 
       for (var c in autoCuotas) {
         final int cId = c['id'] as int;
@@ -1763,6 +1829,7 @@ class SalesService {
           }, where: 'id = ?', whereArgs: [cId]);
 
           updatedVentas.add(vId);
+          updatedCuotas.add(cId);
         }
       }
 
@@ -1792,8 +1859,68 @@ class SalesService {
           await clientService.recalculateClientReputation(cId);
         }
       }
+
+      for (var cuotaId in updatedCuotas) {
+        await syncCuotaNotification(cuotaId);
+      }
     } catch (e) {
       debugPrint("Error evaluando morosidad periódica: $e");
+    }
+  }
+
+  /// 🔔 V31: Sincroniza en tiempo real la notificación de una cuota al alterar su mora o saldo
+  Future<void> syncCuotaNotification(int cuotaId) async {
+    try {
+      final db = await dbHelper.database;
+      final cRows = await db.rawQuery('''
+        SELECT c.id as cuota_id, c.numero_cuota, c.fecha_vencimiento, c.monto, c.monto_original, c.mora_monto, c.monto_pagado,
+               v.id as venta_id, v.negocio_id, v.numero_secuencial, v.origen_venta, cl.nombre_completo, cl.id as cliente_id, cl.telefono as cliente_telefono
+        FROM cuotas c
+        JOIN ventas v ON c.venta_id = v.id
+        JOIN clientes cl ON v.cliente_id = cl.id
+        WHERE c.id = ? AND c.estado NOT IN ('pagado', 'anulada') AND (v.is_archived IS NULL OR v.is_archived = 0)
+      ''', [cuotaId]);
+
+      if (cRows.isEmpty) return;
+      final row = cRows.first;
+      final montoTotal = (row['monto'] as num).toDouble();
+      final montoOriginal = (row['monto_original'] as num?)?.toDouble() ?? montoTotal;
+      final moraMonto = (row['mora_monto'] as num?)?.toDouble() ?? 0.0;
+      final montoPagado = (row['monto_pagado'] as num?)?.toDouble() ?? 0.0;
+      final saldoExigible = (montoTotal - montoPagado).clamp(0.0, double.infinity);
+      final fechaVenc = DateTime.tryParse(row['fecha_vencimiento']?.toString() ?? '');
+      final diasAtraso = fechaVenc != null ? DateTime.now().difference(fechaVenc).inDays : 0;
+      final bool isLoan = row['origen_venta'] == 'prestamo_personal';
+      final String folio = isLoan 
+          ? 'Préstamo #${row['numero_secuencial'] ?? row['venta_id']}' 
+          : 'Recibo #${row['numero_secuencial'] ?? row['venta_id']}';
+
+      final String content = moraMonto > 0.001
+          ? "${row['nombre_completo']} tiene la Cuota #${row['numero_cuota']} ($folio) con S/ ${saldoExigible.toStringAsFixed(2)} exigible (Base: S/ ${(montoOriginal - montoPagado).clamp(0.0, double.infinity).toStringAsFixed(2)} + Mora: S/ ${moraMonto.toStringAsFixed(2)}) y lleva $diasAtraso día${diasAtraso != 1 ? 's' : ''} de atraso."
+          : "${row['nombre_completo']} tiene la Cuota #${row['numero_cuota']} ($folio) con S/ ${saldoExigible.toStringAsFixed(2)} pendiente y lleva $diasAtraso día${diasAtraso != 1 ? 's' : ''} de atraso.";
+
+      final metaJson = jsonEncode({
+        'cliente_id': row['cliente_id'],
+        'cliente_nombre': row['nombre_completo'],
+        'cliente_telefono': row['cliente_telefono'],
+        'cuota_id': cuotaId,
+        'cuota_numero': row['numero_cuota'],
+        'venta_id': row['venta_id'],
+        'folio_operacion': folio,
+        'es_prestamo': isLoan,
+        'monto_base': montoOriginal,
+        'mora_acumulada': moraMonto,
+        'saldo_total': saldoExigible,
+        'dias_atraso': diasAtraso,
+        'fecha_vencimiento': row['fecha_vencimiento'],
+      });
+
+      await db.update('notificaciones', {
+        'mensaje': content,
+        'metadata_json': metaJson,
+      }, where: "objeto_relacionado_tipo = 'cuota' AND objeto_relacionado_id = ? AND dedup_key = ?", whereArgs: [cuotaId, 'cuota_vencida_$cuotaId']);
+    } catch (e) {
+      debugPrint("Error syncing cuota notification: $e");
     }
   }
 

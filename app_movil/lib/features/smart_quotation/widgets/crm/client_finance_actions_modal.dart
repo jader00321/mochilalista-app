@@ -946,6 +946,22 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   void _showInstallmentStatusDialog(int index) {
     final current = _installments[index];
     final amount = current.amount;
+
+    final d = DateTime.tryParse(current.dueDate) ?? DateTime.now();
+    final today = DateTime.now();
+    final todayClean = DateTime(today.year, today.month, today.day);
+    final dClean = DateTime(d.year, d.month, d.day);
+    final bool isOverdue = dClean.isBefore(todayClean);
+
+    int selectedOption = 0;
+    if (current.montoPagado >= amount && amount > 0) {
+      selectedOption = 1;
+    } else if (current.montoPagado > 0) {
+      selectedOption = 2;
+    } else {
+      selectedOption = 0;
+    }
+
     final TextEditingController paidCtrl = TextEditingController(
       text: current.montoPagado > 0
           ? current.montoPagado.toStringAsFixed(2)
@@ -957,189 +973,461 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor:
-                  widget.isDark ? const Color(0xFF23232F) : Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18)),
-              title: Text(
-                "Estado Cuota #${current.installmentNumber} (${AppCurrency.format(amount)})",
-                style: TextStyle(
-                  color: widget.isDark ? Colors.white : Colors.black87,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+            final double currentPaid = double.tryParse(paidCtrl.text.replaceAll(',', '.')) ?? 0.0;
+            final double remainingToCollect = (amount - currentPaid) > 0 ? (amount - currentPaid) : 0.0;
+
+            return GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+              child: AlertDialog(
+                backgroundColor:
+                    widget.isDark ? const Color(0xFF23232F) : Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
+                title: Text(
+                  "Estado Cuota #${current.installmentNumber} (${AppCurrency.format(amount)})",
+                  style: TextStyle(
+                    color: widget.isDark ? Colors.white : Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Si este préstamo es histórico o ya se amortizó parte de esta cuota, define su estado actual:",
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: widget.isDark
-                            ? Colors.grey[400]
-                            : Colors.grey[600],
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Si este préstamo es histórico o ya se amortizó parte de esta cuota, define su estado actual:",
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: widget.isDark
+                              ? Colors.grey[400]
+                              : Colors.grey[600],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    ListTile(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      tileColor: current.montoPagado == 0
-                          ? (widget.isDark
-                              ? Colors.white10
-                              : Colors.grey[200])
-                          : Colors.transparent,
-                      leading: const Icon(Icons.schedule,
-                          color: Colors.amber),
-                      title: const Text("Pendiente / Sin Pagar",
-                          style: TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: const Text("Monto abonado: S/ 0.00",
-                          style: TextStyle(fontSize: 12)),
-                      onTap: () {
-                        setState(() {
-                          final d = DateTime.tryParse(current.dueDate) ??
-                              DateTime.now();
-                          _installments[index] = current.copyWith(
-                            montoPagado: 0.0,
-                            status: d.isBefore(DateTime.now())
-                                ? 'vencida'
-                                : 'pendiente',
-                          );
-                        });
-                        _saveCurrentDraft();
-                        Navigator.pop(ctx);
-                      },
-                    ),
-                    const SizedBox(height: 6),
-                    ListTile(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      tileColor: current.montoPagado >= amount
-                          ? (widget.isDark
-                              ? Colors.green.withValues(alpha: 0.2)
-                              : Colors.green.shade50)
-                          : Colors.transparent,
-                      leading: const Icon(Icons.check_circle,
-                          color: Colors.green),
-                      title: const Text("Ya Pagada Totalmente",
-                          style: TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text(
-                          "Monto abonado: ${AppCurrency.format(amount)}",
-                          style: const TextStyle(fontSize: 12)),
-                      onTap: () {
-                        setState(() {
-                          _installments[index] = current.copyWith(
-                            montoPagado: amount,
-                            status: 'pagado',
-                          );
-                        });
-                        _saveCurrentDraft();
-                        Navigator.pop(ctx);
-                      },
-                    ),
-                    const SizedBox(height: 6),
-                    ListTile(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      tileColor: (current.montoPagado > 0 &&
-                              current.montoPagado < amount)
-                          ? (widget.isDark
-                              ? Colors.blue.withValues(alpha: 0.2)
-                              : Colors.blue.shade50)
-                          : Colors.transparent,
-                      leading: const Icon(Icons.payments_outlined,
-                          color: Colors.blue),
-                      title: const Text("Pago Parcial / Abono",
-                          style: TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: const Text(
-                          "Ingresa el monto pagado hasta la fecha",
-                          style: TextStyle(fontSize: 12)),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(
-                          left: 16, right: 16, top: 4, bottom: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: paidCtrl,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                      decimal: true),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(
-                                    RegExp(r'^\d*\.?\d{0,2}'))
-                              ],
-                              decoration: InputDecoration(
-                                prefixText: "S/ ",
-                                hintText: "0.00",
-                                filled: true,
-                                fillColor: widget.isDark
-                                    ? const Color(0xFF14141C)
-                                    : Colors.grey[100],
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide.none),
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                                isDense: true,
+                      const SizedBox(height: 16),
+
+                      // Tarjeta 1: Pendiente / Vencida
+                      InkWell(
+                        onTap: () {
+                          setDialogState(() {
+                            selectedOption = 0;
+                            paidCtrl.clear();
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: selectedOption == 0
+                                ? (isOverdue ? Colors.red.withValues(alpha: 0.12) : Colors.amber.withValues(alpha: 0.12))
+                                : (widget.isDark ? Colors.white10 : Colors.grey[100]),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selectedOption == 0
+                                  ? (isOverdue ? Colors.redAccent : Colors.amber[700]!)
+                                  : (widget.isDark ? Colors.white12 : Colors.grey.shade300),
+                              width: selectedOption == 0 ? 1.8 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isOverdue ? Icons.warning_amber_rounded : Icons.schedule_rounded,
+                                color: isOverdue ? Colors.redAccent : Colors.amber[700],
+                                size: 22,
                               ),
-                            ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      isOverdue ? "Vencida / Sin Pagar" : "Pendiente / Sin Pagar",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13.5,
+                                        color: widget.isDark ? Colors.white : Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      "Monto abonado: S/ 0.00",
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (selectedOption == 0)
+                                Icon(Icons.check_circle_rounded,
+                                    color: isOverdue ? Colors.redAccent : Colors.amber[700], size: 18),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[700],
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                            ),
-                            onPressed: () {
-                              double p =
-                                  double.tryParse(paidCtrl.text) ?? 0.0;
-                              if (p > amount) p = amount;
-                              setState(() {
-                                final d = DateTime.tryParse(
-                                        current.dueDate) ??
-                                    DateTime.now();
-                                String st = 'pendiente';
-                                if (p >= amount && amount > 0) {
-                                  st = 'pagado';
-                                } else if (p > 0) {
-                                  st = 'parcial';
-                                } else {
-                                  st = d.isBefore(DateTime.now())
-                                      ? 'vencida'
-                                      : 'pendiente';
-                                }
-                                _installments[index] = current.copyWith(
-                                  montoPagado: p,
-                                  status: st,
-                                );
-                              });
-                              _saveCurrentDraft();
-                              Navigator.pop(ctx);
-                            },
-                            child: const Text("Aplicar"),
-                          ),
-                        ],
+                        ),
                       ),
+                      const SizedBox(height: 8),
+
+                      // Tarjeta 2: Ya Pagada Totalmente
+                      InkWell(
+                        onTap: () {
+                          setDialogState(() {
+                            selectedOption = 1;
+                            paidCtrl.text = amount.toStringAsFixed(2);
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: selectedOption == 1
+                                ? Colors.green.withValues(alpha: 0.12)
+                                : (widget.isDark ? Colors.white10 : Colors.grey[100]),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selectedOption == 1
+                                  ? Colors.green
+                                  : (widget.isDark ? Colors.white12 : Colors.grey.shade300),
+                              width: selectedOption == 1 ? 1.8 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: Colors.green, size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Ya Pagada Totalmente",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13.5,
+                                        color: widget.isDark ? Colors.white : Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      "Monto abonado: ${AppCurrency.format(amount)}",
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (selectedOption == 1)
+                                const Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Tarjeta 3: Pago Parcial / Abono
+                      InkWell(
+                        onTap: () {
+                          setDialogState(() {
+                            selectedOption = 2;
+                            if (paidCtrl.text.isEmpty || currentPaid >= amount) {
+                              paidCtrl.text = (amount * 0.5).toStringAsFixed(2);
+                            }
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: selectedOption == 2
+                                ? Colors.blue.withValues(alpha: 0.12)
+                                : (widget.isDark ? Colors.white10 : Colors.grey[100]),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selectedOption == 2
+                                  ? Colors.blue
+                                  : (widget.isDark ? Colors.white12 : Colors.grey.shade300),
+                              width: selectedOption == 2 ? 1.8 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.payments_rounded, color: Colors.blue, size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Pago Parcial / Abono",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13.5,
+                                        color: widget.isDark ? Colors.white : Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      "Ingresa el monto amortizado hasta la fecha",
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (selectedOption == 2)
+                                const Icon(Icons.check_circle_rounded, color: Colors.blue, size: 18),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Sección Condicional Animada para Pago Parcial (Solo visible si selectedOption == 2)
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOut,
+                        child: selectedOption == 2
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    TextField(
+                                      controller: paidCtrl,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                              decimal: true),
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.allow(
+                                            RegExp(r'^\d*\.?\d{0,2}'))
+                                      ],
+                                      onChanged: (_) => setDialogState(() {}),
+                                      onTapOutside: (_) =>
+                                          FocusManager.instance.primaryFocus?.unfocus(),
+                                      decoration: InputDecoration(
+                                        labelText: "Monto Abonado",
+                                        prefixText: "S/ ",
+                                        hintText: "0.00",
+                                        filled: true,
+                                        fillColor: widget.isDark
+                                            ? const Color(0xFF14141C)
+                                            : Colors.grey[100],
+                                        border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            borderSide: BorderSide.none),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 12),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+
+                                    // Chips rápidos de porcentaje 25%, 50%, 75%
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: ActionChip(
+                                            label: const Center(
+                                              child: Text("25%",
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.bold)),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 4, vertical: 0),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            onPressed: () {
+                                              double v = double.parse(
+                                                  (amount * 0.25)
+                                                      .toStringAsFixed(2));
+                                              paidCtrl.text =
+                                                  v.toStringAsFixed(2);
+                                              setDialogState(() {});
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: ActionChip(
+                                            label: const Center(
+                                              child: Text("50%",
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.bold)),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 4, vertical: 0),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            onPressed: () {
+                                              double v = double.parse(
+                                                  (amount * 0.50)
+                                                      .toStringAsFixed(2));
+                                              paidCtrl.text =
+                                                  v.toStringAsFixed(2);
+                                              setDialogState(() {});
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: ActionChip(
+                                            label: const Center(
+                                              child: Text("75%",
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.bold)),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 4, vertical: 0),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            onPressed: () {
+                                              double v = double.parse(
+                                                  (amount * 0.75)
+                                                      .toStringAsFixed(2));
+                                              paidCtrl.text =
+                                                  v.toStringAsFixed(2);
+                                              setDialogState(() {});
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+
+                                    // Resumen en vivo
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: widget.isDark
+                                            ? Colors.black26
+                                            : Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: widget.isDark
+                                              ? Colors.white12
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                "Abonado: ${AppCurrency.format(currentPaid)}",
+                                                style: const TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.green,
+                                                ),
+                                              ),
+                                              Text(
+                                                "Resta: ${AppCurrency.format(remainingToCollect)}",
+                                                style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: remainingToCollect > 0
+                                                      ? Colors.orange[800]
+                                                      : Colors.green,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (currentPaid >= amount && amount > 0) ...[
+                                            const SizedBox(height: 4),
+                                            const Text(
+                                              "El abono cubre el total de la cuota (se registrará como Pagada).",
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                color: Colors.green,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text("Cancelar",
+                        style: TextStyle(color: Colors.grey)),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[700],
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
-                  ],
-                ),
+                    onPressed: () {
+                      double finalPaid = 0.0;
+                      String finalStatus = 'pendiente';
+
+                      if (selectedOption == 0) {
+                        finalPaid = 0.0;
+                        finalStatus = isOverdue ? 'vencida' : 'pendiente';
+                      } else if (selectedOption == 1) {
+                        finalPaid = amount;
+                        finalStatus = 'pagado';
+                      } else {
+                        double p = double.tryParse(paidCtrl.text.replaceAll(',', '.')) ?? 0.0;
+                        if (p >= amount && amount > 0) {
+                          finalPaid = amount;
+                          finalStatus = 'pagado';
+                        } else if (p > 0) {
+                          finalPaid = p;
+                          finalStatus = 'parcial';
+                        } else {
+                          finalPaid = 0.0;
+                          finalStatus = isOverdue ? 'vencida' : 'pendiente';
+                        }
+                      }
+
+                      setState(() {
+                        _installments[index] = current.copyWith(
+                          montoPagado: finalPaid,
+                          status: finalStatus,
+                        );
+                      });
+                      _saveCurrentDraft();
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text("Aplicar",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text("Cerrar",
-                      style: TextStyle(color: Colors.grey)),
-                ),
-              ],
             );
           },
         );
@@ -1155,78 +1443,198 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     );
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor:
-            widget.isDark ? const Color(0xFF23232F) : Colors.white,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("Abono / Pago Parcial Histórico",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Indica el monto que ya fue amortizado de este préstamo de ${AppCurrency.format(enteredAmount)}:",
-              style: const TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
-              ],
-              decoration: InputDecoration(
-                prefixText: "S/ ",
-                hintText: "0.00",
-                filled: true,
-                fillColor: widget.isDark
-                    ? const Color(0xFF14141C)
-                    : Colors.grey[100],
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 12),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final double p = double.tryParse(ctrl.text.replaceAll(',', '.')) ?? 0.0;
+          final double remaining = (enteredAmount - p) > 0 ? (enteredAmount - p) : 0.0;
+
+          return GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: AlertDialog(
+              backgroundColor:
+                  widget.isDark ? const Color(0xFF23232F) : Colors.white,
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text("Abono / Pago Parcial Histórico",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Indica el monto que ya fue amortizado de este préstamo de ${AppCurrency.format(enteredAmount)}:",
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: ctrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
+                    ],
+                    onChanged: (_) => setDialogState(() {}),
+                    onTapOutside: (_) =>
+                        FocusManager.instance.primaryFocus?.unfocus(),
+                    decoration: InputDecoration(
+                      labelText: "Monto Abonado",
+                      prefixText: "S/ ",
+                      hintText: "0.00",
+                      filled: true,
+                      fillColor: widget.isDark
+                          ? const Color(0xFF14141C)
+                          : Colors.grey[100],
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ActionChip(
+                          label: const Center(
+                            child: Text("25%",
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 0),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {
+                            double v = double.parse(
+                                (enteredAmount * 0.25).toStringAsFixed(2));
+                            ctrl.text = v.toStringAsFixed(2);
+                            setDialogState(() {});
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ActionChip(
+                          label: const Center(
+                            child: Text("50%",
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 0),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {
+                            double v = double.parse(
+                                (enteredAmount * 0.50).toStringAsFixed(2));
+                            ctrl.text = v.toStringAsFixed(2);
+                            setDialogState(() {});
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ActionChip(
+                          label: const Center(
+                            child: Text("75%",
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 0),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {
+                            double v = double.parse(
+                                (enteredAmount * 0.75).toStringAsFixed(2));
+                            ctrl.text = v.toStringAsFixed(2);
+                            setDialogState(() {});
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: widget.isDark
+                          ? Colors.black26
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: widget.isDark
+                            ? Colors.white12
+                            : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "Abonado: ${AppCurrency.format(p)}",
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                        Text(
+                          "Resta: ${AppCurrency.format(remaining)}",
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: remaining > 0
+                                ? Colors.orange[800]
+                                : Colors.green,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child:
+                      const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange[800],
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    double finalPaid = double.tryParse(ctrl.text.replaceAll(',', '.')) ?? 0.0;
+                    if (finalPaid > enteredAmount) finalPaid = enteredAmount;
+                    setState(() {
+                      _oneQuotaPaidAmount = finalPaid;
+                      if (finalPaid >= enteredAmount && enteredAmount > 0) {
+                        _oneQuotaStatus = 'pagado';
+                      } else if (finalPaid > 0) {
+                        _oneQuotaStatus = 'parcial';
+                      } else {
+                        _oneQuotaStatus =
+                            _dueDate.isBefore(DateTime.now()) ? 'vencida' : 'pendiente';
+                      }
+                    });
+                    _saveCurrentDraft();
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text("Guardar"),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text("Cancelar", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange[800],
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () {
-              double p = double.tryParse(ctrl.text) ?? 0.0;
-              if (p > enteredAmount) p = enteredAmount;
-              setState(() {
-                _oneQuotaPaidAmount = p;
-                if (p >= enteredAmount && enteredAmount > 0) {
-                  _oneQuotaStatus = 'pagado';
-                } else if (p > 0) {
-                  _oneQuotaStatus = 'parcial';
-                } else {
-                  _oneQuotaStatus =
-                      _dueDate.isBefore(DateTime.now()) ? 'vencida' : 'pendiente';
-                }
-              });
-              _saveCurrentDraft();
-              Navigator.pop(ctx);
-            },
-            child: const Text("Guardar"),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -1446,40 +1854,38 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 8),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Text(
-                              "Cuota ${c.installmentNumber} • ${_formatDateSpanish(d)}",
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: widget.isDark
-                                    ? Colors.grey[400]
-                                    : Colors.grey[700],
+                            Expanded(
+                              child: Text(
+                                "Cuota ${c.installmentNumber} • ${_formatDateSpanish(d)}",
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w500,
+                                  color: widget.isDark
+                                      ? Colors.grey[300]
+                                      : Colors.grey[800],
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            const SizedBox(width: 12),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   AppCurrency.format(c.amount),
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 13.5,
                                     color: widget.isDark
                                         ? Colors.white
                                         : Colors.black87,
                                   ),
                                 ),
-                                if (c.montoPagado > 0)
-                                  Text(
-                                    c.montoPagado >= c.amount
-                                        ? "Pagada"
-                                        : "Abonado: ${AppCurrency.format(c.montoPagado)}",
-                                    style: const TextStyle(
-                                      fontSize: 10.5,
-                                      color: Colors.green,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                const SizedBox(height: 2),
+                                _buildConfirmQuotaBadge(c, d),
                               ],
                             ),
                           ],
@@ -1544,6 +1950,503 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     );
   }
 
+  Widget _buildConfirmQuotaBadge(InstallmentModel c, DateTime d) {
+    if (c.montoPagado >= c.amount && c.amount > 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.green.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle_outline, size: 10, color: Colors.green),
+            SizedBox(width: 3),
+            Text(
+              "Pagada",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (c.montoPagado > 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.blue.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.pie_chart_outline, size: 10, color: Colors.blue),
+            const SizedBox(width: 3),
+            Text(
+              "Abono: ${AppCurrency.format(c.montoPagado)}",
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (d.isBefore(DateTime.now())) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.red.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 10, color: Colors.redAccent),
+            SizedBox(width: 3),
+            Text(
+              "Vencida",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.redAccent,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.grey.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          "Pendiente",
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: widget.isDark ? Colors.grey[400] : Colors.grey[700],
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildDynamicContextualCard(
+    bool isDark,
+    double enteredAmount,
+    TrackingProvider provider,
+  ) {
+    final bool isLoan = _tabController.index == 0;
+
+    if (isLoan) {
+      // 1. Detección de cuotas vencidas en tiempo real
+      int overdueCount = 0;
+      final today = DateTime.now();
+      final todayClean = DateTime(today.year, today.month, today.day);
+      for (final sale in provider.currentClientDebts) {
+        if (sale.isArchived) continue;
+        for (final c in sale.installments) {
+          if (c.status != 'pagado' && c.status != 'anulada') {
+            final due = DateTime.tryParse(c.dueDate);
+            if (due != null) {
+              final dueClean = DateTime(due.year, due.month, due.day);
+              if (dueClean.isBefore(todayClean)) {
+                overdueCount++;
+              }
+            }
+          }
+        }
+      }
+
+      final double suggestedLimit = widget.client.tier.limiteCreditoSugerido;
+
+      if (overdueCount > 0) {
+        // Mora activa detectada: límite congelado y advertencia
+        final subtitle = enteredAmount > 0
+            ? "Atención: ${widget.client.fullName} tiene $overdueCount ${overdueCount == 1 ? 'cuota vencida' : 'cuotas vencidas'}. Estás por otorgar un préstamo adicional a un cliente con mora activa."
+            : "El cliente tiene $overdueCount ${overdueCount == 1 ? 'cuota vencida' : 'cuotas vencidas'}. Su límite de crédito sugerido está suspendido en S/ 0.00 hasta regularizar su deuda.";
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF3B1E22) : const Color(0xFFFEF2F2),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.red.withValues(alpha: 0.5) : const Color(0xFFFECACA),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.warning_amber_rounded, size: 20, color: Colors.redAccent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Límite Congelado: S/ 0.00 (Mora Activa)",
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? const Color(0xFFFF8A80) : const Color(0xFF991B1B),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.25,
+                        color: isDark ? Colors.grey[300] : const Color(0xFF7F1D1D),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      if (enteredAmount <= 0) {
+        // Al día, sin monto ingresado: resumen de nivel y racha
+        final subtitle = widget.client.rachaPagosPuntuales > 0
+            ? "Cliente puntual con racha de ${widget.client.rachaPagosPuntuales} pagos a tiempo. Recomendado para operaciones de confianza."
+            : "Cliente sin historial de atrasos. Se sugiere iniciar con operaciones prudentes dentro de su tope base.";
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF282837) : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.shield_outlined, size: 20, color: Color(widget.client.tier.colorHex)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Límite de Crédito Sugerido (${widget.client.tier.badgeText}): ${AppCurrency.format(suggestedLimit)}",
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.grey[200] : const Color(0xFF1E293B),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.25,
+                        color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      if (enteredAmount <= suggestedLimit) {
+        // Al día, monto dentro del rango seguro
+        final restan = suggestedLimit - enteredAmount;
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF132D21) : const Color(0xFFF0FDF4),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.green.withValues(alpha: 0.5) : const Color(0xFFBBF7D0),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.check_circle_outline_rounded,
+                  size: 20, color: isDark ? Colors.greenAccent : const Color(0xFF16A34A)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Monto Dentro del Rango Seguro (${widget.client.tier.badgeText})",
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.greenAccent : const Color(0xFF166534),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Monto dentro del rango seguro recomendado para ${widget.client.fullName}. Restan ${AppCurrency.format(restan)} de su tope sugerido.",
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.25,
+                        color: isDark ? Colors.grey[300] : const Color(0xFF15803D),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      // Al día, monto excede límite
+      final exceso = enteredAmount - suggestedLimit;
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF382914) : const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? Colors.amber.withValues(alpha: 0.5) : const Color(0xFFFDE68A),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.warning_amber_rounded,
+                size: 20, color: isDark ? Colors.amberAccent : const Color(0xFFD97706)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Atención: Excede Límite Recomendado (${widget.client.tier.badgeText})",
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.amberAccent : const Color(0xFFB45309),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "El monto ingresado excede por ${AppCurrency.format(exceso)} el límite sugerido de ${AppCurrency.format(suggestedLimit)}. Evalúa la capacidad de pago del cliente.",
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.25,
+                      color: isDark ? Colors.grey[300] : const Color(0xFF92400E),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Pestaña Retirar Saldo (Tab 1)
+    if (widget.client.saldoAFavor <= 0.01) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF282837) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.account_balance_wallet_outlined, size: 20, color: Colors.grey),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Sin Saldo a Favor Disponible",
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.grey[300] : const Color(0xFF334155),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "${widget.client.fullName} no cuenta con saldo a favor para retiros en este momento.",
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.25,
+                      color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (enteredAmount <= 0) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF132D2D) : const Color(0xFFF0FDFA),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? Colors.teal.withValues(alpha: 0.5) : const Color(0xFF99F6E4),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.account_balance_wallet_rounded, size: 20, color: Colors.teal),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Saldo a Favor Disponible: ${AppCurrency.format(widget.client.saldoAFavor)}",
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.tealAccent : const Color(0xFF0F766E),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Puedes registrar el desembolso total o parcial del saldo a favor de ${widget.client.fullName}.",
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.25,
+                      color: isDark ? Colors.grey[300] : const Color(0xFF115E59),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (enteredAmount <= widget.client.saldoAFavor) {
+      final rem = widget.client.saldoAFavor - enteredAmount;
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF132D21) : const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? Colors.green.withValues(alpha: 0.5) : const Color(0xFFBBF7D0),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.check_circle_outline_rounded,
+                size: 20, color: isDark ? Colors.greenAccent : const Color(0xFF16A34A)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Retiro Válido: ${AppCurrency.format(enteredAmount)}",
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.greenAccent : const Color(0xFF166534),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Tras este retiro, el nuevo saldo a favor de ${widget.client.fullName} será de ${AppCurrency.format(rem)}.",
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.25,
+                      color: isDark ? Colors.grey[300] : const Color(0xFF15803D),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Excede saldo disponible
+    final exceso = enteredAmount - widget.client.saldoAFavor;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF3B1E22) : const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.red.withValues(alpha: 0.5) : const Color(0xFFFECACA),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded, size: 20, color: Colors.redAccent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Monto Excede el Saldo Disponible",
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? const Color(0xFFFF8A80) : const Color(0xFF991B1B),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "No es posible retirar ${AppCurrency.format(enteredAmount)}. El monto supera el saldo disponible por ${AppCurrency.format(exceso)}.",
+                  style: TextStyle(
+                    fontSize: 11,
+                    height: 1.25,
+                    color: isDark ? Colors.grey[300] : const Color(0xFF7F1D1D),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // =========================================================================
   // CONSTRUCCIÓN DE LA VISTA
   // =========================================================================
@@ -1601,111 +2504,89 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         ),
       ],
       backgroundColor: surfaceColor,
-      child: Column(
-        children: [
-          const SizedBox(height: 8),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
 
-          // Selector de 2 tarjetas interactivas con subtítulos guía
-          _buildTopModeSelector(widget.isDark),
+            // Selector de 2 tarjetas interactivas con subtítulos guía
+            _buildTopModeSelector(widget.isDark),
 
-          // Banner de Límite de Crédito Seguro Sugerido
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: widget.isDark ? const Color(0xFF282837) : const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: widget.isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+            // Tarjeta Contextual Dinámica y Reactiva
+            _buildDynamicContextualCard(widget.isDark, enteredAmount, provider),
+            const SizedBox(height: 4),
+
+            // TabBarView sin cortes
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildLoanTab(textColor, enteredAmount),
+                  _buildWithdrawTab(
+                      textColor, hasAvailableBalance, enteredAmount),
+                ],
               ),
             ),
-            child: Row(
-              children: [
-                Icon(Icons.shield_outlined, size: 16, color: Color(widget.client.tier.colorHex)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "Límite de Crédito Sugerido (${widget.client.tier.badgeText}): ${AppCurrency.format(widget.client.tier.limiteCreditoSugerido)}",
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: widget.isDark ? Colors.grey[300] : const Color(0xFF334155),
-                    ),
+
+            // Bottom Action Bar
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                InteractiveSheetWrapper.getEffectiveBottomPadding(
+                  context,
+                  minPadding: 28.0,
+                ),
+              ),
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                border: Border(
+                    top: BorderSide(
+                        color: widget.isDark
+                            ? Colors.white10
+                            : Colors.grey.shade200)),
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: canSubmit && !_isLoading
+                      ? () => _submitAction(provider)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        isLoanTab ? Colors.orange[800] : Colors.teal,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: canSubmit ? 2 : 0,
+                    disabledBackgroundColor:
+                        widget.isDark ? Colors.white10 : Colors.grey[300],
+                    disabledForegroundColor:
+                        widget.isDark ? Colors.grey[600] : Colors.grey[500],
                   ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
+                        )
+                      : Text(
+                          isLoanTab
+                              ? "Registrar Préstamo"
+                              : "Confirmar Retiro",
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
-
-          // TabBarView sin cortes
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildLoanTab(textColor, enteredAmount),
-                _buildWithdrawTab(
-                    textColor, hasAvailableBalance, enteredAmount),
-              ],
-            ),
-          ),
-
-          // Bottom Action Bar
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              12,
-              20,
-              InteractiveSheetWrapper.getEffectiveBottomPadding(
-                context,
-                minPadding: 28.0,
               ),
             ),
-            decoration: BoxDecoration(
-              color: surfaceColor,
-              border: Border(
-                  top: BorderSide(
-                      color: widget.isDark
-                          ? Colors.white10
-                          : Colors.grey.shade200)),
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: canSubmit && !_isLoading
-                    ? () => _submitAction(provider)
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      isLoanTab ? Colors.orange[800] : Colors.teal,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: canSubmit ? 2 : 0,
-                  disabledBackgroundColor:
-                      widget.isDark ? Colors.white10 : Colors.grey[300],
-                  disabledForegroundColor:
-                      widget.isDark ? Colors.grey[600] : Colors.grey[500],
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
-                      )
-                    : Text(
-                        isLoanTab
-                            ? "Registrar Préstamo"
-                            : "Confirmar Retiro",
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1834,6 +2715,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     if (!hasAvailableBalance) {
       return Center(
         child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1898,6 +2780,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
 
     return ListView(
       physics: const BouncingScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
         // Balance Card
@@ -1999,12 +2882,21 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
 
         if (enteredAmount > widget.client.saldoAFavor) ...[
           const SizedBox(height: 6),
-          const Text(
-            "⚠️ El monto supera el saldo disponible para retiro",
-            style: TextStyle(
-                color: Colors.redAccent,
-                fontSize: 12,
-                fontWeight: FontWeight.bold),
+          const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 14, color: Colors.redAccent),
+              SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  "El monto supera el saldo disponible para retiro",
+                  style: TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
 
@@ -2037,6 +2929,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   Widget _buildLoanTab(Color textColor, double enteredAmount) {
     return ListView(
       physics: const BouncingScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 48),
       children: [
         // Banner informativo
@@ -2222,6 +3115,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         TextField(
           controller: _noteCtrl,
           maxLines: 2,
+          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           style: TextStyle(color: textColor, fontSize: 14),
           decoration: InputDecoration(
             hintText: "Ej. Préstamo personal, Fiado mercadería...",
@@ -2629,11 +3523,14 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text("Cronograma Generado",
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: textColor)),
+                      Expanded(
+                        child: Text("Cronograma Generado",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: textColor)),
+                      ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
@@ -2802,18 +3699,18 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                     child: Row(
                       children: [
                         CircleAvatar(
-                          radius: 13,
+                          radius: 12,
                           backgroundColor:
                               Colors.orange.withValues(alpha: 0.2),
                           child: Text(
                             "${cuota.installmentNumber}",
                             style: const TextStyle(
-                                fontSize: 11,
+                                fontSize: 10.5,
                                 color: Colors.orange,
                                 fontWeight: FontWeight.bold),
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: InkWell(
                             onTap: () => _editInstallmentDate(i),
@@ -2984,64 +3881,72 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                             ),
                           ),
                         ),
-                        Tooltip(
-                          message: "Saltar día y recalcular siguientes",
-                          child: InkWell(
-                            onTap: () => _skipDayForInstallment(i),
-                            borderRadius: BorderRadius.circular(6),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 3),
-                              margin: const EdgeInsets.only(right: 8),
-                              decoration: BoxDecoration(
-                                color: widget.isDark
-                                    ? Colors.white10
-                                    : Colors.grey[200],
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.skip_next,
-                                      size: 13,
-                                      color: widget.isDark
-                                          ? Colors.grey[300]
-                                          : Colors.grey[700]),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    "+1d",
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: widget.isDark
-                                          ? Colors.grey[300]
-                                          : Colors.grey[700],
+                        if (cuota.montoPagado < cuota.amount &&
+                            cuota.status != 'pagado')
+                          Tooltip(
+                            message: "Saltar día y recalcular siguientes",
+                            child: InkWell(
+                              onTap: () => _skipDayForInstallment(i),
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 2.5),
+                                margin: const EdgeInsets.only(right: 5),
+                                decoration: BoxDecoration(
+                                  color: widget.isDark
+                                      ? Colors.white10
+                                      : Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.skip_next,
+                                        size: 12,
+                                        color: widget.isDark
+                                            ? Colors.grey[300]
+                                            : Colors.grey[700]),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      "+1d",
+                                      style: TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: widget.isDark
+                                            ? Colors.grey[300]
+                                            : Colors.grey[700],
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              AppCurrency.format(cuota.amount),
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: textColor),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                AppCurrency.format(cuota.amount),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: textColor),
+                              ),
                             ),
                             if (cuota.montoPagado > 0 &&
                                 cuota.montoPagado < cuota.amount)
-                              Text(
-                                "Pend: ${AppCurrency.format(cuota.amount - cuota.montoPagado)}",
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.orange,
-                                  fontWeight: FontWeight.bold,
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  "Pend: ${AppCurrency.format(cuota.amount - cuota.montoPagado)}",
+                                  style: const TextStyle(
+                                    fontSize: 9.5,
+                                    color: Colors.orange,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                           ],
@@ -3074,12 +3979,14 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "Estado de Pago Inicial",
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: widget.isDark ? Colors.grey[300] : Colors.grey[700],
+              Expanded(
+                child: Text(
+                  "Estado de Pago Inicial",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: widget.isDark ? Colors.grey[300] : Colors.grey[700],
+                  ),
                 ),
               ),
               if (_oneQuotaPaidAmount > 0)
@@ -3189,12 +4096,14 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  "Saldo Deudor Inicial:",
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                Expanded(
+                  child: Text(
+                    "Saldo Deudor Inicial:",
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
                   ),
                 ),
                 Text(
@@ -3428,6 +4337,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   }) {
     return TextField(
       controller: ctrl,
+      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
       keyboardType: isInt
           ? TextInputType.number
           : const TextInputType.numberWithOptions(decimal: true),
@@ -3469,6 +4379,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   }) {
     return TextField(
       controller: ctrl,
+      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
       keyboardType: isInt
           ? TextInputType.number
           : const TextInputType.numberWithOptions(decimal: true),

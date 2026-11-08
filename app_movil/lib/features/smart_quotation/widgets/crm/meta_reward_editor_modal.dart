@@ -181,14 +181,30 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
 
       if (isNew) {
         final created = await _clientService.createRewardGoal(widget.negocioId, model.toSqlite());
+        final unlocked = await _clientService.evaluateAllClientsForActiveGoals(widget.negocioId);
         if (mounted) {
-          CustomSnackBar.show(context, message: 'Meta de recompensa creada');
+          if (unlocked.isNotEmpty) {
+            CustomSnackBar.show(
+              context,
+              message: 'Meta creada. ${unlocked.length} cliente(s) ya cumplen y sus premios están listos para revisar',
+            );
+          } else {
+            CustomSnackBar.show(context, message: 'Meta de recompensa creada');
+          }
           Navigator.pop(context, created);
         }
       } else {
         await _clientService.updateRewardGoal(widget.goal!.id, model.toSqlite());
+        final unlocked = await _clientService.evaluateAllClientsForActiveGoals(widget.negocioId);
         if (mounted) {
-          CustomSnackBar.show(context, message: 'Meta actualizada');
+          if (unlocked.isNotEmpty) {
+            CustomSnackBar.show(
+              context,
+              message: 'Meta actualizada. ${unlocked.length} cliente(s) ya cumplen y sus premios están listos para revisar',
+            );
+          } else {
+            CustomSnackBar.show(context, message: 'Meta actualizada');
+          }
           Navigator.pop(context, model);
         }
       }

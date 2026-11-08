@@ -356,4 +356,102 @@ class TrackingProvider with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// ✏️ Edita un abono y recalcula en cascada cuotas, ventas y saldo del cliente
+  Future<bool> editarPago(
+    int clientId,
+    int pagoId, {
+    required double nuevoMonto,
+    required String nuevoMetodoPago,
+    DateTime? nuevaFechaPago,
+    String? nuevaNota,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final success = await _service.editarPago(
+        pagoId,
+        nuevoMonto: nuevoMonto,
+        nuevoMetodoPago: nuevoMetodoPago,
+        nuevaFechaPago: nuevaFechaPago,
+        nuevaNota: nuevaNota,
+      );
+      if (success) {
+        await loadClients();
+        await loadClientLedger(clientId);
+        await loadClientDebts(clientId);
+        await getClientById(clientId);
+      }
+      return success;
+    } catch (e) {
+      _handleException(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 🗑️ Revierte/elimina un abono y restaura los estados previos
+  Future<bool> revertirPago(int clientId, int pagoId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final success = await _service.revertirPago(pagoId);
+      if (success) {
+        await loadClients();
+        await loadClientLedger(clientId);
+        await loadClientDebts(clientId);
+        await getClientById(clientId);
+      }
+      return success;
+    } catch (e) {
+      _handleException(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 🗑️ Revierte/elimina una venta o préstamo y sus cuotas asociadas
+  Future<bool> revertirVentaOPrestamo(int clientId, int ventaId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final success = await _service.revertirVentaOPrestamo(ventaId);
+      if (success) {
+        await loadClients();
+        await loadClientLedger(clientId);
+        await loadClientDebts(clientId);
+        await getClientById(clientId);
+      }
+      return success;
+    } catch (e) {
+      _handleException(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 🗑️ Elimina un evento informativo del historial contable
+  Future<bool> eliminarEventoFinanciero(int clientId, int eventoId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final success = await _service.eliminarEventoFinanciero(eventoId);
+      if (success) {
+        await loadClientLedger(clientId);
+      }
+      return success;
+    } catch (e) {
+      _handleException(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 }

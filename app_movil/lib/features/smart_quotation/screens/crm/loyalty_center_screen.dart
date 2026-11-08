@@ -101,6 +101,9 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         goals = await _clientService.getRewardGoals(negocioId, activeOnly: false);
       }
 
+      // 1.5. Evaluación retroactiva de metas activas para todos los clientes
+      await _clientService.evaluateAllClientsForActiveGoals(negocioId);
+
       // 2. Cargar clientes
       final clients = await _clientService.getAllClients(negocioId);
 
@@ -723,6 +726,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
   ) {
     final tier = client.tier;
     final almostAtGoal = _almostAtGoalMap[client.id];
+    final clientPendingRewards = _pendingRewards.where((rw) => rw.clienteId == client.id).toList();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -842,8 +846,74 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                 ],
               ),
 
-              // Indicador de "Casi en la Meta" con botón de impulso WhatsApp
-              if (almostAtGoal != null) ...[
+              // Indicador de Premio Listo para Revisar o Casi en la Meta
+              if (clientPendingRewards.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.45)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.card_giftcard_rounded, size: 15, color: Colors.amber[800]),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          "Premio listo para revisar: ${clientPendingRewards.first.metaTitulo}",
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.amber[300] : Colors.amber[900],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () async {
+                          await showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (ctx) => RewardReviewModal(
+                              reward: clientPendingRewards.first,
+                              client: client,
+                              onActionCompleted: _loadData,
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber[700],
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.rate_review_rounded, size: 11, color: Colors.white),
+                              SizedBox(width: 3),
+                              Text(
+                                "Revisar",
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (almostAtGoal != null) ...[
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

@@ -15,7 +15,8 @@ class LocalDatabase {
 
   @visibleForTesting
   static Future<void> createDBForTesting(Database db) async {
-    await instance._createDB(db, 30);
+    await instance._createDB(db, 32);
+    await ensureEventosFinancierosTable(db);
   }
 
   Future<Database> get database async {
@@ -28,13 +29,16 @@ class LocalDatabase {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(
+    final db = await openDatabase(
       path,
-      version: 30, // Upgrade to v30: Motor de morosidad dual (manual y periódico), cuotas y mora_total en ventas
+      version: 32, // Upgrade to v32: Eventos financieros del cliente y trazabilidad contable
       onCreate: _createDB,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
     );
+    // Verificación defensiva idempotente para cualquier base de datos existente
+    await ensureEventosFinancierosTable(db);
+    return db;
   }
 
   Future _onConfigure(Database db) async {
@@ -324,6 +328,100 @@ class LocalDatabase {
         debugPrint("Error en migración V30: $e");
       }
     }
+
+    // Migración V30 -> V31: Reingeniería del motor canónico de notificaciones inteligente y deduplicación
+    if (oldVersion < 31) {
+      try {
+        await ensureColumnExists(db, 'notificaciones', 'dedup_key', 'TEXT');
+        await ensureColumnExists(db, 'notificaciones', 'is_resolved', 'INTEGER DEFAULT 0');
+        await ensureColumnExists(db, 'notificaciones', 'fecha_resolucion', 'TEXT');
+        await ensureColumnExists(db, 'notificaciones', 'nivel_prioridad', "TEXT DEFAULT 'informativa'");
+        await ensureColumnExists(db, 'notificaciones', 'metadata_json', 'TEXT');
+
+        // Salvaguarda 1: Marcar como resueltas las notificaciones de cuotas que ya estén pagadas o anuladas
+        await db.execute('''
+          UPDATE notificaciones 
+          SET is_resolved = 1, fecha_resolucion = datetime('now')
+          WHERE objeto_relacionado_tipo = 'cuota' 
+          AND objeto_relacionado_id IN (
+            SELECT id FROM cuotas WHERE estado IN ('pagado', 'anulada')
+            UNION
+            SELECT c.id FROM cuotas c JOIN ventas v ON c.venta_id = v.id WHERE v.is_archived = 1
+          )
+        ''');
+
+        // Salvaguarda 2: Asignar dedup_key determinista a registros existentes sin clave
+        await db.execute('''
+          UPDATE notificaciones
+          SET dedup_key = CASE 
+            WHEN objeto_relacionado_tipo IS NOT NULL AND objeto_relacionado_id IS NOT NULL 
+              THEN objeto_relacionado_tipo || '_' || objeto_relacionado_id || '_' || tipo
+            ELSE 'notif_' || id
+          END
+          WHERE dedup_key IS NULL
+        ''');
+
+        // Salvaguarda 3: Eliminar filas duplicadas antiguas conservando únicamente la fila más reciente (MAX(id))
+        await db.execute('''
+          DELETE FROM notificaciones
+          WHERE id NOT IN (
+            SELECT MAX(id)
+            FROM notificaciones
+            GROUP BY negocio_id, dedup_key
+          )
+        ''');
+
+        // Crear los índices de alto rendimiento y unicidad
+        await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_notif_dedup ON notificaciones(negocio_id, dedup_key)');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_notif_objeto ON notificaciones(negocio_id, objeto_relacionado_tipo, objeto_relacionado_id)');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_notif_estado ON notificaciones(negocio_id, is_resolved, leida)');
+
+        debugPrint("✅ Migración V31 completada con éxito: Motor canónico de notificaciones y deduplicación listos.");
+      } catch (e) {
+        debugPrint("Error en migración V31: $e");
+      }
+    }
+
+    // Migración V31 -> V32: Trazabilidad contable, auditoría y reversión atómica de eventos financieros
+    if (oldVersion < 32) {
+      try {
+        await ensureEventosFinancierosTable(db);
+        await ensureColumnExists(db, 'ventas', 'created_at', 'TEXT');
+        await ensureColumnExists(db, 'pagos', 'created_at', 'TEXT');
+        debugPrint("✅ Migración V32 completada con éxito: eventos_financieros_cliente creada.");
+      } catch (e) {
+        debugPrint("Error en migración V32: $e");
+      }
+    }
+  }
+
+  /// 🛡️ Creación idempotente de la tabla de auditoría y eventos financieros del cliente
+  static Future<void> ensureEventosFinancierosTable(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS eventos_financieros_cliente (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        negocio_id INTEGER NOT NULL,
+        cliente_id INTEGER NOT NULL,
+        venta_id INTEGER,
+        cuota_id INTEGER,
+        pago_id INTEGER,
+        tipo_evento TEXT NOT NULL,
+        titulo TEXT NOT NULL,
+        descripcion TEXT,
+        monto_anterior REAL,
+        monto_nuevo REAL,
+        monto_impacto REAL DEFAULT 0.0,
+        fecha_evento TEXT NOT NULL,
+        metadata TEXT,
+        FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE,
+        FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE CASCADE,
+        FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE,
+        FOREIGN KEY (cuota_id) REFERENCES cuotas (id) ON DELETE SET NULL,
+        FOREIGN KEY (pago_id) REFERENCES pagos (id) ON DELETE SET NULL
+      )
+    ''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_eventos_cliente ON eventos_financieros_cliente(cliente_id, fecha_evento)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_eventos_venta ON eventos_financieros_cliente(venta_id)');
   }
 
   /// 🎁 Siembra automática de metas predeterminadas para cada negocio si no tiene ninguna configurada.
@@ -735,7 +833,7 @@ class LocalDatabase {
 
     // 4. Ventas y Pagos
     await db.execute(
-      '''CREATE TABLE ventas (id $idType, numero_secuencial $intNullable, negocio_id $intType, creado_por_usuario_id $intType, cotizacion_id $intNullable UNIQUE, cliente_id $intNullable, origen_venta $textNullable DEFAULT 'smart_quotation', is_archived $boolTypeFalse, motivo_anulacion $textNullable, fecha_anulacion $textNullable, nota_prestamo $textNullable, metodo_pago $textType, estado_pago $textNullable DEFAULT 'pagado', estado_entrega $textNullable DEFAULT 'entregado', fecha_entrega $textNullable, monto_total $realType, monto_pagado $realType, descuento_aplicado $realNullable DEFAULT 0.00, abono_inicial $realNullable DEFAULT 0.0, porcentaje_interes $realNullable DEFAULT 0.0, mora_total $realNullable DEFAULT 0.0, foto_entrega $textNullable, fecha_venta $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (cotizacion_id) REFERENCES smart_quotations (id), FOREIGN KEY (cliente_id) REFERENCES clientes (id))''',
+      '''CREATE TABLE ventas (id $idType, numero_secuencial $intNullable, negocio_id $intType, creado_por_usuario_id $intType, cotizacion_id $intNullable UNIQUE, cliente_id $intNullable, origen_venta $textNullable DEFAULT 'smart_quotation', is_archived $boolTypeFalse, motivo_anulacion $textNullable, fecha_anulacion $textNullable, nota_prestamo $textNullable, metodo_pago $textType, estado_pago $textNullable DEFAULT 'pagado', estado_entrega $textNullable DEFAULT 'entregado', fecha_entrega $textNullable, monto_total $realType, monto_pagado $realType, descuento_aplicado $realNullable DEFAULT 0.00, abono_inicial $realNullable DEFAULT 0.0, porcentaje_interes $realNullable DEFAULT 0.0, mora_total $realNullable DEFAULT 0.0, foto_entrega $textNullable, fecha_venta $textNullable, created_at $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (cotizacion_id) REFERENCES smart_quotations (id), FOREIGN KEY (cliente_id) REFERENCES clientes (id))''',
     );
     await db.execute(
       '''CREATE TABLE venta_items (id $idType, venta_id $intType, presentation_id $intNullable, product_id $intNullable, bundle_id $intNullable, cantidad $intType DEFAULT 1, precio_unitario $realType, original_unit_price $realNullable, subtotal $realType, nombre_producto $textType, brand_name $textNullable, specific_name $textNullable, unidad_medida $textNullable, original_text $textNullable, image_url $textNullable, is_manual_price $boolTypeFalse, FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE, FOREIGN KEY (presentation_id) REFERENCES presentaciones_producto (id), FOREIGN KEY (bundle_id) REFERENCES paquetes (id))''',
@@ -744,12 +842,12 @@ class LocalDatabase {
       '''CREATE TABLE cuotas (id $idType, venta_id $intType, numero_cuota $intType, monto $realType, monto_pagado $realNullable DEFAULT 0.00, fecha_vencimiento $textType, estado $textNullable DEFAULT 'pendiente', monto_original $realNullable, mora_monto $realNullable DEFAULT 0.0, mora_porcentaje $realNullable DEFAULT 0.0, mora_automatica $intNullable DEFAULT 0, mora_frecuencia $textNullable, mora_intervalo_dias $intNullable DEFAULT 1, mora_tipo $textNullable DEFAULT 'fijo', mora_valor $realNullable DEFAULT 0.0, mora_fecha_inicio $textNullable, mora_ultima_aplicacion $textNullable, mora_periodos_acumulados $intNullable DEFAULT 0, FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE)''',
     );
     await db.execute(
-      '''CREATE TABLE pagos (id $idType, negocio_id $intType, creado_por_usuario_id $intType, cliente_id $intNullable, venta_id $intNullable, cuota_id $intNullable, monto $realType, metodo_pago $textType, nota $textNullable, fecha_pago $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (cliente_id) REFERENCES clientes (id), FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE SET NULL, FOREIGN KEY (cuota_id) REFERENCES cuotas (id) ON DELETE SET NULL)''',
+      '''CREATE TABLE pagos (id $idType, negocio_id $intType, creado_por_usuario_id $intType, cliente_id $intNullable, venta_id $intNullable, cuota_id $intNullable, monto $realType, metodo_pago $textType, nota $textNullable, fecha_pago $textNullable, created_at $textNullable, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE, FOREIGN KEY (creado_por_usuario_id) REFERENCES usuarios (id), FOREIGN KEY (cliente_id) REFERENCES clientes (id), FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE SET NULL, FOREIGN KEY (cuota_id) REFERENCES cuotas (id) ON DELETE SET NULL)''',
     );
 
     // 5. Notificaciones
     await db.execute(
-      '''CREATE TABLE notificaciones (id $idType, user_id $intType, negocio_id $intType, titulo $textType, mensaje $textType, tipo $textNullable DEFAULT 'info', leida $boolTypeFalse, fecha_creacion $textNullable, prioridad $textNullable DEFAULT 'Media', objeto_relacionado_tipo $textNullable, objeto_relacionado_id $intNullable, FOREIGN KEY (user_id) REFERENCES usuarios (id) ON DELETE CASCADE, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE)''',
+      '''CREATE TABLE notificaciones (id $idType, user_id $intType, negocio_id $intType, dedup_key $textNullable, titulo $textType, mensaje $textType, tipo $textNullable DEFAULT 'info', nivel_prioridad $textNullable DEFAULT 'informativa', leida $boolTypeFalse, is_resolved $boolTypeFalse, fecha_creacion $textNullable, fecha_resolucion $textNullable, prioridad $textNullable DEFAULT 'Media', objeto_relacionado_tipo $textNullable, objeto_relacionado_id $intNullable, metadata_json $textNullable, FOREIGN KEY (user_id) REFERENCES usuarios (id) ON DELETE CASCADE, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE)''',
     );
 
     // 6. Promociones y Paquetes
@@ -790,6 +888,11 @@ class LocalDatabase {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_stock_ledger_negocio ON stock_ledger(negocio_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_product_history_entidad ON product_history(entidad_tipo, entidad_id)');
     
+    // Índices de Notificaciones (V31)
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_notif_dedup ON notificaciones(negocio_id, dedup_key)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_notif_objeto ON notificaciones(negocio_id, objeto_relacionado_tipo, objeto_relacionado_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_notif_estado ON notificaciones(negocio_id, is_resolved, leida)');
+    
     // 9. BI Snapshots
     await db.execute(
       '''CREATE TABLE business_snapshots (id $idType, negocio_id $intType, snapshot_date $textType, metrics_json $textType, created_at $textType, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE)'''
@@ -813,6 +916,9 @@ class LocalDatabase {
     );
     await db.execute('CREATE INDEX IF NOT EXISTS idx_historial_puntos_cliente ON historial_puntos_reputacion(cliente_id, fecha_registro)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_historial_puntos_negocio ON historial_puntos_reputacion(negocio_id, fecha_registro)');
+
+    // 11. Eventos Financieros del Cliente (V32)
+    await ensureEventosFinancierosTable(db);
 
     // Sembrar metas predeterminadas
     await seedDefaultMetasRecompensas(db);

@@ -1,5 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:app_movil/core/database/local_db.dart'; // 🔥 Importamos SQLite para guardar el historial
 
 class LocalNotificationService {
@@ -41,6 +42,9 @@ class LocalNotificationService {
     String? objetoRelacionadoTipo, // Ej: 'producto', 'venta', 'backup'
     int? objetoRelacionadoId, // Ej: el ID de la venta
     String? payload,
+    String? dedupKey,
+    String? nivelPrioridad,
+    String? metadataJson,
   }) async {
     
     // 1. Mostrar Alerta Nativa de Android (Pop-up en la parte superior)
@@ -69,18 +73,28 @@ class LocalNotificationService {
     // 2. Guardar el registro en SQLite para el historial en la App
     try {
       final db = await LocalDatabase.instance.database;
+      final resolvedDedupKey = dedupKey ?? (objetoRelacionadoTipo != null && objetoRelacionadoId != null 
+          ? '${objetoRelacionadoTipo}_${objetoRelacionadoId}_$type' 
+          : 'notif_${DateTime.now().millisecondsSinceEpoch}');
+      
+      final resolvedNivel = nivelPrioridad ?? (prioridad == 'Alta' ? 'critica' : (type == 'exito' ? 'informativa' : 'preventiva'));
+
       await db.insert('notificaciones', {
         'user_id': userId,
         'negocio_id': negocioId,
+        'dedup_key': resolvedDedupKey,
         'titulo': title,
         'mensaje': body,
         'tipo': type,
+        'nivel_prioridad': resolvedNivel,
         'leida': 0, // 0 = No leída (boolTypeFalse en SQLite)
+        'is_resolved': 0,
         'fecha_creacion': DateTime.now().toIso8601String(),
         'prioridad': prioridad,
         'objeto_relacionado_tipo': objetoRelacionadoTipo,
-        'objeto_relacionado_id': objetoRelacionadoId
-      });
+        'objeto_relacionado_id': objetoRelacionadoId,
+        'metadata_json': metadataJson,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
       debugPrint("Notificación guardada en el historial local.");
     } catch (e) {
       debugPrint("Error guardando notificación en DB: $e");

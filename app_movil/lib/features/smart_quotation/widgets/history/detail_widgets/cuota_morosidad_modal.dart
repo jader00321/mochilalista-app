@@ -193,6 +193,17 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
           saleId: widget.cuota['venta_id'] as int?,
         );
 
+        // Si el usuario desactivó la mora automática desde el banner de Manual / Directo, persistir la desactivación sin corromper la frecuencia
+        if (!_autoActiva && (widget.cuota['mora_automatica'] == 1 || widget.cuota['mora_automatica'] == true)) {
+          await saleProv.configurarMorosidadAutomatica(
+            cuotaId,
+            activa: false,
+            frecuencia: _autoFrecuencia,
+            intervaloDias: _autoIntervaloDias,
+            saleId: widget.cuota['venta_id'] as int?,
+          );
+        }
+
         if (ok && mounted) {
           CustomSnackBar.show(context, message: "Morosidad manual actualizada con éxito");
           widget.onSaved();
@@ -336,26 +347,30 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
       maintainFixedHeightOnKeyboard: false,
       contentPadding: EdgeInsets.zero,
       bottomAction: _buildBottomAction(isDark, isVencida, textColor),
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildTopStatusCard(isDark, textColor, cardBg, isVencida, dueDate, daysDiff),
-            const SizedBox(height: 10),
-            if (isVencida)
-              _buildModeSelector(isDark, cardBg, textColor)
-            else
-              _buildShieldBanner(isDark, dueDateStr),
-            const SizedBox(height: 12),
-            if (_activeTab == 'manual')
-              _buildManualBody(isDark, textColor, cardBg)
-            else
-              _buildAutomaticoBody(isDark, textColor, cardBg, isVencida, dueDate, daysDiff),
-            const SizedBox(height: 12),
-          ],
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildTopStatusCard(isDark, textColor, cardBg, isVencida, dueDate, daysDiff),
+              const SizedBox(height: 10),
+              if (isVencida)
+                _buildModeSelector(isDark, cardBg, textColor)
+              else
+                _buildShieldBanner(isDark, dueDateStr),
+              const SizedBox(height: 12),
+              if (_activeTab == 'manual')
+                _buildManualBody(isDark, textColor, cardBg)
+              else
+                _buildAutomaticoBody(isDark, textColor, cardBg, isVencida, dueDate, daysDiff),
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
     );
@@ -391,17 +406,25 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
     final bool hasActiveMora = _moraMontoActual > 0.01;
     final bool hasScheduledRule = _autoActiva || (widget.cuota['mora_automatica'] == 1 || widget.cuota['mora_automatica'] == true);
 
+    final double valPorPeriodo = (widget.cuota['mora_valor'] as num?)?.toDouble() ?? 0.0;
+    final String tipoRecargo = widget.cuota['mora_tipo']?.toString() ?? 'porcentaje';
+    final double feePerCycle = tipoRecargo == 'porcentaje' ? (_montoOriginal * (valPorPeriodo / 100)) : valPorPeriodo;
+    final double feeDisplay = feePerCycle > 0 
+        ? feePerCycle 
+        : (_calcType == 'porcentaje' ? (_montoOriginal * ((double.tryParse(_valorCtrl.text) ?? 5) / 100)) : (double.tryParse(_valorCtrl.text) ?? 0));
+
     if (!isVencida && hasScheduledRule) {
-      badgeText = "🛡️ MORA PROGRAMADA SI VENCE";
+      badgeText = "MORA PROGRAMADA SI VENCE";
       badgeColor = isDark ? Colors.cyanAccent : Colors.teal;
       badgeBgColor = (isDark ? Colors.cyan : Colors.teal).withValues(alpha: 0.15);
       badgeIcon = Icons.shield_outlined;
     } else if (isVencida && hasScheduledRule) {
       final freqLabel = _formatFrecuenciaLabel(_autoFrecuencia, _autoIntervaloDias);
-      badgeText = "⚡ MORA PERIÓDICA ACTIVA: +${AppCurrency.format(_moraMontoActual)} cada $freqLabel";
+      final double displayMora = _moraMontoActual > 0.01 ? _moraMontoActual : feeDisplay;
+      badgeText = "MORA PERIÓDICA ACTIVA: +${AppCurrency.format(displayMora)} cada $freqLabel";
       badgeColor = Colors.orange[400]!;
       badgeBgColor = Colors.orange.withValues(alpha: 0.18);
-      badgeIcon = Icons.autorenew;
+      badgeIcon = Icons.update_rounded;
     } else if (isVencida && hasActiveMora) {
       badgeText = "MORA MANUAL ACTIVA: +${AppCurrency.format(_moraMontoActual)}";
       badgeColor = isDark ? Colors.amber[300]! : Colors.amber[900]!;
@@ -496,16 +519,18 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
                 Icon(badgeIcon, size: 12, color: badgeColor),
                 const SizedBox(width: 5),
                 Expanded(
-                  child: Text(
-                    badgeText,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: badgeColor,
-                      letterSpacing: 0.2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      badgeText,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: badgeColor,
+                        letterSpacing: 0.2,
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -611,7 +636,7 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "🛡️ Cuota en plazo (Vence: ${dueDateStr?.split('T').first ?? ''})",
+                  "Cuota en plazo (Vence: ${dueDateStr?.split('T').first ?? ''})",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.blue[200] : Colors.blue[900]),
                 ),
                 const SizedBox(height: 3),
@@ -630,9 +655,69 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
   // --- ZONA B: CUERPO ESCROLLEABLE (MANUAL VS AUTOMÁTICO) ---
 
   Widget _buildManualBody(bool isDark, Color textColor, Color cardBg) {
+    final double valPorPeriodo = (widget.cuota['mora_valor'] as num?)?.toDouble() ?? 0.0;
+    final String tipoRecargo = widget.cuota['mora_tipo']?.toString() ?? 'porcentaje';
+    final double feePerCycle = tipoRecargo == 'porcentaje' ? (_montoOriginal * (valPorPeriodo / 100)) : valPorPeriodo;
+    final double feeDisplay = feePerCycle > 0 
+        ? feePerCycle 
+        : (_calcType == 'porcentaje' ? (_montoOriginal * ((double.tryParse(_valorCtrl.text) ?? 5) / 100)) : (double.tryParse(_valorCtrl.text) ?? 0));
+    final String freqLabel = _formatFrecuenciaLabel(_autoFrecuencia, _autoIntervaloDias);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (_autoActiva) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.shade200, width: 0.8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline_rounded, size: 16, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "La acumulación periódica (+${AppCurrency.format(feeDisplay)} cada $freqLabel) sigue activa",
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.orange[200] : Colors.orange[900],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _autoActiva = false;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.red.withValues(alpha: 0.35), width: 0.8),
+                    ),
+                    child: const Text(
+                      "Desactivar",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         Text(
           "FORMA DE CÁLCULO",
           style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: isDark ? Colors.grey[400] : Colors.grey[600]),
@@ -658,6 +743,7 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
             scrollPadding: const EdgeInsets.only(bottom: 90),
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.bold),
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
@@ -675,6 +761,7 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
             scrollPadding: const EdgeInsets.only(bottom: 90),
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.bold),
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
@@ -1099,6 +1186,31 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
     );
   }
 
+  Widget _buildSimRow({
+    required IconData icon,
+    required String text,
+    required bool isDark,
+    required Color color,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.grey[300] : Colors.grey[800],
+              height: 1.3,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSimulatorCard(bool isDark, Color textColor, bool isVencida, DateTime? dueDate, int daysDiff) {
     int interval = 1;
     if (_autoFrecuencia == 'personalizado') {
@@ -1122,7 +1234,6 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
         : val;
 
     String simTitle;
-    String simMessage;
     IconData simIcon;
     Color simColor;
 
@@ -1131,71 +1242,170 @@ class _CuotaMorosidadModalState extends State<CuotaMorosidadModal> {
       simColor = isDark ? Colors.cyanAccent : Colors.teal;
       simIcon = Icons.shield_outlined;
       final dateFmt = dueDate != null ? DateFormat('dd/MM/yyyy').format(dueDate) : "su vencimiento";
-      simMessage = "🛡️ Cuota en plazo. La regla no generará ningún cobro ahora; se dejará configurada la regla periódica de +${AppCurrency.format(recargoPorPeriodo)} cada ${_formatFrecuenciaLabel(_autoFrecuencia, interval)}, la cual comenzará a correr a partir del $dateFmt si no se paga a tiempo.";
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: simColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: simColor.withValues(alpha: 0.35), width: 0.8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(simIcon, size: 16, color: simColor),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    simTitle,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: simColor),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildSimRow(
+              icon: Icons.info_outline_rounded,
+              text: "Cuota en plazo. La regla no generará ningún cobro ahora; se dejará configurada la regla periódica de +${AppCurrency.format(recargoPorPeriodo)} cada ${_formatFrecuenciaLabel(_autoFrecuencia, interval)}, la cual comenzará a correr a partir del $dateFmt si no se paga a tiempo.",
+              isDark: isDark,
+              color: simColor,
+            ),
+          ],
+        ),
+      );
     } else if (!_autoActiva) {
       simTitle = "Acumulación Periódica Desactivada";
       simColor = Colors.grey;
       simIcon = Icons.pause_circle_outline;
-      simMessage = "Interruptor desactivado: no se sumarán nuevos recargos periódicos. La mora actual (+${AppCurrency.format(_moraMontoActual)}) se conserva intacta.";
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: simColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: simColor.withValues(alpha: 0.35), width: 0.8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(simIcon, size: 16, color: simColor),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    simTitle,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: simColor),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildSimRow(
+              icon: Icons.info_outline_rounded,
+              text: "Interruptor desactivado: no se sumarán nuevos recargos periódicos. La mora actual (+${AppCurrency.format(_moraMontoActual)}) se conserva intacta.",
+              isDark: isDark,
+              color: simColor,
+            ),
+          ],
+        ),
+      );
     } else {
       final int daysOverdue = daysDiff > 0 ? daysDiff : 0;
       simColor = isDark ? Colors.orange[300]! : Colors.orange[800]!;
-      simIcon = Icons.bolt;
 
       if (_calcularDesdeVencimiento) {
         final int periods = daysOverdue ~/ interval;
         final int remainder = daysOverdue % interval;
         final int daysToNext = interval - remainder;
         final double moraAcumulada = periods * recargoPorPeriodo;
-        final double totalProyectado = _montoOriginal + moraAcumulada;
 
-        simTitle = "Simulación en Vivo ($periods ${periods == 1 ? 'periodo devengado' : 'periodos devengados'})";
-        if (periods == 0) {
-          final nextStr = daysToNext == 1 
-              ? "se aplicará mañana (en 1 día) al cumplir $interval días de atraso." 
-              : "se sumará en $daysToNext días al completar el ciclo de $interval días.";
-          simMessage = "ℹ️ La cuota venció hace $daysOverdue ${daysOverdue == 1 ? 'día' : 'días'}. Con frecuencia cada ${_formatFrecuenciaLabel(_autoFrecuencia, interval)}, hoy devenga 0 periodos (+S/ 0.00). El 1.er recargo (+${AppCurrency.format(recargoPorPeriodo)}) $nextStr";
-        } else {
-          simMessage = "⚡ La cuota venció hace $daysOverdue ${daysOverdue == 1 ? 'día' : 'días'}. Al guardar se aplicarán $periods ${periods == 1 ? 'periodo acumulado' : 'periodos acumulados'} (+${AppCurrency.format(moraAcumulada)} ➔ Total cuota: ${AppCurrency.format(totalProyectado)}), y sumará +${AppCurrency.format(recargoPorPeriodo)} cada nuevo ciclo de $interval días (próximo en $daysToNext ${daysToNext == 1 ? 'día' : 'días'}).";
-        }
-      } else {
-        simTitle = "Simulación: Conteo desde Hoy";
-        simMessage = "El recargo periódico comenzará a acumularse a partir de hoy. El primer incremento (+${AppCurrency.format(recargoPorPeriodo)}) se sumará en $interval ${interval == 1 ? 'día' : 'días'}.";
-      }
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: simColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: simColor.withValues(alpha: 0.35), width: 0.8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: simColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: simColor.withValues(alpha: 0.35), width: 0.8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(simIcon, size: 16, color: simColor),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  simTitle,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: simColor),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              Row(
+                children: [
+                  Icon(Icons.insights_rounded, size: 16, color: simColor),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "Simulación en Vivo ($periods ${periods == 1 ? 'ciclo cumplido' : 'ciclos cumplidos'})",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: simColor),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Fila 1: Atraso y Periodos
+              _buildSimRow(
+                icon: Icons.event_busy_rounded,
+                text: "$daysOverdue ${daysOverdue == 1 ? 'día' : 'días'} de atraso • $periods ${periods == 1 ? 'ciclo cumplido' : 'ciclos cumplidos'} (cada ${_formatFrecuenciaLabel(_autoFrecuencia, interval)})",
+                isDark: isDark,
+                color: simColor,
+              ),
+              const SizedBox(height: 6),
+              // Fila 2: Cálculo Actual
+              _buildSimRow(
+                icon: Icons.calculate_outlined,
+                text: periods > 0
+                    ? "$periods ciclos × ${AppCurrency.format(recargoPorPeriodo)} = +${AppCurrency.format(moraAcumulada)} de mora hoy"
+                    : "0 ciclos cumplidos = +${AppCurrency.format(0.0)} de mora hoy",
+                isDark: isDark,
+                color: simColor,
+              ),
+              const SizedBox(height: 6),
+              // Fila 3: Próximo Recargo
+              _buildSimRow(
+                icon: Icons.schedule_rounded,
+                text: "Siguiente recargo (+${AppCurrency.format(recargoPorPeriodo)}): en $daysToNext ${daysToNext == 1 ? 'día' : 'días'}",
+                isDark: isDark,
+                color: isDark ? Colors.grey[300]! : Colors.grey[800]!,
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            simMessage,
-            style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[300] : Colors.grey[800], height: 1.35),
+        );
+      } else {
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: simColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: simColor.withValues(alpha: 0.35), width: 0.8),
           ),
-        ],
-      ),
-    );
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.schedule_rounded, size: 16, color: simColor),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "Simulación: Conteo desde Hoy",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: simColor),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildSimRow(
+                icon: Icons.info_outline_rounded,
+                text: "El recargo periódico comenzará a acumularse a partir de hoy. El primer incremento (+${AppCurrency.format(recargoPorPeriodo)}) se sumará en $interval ${interval == 1 ? 'día' : 'días'}.",
+                isDark: isDark,
+                color: simColor,
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   // --- ZONA C: PIE DE PÁGINA FIJO (PINNED FOOTER EN bottomAction) ---

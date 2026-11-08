@@ -165,6 +165,33 @@ class ClientSalesHistoryTab extends StatelessWidget {
                                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
                                   ),
                                 ),
+                                if (sale.moraTotal > 0.01)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? Colors.orange.withValues(alpha: 0.18) : Colors.orange.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.shade200,
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.trending_up_rounded, size: 13, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          "+ Mora: ${AppCurrency.format(sale.moraTotal)}",
+                                          style: TextStyle(
+                                            fontSize: 12, 
+                                            color: isDark ? Colors.orange[300] : Colors.orange[800], 
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(

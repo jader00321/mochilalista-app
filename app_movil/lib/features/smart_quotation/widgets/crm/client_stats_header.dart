@@ -248,15 +248,16 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
           Row(
             children: [
               Expanded(
-                flex: 4,
+                flex: 7,
                 child: ElevatedButton.icon(
                   onPressed: widget.onGoToQuickSale,
-                  icon: const Icon(Icons.point_of_sale, size: 16),
-                  label: const Text(
-                    "Caja Rápida",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  icon: const Icon(Icons.point_of_sale, size: 15),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "Caja Rápida",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.pinkAccent,
@@ -265,28 +266,29 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                       borderRadius: BorderRadius.circular(12),
                     ),
                     padding: const EdgeInsets.symmetric(
-                      vertical: 10,
-                      horizontal: 8,
+                      vertical: 9,
+                      horizontal: 6,
                     ),
                     elevation: 0,
                   ),
                 ),
               ),
               if (widget.onGoToQuotation != null) ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Expanded(
-                  flex: 3,
+                  flex: 6,
                   child: ElevatedButton.icon(
                     onPressed: widget.onGoToQuotation,
-                    icon: const Icon(Icons.request_quote_outlined, size: 16),
-                    label: const Text(
-                      "Cotizar",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                    icon: const Icon(Icons.request_quote_outlined, size: 15),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        "Cotizar",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.indigo,
@@ -295,17 +297,17 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                         borderRadius: BorderRadius.circular(12),
                       ),
                       padding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 8,
+                        vertical: 9,
+                        horizontal: 6,
                       ),
                       elevation: 0,
                     ),
                   ),
                 ),
               ],
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Expanded(
-                flex: 3,
+                flex: 7,
                 child: ElevatedButton.icon(
                   onPressed: () {
                     ClientFinanceActionsModal.show(
@@ -316,12 +318,13 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                       onCompleted: widget.onFinanceActionCompleted,
                     );
                   },
-                  icon: const Icon(Icons.account_balance_rounded, size: 16),
-                  label: const Text(
-                    "+ Préstamo",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  icon: const Icon(Icons.account_balance_rounded, size: 15),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "+ Préstamo",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: widget.isDark
@@ -332,8 +335,8 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                       borderRadius: BorderRadius.circular(12),
                     ),
                     padding: const EdgeInsets.symmetric(
-                      vertical: 10,
-                      horizontal: 8,
+                      vertical: 9,
+                      horizontal: 6,
                     ),
                     elevation: 0,
                   ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -9,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_screen.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/utils/cuota_date_helper.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/cuota_morosidad_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/whatsapp_preview_modal.dart'; 
 import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';
@@ -219,7 +219,17 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text(isLoan ? "Detalle del Préstamo #${_saleData?['numero_secuencial'] ?? widget.saleId}" : "Detalle de Venta #${_saleData?['numero_secuencial'] ?? widget.saleId}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        titleSpacing: 0,
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            isLoan
+                ? "Detalle del Préstamo #${_saleData?['numero_secuencial'] ?? widget.saleId}"
+                : "Detalle de Venta #${_saleData?['numero_secuencial'] ?? widget.saleId}",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -358,34 +368,43 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                     if (cSaldo <= 0.02) {
                       cSaldo = 0.0;
                       isPaid = true;
-                      displayEstado = 'PAGADO';
+                      displayEstado = 'PAGADA';
                     }
                     
-                    DateTime dueDate = DateTime.tryParse(c['fecha_vencimiento'] ?? "") ?? DateTime.now();
-                    DateTime today = DateTime.now();
-                    int daysDiff = dueDate.difference(DateTime(today.year, today.month, today.day)).inDays;
+                    final dateInfo = CuotaDateHelper.evaluate(c['fecha_vencimiento']);
+                    final DateTime dueDate = CuotaDateHelper.parseFlexible(c['fecha_vencimiento']) ?? DateTime.now();
+                    final bool isOverdue = !isPaid && dateInfo.isPast;
+                    final int daysOverdue = dateInfo.daysOverdue;
 
                     Color statusColor = isDark ? Colors.grey[400]! : Colors.grey;
                     IconData statusIcon = Icons.calendar_today;
                     String statusText = displayEstado;
 
                     if (isPaid) {
-                      statusColor = isDark ? Colors.green[400]! : Colors.green;
-                      statusIcon = Icons.check_circle;
+                      statusColor = isDark ? Colors.green[300]! : Colors.green.shade700;
+                      statusIcon = Icons.check_circle_rounded;
+                      statusText = 'PAGADA';
                     } else {
-                      if (daysDiff < 0) {
-                        statusColor = isDark ? Colors.red[400]! : Colors.red;
-                        statusIcon = Icons.warning_rounded;
+                      if (isOverdue) {
+                        statusColor = isDark ? Colors.red[300]! : Colors.red.shade700;
+                        statusIcon = Icons.warning_amber_rounded;
                         statusText = 'VENCIDA';
-                      } else if (daysDiff <= 3) {
-                        statusColor = isDark ? Colors.orange[400]! : Colors.orange;
-                        statusIcon = Icons.schedule;
+                      } else if (dateInfo.isToday) {
+                        statusColor = isDark ? Colors.amber[300]! : Colors.amber.shade800;
+                        statusIcon = Icons.notification_important_outlined;
+                        statusText = 'VENCE HOY';
+                      } else if (dateInfo.daysDifference >= -3) {
+                        statusColor = isDark ? Colors.orange[300]! : Colors.orange.shade800;
+                        statusIcon = Icons.schedule_rounded;
                         statusText = 'PRÓXIMA';
                       } else if (cPagado > 0) {
-                        statusColor = isDark ? Colors.blue[300]! : Colors.blue;
-                        statusIcon = Icons.payments;
+                        statusColor = isDark ? Colors.blue[300]! : Colors.blue.shade700;
+                        statusIcon = Icons.payments_rounded;
+                        statusText = 'PARCIAL';
                       } else {
                         statusColor = isDark ? Colors.grey[400]! : Colors.grey[700]!;
+                        statusIcon = Icons.hourglass_top_rounded;
+                        statusText = 'PENDIENTE';
                       }
                     }
 
@@ -400,45 +419,103 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                           iconColor: textColor,
                           collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey,
                           leading: CircleAvatar(backgroundColor: statusColor.withValues(alpha: 0.15), child: Icon(statusIcon, color: statusColor)),
-                          title: Text("Cuota ${c['numero_cuota']}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          title: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    daysDiff < 0 && !isPaid ? "Venció hace ${daysDiff.abs()} días" : "Vence: ${DateFormat('dd/MM/yyyy').format(dueDate)}", 
-                                    style: TextStyle(fontSize: 13, color: daysDiff < 0 && !isPaid ? (isDark ? Colors.red[300] : Colors.red) : (isDark ? Colors.grey[400] : Colors.grey[700]), fontWeight: daysDiff < 0 && !isPaid ? FontWeight.bold : FontWeight.normal)
-                                  ),
-                                  if (isAutoMora) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                      decoration: BoxDecoration(
-                                        color: Colors.orange.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: Colors.orange.withValues(alpha: 0.6), width: 0.7),
-                                      ),
-                                      child: const Text("⚡ Auto", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.orange)),
-                                    ),
-                                  ],
-                                ],
+                              Text(
+                                "Cuota ${c['numero_cuota']}",
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
                               ),
-                              if (cMoraMonto > 0.01) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  "Orig: ${AppCurrency.format(cMontoOriginal)} • + Mora: ${AppCurrency.format(cMoraMonto)} (${cMoraPorcentaje.toStringAsFixed(1)}%)",
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber[700]),
+                              if (isAutoMora) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.amber.withValues(alpha: 0.5), width: 0.8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.bolt_rounded, size: 11, color: isDark ? Colors.amber[300] : Colors.amber[800]),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        "Auto",
+                                        style: TextStyle(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.amber[300] : Colors.amber[800],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ],
                           ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  isOverdue ? "Venció hace $daysOverdue ${daysOverdue == 1 ? 'día' : 'días'}" : dateInfo.fullLabel,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: isOverdue ? (isDark ? Colors.red[300] : Colors.red.shade800) : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                    fontWeight: isOverdue ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                                if (cMoraMonto > 0.01) ...[
+                                  const SizedBox(height: 3),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: (isDark ? Colors.amber : Colors.orange).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: (isDark ? Colors.amber : Colors.orange).withValues(alpha: 0.3), width: 0.7),
+                                      ),
+                                      child: Text(
+                                        "Base: ${AppCurrency.format(cMontoOriginal)} • + Mora: ${AppCurrency.format(cMoraMonto)} (${cMoraPorcentaje.toStringAsFixed(1)}%)",
+                                        style: TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.amber[300] : Colors.orange[900],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(AppCurrency.format(cMonto), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: textColor)),
-                              Text(statusText, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                              Text(
+                                AppCurrency.format(cMonto),
+                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: textColor),
+                              ),
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: statusColor.withValues(alpha: 0.35), width: 0.8),
+                                ),
+                                child: Text(
+                                  statusText,
+                                  style: TextStyle(color: statusColor, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                ),
+                              ),
                             ],
                           ),
                           children: [
@@ -604,10 +681,10 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                                             child: Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
                                               decoration: BoxDecoration(
-                                                color: (cMoraMonto > 0.01 ? Colors.redAccent : (daysDiff < 0 ? Colors.orange : Colors.blueGrey)).withValues(alpha: 0.12),
+                                                color: (cMoraMonto > 0.01 ? Colors.redAccent : (isOverdue ? Colors.orange : Colors.blueGrey)).withValues(alpha: 0.12),
                                                 borderRadius: BorderRadius.circular(8),
                                                 border: Border.all(
-                                                  color: (cMoraMonto > 0.01 ? Colors.redAccent : (daysDiff < 0 ? Colors.orange : Colors.blueGrey)).withValues(alpha: 0.3),
+                                                  color: (cMoraMonto > 0.01 ? Colors.redAccent : (isOverdue ? Colors.orange : Colors.blueGrey)).withValues(alpha: 0.3),
                                                   width: 0.8,
                                                 ),
                                               ),
@@ -617,15 +694,15 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                                                   mainAxisAlignment: MainAxisAlignment.center,
                                                   children: [
                                                     Icon(
-                                                      cMoraMonto > 0.01 ? Icons.timer_outlined : (daysDiff < 0 ? Icons.tune : Icons.shield_outlined),
+                                                      cMoraMonto > 0.01 ? Icons.timer_outlined : (isOverdue ? Icons.tune : Icons.shield_outlined),
                                                       size: 13,
-                                                      color: cMoraMonto > 0.01 ? Colors.redAccent : (daysDiff < 0 ? Colors.orange[800] : (isDark ? Colors.cyanAccent : Colors.teal)),
+                                                      color: cMoraMonto > 0.01 ? Colors.redAccent : (isOverdue ? Colors.orange[800] : (isDark ? Colors.cyanAccent : Colors.teal)),
                                                     ),
                                                     const SizedBox(width: 3),
                                                     Text(
-                                                      cMoraMonto > 0.01 ? "Mora" : (daysDiff < 0 ? "Mora" : "Prog. Mora"),
+                                                      cMoraMonto > 0.01 ? "Mora" : (isOverdue ? "Mora" : "Prog. Mora"),
                                                       style: TextStyle(
-                                                        color: cMoraMonto > 0.01 ? Colors.redAccent : (daysDiff < 0 ? Colors.orange[800] : (isDark ? Colors.cyanAccent : Colors.teal)),
+                                                        color: cMoraMonto > 0.01 ? Colors.redAccent : (isOverdue ? Colors.orange[800] : (isDark ? Colors.cyanAccent : Colors.teal)),
                                                         fontSize: 11,
                                                         fontWeight: FontWeight.bold,
                                                       ),

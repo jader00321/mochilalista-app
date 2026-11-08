@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:share_plus/share_plus.dart';
 
 /// 🏆 MODAL ANIMADO DE DESCARGA CON FEEDBACK HÁPTICO Y APERTURA DIRECTA
 /// Provee una experiencia visual ejecutiva al descargar archivos (imágenes o reportes PDF):
@@ -87,7 +88,10 @@ class _DownloadFeedbackModalState extends State<DownloadFeedbackModal>
 
       // Disparo de feedback háptico táctil en dispositivo físico
       try {
-        await HapticFeedback.mediumImpact();
+        if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+          await HapticFeedback.mediumImpact()
+              .timeout(const Duration(milliseconds: 150));
+        }
       } catch (_) {}
 
       setState(() {
@@ -128,6 +132,36 @@ class _DownloadFeedbackModalState extends State<DownloadFeedbackModal>
             backgroundColor: Colors.red[800],
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _shareFile() async {
+    if (_savedFile == null) return;
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(_savedFile!.path)],
+          text: 'Comprobante de Factura - MochilaLista',
+        ),
+      );
+    } catch (_) {
+      // Fallback para compatibilidad con versiones previas de SharePlus
+      try {
+        // ignore: deprecated_member_use
+        await Share.shareXFiles(
+          [XFile(_savedFile!.path)],
+          text: 'Comprobante de Factura - MochilaLista',
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No se pudo compartir el archivo: $e'),
+              backgroundColor: Colors.red[800],
+            ),
+          );
+        }
       }
     }
   }
@@ -242,41 +276,71 @@ class _DownloadFeedbackModalState extends State<DownloadFeedbackModal>
                 ),
               ),
               const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white10 : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isDark ? Colors.white12 : Colors.grey.shade300,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _savedFile!.path.endsWith('.pdf')
-                          ? Icons.picture_as_pdf_rounded
-                          : Icons.image_rounded,
-                      size: 22,
-                      color: _savedFile!.path.endsWith('.pdf')
-                          ? Colors.redAccent
-                          : Colors.blueAccent,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _savedFile!.path.split(Platform.pathSeparator).last,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
+              Builder(
+                builder: (context) {
+                  final fullName = _savedFile!.path.split(Platform.pathSeparator).last;
+                  final dotIndex = fullName.lastIndexOf('.');
+                  final baseName = dotIndex > 0 ? fullName.substring(0, dotIndex) : fullName;
+                  final extension = dotIndex > 0 ? fullName.substring(dotIndex).toUpperCase() : '';
+                  final isPdf = fullName.toLowerCase().endsWith('.pdf');
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white10 : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDark ? Colors.white12 : Colors.grey.shade300,
                       ),
                     ),
-                  ],
-                ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                          size: 22,
+                          color: isPdf ? Colors.redAccent : Colors.blueAccent,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            baseName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                          ),
+                        ),
+                        if (extension.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isPdf
+                                  ? Colors.redAccent.withValues(alpha: 0.15)
+                                  : Colors.blueAccent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: isPdf ? Colors.redAccent : Colors.blueAccent,
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              extension,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                color: isPdf ? Colors.redAccent : Colors.blueAccent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 10),
               Row(
@@ -302,6 +366,7 @@ class _DownloadFeedbackModalState extends State<DownloadFeedbackModal>
               Row(
                 children: [
                   Expanded(
+                    flex: 2,
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -322,8 +387,35 @@ class _DownloadFeedbackModalState extends State<DownloadFeedbackModal>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   Expanded(
+                    flex: 3,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: BorderSide(
+                          color: isDark ? Colors.tealAccent : Colors.teal.shade700,
+                        ),
+                        foregroundColor:
+                            isDark ? Colors.tealAccent : Colors.teal.shade800,
+                      ),
+                      onPressed: _shareFile,
+                      icon: const Icon(Icons.share_rounded, size: 16),
+                      label: const Text(
+                        'Compartir',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 3,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor:
@@ -335,12 +427,12 @@ class _DownloadFeedbackModalState extends State<DownloadFeedbackModal>
                         ),
                       ),
                       onPressed: _openFile,
-                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 16),
                       label: const Text(
-                        'Abrir Archivo',
+                        'Abrir',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                          fontSize: 12,
                         ),
                       ),
                     ),
