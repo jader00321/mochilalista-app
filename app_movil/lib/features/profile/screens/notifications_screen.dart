@@ -22,6 +22,8 @@ import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/profile/widgets/notifications/notification_filter_bar.dart';
 import 'package:app_movil/features/profile/widgets/notifications/notification_item_card.dart';
 import 'package:app_movil/features/profile/widgets/notifications/notification_empty_state.dart';
+import 'package:app_movil/features/profile/widgets/notifications/notification_settings_modal.dart';
+import 'package:app_movil/features/profile/widgets/notifications/archived_notifications_modal.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/whatsapp_preview_modal.dart';
@@ -43,7 +45,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
   String _timeFilter = 'Todo'; // Todo, Hoy, 7 Días, Específico
   DateTime? _specificDate;
   
-  late InventoryProvider _inventoryProvider;
+  InventoryProvider? _inventoryProvider;
 
   bool _isSelectionMode = false;
   final Set<int> _selectedIds = {};
@@ -67,7 +69,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
       _inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
-      _inventoryProvider.addListener(_onInventoryChanged);
+      _inventoryProvider?.addListener(_onInventoryChanged);
     });
   }
 
@@ -79,7 +81,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
 
   @override
   void dispose() {
-    _inventoryProvider.removeListener(_onInventoryChanged);
+    _inventoryProvider?.removeListener(_onInventoryChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -910,6 +912,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       ],
                     ),
                   ),
+                  IconButton(
+                    icon: Icon(Icons.more_vert_rounded, size: 22, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                    tooltip: "Opciones de cobranzas",
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    onPressed: () => _showGroupActionMenu(clientId, clientName, cuotas, prov, isDark),
+                  ),
+                  const SizedBox(width: 2),
                   Icon(
                     isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
                     color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -954,7 +965,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       children: cuotas.map((cNotif) {
                         return Padding(
                           padding: const EdgeInsets.only(top: 8.0),
-                          child: _buildDismissibleCard(
+                          child: _buildNotificationCardItem(
                             cNotif, 
                             prov, 
                             isDark, 
@@ -971,14 +982,178 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     );
   }
 
+  void _showGroupActionMenu(int clientId, String clientName, List<NotificationModel> cuotas, NotificationProvider prov, bool isDark) {
+    HapticFeedback.lightImpact();
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Cobranzas de $clientName",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "${cuotas.length} cuotas pendientes asociadas",
+                            style: TextStyle(fontSize: 12, color: subtitleColor),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+
+              // 1. Archivar todas las cuotas de este cliente
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: isDark ? 0.2 : 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.inventory_2_outlined, color: isDark ? Colors.amber[300] : Colors.orange[800], size: 20),
+                ),
+                title: const Text("Archivar todas las alertas de este cliente", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                subtitle: const Text("Oculta el grupo de pendientes con opción de deshacer", style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  prov.archiveClientCuotas(clientId);
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Todas las alertas de $clientName archivadas"),
+                      duration: const Duration(seconds: 4),
+                      action: SnackBarAction(
+                        label: "Deshacer",
+                        textColor: Colors.amberAccent,
+                        onPressed: () {
+                          prov.unarchiveClientCuotas(clientId);
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // 2. Silenciar cliente (Mover a No Deseadas)
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: isDark ? 0.2 : 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.notifications_off_outlined, color: isDark ? Colors.red[300] : Colors.red[700], size: 20),
+                ),
+                title: const Text("Mover a No Deseadas (Silenciar cliente)", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                subtitle: const Text("Bloquea futuras alertas de cobranza para este cliente", style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  prov.silenceClient(clientId);
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Cliente $clientName silenciado (alertas bloqueadas)"),
+                      duration: const Duration(seconds: 4),
+                      action: SnackBarAction(
+                        label: "Deshacer",
+                        textColor: Colors.amberAccent,
+                        onPressed: () {
+                          prov.unsilenceClient(clientId);
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // 3. Resolver todas las cuotas del grupo
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: isDark ? 0.2 : 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.done_all_rounded, color: isDark ? Colors.green[300] : Colors.green[800], size: 20),
+                ),
+                title: const Text("Marcar todas como resueltas", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                subtitle: const Text("Resuelve las cuotas de este cliente en lote", style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  final ids = cuotas.map((c) => c.id).toList();
+                  for (var cid in ids) {
+                    prov.markAsResolved(cid);
+                  }
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Cuotas de $clientName marcadas como resueltas"),
+                      duration: const Duration(seconds: 4),
+                      action: SnackBarAction(
+                        label: "Deshacer",
+                        textColor: Colors.amberAccent,
+                        onPressed: () {
+                          for (var cid in ids) {
+                            prov.markAsUnresolved(cid);
+                          }
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // =========================================================================
   // DASHBOARD DE PULSO EJECUTIVO (EN PENDIENTES)
   // =========================================================================
 
   Widget _buildPulseDashboard(List<NotificationModel> allPendientes, bool isDark) {
     final overdueCuotas = allPendientes.where((n) => n.objetoRelacionadoTipo == 'cuota' && n.nivelPrioridad == 'critica').toList();
+    final upcomingCuotas = allPendientes.where((n) => n.objetoRelacionadoTipo == 'cuota' && n.nivelPrioridad == 'preventiva').toList();
     final double totalMoraExigible = overdueCuotas.fold(0.0, (sum, n) => sum + (n.saldoTotal ?? (n.montoBase ?? 0.0)));
     final int cuotasCount = overdueCuotas.length;
+    final int upcomingCount = upcomingCuotas.length;
 
     final inventoryAlerts = allPendientes.where((n) => n.objetoRelacionadoTipo == 'producto').toList();
     final int stockCount = inventoryAlerts.length;
@@ -1053,7 +1228,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        "$cuotasCount cuotas vencidas",
+                        "$cuotasCount cuotas vencidas${upcomingCount > 0 ? ' • $upcomingCount por vencer' : ''}",
                         style: TextStyle(
                           fontSize: 11,
                           color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -1199,13 +1374,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text(
-          "Notificaciones", 
-          style: TextStyle(
-            fontWeight: FontWeight.w900, 
-            color: textColor, 
-            fontSize: 22, 
-            letterSpacing: -0.5,
+        titleSpacing: 0,
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Notificaciones", 
+            style: TextStyle(
+              fontWeight: FontWeight.w900, 
+              color: textColor, 
+              fontSize: 19, 
+              letterSpacing: -0.5,
+            ),
           ),
         ),
         backgroundColor: bgColor,
@@ -1217,33 +1397,60 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
             title: 'Notificaciones',
             description: 'Centro de control inteligente de tu negocio: cobranzas en mora, vencimientos preventivos, inventario bajo y cotizaciones.',
             tips: const [
-              InfoTip(icon: Icons.swipe_rounded, text: 'Desliza una tarjeta a la derecha para resolverla o a la izquierda para eliminarla.'),
+              InfoTip(icon: Icons.swipe_rounded, text: 'Desliza horizontalmente para navegar entre pestañas con total seguridad.'),
+              InfoTip(icon: Icons.more_vert_rounded, text: 'Toca los tres puntos (•••) en cualquier tarjeta para archivar, silenciar o resolver con opción Deshacer.'),
               InfoTip(icon: Icons.chat_bubble_outline, text: 'Envía recordatorios instantáneos por WhatsApp con mensaje pre-armado.'),
               InfoTip(icon: Icons.payments_outlined, text: 'Cobra y registra abonos directamente desde la notificación.'),
-              InfoTip(icon: Icons.filter_alt_outlined, text: 'Filtra por Cobranzas, Inventario o Cotizaciones con los chips superiores.'),
+              InfoTip(icon: Icons.settings_suggest_outlined, text: 'Personaliza canales, umbrales y alertas desde el botón de configuración.'),
+            ],
+          ),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.inventory_2_outlined),
+                tooltip: "Notificaciones Archivadas",
+                visualDensity: VisualDensity.compact,
+                onPressed: () => ArchivedNotificationsModal.show(context, isDark: isDark),
+              ),
+              if (notifProv.archivedCount > 0)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.amber[700],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                    child: Text(
+                      "${notifProv.archivedCount}",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
           if (notifProv.unreadCount > 0)
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: TextButton.icon(
-                onPressed: () => notifProv.markAllAsRead(),
-                icon: Icon(Icons.done_all, size: 18, color: isDark ? Colors.blue[300] : Colors.blue[700]),
-                label: Text(
-                  "Leídas", 
-                  style: TextStyle(
-                    color: isDark ? Colors.blue[300] : Colors.blue[700], 
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-                style: TextButton.styleFrom(
-                  backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.12) : Colors.blue.withValues(alpha: 0.06), 
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                ),
-              ),
+            IconButton(
+              icon: Icon(Icons.done_all_rounded, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+              tooltip: "Marcar todas como leídas",
+              visualDensity: VisualDensity.compact,
+              onPressed: () => notifProv.markAllAsRead(),
             ),
+          IconButton(
+            icon: Icon(Icons.settings_outlined, color: textColor),
+            tooltip: "Configuración de Notificaciones",
+            visualDensity: VisualDensity.compact,
+            onPressed: () => NotificationSettingsModal.show(context, isDark: isDark),
+          ),
+          const SizedBox(width: 4),
         ],
         bottom: TabBar(
           controller: _tabController,
@@ -1378,6 +1585,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           Expanded(
             child: TabBarView(
               controller: _tabController,
+              physics: notifProv.preferences.comportamientoSwipe == 'card_actions'
+                  ? const NeverScrollableScrollPhysics()
+                  : null,
               children: [
                 _buildTabContent(pendientes, notifProv, isDark, tabIndex: 0),
                 _buildTabContent(resueltas, notifProv, isDark, tabIndex: 1),
@@ -1420,11 +1630,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       return NotificationEmptyState(isDark: isDark);
     }
 
+    final bool smartGroupingActive = prov.preferences.activarSmartGrouping;
+    final bool pulseDashboardActive = prov.preferences.mostrarPulseDashboard;
+
     // En Pendientes: Agrupación inteligente por cliente si tiene >= 2 cuotas en mora
     Map<int, List<NotificationModel>> multiCuotasByClient = {};
     Set<int> multiCuotaNotificationIds = {};
 
-    if (tabIndex == 0) {
+    if (tabIndex == 0 && smartGroupingActive) {
       for (var n in notifs) {
         if (n.objetoRelacionadoTipo == 'cuota' && n.clientId != null && n.nivelPrioridad == 'critica') {
           multiCuotasByClient.putIfAbsent(n.clientId!, () => []).add(n);
@@ -1445,16 +1658,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     return ListView(
       padding: const EdgeInsets.only(bottom: 80, top: 4),
       children: [
-        // 1. Dashboard de Pulso en Pendientes
-        if (tabIndex == 0)
+        // 1. Dashboard de Pulso en Pendientes (si está activo)
+        if (tabIndex == 0 && pulseDashboardActive)
           _buildPulseDashboard(notifs, isDark),
 
         // 2. Tarjetas Maestras de Clientes Agrupados (Smart Grouping)
-        if (tabIndex == 0 && multiCuotasByClient.isNotEmpty) ...[
+        if (tabIndex == 0 && smartGroupingActive && multiCuotasByClient.isNotEmpty) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 6),
             child: Text(
-              "COBRANZAS CONSOLIDADA (${multiCuotasByClient.length})",
+              "COBRANZAS CONSOLIDADAS (${multiCuotasByClient.length})",
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
@@ -1478,7 +1691,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           }),
         ],
 
-        // 3. Tarjetas Regulares Agrupadas por Fecha con Swipe Gestures
+        // 3. Tarjetas Regulares Agrupadas por Fecha con Navegación Segura
         ...groupedList.map((item) {
           if (item is String) {
             return Padding(
@@ -1498,41 +1711,48 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           final notif = item as NotificationModel;
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _buildDismissibleCard(notif, prov, isDark, tabIndex: tabIndex),
+            child: _buildNotificationCardItem(notif, prov, isDark, tabIndex: tabIndex),
           );
         }),
       ],
     );
   }
 
-  Widget _buildDismissibleCard(NotificationModel notif, NotificationProvider prov, bool isDark, {required int tabIndex}) {
-    final cardWidget = NotificationItemCard(
+  Widget _buildNotificationCardItem(NotificationModel notif, NotificationProvider prov, bool isDark, {required int tabIndex}) {
+    return NotificationItemCard(
       notif: notif,
       isDark: isDark,
       isSelected: _selectedIds.contains(notif.id),
       isSelectionMode: _isSelectionMode,
       tabIndex: tabIndex,
+      enableSwipeActions: prov.preferences.comportamientoSwipe == 'card_actions',
+      onArchive: () => _handleArchive(notif, prov),
+      onSilence: () => _handleSilence(notif, prov),
+      onToggleResolve: () => _handleToggleResolve(notif, prov),
+      onShowActions: () => _showCardActionMenu(notif, prov, isDark),
       onLongPress: () {
-         if (tabIndex == 2) {
-            setState(() {
-               _isSelectionMode = true;
-               _selectedIds.add(notif.id);
-            });
-         }
+        if (tabIndex == 2) {
+          setState(() {
+            _isSelectionMode = true;
+            _selectedIds.add(notif.id);
+          });
+        } else {
+          _showCardActionMenu(notif, prov, isDark);
+        }
       },
       onTap: () {
-         if (_isSelectionMode && tabIndex == 2) {
-            setState(() {
-               if (_selectedIds.contains(notif.id)) {
-                 _selectedIds.remove(notif.id);
-               } else {
-                 _selectedIds.add(notif.id);
-               }
-               if (_selectedIds.isEmpty) _isSelectionMode = false;
-            });
-         } else {
-            _handleDeepLink(notif, context);
-         }
+        if (_isSelectionMode && tabIndex == 2) {
+          setState(() {
+            if (_selectedIds.contains(notif.id)) {
+              _selectedIds.remove(notif.id);
+            } else {
+              _selectedIds.add(notif.id);
+            }
+            if (_selectedIds.isEmpty) _isSelectionMode = false;
+          });
+        } else {
+          _handleDeepLink(notif, context);
+        }
       },
       onActionRecordar: notif.objetoRelacionadoTipo == 'cuota' ? () => _onActionRecordarCuota(notif) : null,
       onActionCobrar: notif.objetoRelacionadoTipo == 'cuota' ? () => _onActionCobrarCuota(notif) : null,
@@ -1542,75 +1762,237 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       onActionVerCotizacion: notif.objetoRelacionadoTipo == 'cotizacion' ? () => _onActionVerCotizacion(notif) : null,
       onActionVerPremio: notif.objetoRelacionadoTipo == 'recompensa' ? () => _onActionVerPremio(notif) : null,
     );
+  }
 
-    if (_isSelectionMode) return cardWidget;
-
-    return Dismissible(
-      key: ValueKey("notif_${notif.id}"),
-      direction: DismissDirection.horizontal,
-      onDismissed: (direction) {
-        if (direction == DismissDirection.startToEnd) {
-          // Swipe right: Marcar como resuelta
-          prov.markAsResolved(notif.id);
-          HapticFeedback.lightImpact();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Notificación resuelta"),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        } else {
-          // Swipe left: Eliminar
-          prov.deleteNotification(notif.id);
-          HapticFeedback.lightImpact();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Notificación eliminada"),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      },
-      background: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        alignment: Alignment.centerLeft,
-        decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: 0.85),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.done_all_rounded, color: Colors.white, size: 24),
-            SizedBox(width: 8),
-            Text(
-              "Resolver",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13.5),
-            ),
-          ],
+  void _handleArchive(NotificationModel notif, NotificationProvider prov) {
+    prov.archiveNotification(notif.id);
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Notificación archivada"),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: "Deshacer",
+          textColor: Colors.amberAccent,
+          onPressed: () {
+            prov.unarchiveNotification(notif.id);
+          },
         ),
       ),
-      secondaryBackground: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        alignment: Alignment.centerRight,
-        decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 0.85),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              "Eliminar",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13.5),
-            ),
-            SizedBox(width: 8),
-            Icon(Icons.delete_outline_rounded, color: Colors.white, size: 24),
-          ],
+    );
+  }
+
+  void _handleSilence(NotificationModel notif, NotificationProvider prov) {
+    prov.silenceNotification(notif.id);
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Ítem movido a No Deseadas y alertas bloqueadas"),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: "Deshacer",
+          textColor: Colors.amberAccent,
+          onPressed: () {
+            prov.unsilenceNotification(notif.id);
+          },
         ),
       ),
-      child: cardWidget,
+    );
+  }
+
+  void _handleToggleResolve(NotificationModel notif, NotificationProvider prov) {
+    if (notif.isResolved) {
+      prov.markAsUnresolved(notif.id);
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Marcada como pendiente"), duration: Duration(seconds: 2)),
+      );
+    } else {
+      prov.markAsResolved(notif.id);
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Notificación resuelta"),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: "Deshacer",
+            textColor: Colors.amberAccent,
+            onPressed: () {
+              prov.markAsUnresolved(notif.id);
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showCardActionMenu(NotificationModel notif, NotificationProvider prov, bool isDark) {
+    HapticFeedback.lightImpact();
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            notif.title,
+                            style: TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "Opciones para esta notificación",
+                            style: TextStyle(fontSize: 12, color: subtitleColor),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+
+              // 1. Archivar notificación (con Deshacer)
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: isDark ? 0.2 : 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.inventory_2_outlined, color: isDark ? Colors.amber[300] : Colors.orange[800], size: 20),
+                ),
+                title: const Text("Archivar notificación", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                subtitle: const Text("Retirar de lista activa con opción de restaurar luego", style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _handleArchive(notif, prov);
+                },
+              ),
+
+              // 2. Mover a No Deseadas (Silenciar ítem) con Deshacer
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: isDark ? 0.2 : 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.notifications_off_outlined, color: isDark ? Colors.red[300] : Colors.red[700], size: 20),
+                ),
+                title: const Text("Mover a No Deseadas (Silenciar ítem)", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                subtitle: Text("Bloquear futuras alertas de este ${notif.objetoRelacionadoTipo ?? 'ítem'}", style: const TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _handleSilence(notif, prov);
+                },
+              ),
+
+              // 3. Alternar Resuelta / Pendiente
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: isDark ? 0.2 : 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    notif.isResolved ? Icons.restart_alt_rounded : Icons.check_circle_outline_rounded,
+                    color: isDark ? Colors.green[300] : Colors.green[800],
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  notif.isResolved ? "Marcar como pendiente" : "Marcar como resuelta",
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
+                ),
+                subtitle: Text(
+                  notif.isResolved ? "Devolver al flujo de tareas pendientes" : "Finalizar y archivar en resueltas",
+                  style: const TextStyle(fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _handleToggleResolve(notif, prov);
+                },
+              ),
+
+              // 4. Eliminar definitivamente
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: isDark ? 0.2 : 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.delete_outline_rounded, color: Colors.red[600], size: 20),
+                ),
+                title: Text(
+                  "Eliminar definitivamente",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: Colors.red[600]),
+                ),
+                subtitle: const Text("Borrado permanente en base de datos", style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmSingleDelete(notif, prov);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmSingleDelete(NotificationModel notif, NotificationProvider prov) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Eliminar Notificación"),
+        content: Text("¿Deseas eliminar permanentemente '${notif.title}'? Esta acción no se puede deshacer."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          ElevatedButton(
+            onPressed: () {
+              prov.deleteNotification(notif.id);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Notificación eliminada"), duration: Duration(seconds: 2)),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600], foregroundColor: Colors.white),
+            child: const Text("Sí, Eliminar"),
+          ),
+        ],
+      ),
     );
   }
 }

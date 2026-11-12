@@ -198,66 +198,124 @@ class _CustomSearchBarState extends State<CustomSearchBar> {
         ),
 
         // 2. CHIPS DE CATEGORÍA
-        if (provider.categories.isNotEmpty || provider.hasOrphanCategories) ...[
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 36,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: (provider.hasOrphanCategories ? 1 : 0) + provider.categories.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (context, index) {
-                if (provider.hasOrphanCategories && index == 0) {
-                  final isSelected = provider.activeCategoryIds.contains(0);
-                  return FilterChip(
-                    label: const Text('[ Sin Categoría ]'),
-                    selected: isSelected,
-                    onSelected: (val) => _toggleCategory(0, val, provider),
-                    showCheckmark: false,
-                    backgroundColor: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.2), 
-                    selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : const Color.fromARGB(255, 230, 230, 230), 
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.transparent) : Colors.transparent), 
-                    ),
-                    labelStyle: TextStyle(
-                      color: isSelected ? (isDark ? Colors.blue[200] : theme.primaryColor) : (isDark ? Colors.white70 : const Color.fromARGB(255, 48, 48, 48)),
-                      fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  );
-                }
+        () {
+          final formalGeneralCat = provider.categories.cast<dynamic>().firstWhere(
+            (c) => c.nombre.toString().trim().toLowerCase() == 'general',
+            orElse: () => null,
+          );
+          final int generalCombinedCount = provider.orphanCategoriesCount +
+              (formalGeneralCat != null ? (formalGeneralCat.productsCount as int) : 0);
+          final bool showGeneralChip = generalCombinedCount > 0;
+          final otherCategories = provider.categories
+              .where((c) => c.nombre.trim().toLowerCase() != 'general')
+              .toList();
 
-                final catIndex = provider.hasOrphanCategories ? index - 1 : index;
-                final cat = provider.categories[catIndex];
-                final isSelected = provider.activeCategoryIds.contains(cat.id);
+          if (!showGeneralChip && otherCategories.isEmpty) {
+            return const SizedBox.shrink();
+          }
 
-                return FilterChip(
-                  label: Text(cat.nombre),
-                  selected: isSelected,
-                  onSelected: (val) => _toggleCategory(cat.id, val, provider),
-                  showCheckmark: false,
-                  backgroundColor: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.2), 
-                  selectedColor: isDark ? Colors.blue.withValues(alpha: 0.3) : const Color.fromARGB(255, 230, 230, 230), 
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: isSelected ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.transparent) : Colors.transparent), 
-                  ),
-                  labelStyle: TextStyle(
-                    color: isSelected ? (isDark ? Colors.blue[200] : theme.primaryColor) : (isDark ? Colors.white70 : const Color.fromARGB(255, 48, 48, 48)),
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                );
-              },
-            ),
-          ),
-        ],
+          final totalChips = (showGeneralChip ? 1 : 0) + otherCategories.length;
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 36,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: totalChips,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    if (showGeneralChip && index == 0) {
+                      final isSelected = provider.activeCategoryIds.contains(0) ||
+                          (formalGeneralCat != null &&
+                              provider.activeCategoryIds.contains(formalGeneralCat.id));
+                      return FilterChip(
+                        label: const Text('General'),
+                        selected: isSelected,
+                        onSelected: (val) => _toggleCategory(0, val, provider),
+                        showCheckmark: false,
+                        backgroundColor: isDark
+                            ? Colors.white10
+                            : Colors.white.withValues(alpha: 0.2),
+                        selectedColor: isDark
+                            ? Colors.blue.withValues(alpha: 0.3)
+                            : const Color.fromARGB(255, 230, 230, 230),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: isSelected
+                                ? (isDark
+                                    ? Colors.blue.withValues(alpha: 0.5)
+                                    : Colors.transparent)
+                                : Colors.transparent,
+                          ),
+                        ),
+                        labelStyle: TextStyle(
+                          color: isSelected
+                              ? (isDark ? Colors.blue[200] : theme.primaryColor)
+                              : (isDark
+                                  ? Colors.white70
+                                  : const Color.fromARGB(255, 48, 48, 48)),
+                          fontSize: 13,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      );
+                    }
+
+                    final catIndex = showGeneralChip ? index - 1 : index;
+                    final cat = otherCategories[catIndex];
+                    final isSelected = provider.activeCategoryIds.contains(cat.id);
+
+                    return FilterChip(
+                      label: Text(cat.nombre),
+                      selected: isSelected,
+                      onSelected: (val) => _toggleCategory(cat.id, val, provider),
+                      showCheckmark: false,
+                      backgroundColor: isDark
+                          ? Colors.white10
+                          : Colors.white.withValues(alpha: 0.2),
+                      selectedColor: isDark
+                          ? Colors.blue.withValues(alpha: 0.3)
+                          : const Color.fromARGB(255, 230, 230, 230),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: isSelected
+                              ? (isDark
+                                  ? Colors.blue.withValues(alpha: 0.5)
+                                  : Colors.transparent)
+                              : Colors.transparent,
+                        ),
+                      ),
+                      labelStyle: TextStyle(
+                        color: isSelected
+                            ? (isDark ? Colors.blue[200] : theme.primaryColor)
+                            : (isDark
+                                ? Colors.white70
+                                : const Color.fromARGB(255, 48, 48, 48)),
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        }(),
       ],
     );
   }

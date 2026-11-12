@@ -302,6 +302,15 @@ class _CategoriesTabState extends State<CategoriesTab> {
       return;
     }
 
+    if (id == 0) {
+      CustomSnackBar.show(
+        context,
+        message: "La categoría base 'General' está protegida y no puede eliminarse",
+        isError: true,
+      );
+      return;
+    }
+
     final provider = Provider.of<InventoryProvider>(context, listen: false);
     bool success = await provider.deleteCategory(id);
 
@@ -331,7 +340,37 @@ class _CategoriesTabState extends State<CategoriesTab> {
 
     return Consumer<InventoryProvider>(
       builder: (context, provider, _) {
-        final categories = provider.categories;
+        // 🏷️ FASE 3: Unificación de la Categoría General en la pestaña CATEGORÍAS
+        final formalGeneralCat = provider.categories.cast<Category?>().firstWhere(
+          (c) => c?.nombre.trim().toLowerCase() == 'general',
+          orElse: () => null,
+        );
+
+        final int generalCount = provider.orphanCategoriesCount +
+            (formalGeneralCat != null ? formalGeneralCat.productsCount : 0);
+
+        final List<Category> displayCategories = [];
+
+        // Si existen productos huérfanos o productos en General, mostrar 'General'
+        if (generalCount > 0 || formalGeneralCat != null) {
+          displayCategories.add(
+            Category(
+              id: formalGeneralCat?.id ?? 0,
+              nombre: "General",
+              descripcion: formalGeneralCat?.descripcion ??
+                  "Categoría base del sistema para productos sin categoría asignada",
+              productsCount: generalCount,
+              activo: formalGeneralCat?.activo ?? true,
+            ),
+          );
+        }
+
+        // Incorporar el resto de categorías reales excluyendo la fila duplicada 'general'
+        displayCategories.addAll(
+          provider.categories.where((c) => c.nombre.trim().toLowerCase() != 'general'),
+        );
+
+        final categories = displayCategories;
 
         return Scaffold(
           backgroundColor: Colors.transparent,
@@ -473,6 +512,8 @@ class _CategoriesTabState extends State<CategoriesTab> {
                               color: isDark ? Colors.blue[300]! : Colors.blue,
                               isActive: cat.activo,
                               onTap: () {
+                                final isBaseGeneral =
+                                    cat.id == 0 || cat.nombre.trim().toLowerCase() == 'general';
                                 showModalBottomSheet(
                                   context: context,
                                   useSafeArea: true,
@@ -480,18 +521,22 @@ class _CategoriesTabState extends State<CategoriesTab> {
                                   backgroundColor: Colors.transparent,
                                   builder: (_) => MasterDetailModal(
                                     title: cat.nombre,
-                                    subtitle: "ID Sistema: ${cat.id}",
+                                    subtitle: isBaseGeneral
+                                        ? "Categoría Base del Sistema"
+                                        : "ID Sistema: ${cat.id}",
                                     icon: Icons.category,
                                     color: isDark
                                         ? Colors.blue[300]!
                                         : Colors.blue,
                                     isActive: cat.activo,
-                                    usageCount: cat.productsCount,
+                                    // Forzar canDelete = false para categoría General protegida
+                                    usageCount: isBaseGeneral
+                                        ? (cat.productsCount > 0 ? cat.productsCount : 1)
+                                        : cat.productsCount,
                                     dataRows: [
                                       {
                                         "label": "Descripción",
-                                        "value":
-                                            (cat.descripcion != null &&
+                                        "value": (cat.descripcion != null &&
                                                 cat.descripcion!.isNotEmpty)
                                             ? cat.descripcion!
                                             : "Sin descripción",
@@ -501,13 +546,27 @@ class _CategoriesTabState extends State<CategoriesTab> {
                                         "value":
                                             "${cat.productsCount} productos vinculados",
                                       },
+                                      if (isBaseGeneral)
+                                        {
+                                          "label": "Tipo",
+                                          "value": "Categoría Base (Protegida)",
+                                        },
                                     ],
-                                    onEdit: () => _showFormDialog(
-                                      context,
-                                      category: cat,
-                                      isDark: isDark,
-                                      isGuest: isGuest,
-                                    ),
+                                    onEdit: () {
+                                      if (cat.id == 0) {
+                                        CustomSnackBar.show(
+                                          context,
+                                          message: "La categoría base 'General' es administrada por el sistema.",
+                                        );
+                                        return;
+                                      }
+                                      _showFormDialog(
+                                        context,
+                                        category: cat,
+                                        isDark: isDark,
+                                        isGuest: isGuest,
+                                      );
+                                    },
                                     onDelete: () => _delete(
                                       context,
                                       cat.id,

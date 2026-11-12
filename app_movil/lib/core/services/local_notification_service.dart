@@ -73,6 +73,14 @@ class LocalNotificationService {
     // 2. Guardar el registro en SQLite para el historial en la App
     try {
       final db = await LocalDatabase.instance.database;
+      final muteKey = objetoRelacionadoTipo != null && objetoRelacionadoId != null 
+          ? '${objetoRelacionadoTipo}_$objetoRelacionadoId' 
+          : null;
+      if (muteKey != null && await LocalDatabase.isMuted(db, negocioId, muteKey)) {
+        debugPrint("Notificación omitida porque el ítem $muteKey está en No Deseadas.");
+        return;
+      }
+
       final resolvedDedupKey = dedupKey ?? (objetoRelacionadoTipo != null && objetoRelacionadoId != null 
           ? '${objetoRelacionadoTipo}_${objetoRelacionadoId}_$type' 
           : 'notif_${DateTime.now().millisecondsSinceEpoch}');
@@ -89,6 +97,9 @@ class LocalNotificationService {
         'nivel_prioridad': resolvedNivel,
         'leida': 0, // 0 = No leída (boolTypeFalse en SQLite)
         'is_resolved': 0,
+        'is_archived': 0,
+        'is_silenced': 0,
+        'mute_key': muteKey,
         'fecha_creacion': DateTime.now().toIso8601String(),
         'prioridad': prioridad,
         'objeto_relacionado_tipo': objetoRelacionadoTipo,

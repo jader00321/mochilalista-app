@@ -42,11 +42,55 @@ class MatchingService {
     return tokens.toSet().toList();
   }
 
+  /// Ponderación pura de Enfoque Mayorista vs Menudeo (Fase 1 y Fase 3)
+  static int calculatePresentationBonus({
+    required String? presUnit,
+    required String? presName,
+    required String? itemUnit,
+    required bool prioritizeWholesale,
+  }) {
+    final String pUnit = (presUnit ?? '').toLowerCase();
+    final String pName = (presName ?? '').toLowerCase();
+    final bool isWholesalePres = pUnit.contains('caja') ||
+        pUnit.contains('paquete') ||
+        pUnit.contains('pack') ||
+        pUnit.contains('docena') ||
+        pUnit.contains('fardo') ||
+        pName.contains('caja') ||
+        pName.contains('pack') ||
+        pName.contains('paquete') ||
+        pName.contains('docena') ||
+        pName.contains('fardo') ||
+        RegExp(r'\bx\s*\d+').hasMatch(pName);
+
+    final String iUnit = (itemUnit ?? '').toLowerCase();
+    final bool itemWantsWholesale = iUnit.contains('caja') ||
+        iUnit.contains('paquete') ||
+        iUnit.contains('pack') ||
+        iUnit.contains('docena') ||
+        iUnit.contains('fardo');
+
+    if (itemWantsWholesale && isWholesalePres) {
+      return 35; // Coincidencia explícita de empaque (Vector A1)
+    } else if (prioritizeWholesale) {
+      if (isWholesalePres) {
+        return 25; // Bono de estrategia mayorista
+      }
+      return 0;
+    } else {
+      if (!isWholesalePres || pUnit.contains('unidad')) {
+        return 10; // Preferencia por unidad en menudeo
+      }
+      return 0;
+    }
+  }
+
   Future<List<BackendMatchResult>> runBatchMatching(
     List<ExtractedItem> items, 
     int negocioId,
-    bool isClientRole 
-  ) async {
+    bool isClientRole, {
+    bool prioritizeWholesale = false,
+  }) async {
     final db = await dbHelper.database;
     List<BackendMatchResult> results = [];
 
@@ -126,6 +170,14 @@ class MatchingService {
               score += 10;
             }
           }
+
+          // 📦 Ponderación de Enfoque Mayorista vs Menudeo (Fase 1 y Fase 3)
+          score += calculatePresentationBonus(
+            presUnit: wrapper.presentation.unidadVenta,
+            presName: wrapper.presentation.nombreEspecifico,
+            itemUnit: item.unit,
+            prioritizeWholesale: prioritizeWholesale,
+          );
           
           if (score > maxScore) {
             maxScore = score;

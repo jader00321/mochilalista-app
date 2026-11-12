@@ -97,9 +97,7 @@ class WaMessageEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final textColor = isDark ? Colors.white : Colors.black87;
     final currentText = messageCtrl.text;
-    final bool hasValidity = currentText.contains(RegExp(r'validez|días calendario|promoción por tiempo limitado', caseSensitive: false));
     final bool hasDelivery = currentText.contains(RegExp(r'entrega|envíos|estado del pedido', caseSensitive: false));
-    final bool hasAccounts = currentText.contains(RegExp(r'MEDIOS DE PAGO|CUENTAS DE ABONO|Medios de Pago|Cuentas de Abono', caseSensitive: false));
     final bool hasGreeting = currentText.contains(RegExp(r'¡Hola|Estimad|Buen día|Buenos días', caseSensitive: false));
     final bool hasThanks = currentText.contains(RegExp(r'¡Muchas gracias|Muchas gracias|Gracias por su preferencia|Gracias por tu preferencia|¡Gracias!', caseSensitive: false));
 
@@ -155,8 +153,12 @@ class WaMessageEditor extends StatelessWidget {
               switch (style) {
                 case WhatsAppMessageStyle.commercial:
                   return "📄 *COTIZACIÓN FORMAL*\n• 2x Cuaderno A4: S/ 12.00\n💰 *TOTAL A PAGAR: S/ 12.00*\n💳 *Medios de pago:* Yape / BCP";
+                case WhatsAppMessageStyle.wholesale:
+                  return "📦 *PEDIDO AL POR MAYOR*\n• 2x Caja Agua PET 500ml (x20): S/ 36.00\n💼 *TOTAL B2B: S/ 36.00*\n💳 *Medios de pago:* BCP / Interbank";
                 case WhatsAppMessageStyle.compact:
                   return "⚡ *RESUMEN DIRECTO:* 2 productos | Total a pagar: *S/ 12.00*";
+                case WhatsAppMessageStyle.school:
+                  return "🎓 *LISTA DE ÚTILES ESCOLARES*\n🏫 Colegio San Pedro | 3° Primaria\n• 3x Cuaderno A4: S/ 18.00\n💰 *TOTAL: S/ 18.00*";
                 case WhatsAppMessageStyle.urgentOffer:
                   return "🔥 *¡CIERRE DE OFERTA!*\n🎉 *¡Ahorro Total: S/ 18.00!*\n⏳ Válido por 7 días calendario.";
                 case WhatsAppMessageStyle.accountDebt:
@@ -251,14 +253,16 @@ class WaMessageEditor extends StatelessWidget {
                     Expanded(child: buildStyleCard(styles[3])),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(child: buildStyleCard(styles[4])),
-                    const SizedBox(width: 8),
-                    Expanded(child: buildStyleCard(styles[5])),
-                  ],
-                ),
+                if (styles.length > 4) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: buildStyleCard(styles[4])),
+                      const SizedBox(width: 8),
+                      Expanded(child: buildStyleCard(styles[5])),
+                    ],
+                  ),
+                ],
               ],
             );
           },
@@ -278,29 +282,55 @@ class WaMessageEditor extends StatelessWidget {
                 letterSpacing: 0.8,
               ),
             ),
-            InkWell(
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: messageCtrl.text));
-                CustomSnackBar.show(context, message: "Mensaje copiado al portapapeles", isError: false);
-              },
-              borderRadius: BorderRadius.circular(6),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                child: Row(
-                  children: [
-                    Icon(Icons.copy, size: 14, color: isDark ? Colors.teal[300] : const Color(0xFF00A884)),
-                    const SizedBox(width: 4),
-                    Text(
-                      "Copiar texto",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.teal[300] : const Color(0xFF00A884),
-                      ),
+            Row(
+              children: [
+                InkWell(
+                  onTap: onRegenerateAuto,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.refresh, size: 14, color: Colors.orange),
+                        const SizedBox(width: 4),
+                        Text(
+                          "Restaurar",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.orange[300] : Colors.orange[800],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                InkWell(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: messageCtrl.text));
+                    CustomSnackBar.show(context, message: "Mensaje copiado al portapapeles", isError: false);
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Row(
+                      children: [
+                        Icon(Icons.copy, size: 14, color: isDark ? Colors.teal[300] : const Color(0xFF00A884)),
+                        const SizedBox(width: 4),
+                        Text(
+                          "Copiar",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.teal[300] : const Color(0xFF00A884),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -371,29 +401,62 @@ class WaMessageEditor extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              // NIVEL 2: Snippets Comerciales en Wrap Multi-Línea Visible (Cero Cortes Horizontales, Cero Emojis en UI)
+              // NIVEL 2: 5 Chips Modulares de Personalización Rápida en 1 Toque
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  // 1. Validez 7 días
+                  // 1. Precios Unitarios (c/u)
+                  _buildSnippetChip(
+                    context: context,
+                    icon: Icons.price_check_outlined,
+                    label: "Precios Unitarios (c/u)",
+                    isSelected: config.showUnitPrices,
+                    snippetDescription: "Muestra el desglose de precio unitario (S/ X.XX c/u) en cada línea de producto.",
+                    isDark: isDark,
+                    onTap: () => onOptionToggled?.call('unit_prices', !config.showUnitPrices),
+                  ),
+                  // 2. Marca / Empaque
+                  _buildSnippetChip(
+                    context: context,
+                    icon: Icons.branding_watermark_outlined,
+                    label: "Marca / Empaque",
+                    isSelected: config.showBrandPackage,
+                    snippetDescription: "Muestra la marca y empaque limpio (displayNameClean) en los productos.",
+                    isDark: isDark,
+                    onTap: () => onOptionToggled?.call('brand_package', !config.showBrandPackage),
+                  ),
+                  // 3. Datos del Cliente / RUC
+                  _buildSnippetChip(
+                    context: context,
+                    icon: Icons.badge_outlined,
+                    label: "Datos del Cliente / RUC",
+                    isSelected: config.showClientData,
+                    snippetDescription: "Muestra u oculta la cabecera con datos del cliente, negocio, RUC o colegio.",
+                    isDark: isDark,
+                    onTap: () => onOptionToggled?.call('client_data', !config.showClientData),
+                  ),
+                  // 4. Validez
                   _buildSnippetChip(
                     context: context,
                     icon: Icons.timer_outlined,
-                    label: "Validez 7 días",
-                    isSelected: hasValidity,
-                    snippetDescription: "Inserta o elimina cláusula formal de validez por 7 días de la oferta.",
+                    label: "Validez",
+                    isSelected: config.includeValidity,
+                    snippetDescription: "Inserta o elimina la cláusula formal de validez temporal de la cotización.",
                     isDark: isDark,
-                    onTap: () {
-                      onOptionToggled?.call('validity', !hasValidity);
-                      _toggleSnippet(
-                        isPresent: hasValidity,
-                        snippetToInsert: "⏳ *Validez de la oferta:* 7 días calendario a partir de hoy.",
-                        patternToRemove: RegExp(r'⏳\s*\*?(Validez[^\n]*|Promoción por tiempo limitado[^\n]*)\*?\n?([^\n]*días calendario[^\n]*\n*)?', caseSensitive: false),
-                      );
-                    },
+                    onTap: () => onOptionToggled?.call('validity', !config.includeValidity),
                   ),
-                  // 2. Envío / Entrega
+                  // 5. Medios de Pago
+                  _buildSnippetChip(
+                    context: context,
+                    icon: Icons.payment_outlined,
+                    label: "Medios de Pago",
+                    isSelected: config.showPaymentInfo,
+                    snippetDescription: "Inserta o elimina las cuentas bancarias y números de pago configurados.",
+                    isDark: isDark,
+                    onTap: () => onOptionToggled?.call('payment', !config.showPaymentInfo),
+                  ),
+                  // Snippets útiles complementarios
                   _buildSnippetChip(
                     context: context,
                     icon: Icons.local_shipping_outlined,
@@ -410,27 +473,6 @@ class WaMessageEditor extends StatelessWidget {
                       );
                     },
                   ),
-                  // 3. Mis Cuentas
-                  _buildSnippetChip(
-                    context: context,
-                    icon: Icons.payment_outlined,
-                    label: "Mis Cuentas",
-                    isSelected: hasAccounts,
-                    snippetDescription: "Inserta o elimina tus cuentas bancarias y números de pago configurados.",
-                    isDark: isDark,
-                    onTap: () {
-                      onOptionToggled?.call('payment', !hasAccounts);
-                      final acc = paymentAccountsText != null && paymentAccountsText!.trim().isNotEmpty
-                          ? paymentAccountsText!.trim()
-                          : "Yape / Plin / Transferencia bancaria disponible al solicitar.";
-                      _toggleSnippet(
-                        isPresent: hasAccounts,
-                        snippetToInsert: "💳 *Medios de Pago:*\n$acc",
-                        patternToRemove: RegExp(r'💳\s*\*?(MEDIOS DE PAGO|CUENTAS DE ABONO|Medios de Pago|Cuentas de Abono)[^\n]*\*?\n?([\s\S]*?)(?=(\n\s*\n|📦|🚚|⏳|🤝|🙏|$))', caseSensitive: false),
-                      );
-                    },
-                  ),
-                  // 4. Saludo
                   _buildSnippetChip(
                     context: context,
                     icon: Icons.waving_hand_outlined,
@@ -444,7 +486,6 @@ class WaMessageEditor extends StatelessWidget {
                       patternToRemove: RegExp(r'👋\s*\*?¡?Hola[^\n]*\*?\n?|Estimad[^\n]*\n?|Buenos? días[^\n]*\n?', caseSensitive: false),
                     ),
                   ),
-                  // 5. Agradecimiento
                   _buildSnippetChip(
                     context: context,
                     icon: Icons.thumb_up_alt_outlined,
@@ -488,7 +529,7 @@ class WaMessageEditor extends StatelessWidget {
           child: TextField(
             controller: messageCtrl,
             maxLines: null,
-            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             style: TextStyle(fontSize: 15, height: 1.45, color: textColor),
             decoration: const InputDecoration.collapsed(
               hintText: "Escribe o personaliza el mensaje de WhatsApp...",

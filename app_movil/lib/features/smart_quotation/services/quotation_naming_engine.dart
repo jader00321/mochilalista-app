@@ -1,4 +1,5 @@
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
 
 /// Motor centralizado, reactivo e inteligente de nombramiento de cotizaciones.
 /// Unifica la generación de títulos humanos, legibles y descriptivos tanto para
@@ -22,10 +23,29 @@ class QuotationNamingEngine {
     String? typedClientName,
     String? schoolName,
     String? gradeLevel,
+    QuotationContextMode? contextMode,
   }) {
     final client = selectedClient?.fullName.trim() ?? typedClientName?.trim() ?? '';
     final school = (schoolName ?? '').trim();
     final grade = (gradeLevel ?? '').trim();
+
+    if (contextMode == QuotationContextMode.wholesale) {
+      if (school.isNotEmpty && client.isNotEmpty) {
+        return '$school ($client)';
+      } else if (school.isNotEmpty) {
+        return '$school · Pedido Mayorista';
+      } else if (client.isNotEmpty) {
+        return '$client · Pedido Mayorista';
+      }
+      return 'Pedido Mayorista';
+    }
+
+    if (contextMode == QuotationContextMode.general) {
+      if (client.isNotEmpty) {
+        return client;
+      }
+      return 'Pedido General';
+    }
 
     String schoolPart = '';
     if (school.isNotEmpty && grade.isNotEmpty) {
@@ -82,6 +102,7 @@ class QuotationNamingEngine {
     int? clientListIndex,
     bool isClientRole = false,
     String? clientUserName,
+    QuotationContextMode? contextMode,
   }) {
     final effectiveDate = date ?? DateTime.now();
     final dateStr = formatShortDate(effectiveDate);
@@ -106,6 +127,7 @@ class QuotationNamingEngine {
       typedClientName: typedClientName,
       schoolName: schoolName,
       gradeLevel: gradeLevel,
+      contextMode: contextMode,
     );
 
     final buffer = StringBuffer(subject);

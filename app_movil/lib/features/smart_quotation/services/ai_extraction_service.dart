@@ -17,7 +17,7 @@ class AIExtractionService {
   }) async {
     // 1. Pre-procesamiento de Alta Fidelidad (2048px, 88% calidad, sin borrosidad)
     if (onRetrying != null) {
-      onRetrying("Optimizando nitidez y legibilidad de la lista de útiles...");
+      onRetrying("Optimizando nitidez y legibilidad de la lista o pedido...");
     }
     final imageBytes = await ImageOptimizerService.getOptimizedBytes(imageFile);
 
@@ -165,33 +165,52 @@ class AIExtractionService {
 
   String _buildListExtractionPrompt() {
     return '''
-Actúa como un experto en digitalización de listas de útiles escolares en librerías y papelerías.
+Actúa como un experto en digitalización y extracción de datos comerciales para cualquier tipo de pedido o lista:
+1. Listas de compras cotidianas o variadas (abarrotes, bebidas, limpieza, ferretería, bazar, farmacia).
+2. Pedidos al por mayor para bodegas, negocios o empresas B2B (cajas, paquetes, packs, docenas, fardos, millares).
+3. Listas de útiles escolares y papelería (cuadernos, lápices, materiales de estudio).
+
 Analiza la imagen proporcionada y extrae la información siguiendo ESTRICTAMENTE el esquema JSON solicitado.
 
-INSTRUCCIONES DE EXTRACCIÓN DETALLADA:
+INSTRUCCIONES DE ANÁLISIS Y EXTRACCIÓN:
 
-1. METADATA (Encabezado):
-   - Busca nombre de la institución educativa o colegio, nombre del alumno/estudiante y grado o sección.
-   
-2. ÍTEMS (Lista de Productos):
-   Recorre línea por línea y para cada producto extrae con máxima exactitud:
-   - "id": Genera un número secuencial entero (1, 2, 3...).
-   - "original_text": Transcribe el texto exacto visible en la línea para referencia del comerciante.
-   - "full_name": El nombre completo y DESCRIPTIVO del producto. 
-     * Corrige ortografía habitual (ej: "Cdorno" -> "Cuaderno", "Lap" -> "Lápiz").
-     * Si la marca está integrada (ej: "Colores Faber"), extráela al campo "brand" y deja en "full_name" solo "Colores".
-   - "brand": Si se especifica una marca explícita (ej: Faber-Castell, Artesco, Stanford, Alpha, Justus, Pilot), colócala aquí con ortografía correcta. Si no, null.
-   - "quantity": Extrae el número como entero positivo. Si no hay número explícito, asume 1.
-   - "unit": Expande abreviaturas ("c/u" o "u" -> "unidad", "pqte" -> "paquete", "doc" -> "docena", "mill" -> "millar", "caja" -> "caja").
-   - "notes": Detalles visuales, colores requeridos (ej: "color rojo", "rayado", "cuadriculado 1x1") o instrucciones adicionales.
+1. AUTODETECCIÓN DEL MODO DE COTIZACIÓN ("detected_mode"):
+   - "wholesale": Si el documento contiene compras al por mayor, pedidos para negocios, bodegas, empresas, RUC, o cantidades por bulto/caja/fardo/docena.
+   - "school": Si el documento es explícitamente una lista de útiles escolares (colegio, alumno, grado/sección, cuadernos escolares).
+   - "general": Para listas de compras familiares, compras variadas, abarrotes, cotizaciones de ferretería o listas cotidianas.
+
+2. METADATA (Encabezado):
+   - "detected_mode": "general" | "wholesale" | "school".
+   - "contact_name": Nombre de la persona, cliente, contacto o estudiante.
+   - "organization_name": Nombre de la empresa, negocio, bodega o institución educativa/colegio.
+   - "phone": Número de teléfono o WhatsApp si figura en el documento.
+   - "reference_info": Grado escolar, referencia de compra (ej: "Pedido mensual", "Canasta familiar") o notas generales.
+
+3. ÍTEMS (Lista de Productos - Cualquier Rubro Comercial):
+   Para cada producto extrae con máxima fidelidad:
+   - "id": Número secuencial entero (1, 2, 3...).
+   - "original_text": Texto exacto visible en la línea original para referencia del comerciante.
+   - "full_name": Nombre descriptivo y limpio del producto (ej: "Leche evaporada", "Cuaderno rayado", "Agua sin gas 500ml", "Cemento").
+     * Corrige abreviaturas habituales (ej: "Cdorno" -> "Cuaderno", "Lap" -> "Lápiz", "Gas" -> "Gaseosa").
+     * Si la marca está integrada, extráela al campo "brand" y deja en "full_name" el nombre del producto.
+   - "brand": Marca explícita si se especifica (ej: Gloria, Standford, San Carlos, Truper, Faber-Castell). Si no, null.
+   - "quantity": Número entero o decimal. Si no hay número explícito, asume 1.
+   - "unit": Presentación normalizada ("unidad", "caja", "paquete", "pack", "docena", "fardo", "bolsa", "kilo", "litro", "lata", "botella").
+   - "notes": Colores, dimensiones, variantes o detalles adicionales visibles.
 
 REGLAS CRÍTICAS DE CALIDAD:
 - NO inventes productos que no estén visibles en la imagen.
 - Si una línea está tachada con un trazo evidente, IGNÓRALA.
+- Extrae con precisión tanto presentaciones al por mayor como al menudeo.
 
 Debes responder EXCLUSIVAMENTE con el siguiente formato JSON puro:
 {
   "metadata": {
+    "detected_mode": "general",
+    "contact_name": "string",
+    "organization_name": "string",
+    "phone": "string",
+    "reference_info": "string",
     "institution_name": "string",
     "student_name": "string",
     "grade_level": "string"

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/models/product_create_draft.dart';
+import 'package:app_movil/features/catalog/models/variant_extraction_models.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/core/services/unit_catalog_service.dart';
 import 'package:app_movil/core/widgets/presentation_card/presentation_math_engine.dart';
@@ -890,6 +891,106 @@ class ProductCreateOperations {
       }
     }
     return null;
+  }
+
+  /// Hidrata el formulario de Crear Producto desde un bundle de extracción de variante
+  static ProductCreateHydratedData hydrateFromExtraction({
+    required VariantExtractionBundle bundle,
+    required TextEditingController nameCtrl,
+    required TextEditingController descCtrl,
+    required TextEditingController imgUrlCtrl,
+    required TextEditingController barcodeCtrl,
+    required List<Map<String, dynamic>> controllers,
+    required Map<String, GlobalKey> keys,
+    required Map<int, String> deferredProviderNames,
+    required VoidCallback onSyncDraft,
+  }) {
+    // 1. Limpiar controladores previos
+    for (var map in controllers) {
+      ProductControllerFactory.disposeControllerMap(map);
+    }
+    keys.clear();
+    controllers.clear();
+
+    final general = bundle.generalData;
+    final detail = bundle.detailData;
+
+    // 2. Hidratar datos generales
+    nameCtrl.text = detail.newProductName;
+    descCtrl.text = general.copyDescription ? (general.description ?? "") : "";
+    imgUrlCtrl.text = general.copyImages
+        ? (general.imageUrl ?? "")
+        : (detail.includeVariantImage ? (detail.variantImage ?? "") : "");
+    barcodeCtrl.text = detail.includeBarcode ? (detail.barcode ?? "") : "";
+
+    final String variantStock = detail.includeStock
+        ? (detail.transferFullStock ? detail.stockUnits.toString() : "0")
+        : "0";
+
+    // 3. Crear variante principal en posición 0
+    final String newId = UniqueKey().toString();
+    keys[newId] = GlobalKey();
+
+    final newMap = ProductControllerFactory.createNewControllerMap(
+      id: newId,
+      isDefault: true,
+      isExpanded: true,
+      isEditMode: false,
+      specificName: detail.specificName ?? "",
+      unidadVenta: detail.includeUnit ? detail.unitName : "Unidad",
+      unidadesVenta: detail.includeUnit ? detail.unitFactor.toString() : "1",
+      costoPres: detail.includePricing ? detail.costPrice.toStringAsFixed(2) : "0.00",
+      margen: detail.includePricing ? detail.margin.toStringAsFixed(2) : "1.35",
+      precioVenta: detail.includePricing ? detail.salePrice.toStringAsFixed(2) : "0.00",
+      stockInicial: variantStock,
+      stockFinal: variantStock,
+      barcode: detail.includeBarcode ? (detail.barcode ?? "") : "",
+      image: detail.includeVariantImage ? (detail.variantImage ?? "") : "",
+      providerId: detail.variantProviderId,
+      deferredProviderName: detail.variantProviderName,
+      descuentoActivo: detail.hasDiscount,
+      tipoDescuento: detail.discountType ?? "porcentaje",
+      valorDescuento: detail.discountValue != null ? detail.discountValue.toString() : "",
+    );
+    newMap['stockAlerta'] = detail.includeStockAlert ? (detail.alertStock ?? 5) : 5;
+
+    (newMap['specific'] as TextEditingController).addListener(onSyncDraft);
+    (newMap['precioVenta'] as TextEditingController).addListener(onSyncDraft);
+    (newMap['costoPres'] as TextEditingController).addListener(onSyncDraft);
+    (newMap['image'] as TextEditingController).addListener(onSyncDraft);
+    (newMap['barcode'] as TextEditingController).addListener(onSyncDraft);
+    (newMap['stockFinal'] as TextEditingController).addListener(onSyncDraft);
+
+    if (detail.variantProviderId != null &&
+        detail.variantProviderId! < 0 &&
+        detail.variantProviderName != null) {
+      deferredProviderNames[detail.variantProviderId!] = detail.variantProviderName!;
+    }
+
+    controllers.add(newMap);
+
+    final int? brandId = general.copyBrand ? general.brandId : null;
+    final String? brandName = general.copyBrand ? general.brandName : null;
+    final int? categoryId = general.copyCategory ? general.categoryId : null;
+    final String? categoryName = general.copyCategory ? general.categoryName : null;
+    final int? providerId = general.copyProvider ? general.generalProviderId : null;
+    final String? providerName = general.copyProvider ? general.generalProviderName : null;
+
+    if (providerId != null && providerId < 0 && providerName != null) {
+      deferredProviderNames[providerId] = providerName;
+    }
+
+    return ProductCreateHydratedData(
+      brandId: brandId,
+      brandName: brandName,
+      categoryId: categoryId,
+      categoryName: categoryName,
+      generalProviderId: providerId,
+      generalProviderName: providerName,
+      modoStock: 'INDEPENDIENTE',
+      stockCompartido: 0,
+      costoBase: 0.0,
+    );
   }
 
   static Future<bool> applyGeneralProviderChange({

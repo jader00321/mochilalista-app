@@ -286,7 +286,7 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
             _showResumeDialog(
               ctx,
               title: "Lista Detectada",
-              msg: "Tienes una lista escolar procesada sin guardar.",
+              msg: "Tienes una lista o pedido procesado sin guardar.",
               isDark: isDark,
               onNew: () {
                 quotationScanner.clearState();

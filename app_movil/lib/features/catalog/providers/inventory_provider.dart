@@ -897,6 +897,40 @@ class InventoryProvider with ChangeNotifier {
     }
   }
 
+  /// Retira una variante cortada en SQLite de forma atómica y actualiza catálogos a 0ms
+  Future<bool> cutVariantFromProduct({
+    required int presentationId,
+    required int originProductId,
+    int? promoteToDefaultPresentationId,
+    String? transferredBarcode,
+    int transferredStock = 0,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final ok = await _productService.cutVariantFromProduct(
+        presentationId: presentationId,
+        originProductId: originProductId,
+        promoteToDefaultPresentationId: promoteToDefaultPresentationId,
+        transferredBarcode: transferredBarcode,
+        transferredStock: transferredStock,
+      );
+      if (ok) {
+        _errorMessage = '';
+        _masterDataCache.clearCache();
+        await loadMasterData(showAll: true);
+        await loadInventory(reset: true);
+      } else {
+        _errorMessage =
+            _productService.lastError ?? "Error al trasladar la variante";
+      }
+      return ok;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> updatePresentation(
     int presentationId, {
     String? umpCompra,

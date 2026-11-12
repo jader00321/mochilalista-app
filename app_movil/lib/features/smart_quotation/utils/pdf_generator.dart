@@ -4,6 +4,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
 
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
 import 'package:app_movil/core/models/user_model.dart'; 
 import 'package:app_movil/features/smart_quotation/models/pdf_config_model.dart'; 
 import 'package:app_movil/features/smart_quotation/utils/pdf_image_helper.dart';
@@ -435,6 +436,10 @@ class PdfGenerator {
           ? config.customNotes!.trim()
           : note,
     );
+    final String? cleanNote = (effectiveNote != null)
+        ? effectiveNote.replaceAll(RegExp(r'\[modo:\w+\]\s*'), '').replaceAll(RegExp(r'\[mayorista\]\s*'), '').trim()
+        : null;
+
     final String? effectiveInst = _stripUnsupportedEmojis(
       (config.customInstitutionName != null && config.customInstitutionName!.trim().isNotEmpty)
           ? config.customInstitutionName!.trim()
@@ -456,15 +461,18 @@ class PdfGenerator {
             pw.Text("Tel: $clientPhone", style: pw.TextStyle(fontSize: isTicket ? 8 : 9, color: PdfColors.grey700)),
         ],
         if (config.showInstitutionInfo) ...[
-          if (effectiveNote != null && effectiveNote.isNotEmpty)
+          if (cleanNote != null && cleanNote.isNotEmpty)
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 2),
-              child: pw.Text("Nota: $effectiveNote", style: pw.TextStyle(fontSize: isTicket ? 8 : 9, color: PdfColors.grey800, fontStyle: pw.FontStyle.italic)),
+              child: pw.Text("Nota: $cleanNote", style: pw.TextStyle(fontSize: isTicket ? 8 : 9, color: PdfColors.grey800, fontStyle: pw.FontStyle.italic)),
             ),
           if (!isQuickSale && !isLoan) ...[
             if (effectiveInst != null && effectiveInst.isNotEmpty)
-              pw.Text(effectiveInst, style: pw.TextStyle(fontSize: isTicket ? 8 : 9)),
-            if (effectiveGrade != null && effectiveGrade.isNotEmpty)
+              pw.Text(
+                q.contextMode == QuotationContextMode.wholesale ? "Empresa / RUC: $effectiveInst" : effectiveInst,
+                style: pw.TextStyle(fontSize: isTicket ? 8 : 9),
+              ),
+            if (effectiveGrade != null && effectiveGrade.isNotEmpty && q.contextMode == QuotationContextMode.school)
               pw.Text(effectiveGrade, style: pw.TextStyle(fontSize: isTicket ? 8 : 9)),
           ],
         ],
@@ -509,15 +517,9 @@ class PdfGenerator {
 
     final logoWidget = (config.showBusinessInfo && config.includeLogo && logo != null)
         ? pw.Container(
-            width: 68,
-            height: 68,
+            constraints: const pw.BoxConstraints(maxWidth: 80, maxHeight: 60),
             margin: const pw.EdgeInsets.only(right: 14),
-            alignment: pw.Alignment.center,
-            decoration: pw.BoxDecoration(
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-              border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
-            ),
-            padding: const pw.EdgeInsets.all(3),
+            alignment: pw.Alignment.centerLeft,
             child: pw.Image(logo, fit: pw.BoxFit.contain),
           )
         : null;
@@ -696,7 +698,7 @@ class PdfGenerator {
               child: img != null 
                   ? pw.Image(img, fit: pw.BoxFit.contain)
                   : PdfImageHelper.buildProductAvatar(
-                      item.displayName,
+                      item.displayNameClean,
                       bgColor: colors['avatar_bg'],
                       textColor: colors['avatar_txt'],
                     ),
@@ -725,7 +727,7 @@ class PdfGenerator {
             descWidget = pw.Row(
               children: [
                 pw.Expanded(
-                  child: pw.Text(item.displayName, style: pw.TextStyle(fontSize: fontSize)),
+                  child: pw.Text(item.displayNameClean, style: pw.TextStyle(fontSize: fontSize)),
                 ),
                 if (isCatalog && hasDiscount && !isTicket) ...[
                   pw.SizedBox(width: 4),
@@ -764,11 +766,11 @@ class PdfGenerator {
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       mainAxisAlignment: pw.MainAxisAlignment.center,
                       children: [
-                        pw.Text(currency.format(item.originalUnitPrice), style: pw.TextStyle(fontSize: fontSize - 1.5, color: PdfColors.grey600, decoration: pw.TextDecoration.lineThrough)),
-                        pw.Text(currency.format(item.unitPriceApplied), style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(AppCurrency.format(item.originalUnitPrice), style: pw.TextStyle(fontSize: fontSize - 1.5, color: PdfColors.grey600, decoration: pw.TextDecoration.lineThrough)),
+                        pw.Text(AppCurrency.format(item.unitPriceApplied), style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold)),
                       ],
                     )
-                  : pw.Text(currency.format(item.unitPriceApplied), style: pw.TextStyle(fontSize: fontSize)),
+                  : pw.Text(AppCurrency.format(item.unitPriceApplied), style: pw.TextStyle(fontSize: fontSize)),
             ));
           }
 
@@ -777,7 +779,7 @@ class PdfGenerator {
             cells.add(pw.Container(
               padding: pw.EdgeInsets.symmetric(vertical: cellPaddingV, horizontal: 4),
               alignment: pw.Alignment.centerRight,
-              child: pw.Text(currency.format(item.quantity * item.unitPriceApplied), style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold)),
+              child: pw.Text(AppCurrency.format(item.quantity * item.unitPriceApplied), style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold)),
             ));
           }
 

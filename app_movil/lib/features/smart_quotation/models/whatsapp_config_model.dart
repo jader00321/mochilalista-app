@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 enum WhatsAppMessageStyle {
   commercial,
+  wholesale,
   compact,
+  school,
   urgentOffer,
   accountDebt,
   followUp,
@@ -11,9 +13,13 @@ enum WhatsAppMessageStyle {
   String get label {
     switch (this) {
       case WhatsAppMessageStyle.commercial:
-        return 'Comercial Detallado';
+        return 'Estándar / Pedido';
+      case WhatsAppMessageStyle.wholesale:
+        return 'Mayorista / Negocio';
       case WhatsAppMessageStyle.compact:
-        return 'Resumen Directo';
+        return 'Resumen Rápido';
+      case WhatsAppMessageStyle.school:
+        return 'Lista Escolar';
       case WhatsAppMessageStyle.urgentOffer:
         return 'Cierre de Oferta';
       case WhatsAppMessageStyle.accountDebt:
@@ -28,9 +34,13 @@ enum WhatsAppMessageStyle {
   IconData get icon {
     switch (this) {
       case WhatsAppMessageStyle.commercial:
-        return Icons.receipt_long_rounded;
+        return Icons.shopping_bag_outlined;
+      case WhatsAppMessageStyle.wholesale:
+        return Icons.storefront_rounded;
       case WhatsAppMessageStyle.compact:
         return Icons.bolt_rounded;
+      case WhatsAppMessageStyle.school:
+        return Icons.school_outlined;
       case WhatsAppMessageStyle.urgentOffer:
         return Icons.local_offer_rounded;
       case WhatsAppMessageStyle.accountDebt:
@@ -45,9 +55,13 @@ enum WhatsAppMessageStyle {
   String get shortLabel {
     switch (this) {
       case WhatsAppMessageStyle.commercial:
-        return 'Comercial';
+        return 'Pedido';
+      case WhatsAppMessageStyle.wholesale:
+        return 'Mayorista';
       case WhatsAppMessageStyle.compact:
-        return 'Directo';
+        return 'Rápido';
+      case WhatsAppMessageStyle.school:
+        return 'Escolar';
       case WhatsAppMessageStyle.urgentOffer:
         return 'Oferta';
       case WhatsAppMessageStyle.accountDebt:
@@ -62,9 +76,13 @@ enum WhatsAppMessageStyle {
   String get description {
     switch (this) {
       case WhatsAppMessageStyle.commercial:
-        return 'Formato elegante y completo con lista detallada de productos, subtotales, totales y cuentas de pago.';
+        return 'Formato elegante y completo para pedidos de compra variados con productos, unitarios, totales y cuentas de pago.';
+      case WhatsAppMessageStyle.wholesale:
+        return 'Proforma comercial B2B para pedidos al por mayor con especificación de empaques, cajas, fardos y precios por volumen.';
       case WhatsAppMessageStyle.compact:
-        return 'Mensaje ultra-conciso enfocado en la cantidad de ítems y el monto total final para respuestas rápidas.';
+        return 'Mensaje ultra-conciso enfocado en la cantidad de ítems y el monto total final para respuestas instantáneas.';
+      case WhatsAppMessageStyle.school:
+        return 'Cotización de útiles escolares detallando colegio, alumno, grado y lista de útiles organizados.';
       case WhatsAppMessageStyle.urgentOffer:
         return 'Enfocado en descuentos aplicados, ahorro total obtenido y vigencia limitada para motivar la decisión de compra.';
       case WhatsAppMessageStyle.accountDebt:
@@ -89,6 +107,9 @@ class WhatsAppConfig {
   WhatsAppMessageStyle style;
   bool showSubtotals; 
   bool showTotalGlobal; 
+  bool showUnitPrices; 
+  bool showBrandPackage; 
+  bool showClientData; 
   
   bool showSavingsSection; 
   bool showDiscountDetail; 
@@ -117,6 +138,9 @@ class WhatsAppConfig {
     this.style = WhatsAppMessageStyle.commercial,
     this.showSubtotals = true,
     this.showTotalGlobal = true,
+    this.showUnitPrices = true,
+    this.showBrandPackage = true,
+    this.showClientData = true,
     this.showSavingsSection = true,
     this.showDiscountDetail = false, 
     this.showDebtInfo = true,    
@@ -139,6 +163,9 @@ class WhatsAppConfig {
     WhatsAppMessageStyle? style,
     bool? showSubtotals,
     bool? showTotalGlobal,
+    bool? showUnitPrices,
+    bool? showBrandPackage,
+    bool? showClientData,
     bool? showSavingsSection,
     bool? showDiscountDetail,
     bool? showDebtInfo,
@@ -160,6 +187,9 @@ class WhatsAppConfig {
       style: style ?? this.style,
       showSubtotals: showSubtotals ?? this.showSubtotals,
       showTotalGlobal: showTotalGlobal ?? this.showTotalGlobal,
+      showUnitPrices: showUnitPrices ?? this.showUnitPrices,
+      showBrandPackage: showBrandPackage ?? this.showBrandPackage,
+      showClientData: showClientData ?? this.showClientData,
       showSavingsSection: showSavingsSection ?? this.showSavingsSection,
       showDiscountDetail: showDiscountDetail ?? this.showDiscountDetail,
       showDebtInfo: showDebtInfo ?? this.showDebtInfo,
@@ -179,13 +209,47 @@ class WhatsAppConfig {
     );
   }
 
-  /// Aplica la Matriz de Configuración oficial de las 6 Plantillas (Sección 3.6 del Plan Maestro)
-  /// Conservando siempre la libertad del comerciante de modificar manualmente cualquier opción después.
+  /// Aplica la Matriz de Configuración oficial de las Plantillas por Escenario
   void applyTemplateStyle(WhatsAppMessageStyle newStyle) {
     style = newStyle;
     switch (newStyle) {
       case WhatsAppMessageStyle.commercial:
         showSubtotals = true;
+        showUnitPrices = true;
+        showBrandPackage = true;
+        showClientData = true;
+        showSavingsSection = true;
+        showDiscountDetail = true;
+        showTotalGlobal = true;
+        showBusinessInfo = true;
+        showPaymentInfo = true;
+        includeValidity = true;
+        includeDelivery = true;
+        showDebtInfo = true;
+        showInstallmentDetails = true;
+        showDeliveryInfo = true;
+        break;
+      case WhatsAppMessageStyle.wholesale:
+        showSubtotals = true;
+        showUnitPrices = true;
+        showBrandPackage = true;
+        showClientData = true;
+        showSavingsSection = true;
+        showDiscountDetail = true;
+        showTotalGlobal = true;
+        showBusinessInfo = true;
+        showPaymentInfo = true;
+        includeValidity = true;
+        includeDelivery = true;
+        showDebtInfo = true;
+        showInstallmentDetails = true;
+        showDeliveryInfo = true;
+        break;
+      case WhatsAppMessageStyle.school:
+        showSubtotals = true;
+        showUnitPrices = true;
+        showBrandPackage = true;
+        showClientData = true;
         showSavingsSection = true;
         showDiscountDetail = true;
         showTotalGlobal = true;
@@ -270,6 +334,9 @@ class WhatsAppConfig {
       style: WhatsAppMessageStyle.fromString(json['style']),
       showSubtotals: json['showSubtotals'] ?? true,
       showTotalGlobal: json['showTotalGlobal'] ?? true,
+      showUnitPrices: json['showUnitPrices'] ?? true,
+      showBrandPackage: json['showBrandPackage'] ?? true,
+      showClientData: json['showClientData'] ?? true,
       showSavingsSection: json['showSavingsSection'] ?? true,
       showDiscountDetail: json['showDiscountDetail'] ?? false,
       showDebtInfo: json['showDebtInfo'] ?? true,
@@ -294,6 +361,9 @@ class WhatsAppConfig {
       'style': style.name,
       'showSubtotals': showSubtotals,
       'showTotalGlobal': showTotalGlobal,
+      'showUnitPrices': showUnitPrices,
+      'showBrandPackage': showBrandPackage,
+      'showClientData': showClientData,
       'showSavingsSection': showSavingsSection,
       'showDiscountDetail': showDiscountDetail,
       'showDebtInfo': showDebtInfo,

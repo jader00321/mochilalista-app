@@ -30,6 +30,7 @@ class ProductPresentationCard extends StatefulWidget {
   final VoidCallback? onInvalidateLeftover;
   final VoidCallback? onBeforeDiscreteMutation;
   final VoidCallback? onDiscreteMutationCompleted;
+  final VoidCallback? onConvertToProduct;
   final String modoStock;
   final TextEditingController? sharedStockCtrl;
   final TextEditingController? baseCostCtrl;
@@ -50,6 +51,7 @@ class ProductPresentationCard extends StatefulWidget {
     this.onInvalidateLeftover,
     this.onBeforeDiscreteMutation,
     this.onDiscreteMutationCompleted,
+    this.onConvertToProduct,
     this.modoStock = 'INDEPENDIENTE',
     this.sharedStockCtrl,
     this.baseCostCtrl,
@@ -226,6 +228,7 @@ class _ProductPresentationCardState extends State<ProductPresentationCard> {
             onStateChange: widget.onStateChange,
             onClone: widget.onClone,
             onDelete: widget.onDelete,
+            onConvertToProduct: widget.onConvertToProduct,
             onToggleExpand: () {
               setState(() {
                 _isCardExpanded = !_isCardExpanded;

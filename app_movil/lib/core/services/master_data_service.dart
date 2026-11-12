@@ -20,10 +20,10 @@ class MasterDataService {
       String whereClause = showAll ? "negocio_id = ?" : "negocio_id = ? AND activo = 1";
       List<dynamic> args = [_negocioId];
       
-      // 🔥 REPLICACIÓN EXACTA DE PYTHON: Subconsultas para el conteo de productos
+      // 🔥 REPLICACIÓN EXACTA DE PYTHON: Subconsultas para el conteo de productos (unificando huérfanos bajo General)
       final catsData = await db.rawQuery('''
         SELECT c.*, 
-        (SELECT COUNT(*) FROM productos p WHERE p.categoria_id = c.id AND p.negocio_id = c.negocio_id) as products_count
+        (SELECT COUNT(*) FROM productos p WHERE (p.categoria_id = c.id OR (LOWER(TRIM(c.nombre)) = 'general' AND (p.categoria_id IS NULL OR p.categoria_id = 0))) AND p.negocio_id = c.negocio_id) as products_count
         FROM categorias c WHERE $whereClause
       ''', args);
 

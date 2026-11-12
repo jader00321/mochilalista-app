@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/widgets/empty_state_widget.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
@@ -26,7 +27,8 @@ import 'package:app_movil/core/widgets/stock_update_modal.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
 class ProductsTab extends StatefulWidget {
-  const ProductsTab({super.key});
+  final TabController? tabController;
+  const ProductsTab({super.key, this.tabController});
 
   @override
   State<ProductsTab> createState() => _ProductsTabState();
@@ -44,10 +46,18 @@ class _ProductsTabState extends State<ProductsTab>
 
   bool _showScrollToTop = false;
 
+  // 🎨 FASE 2: Toast Flotante Local de Alerta de Stock
+  bool _showStockAlertToast = false;
+  String _stockAlertToastText = "";
+  bool _stockAlertToastIsActive = true;
+  Timer? _stockAlertToastTimer;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+
+    widget.tabController?.addListener(_onParentTabChanged);
 
     _fabAnimationController = AnimationController(
       vsync: this,
@@ -58,8 +68,48 @@ class _ProductsTabState extends State<ProductsTab>
     );
   }
 
+  void _onParentTabChanged() {
+    if (widget.tabController != null && widget.tabController!.index != 0) {
+      _dismissStockAlertToast();
+    }
+  }
+
+  void _dismissStockAlertToast() {
+    _stockAlertToastTimer?.cancel();
+    _stockAlertToastTimer = null;
+    if (_showStockAlertToast && mounted) {
+      setState(() => _showStockAlertToast = false);
+    }
+  }
+
+  void _onStockAlertToggled() {
+    final provider = Provider.of<InventoryProvider>(context, listen: false);
+    final isActive = provider.showStockAlertColors;
+    _stockAlertToastTimer?.cancel();
+    setState(() {
+      _showStockAlertToast = true;
+      _stockAlertToastIsActive = isActive;
+      _stockAlertToastText = isActive
+          ? "Colores de stock activados"
+          : "Estilo neutro activado";
+    });
+    _stockAlertToastTimer = Timer(const Duration(milliseconds: 2000), () {
+      if (mounted) {
+        setState(() => _showStockAlertToast = false);
+      }
+    });
+  }
+
+  @override
+  void deactivate() {
+    _dismissStockAlertToast();
+    super.deactivate();
+  }
+
   @override
   void dispose() {
+    widget.tabController?.removeListener(_onParentTabChanged);
+    _dismissStockAlertToast();
     _scrollController.dispose();
     _fabAnimationController.dispose();
     super.dispose();
@@ -620,7 +670,7 @@ class _ProductsTabState extends State<ProductsTab>
                       : Theme.of(context).primaryColor,
                   automaticallyImplyLeading: false,
                   actions: const [SizedBox.shrink()],
-                  expandedHeight: provider.categories.isNotEmpty ? 135.0 : 85.0,
+                  expandedHeight: (provider.categories.isNotEmpty || provider.hasOrphanCategories) ? 138.0 : 85.0,
                   floating: true,
                   snap: true,
                   stretch: true,
@@ -647,6 +697,15 @@ class _ProductsTabState extends State<ProductsTab>
                   isDark: isDark,
                   viewMode: _viewMode,
                   onViewModeChanged: (mode) => setState(() => _viewMode = mode),
+                  onStockAlertToggled: _onStockAlertToggled,
+                  onStockAlertExplanationRequested: () {
+                    _dismissStockAlertToast();
+                    InventoryFilterHeader.showColorAlertExplanation(
+                      context,
+                      provider,
+                      isDark,
+                    );
+                  },
                 ),
 
                 // 2.1 Banner de Producto en Creación Pendiente (Borrador en Memoria)
@@ -891,6 +950,94 @@ class _ProductsTabState extends State<ProductsTab>
                   ),
                 ),
               ],
+            ),
+          ),
+
+          // 🎨 FASE 2: Toast Flotante Local de Alerta de Stock (~2.0s y dismiss en cambio de tab)
+          Positioned(
+            top: 135,
+            left: 20,
+            right: 20,
+            child: IgnorePointer(
+              ignoring: !_showStockAlertToast,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                offset: _showStockAlertToast ? Offset.zero : const Offset(0, -0.35),
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  opacity: _showStockAlertToast ? 1.0 : 0.0,
+                  child: Center(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          _dismissStockAlertToast();
+                          InventoryFilterHeader.showColorAlertExplanation(
+                            context,
+                            provider,
+                            isDark,
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E2235) : const Color(0xFF22283A),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: _stockAlertToastIsActive
+                                  ? (isDark ? Colors.tealAccent.withValues(alpha: 0.6) : Colors.tealAccent)
+                                  : Colors.white24,
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _stockAlertToastIsActive ? Icons.palette_rounded : Icons.palette_outlined,
+                                size: 18,
+                                color: _stockAlertToastIsActive ? Colors.tealAccent : Colors.grey[400],
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _stockAlertToastText,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.info_outline,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ],

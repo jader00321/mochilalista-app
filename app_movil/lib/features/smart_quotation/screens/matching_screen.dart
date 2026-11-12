@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
@@ -36,12 +37,13 @@ import 'package:app_movil/core/screens/home_screen.dart';
 class MatchingScreen extends StatefulWidget {
   final List<ExtractedItem> extractedItems;
   final ExtractedMetadata? metadata;
-  // 🔥 ELIMINADO: final String token; (Ya no se necesita en modo offline/multi-perfil)
+  final bool prioritizeWholesale;
 
   const MatchingScreen({
     super.key,
     required this.extractedItems,
     this.metadata,
+    this.prioritizeWholesale = false,
   });
 
   @override
@@ -51,6 +53,7 @@ class MatchingScreen extends StatefulWidget {
 class _MatchingScreenState extends State<MatchingScreen> {
   late TextEditingController _schoolCtrl;
   late TextEditingController _gradeCtrl;
+  late QuotationContextMode _currentMode;
   
   var _clientNameCtrl = TextEditingController();
   final _clientPhoneCtrl = TextEditingController();
@@ -84,6 +87,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
       quotationType: 'ai_scan',
       isClientRole: auth.isCommunityClient,
       clientUserName: auth.user?.fullName,
+      contextMode: _currentMode,
     );
 
     if (mounted && _quoteTitleCtrl.text != newTitle) {
@@ -105,6 +109,8 @@ class _MatchingScreenState extends State<MatchingScreen> {
     final provider = Provider.of<MatchingProvider>(context, listen: false);
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isClient = auth.isCommunityClient;
+    final mode = widget.metadata?.contextMode ?? provider.metadata?.contextMode ?? (widget.prioritizeWholesale ? QuotationContextMode.wholesale : QuotationContextMode.general);
+    _currentMode = mode;
     
     String initSchool = widget.metadata?.institutionName ?? "";
     String initClient = widget.metadata?.studentName ?? "";
@@ -134,11 +140,11 @@ class _MatchingScreenState extends State<MatchingScreen> {
       initGrade = provider.metadata?.gradeLevel ?? initGrade;
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // 🔥 CORRECCIÓN 1: Se quitó widget.token
         provider.initializeAndMatch(
             widget.extractedItems, 
             widget.metadata, 
-            isClientRole: isClient
+            isClientRole: isClient,
+            prioritizeWholesale: widget.prioritizeWholesale,
         );
       });
     }
@@ -155,6 +161,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
       quotationType: 'ai_scan',
       isClientRole: isClient,
       clientUserName: auth.user?.fullName,
+      contextMode: _currentMode,
     );
     _quoteTitleCtrl.text = initialTitle;
 
@@ -329,6 +336,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
       isClientRole: isClient,
       quoteTitle: _quoteTitleCtrl.text.trim(),
       quoteNotes: _quoteNotesCtrl.text.trim(),
+      contextMode: _currentMode,
     );
 
     if (newId != null && mounted) {
@@ -344,10 +352,11 @@ class _MatchingScreenState extends State<MatchingScreen> {
          Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkbenchScreen()));
       } else {
          Navigator.push(context, MaterialPageRoute(builder: (_) => QuotationDetailScreen(quotationId: newId)));
+         final activeMode = _currentMode;
          if (actionType == 'pdf') {
-           Navigator.push(context, MaterialPageRoute(builder: (_) => PdfPreviewScreen(quotationId: newId)));
+           Navigator.push(context, MaterialPageRoute(builder: (_) => PdfPreviewScreen(quotationId: newId, contextMode: activeMode)));
          } else if (actionType == 'whatsapp') {
-           Navigator.push(context, MaterialPageRoute(builder: (_) => WhatsAppPreviewScreen(quotationId: newId)));
+           Navigator.push(context, MaterialPageRoute(builder: (_) => WhatsAppPreviewScreen(quotationId: newId, contextMode: activeMode)));
          }
       }
     } else if (mounted) {
@@ -911,64 +920,158 @@ class _MatchingScreenState extends State<MatchingScreen> {
 
           const SizedBox(height: 8),
 
-          // 🪗 ACORDEÓN 2: Cliente y Colegio
-          MorphingAccordion(
-            title: isClient ? "Mis Datos y Colegio" : "Datos del Cliente y Colegio",
-            icon: Icons.school_outlined,
-            iconColor: isDark ? Colors.amber[300] : Colors.orange[800],
-            initialExpanded: _isClientPanelExpanded,
-            onExpansionChanged: (val) => setState(() => _isClientPanelExpanded = val),
-            summaryBadge: (clientDisplayName.isNotEmpty || schoolText.isNotEmpty)
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.orange[900]!.withValues(alpha: 0.3) : Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      clientDisplayName.isNotEmpty
-                          ? (clientDisplayName.length > 15 ? '${clientDisplayName.substring(0, 13)}...' : clientDisplayName)
-                          : (schoolText.length > 15 ? '${schoolText.substring(0, 13)}...' : schoolText),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.orange[200] : Colors.orange[900],
+          // 🪗 ACORDEÓN 2: Cliente y Colegio / Pedido / Negocio adaptativo
+          Builder(
+            builder: (context) {
+              final mode = _currentMode;
+              final String accordionTitle;
+              final IconData accordionIcon;
+              switch (mode) {
+                case QuotationContextMode.general:
+                  accordionTitle = isClient ? "Mis Datos de Pedido" : "Datos del Cliente y Pedido";
+                  accordionIcon = Icons.shopping_bag_outlined;
+                  break;
+                case QuotationContextMode.wholesale:
+                  accordionTitle = isClient ? "Mis Datos de Negocio" : "Datos del Cliente y Negocio";
+                  accordionIcon = Icons.storefront_rounded;
+                  break;
+                case QuotationContextMode.school:
+                  accordionTitle = isClient ? "Mis Datos y Colegio" : "Datos del Cliente y Colegio";
+                  accordionIcon = Icons.school_outlined;
+                  break;
+              }
+
+              return MorphingAccordion(
+                title: accordionTitle,
+                icon: accordionIcon,
+                iconColor: isDark ? Colors.amber[300] : Colors.orange[800],
+                initialExpanded: _isClientPanelExpanded,
+                onExpansionChanged: (val) => setState(() => _isClientPanelExpanded = val),
+                summaryBadge: (clientDisplayName.isNotEmpty || schoolText.isNotEmpty)
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.orange[900]!.withValues(alpha: 0.3) : Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          clientDisplayName.isNotEmpty
+                              ? (clientDisplayName.length > 15 ? '${clientDisplayName.substring(0, 13)}...' : clientDisplayName)
+                              : (schoolText.length > 15 ? '${schoolText.substring(0, 13)}...' : schoolText),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.orange[200] : Colors.orange[900],
+                          ),
+                        ),
+                      )
+                    : null,
+                content: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Column(
+                    children: [
+                      // Selector de Modo Rápido en 1 Toque (General, Mayorista, Escolar)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E1E2C) : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          children: QuotationContextMode.values.map((m) {
+                            final isSelected = _currentMode == m;
+                            return Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  setState(() {
+                                    _currentMode = m;
+                                    provider.updateMetadata(mode: m);
+                                  });
+                                  _syncAutoTitle(force: true);
+                                },
+                                borderRadius: BorderRadius.circular(9),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? (isDark ? Colors.blue[900]!.withValues(alpha: 0.6) : Colors.white)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(9),
+                                    boxShadow: isSelected
+                                        ? [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 1),
+                                            )
+                                          ]
+                                        : null,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        m.icon, 
+                                        size: 14, 
+                                        color: isSelected 
+                                            ? (isDark ? Colors.blue[200] : Colors.blue[900]) 
+                                            : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        m == QuotationContextMode.general
+                                            ? "General"
+                                            : (m == QuotationContextMode.wholesale ? "Mayorista" : "Escolar"),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                          color: isSelected
+                                              ? (isDark ? Colors.blue[200] : Colors.blue[900])
+                                              : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
                       ),
-                    ),
-                  )
-                : null,
-            content: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Column(
-                children: [
-                  ManualQuoteInstitutionHeader(
-                    schoolCtrl: _schoolCtrl,
-                    gradeCtrl: _gradeCtrl,
-                    isDark: isDark,
+                      ManualQuoteInstitutionHeader(
+                        schoolCtrl: _schoolCtrl,
+                        gradeCtrl: _gradeCtrl,
+                        isDark: isDark,
+                        mode: _currentMode,
+                      ),
+                      const SizedBox(height: 10),
+                      ManualQuoteClientHeader(
+                        selectedClient: provider.selectedClient,
+                        nameCtrl: _clientNameCtrl,
+                        phoneCtrl: _clientPhoneCtrl,
+                        dniCtrl: _clientDniCtrl,
+                        addressCtrl: _clientAddressCtrl,
+                        emailCtrl: _clientEmailCtrl,
+                        notesCtrl: _clientNotesCtrl,
+                        isNewClientMode: _updateClientData,
+                        isDark: isDark,
+                        isGuest: isGuest, 
+                        onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; }); _updateHeader(); },
+                        onSearchClientTap: isClient ? () {
+                          CustomSnackBar.show(context, message: "Tu cuenta ya está vinculada automáticamente.", isError: false);
+                        } : () => _showClientSearch(isDark),
+                        onClearClient: isClient ? () {
+                          CustomSnackBar.show(context, message: "No puedes desvincular tu propia cuenta.", isError: true);
+                        } : _clearClient,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  ManualQuoteClientHeader(
-                    selectedClient: provider.selectedClient,
-                    nameCtrl: _clientNameCtrl,
-                    phoneCtrl: _clientPhoneCtrl,
-                    dniCtrl: _clientDniCtrl,
-                    addressCtrl: _clientAddressCtrl,
-                    emailCtrl: _clientEmailCtrl,
-                    notesCtrl: _clientNotesCtrl,
-                    isNewClientMode: _updateClientData,
-                    isDark: isDark,
-                    isGuest: isGuest, 
-                    onNewClientModeChanged: (v) { setState(() { _updateClientData = v ?? false; }); _updateHeader(); },
-                    onSearchClientTap: isClient ? () {
-                      CustomSnackBar.show(context, message: "Tu cuenta ya está vinculada automáticamente.", isError: false);
-                    } : () => _showClientSearch(isDark),
-                    onClearClient: isClient ? () {
-                      CustomSnackBar.show(context, message: "No puedes desvincular tu propia cuenta.", isError: true);
-                    } : _clearClient,
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ],
       ),

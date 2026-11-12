@@ -7,6 +7,8 @@ class InventoryFilterHeader extends StatelessWidget {
   final bool isDark;
   final int viewMode;
   final ValueChanged<int> onViewModeChanged;
+  final VoidCallback? onStockAlertToggled;
+  final VoidCallback? onStockAlertExplanationRequested;
 
   const InventoryFilterHeader({
     super.key,
@@ -14,6 +16,8 @@ class InventoryFilterHeader extends StatelessWidget {
     required this.isDark,
     required this.viewMode,
     required this.onViewModeChanged,
+    this.onStockAlertToggled,
+    this.onStockAlertExplanationRequested,
   });
 
   Widget _buildSortButton(
@@ -33,7 +37,7 @@ class InventoryFilterHeader extends StatelessWidget {
       onTap: () => provider.sortProducts(type),
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected
               ? color.withValues(alpha: 0.15)
@@ -48,12 +52,12 @@ class InventoryFilterHeader extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20, color: color),
+            Icon(icon, size: 19, color: color),
             if (isSelected) ...[
-              const SizedBox(width: 4),
+              const SizedBox(width: 3),
               Icon(
                 provider.prodAsc ? Icons.arrow_upward : Icons.arrow_downward,
-                size: 14,
+                size: 13,
                 color: color,
               ),
             ],
@@ -68,7 +72,7 @@ class InventoryFilterHeader extends StatelessWidget {
     return InkWell(
       onTap: () => onViewModeChanged(mode),
       child: Container(
-        width: 36,
+        width: 30,
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark ? Colors.white10 : Colors.grey[200])
@@ -81,7 +85,7 @@ class InventoryFilterHeader extends StatelessWidget {
         child: Center(
           child: Icon(
             icon,
-            size: 20,
+            size: 18,
             color: isSelected
                 ? (isDark ? Colors.white : Colors.black)
                 : (isDark ? Colors.grey[600] : Colors.grey[400]),
@@ -94,12 +98,20 @@ class InventoryFilterHeader extends StatelessWidget {
   Widget _buildVerticalDivider(bool isDark) {
     return Container(
       width: 1,
-      height: 24,
+      height: 20,
       color: isDark ? Colors.white10 : Colors.grey.shade200,
     );
   }
 
   void _showColorAlertExplanation(BuildContext context, bool isDark) {
+    showColorAlertExplanation(context, provider, isDark);
+  }
+
+  static void showColorAlertExplanation(
+    BuildContext context,
+    InventoryProvider provider,
+    bool isDark,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
@@ -240,27 +252,24 @@ class InventoryFilterHeader extends StatelessWidget {
       child: InkWell(
         onTap: () {
           provider.toggleStockAlertColors();
-          ScaffoldMessenger.of(context).clearSnackBars();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                !isActive
-                    ? "Colores de stock activados"
-                    : "Estilo neutro activado (colores desactivados)",
-              ),
-              duration: const Duration(seconds: 3),
-              action: SnackBarAction(
-                label: "Detalles",
-                onPressed: () => _showColorAlertExplanation(context, isDark),
-              ),
-            ),
-          );
+          if (onStockAlertToggled != null) {
+            onStockAlertToggled!();
+          } else {
+            // Fallback en caso no se proporcione callback
+            _showColorAlertExplanation(context, isDark);
+          }
         },
-        onLongPress: () => _showColorAlertExplanation(context, isDark),
+        onLongPress: () {
+          if (onStockAlertExplanationRequested != null) {
+            onStockAlertExplanationRequested!();
+          } else {
+            _showColorAlertExplanation(context, isDark);
+          }
+        },
         borderRadius: BorderRadius.circular(10),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
           decoration: BoxDecoration(
             color: isActive
                 ? color.withValues(alpha: 0.15)
@@ -277,7 +286,7 @@ class InventoryFilterHeader extends StatelessWidget {
             child: Icon(
               isActive ? Icons.palette_rounded : Icons.palette_outlined,
               key: ValueKey<bool>(isActive),
-              size: 20,
+              size: 19,
               color: color,
             ),
           ),
@@ -291,46 +300,55 @@ class InventoryFilterHeader extends StatelessWidget {
     return SliverPersistentHeader(
       pinned: true,
       delegate: SliverStickyHeaderDelegate(
-        minHeight: 72.0,
-        maxHeight: 72.0,
+        minHeight: 70.0,
+        maxHeight: 70.0,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           color: isDark ? const Color(0xFF14141C) : Colors.grey[100],
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        "${provider.totalProductsCount} Productos",
-                        style: TextStyle(
-                          color: isDark ? Colors.white : Colors.grey[800],
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final availableWidth = constraints.maxWidth;
+                    // Límite mínimo garantizado de escala tipográfica
+                    final double titleSize = availableWidth < 85 ? 12.0 : 13.0;
+                    final double subtitleSize = availableWidth < 85 ? 10.5 : 11.0;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "${provider.totalProductsCount} Productos",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.grey[800],
+                            fontSize: titleSize,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.2,
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        "${provider.totalPresentationsCount} Variantes",
-                        style: TextStyle(
-                          color: isDark ? Colors.grey[500] : Colors.grey[600],
-                          fontSize: 13,
+                        const SizedBox(height: 2),
+                        Text(
+                          "${provider.totalPresentationsCount} Variantes",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            fontSize: subtitleSize,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
               ),
 
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
 
               Row(
                 children: [
@@ -342,7 +360,7 @@ class InventoryFilterHeader extends StatelessWidget {
                     "ID",
                     isDark,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   _buildSortButton(
                     context,
                     provider,
@@ -351,18 +369,18 @@ class InventoryFilterHeader extends StatelessWidget {
                     "A-Z",
                     isDark,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   _buildStockAlertColorButton(context, isDark),
 
                   Container(
-                    height: 26,
+                    height: 24,
                     width: 1,
                     color: isDark ? Colors.white24 : Colors.grey[300],
-                    margin: const EdgeInsets.symmetric(horizontal: 10),
+                    margin: const EdgeInsets.symmetric(horizontal: 5),
                   ),
 
                   Container(
-                    height: 40,
+                    height: 36,
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF23232F) : Colors.white,
                       borderRadius: BorderRadius.circular(10),

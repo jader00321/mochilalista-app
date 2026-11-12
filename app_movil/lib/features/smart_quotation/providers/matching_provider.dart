@@ -138,22 +138,32 @@ class MatchingProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> initializeAndMatch(List<ExtractedItem> sourceItems, ExtractedMetadata? meta, {bool isClientRole = false}) async {
+  Future<void> initializeAndMatch(
+    List<ExtractedItem> sourceItems, 
+    ExtractedMetadata? meta, {
+    bool isClientRole = false,
+    bool prioritizeWholesale = false,
+  }) async {
     final activeState = _currentState;
     final activeNegocioId = _negocioId;
     if (activeState.pairs.isNotEmpty || activeNegocioId == null) return;
     activeState.isLoading = true;
     activeState.errorMessage = '';
 
-    activeState.metadata = ExtractedMetadata(
-      institutionName: meta?.institutionName ?? "", studentName: meta?.studentName ?? "", gradeLevel: meta?.gradeLevel ?? "",
-    );
+    activeState.metadata = meta != null
+        ? meta.clone()
+        : ExtractedMetadata();
 
     activeState.pairs = sourceItems.map((item) => MatchPair(sourceItem: item)).toList();
     notifyListeners();
 
     try {
-      final results = await _service.runBatchMatching(sourceItems, activeNegocioId, isClientRole); 
+      final results = await _service.runBatchMatching(
+        sourceItems, 
+        activeNegocioId, 
+        isClientRole,
+        prioritizeWholesale: prioritizeWholesale,
+      ); 
 
       for (var result in results) {
         final index = activeState.pairs.indexWhere((p) => p.sourceItem.id == result.itemId);
@@ -196,11 +206,19 @@ class MatchingProvider with ChangeNotifier {
     }
   }
 
-  void updateMetadata({String? institution, String? student, String? grade}) {
+  void updateMetadata({
+    String? institution,
+    String? student,
+    String? grade,
+    QuotationContextMode? mode,
+    String? phone,
+  }) {
     _currentState.metadata ??= ExtractedMetadata();
-    if (institution != null) _currentState.metadata!.institutionName = institution;
-    if (student != null) _currentState.metadata!.studentName = student;
-    if (grade != null) _currentState.metadata!.gradeLevel = grade;
+    if (mode != null) _currentState.metadata!.contextMode = mode;
+    if (institution != null) _currentState.metadata!.businessOrInstitutionName = institution;
+    if (student != null) _currentState.metadata!.clientOrContactName = student;
+    if (grade != null) _currentState.metadata!.referenceNotes = grade;
+    if (phone != null) _currentState.metadata!.phone = phone;
     _currentState.hasModifications = true;
     notifyListeners();
   }
@@ -361,7 +379,7 @@ class MatchingProvider with ChangeNotifier {
     String status, {
       String? manualClientName, String? manualClientPhone, String? manualClientDni, String? manualClientAddress, String? manualClientEmail, String? manualClientNotes,
       bool updateClientData = true, String? institutionName, String? gradeLevel, String? type, bool isClientRole = false, 
-      String? quoteTitle, String? quoteNotes,
+      String? quoteTitle, String? quoteNotes, QuotationContextMode? contextMode,
     }
   ) async {
     final activeState = _currentState;
@@ -377,7 +395,9 @@ class MatchingProvider with ChangeNotifier {
         return null;
       }
 
+      final activeMode = contextMode ?? activeState.metadata?.contextMode ?? QuotationContextMode.general;
       activeState.metadata ??= ExtractedMetadata();
+      activeState.metadata!.contextMode = activeMode;
       activeState.metadata!.institutionName = (institutionName != null && institutionName.trim().isNotEmpty) ? institutionName.trim() : null;
       activeState.metadata!.gradeLevel = (gradeLevel != null && gradeLevel.trim().isNotEmpty) ? gradeLevel.trim() : null;
 
@@ -453,12 +473,19 @@ class MatchingProvider with ChangeNotifier {
         finalSavings += (originalTotal - (item['unit_price_applied'] * item['quantity']));
       }
 
+      String finalNotes = (quoteNotes ?? "").trim();
+      final modeTag = "[modo:${activeMode.name}]";
+      if (!finalNotes.contains("[modo:")) {
+        finalNotes = finalNotes.isEmpty ? modeTag : "$finalNotes\n$modeTag";
+      }
+
       final quotationPayload = {
         "client_id": finalClientId, 
         "client_name": finalQuoteName, 
-        "institution_name": activeState.metadata?.institutionName,
-        "grade_level": activeState.metadata?.gradeLevel,
-        "notas": quoteNotes?.trim(),
+        "institution_name": (institutionName != null && institutionName.trim().isNotEmpty) ? institutionName.trim() : activeState.metadata?.institutionName,
+        "grade_level": (gradeLevel != null && gradeLevel.trim().isNotEmpty) ? gradeLevel.trim() : activeState.metadata?.gradeLevel,
+        "notas": finalNotes,
+        "context_mode": activeMode.name,
         "total_amount": double.parse(finalAmount.toStringAsFixed(2)),
         "total_savings": double.parse(finalSavings.toStringAsFixed(2)),
         "status": status, 

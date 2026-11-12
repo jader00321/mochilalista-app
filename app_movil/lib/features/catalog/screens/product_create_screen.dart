@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/catalog/models/product_create_draft.dart';
+import 'package:app_movil/features/catalog/models/variant_extraction_models.dart';
 import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_general_info.dart';
 import 'package:app_movil/features/catalog/widgets/form/product_create_operations.dart';
 import 'package:app_movil/features/catalog/widgets/form/product_create_presentation_list.dart';
@@ -19,7 +20,8 @@ import 'package:app_movil/core/widgets/presentation_card/presentation_math_engin
 
 class ProductCreateScreen extends StatefulWidget {
   final String? initialBarcode;
-  const ProductCreateScreen({super.key, this.initialBarcode});
+  final VariantExtractionBundle? extractionBundle;
+  const ProductCreateScreen({super.key, this.initialBarcode, this.extractionBundle});
 
   @override
   State<ProductCreateScreen> createState() => _ProductCreateScreenState();
@@ -64,30 +66,48 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final invProv = Provider.of<InventoryProvider>(context, listen: false);
       invProv.loadMasterData();
-      final data = ProductCreateOperations.hydrateFromDraft(
-        invProv: invProv,
-        nameCtrl: _nameCtrl,
-        descCtrl: _descCtrl,
-        imgUrlCtrl: _imgUrlCtrl,
-        barcodeCtrl: _barcodeCtrl,
-        controllers: _controllers,
-        keys: _presentationKeys,
-        deferredProviderNames: _deferredProviderNames,
-        onSyncDraft: _syncDraft,
-        generalState: _generalState,
-        initialBarcode: widget.initialBarcode,
-      );
+
+      ProductCreateHydratedData? data;
+      if (widget.extractionBundle != null) {
+        data = ProductCreateOperations.hydrateFromExtraction(
+          bundle: widget.extractionBundle!,
+          nameCtrl: _nameCtrl,
+          descCtrl: _descCtrl,
+          imgUrlCtrl: _imgUrlCtrl,
+          barcodeCtrl: _barcodeCtrl,
+          controllers: _controllers,
+          keys: _presentationKeys,
+          deferredProviderNames: _deferredProviderNames,
+          onSyncDraft: _syncDraft,
+        );
+      } else {
+        data = ProductCreateOperations.hydrateFromDraft(
+          invProv: invProv,
+          nameCtrl: _nameCtrl,
+          descCtrl: _descCtrl,
+          imgUrlCtrl: _imgUrlCtrl,
+          barcodeCtrl: _barcodeCtrl,
+          controllers: _controllers,
+          keys: _presentationKeys,
+          deferredProviderNames: _deferredProviderNames,
+          onSyncDraft: _syncDraft,
+          generalState: _generalState,
+          initialBarcode: widget.initialBarcode,
+        );
+      }
+
       if (data != null && mounted) {
+        final hydrated = data;
         setState(() {
-          _selectedBrandId = data.brandId;
-          _selectedBrandName = data.brandName;
-          _selectedCategoryId = data.categoryId;
-          _selectedCategoryName = data.categoryName;
-          _generalProviderId = data.generalProviderId;
-          _generalProviderName = data.generalProviderName;
-          _modoStock = data.modoStock;
-          _sharedStockCtrl.text = data.stockCompartido.toString();
-          _baseCostCtrl.text = data.costoBase > 0 ? data.costoBase.toStringAsFixed(2) : '0.00';
+          _selectedBrandId = hydrated.brandId;
+          _selectedBrandName = hydrated.brandName;
+          _selectedCategoryId = hydrated.categoryId;
+          _selectedCategoryName = hydrated.categoryName;
+          _generalProviderId = hydrated.generalProviderId;
+          _generalProviderName = hydrated.generalProviderName;
+          _modoStock = hydrated.modoStock;
+          _sharedStockCtrl.text = hydrated.stockCompartido.toString();
+          _baseCostCtrl.text = hydrated.costoBase > 0 ? hydrated.costoBase.toStringAsFixed(2) : '0.00';
         });
       } else if (mounted) {
         setState(() {});
@@ -216,7 +236,7 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
     _baseCostCtrl.removeListener(_onBaseCostChanged);
     _sharedStockCtrl.dispose();
     _baseCostCtrl.dispose();
-    if (!_isSaving) {
+    if (!_isSaving && widget.extractionBundle == null) {
       final draft = _buildCurrentDraft();
       final invProv = Provider.of<InventoryProvider>(context, listen: false);
       if (draft.hasMeaningfulData) {
@@ -389,8 +409,99 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
     );
     if (success && mounted) {
       _isSaving = true;
-      Navigator.pop(context, true);
+      if (widget.extractionBundle != null) {
+        final bundle = widget.extractionBundle!;
+        final result = ProductExtractionResult(
+          success: true,
+          mode: bundle.mode,
+          variantLocalId: bundle.variantLocalId,
+          variantDbId: bundle.variantDbId,
+          newProductName: _nameCtrl.text.trim(),
+          wasOriginDefault: bundle.isOriginDefault,
+          transferredBarcode:
+              bundle.detailData.includeBarcode ? bundle.detailData.barcode : null,
+          transferredStock: (bundle.detailData.includeStock &&
+                  bundle.detailData.transferFullStock)
+              ? bundle.detailData.stockUnits
+              : 0,
+        );
+        Navigator.pop(context, result);
+      } else {
+        Navigator.pop(context, true);
+      }
     }
+  }
+
+  Widget _buildExtractionBanner(bool isDark) {
+    final bundle = widget.extractionBundle!;
+    final isCut = bundle.mode == ProductExtractionMode.cut;
+    final primaryColor = isCut ? Colors.amber.shade700 : Colors.teal;
+    final bgColor = isCut
+        ? (isDark ? const Color(0xFF281E0D) : Colors.amber.shade50)
+        : (isDark ? const Color(0xFF0D2522) : Colors.teal.shade50);
+    final borderColor = isCut
+        ? (isDark
+            ? Colors.amber.shade700.withValues(alpha: 0.6)
+            : Colors.amber.shade300)
+        : (isDark
+            ? Colors.teal.shade600.withValues(alpha: 0.6)
+            : Colors.teal.shade200);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: 1.2),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white10 : Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isCut ? Icons.content_cut_rounded : Icons.copy_all_rounded,
+              size: 18,
+              color: primaryColor,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isCut
+                      ? "Creando Producto desde Variante Cortada"
+                      : "Creando Producto desde Variante Copiada",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  isCut
+                      ? "Esta variante se retirará del producto original ('${bundle.originProductName}') de forma automática ÚNICAMENTE al presionar GUARDAR."
+                      : "Se creará un producto independiente. El producto original ('${bundle.originProductName}') conservará todas sus variantes intactas.",
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: isDark ? Colors.grey[300] : Colors.grey[700],
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -407,8 +518,15 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text("Nuevo Producto", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)),
-            if (provider.hasCreationDraft) ...[
+            Text(
+              widget.extractionBundle != null
+                  ? (widget.extractionBundle!.mode == ProductExtractionMode.cut
+                      ? "Mover Variante"
+                      : "Copiar Variante")
+                  : "Nuevo Producto",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor),
+            ),
+            if (widget.extractionBundle == null && provider.hasCreationDraft) ...[
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -433,7 +551,7 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
         foregroundColor: textColor,
         elevation: 0,
         actions: [
-          if (provider.hasCreationDraft)
+          if (widget.extractionBundle == null && provider.hasCreationDraft)
             IconButton(
               tooltip: "Limpiar todo el formulario",
               icon: Icon(Icons.cleaning_services_outlined, size: 20, color: isDark ? Colors.grey[400] : Colors.grey[600]),
@@ -468,6 +586,8 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (widget.extractionBundle != null)
+                  _buildExtractionBanner(isDark),
                 ProductGeneralInfo(
                   nameCtrl: _nameCtrl,
                   brandDisplay: ProductEntityPickers.getBrandDisplay(provider: provider, selectedBrandId: _selectedBrandId, selectedBrandName: _selectedBrandName),

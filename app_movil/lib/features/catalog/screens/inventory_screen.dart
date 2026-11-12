@@ -311,12 +311,12 @@ class _InventoryScreenState extends State<InventoryScreen>
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
-                  children: const [
-                    ProductsTab(),
-                    OffersTab(),
-                    CategoriesTab(),
-                    BrandsTab(),
-                    ProvidersTab(),
+                  children: [
+                    ProductsTab(tabController: _tabController),
+                    const OffersTab(),
+                    const CategoriesTab(),
+                    const BrandsTab(),
+                    const ProvidersTab(),
                   ],
                 ),
               ),

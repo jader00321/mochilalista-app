@@ -188,26 +188,14 @@ void main() {
       expect(unlocked.first.clienteId, equals(100));
       expect(unlocked.first.metaId, equals(metaId));
 
-      // Verificar que se haya creado la recompensa en PENDIENTE_REVISION
-      final rewards = await db.query(
-        'recompensas_cliente',
-        where: 'cliente_id = ? AND meta_id = ?',
-        whereArgs: [100, metaId],
-      );
-      expect(rewards.length, equals(1));
-      expect(rewards.first['estado'], equals('PENDIENTE_REVISION'));
-      expect(rewards.first['puntos_consumidos'], equals(50));
+      // En la nueva arquitectura de acumulación libre, los puntos se mantienen intactos
+      final summary = await clientService.getClientClaimableRewardsSummary(100, 1);
+      expect(summary, isNotNull);
+      expect(summary!.hasClaimableRewards, isTrue);
+      expect(summary.claimableGoals.any((g) => g.id == metaId), isTrue);
 
-      // Re-evaluar: no debe generar duplicados
-      final secondRun = await clientService.evaluateAllClientsForActiveGoals(1, usuarioId: 1);
-      expect(secondRun.isEmpty, isTrue);
-
-      final rewardsAfter = await db.query(
-        'recompensas_cliente',
-        where: 'cliente_id = ? AND meta_id = ?',
-        whereArgs: [100, metaId],
-      );
-      expect(rewardsAfter.length, equals(1));
+      final clientRow = await db.query('clientes', where: 'id = ?', whereArgs: [100]);
+      expect(clientRow.first['puntos_actuales'], equals(50));
     });
 
     test('getClientsAlmostAtGoal excluye estrictamente clientes con 0 pts o menos del 50%', () async {

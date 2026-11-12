@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 
@@ -9,7 +10,7 @@ import 'package:app_movil/features/smart_quotation/providers/matching_provider.d
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
-import 'package:app_movil/core/widgets/marquee_text.dart';
+import 'package:app_movil/features/smart_quotation/widgets/extraction/quotation_confirmation_modal.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 
 class ExtractionResultScreen extends StatefulWidget {
@@ -23,6 +24,8 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
   final _schoolCtrl = TextEditingController();
   final _studentCtrl = TextEditingController();
   final _gradeCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  QuotationContextMode _currentMode = QuotationContextMode.general;
 
   late MultiSplitViewController _splitController;
   final ScrollController _scrollController = ScrollController();
@@ -50,9 +53,12 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
       if (!mounted) return;
       final provider = Provider.of<SmartQuotationProvider>(context, listen: false);
       if (provider.metadata != null) {
-        _schoolCtrl.text = provider.metadata!.institutionName ?? "";
-        _studentCtrl.text = provider.metadata!.studentName ?? "";
-        _gradeCtrl.text = provider.metadata!.gradeLevel ?? "";
+        _currentMode = provider.metadata!.contextMode;
+        _schoolCtrl.text = provider.metadata!.businessOrInstitutionName ?? "";
+        _studentCtrl.text = provider.metadata!.clientOrContactName ?? "";
+        _gradeCtrl.text = provider.metadata!.referenceNotes ?? "";
+        _phoneCtrl.text = provider.metadata!.phone ?? "";
+        setState(() {});
       }
     });
   }
@@ -62,6 +68,7 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
     _schoolCtrl.dispose();
     _studentCtrl.dispose();
     _gradeCtrl.dispose();
+    _phoneCtrl.dispose();
     _splitController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -117,64 +124,99 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
         return Scaffold(
           backgroundColor: bgColor,
           appBar: AppBar(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: MarqueeText(
-                    text: isClient ? "Revisa tu Lista Escolar" : "Validar Datos Extraídos", 
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                ),
-                Text("${provider.items.length} productos identificados", style: TextStyle(fontSize: 13, color: isDark ? Colors.blue[200] : Colors.blue[100], fontWeight: FontWeight.w500)),
-              ],
+            titleSpacing: 8,
+            title: LayoutBuilder(
+              builder: (context, constraints) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        isClient ? "Revisa tu Lista" : "Datos Extraídos",
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                      ),
+                    ),
+                    Text(
+                      "${provider.items.length} productos identificados",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.blue[200] : Colors.blue[100],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
             backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
             foregroundColor: Colors.white,
             elevation: 0,
             actions: [
-              Flexible(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: FilledButton.icon(
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: isDark ? Colors.blue[700] : Colors.white,
+                    foregroundColor: isDark ? Colors.white : Colors.blue[900],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                   onPressed: () {
                     final smartProvider = Provider.of<SmartQuotationProvider>(context, listen: false);
                     final matchingProvider = Provider.of<MatchingProvider>(context, listen: false); 
                     
-                    final updatedMetadata = ExtractedMetadata(
-                      institutionName: _schoolCtrl.text,
-                      studentName: _studentCtrl.text,
-                      gradeLevel: _gradeCtrl.text,
-                    );
+                    final totalCount = smartProvider.items.length;
+                    final readyCount = smartProvider.items.where((i) => i.fullName.trim().isNotEmpty && i.quantity > 0).length;
+                    final emptyOrZeroCount = totalCount - readyCount;
 
-                    matchingProvider.setEvidence(
-                        smartProvider.currentImage, 
-                        smartProvider.fullExtractedText
-                    );
+                    QuotationConfirmationModal.show(
+                      context: context,
+                      totalItems: totalCount,
+                      readyItems: readyCount,
+                      zeroOrEmptyItems: emptyOrZeroCount,
+                      currentMode: _currentMode,
+                      isClientRole: isClient,
+                      onConfirm: (prioritizeWholesale, selectedMode) {
+                        final updatedMetadata = ExtractedMetadata(
+                          contextMode: selectedMode,
+                          clientOrContactName: _studentCtrl.text.trim().isEmpty ? null : _studentCtrl.text.trim(),
+                          businessOrInstitutionName: _schoolCtrl.text.trim().isEmpty ? null : _schoolCtrl.text.trim(),
+                          phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+                          referenceNotes: _gradeCtrl.text.trim().isEmpty ? null : _gradeCtrl.text.trim(),
+                        );
 
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => MatchingScreen(
-                          metadata: updatedMetadata, 
-                          extractedItems: smartProvider.items,
-                          // 🔥 CORRECCIÓN: Eliminamos la línea "token: auth.token ?? "","
-                        ),
-                      ),
+                        matchingProvider.setEvidence(
+                          smartProvider.currentImage, 
+                          smartProvider.fullExtractedText,
+                        );
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MatchingScreen(
+                              metadata: updatedMetadata, 
+                              extractedItems: smartProvider.items,
+                              prioritizeWholesale: prioritizeWholesale,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
-                  icon: const Icon(Icons.check_circle_outline, size: 20),
+                  icon: const Icon(Icons.check_circle_rounded, size: 16),
                   label: Builder(
                     builder: (context) {
-                      int readyCount = provider.items.where((i) => i.fullName.trim().isNotEmpty).length;
-                      String buttonText = isClient ? "BUSCAR PRODUCTOS" : "COTIZAR ($readyCount/${provider.items.length})";
-                      return Text(buttonText, style: const TextStyle(fontWeight: FontWeight.bold));
+                      int readyCount = provider.items.where((i) => i.fullName.trim().isNotEmpty && i.quantity > 0).length;
+                      String buttonText = isClient ? "BUSCAR ($readyCount)" : "COTIZAR ($readyCount/${provider.items.length})";
+                      return Text(
+                        buttonText, 
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                      );
                     }
-                  ),
-                    ),
                   ),
                 ),
               ),
@@ -339,39 +381,223 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
           initiallyExpanded: true,
           iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
           collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey[600],
-          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           title: Row(
             children: [
-              Icon(Icons.info_outline, color: isDark ? Colors.blue[300] : Colors.blue[700]),
-              const SizedBox(width: 10),
-              Text(
-                "Datos de la Cotización",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87),
+              Icon(_currentMode.icon, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Datos de la Cotización",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87),
+                ),
               ),
             ],
           ),
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _MetaInput(icon: Icons.school, hint: "Institución Educativa (Colegio)", ctrl: _schoolCtrl, isDark: isDark, onChanged: (v) => provider.updateMetadata(institution: v)),
-                  Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200])),
-                  Row(
-                    children: [
-                      // 🔥 Dinámico: Si es cliente, sugerimos que deje el nombre de su hijo o el suyo.
-                      Expanded(child: _MetaInput(icon: Icons.person, hint: isClient ? "Nombre de tu hijo/a (Opcional)" : "Alumno/a (Opcional)", ctrl: _studentCtrl, isDark: isDark, onChanged: (v) => provider.updateMetadata(student: v))),
-                      Container(width: 1, height: 40, color: isDark ? Colors.white10 : Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 16)),
-                      Expanded(child: _MetaInput(icon: Icons.class_, hint: "Grado / Sección", ctrl: _gradeCtrl, isDark: isDark, onChanged: (v) => provider.updateMetadata(grade: v))),
-                    ],
+                  // 🎯 Selector de Tipo de Cotización (1 toque con AnimatedSize)
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF14141C) : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: QuotationContextMode.values.map((mode) {
+                        final isSelected = _currentMode == mode;
+                        return Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              setState(() => _currentMode = mode);
+                              provider.updateMetadata(mode: mode);
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? (isDark ? Colors.blue[800] : Colors.white)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: isSelected && !isDark
+                                    ? [const BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1))]
+                                    : null,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    mode.icon,
+                                    size: 14,
+                                    color: isSelected
+                                        ? (isDark ? Colors.white : Colors.blue[900])
+                                        : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      mode == QuotationContextMode.general
+                                          ? "General"
+                                          : (mode == QuotationContextMode.wholesale ? "Mayorista" : "Escolar"),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                        color: isSelected
+                                            ? (isDark ? Colors.white : Colors.blue[900])
+                                            : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Campos adaptativos con AnimatedSwitcher
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: _buildAdaptiveFields(isDark, isClient, provider),
                   ),
                 ],
               ),
             ),
-          ]
+          ],
         ),
-      )
+      ),
     );
+  }
+
+  Widget _buildAdaptiveFields(bool isDark, bool isClient, SmartQuotationProvider provider) {
+    switch (_currentMode) {
+      case QuotationContextMode.general:
+        return Column(
+          key: const ValueKey('general_fields'),
+          children: [
+            _MetaInput(
+              icon: Icons.person,
+              hint: isClient ? "Tu Nombre (Cliente)" : "Cliente / Solicitante",
+              ctrl: _studentCtrl,
+              isDark: isDark,
+              onChanged: (v) => provider.updateMetadata(student: v),
+            ),
+            Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200])),
+            Row(
+              children: [
+                Expanded(
+                  child: _MetaInput(
+                    icon: Icons.phone,
+                    hint: "Teléfono / WhatsApp",
+                    ctrl: _phoneCtrl,
+                    isDark: isDark,
+                    keyboardType: TextInputType.phone,
+                    onChanged: (v) => provider.updateMetadata(phone: v),
+                  ),
+                ),
+                Container(width: 1, height: 36, color: isDark ? Colors.white10 : Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 12)),
+                Expanded(
+                  child: _MetaInput(
+                    icon: Icons.note_alt_outlined,
+                    hint: "Nota / Referencia",
+                    ctrl: _gradeCtrl,
+                    isDark: isDark,
+                    onChanged: (v) => provider.updateMetadata(grade: v),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      case QuotationContextMode.wholesale:
+        return Column(
+          key: const ValueKey('wholesale_fields'),
+          children: [
+            _MetaInput(
+              icon: Icons.storefront_rounded,
+              hint: "Negocio / Empresa / RUC",
+              ctrl: _schoolCtrl,
+              isDark: isDark,
+              onChanged: (v) => provider.updateMetadata(institution: v),
+            ),
+            Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200])),
+            Row(
+              children: [
+                Expanded(
+                  child: _MetaInput(
+                    icon: Icons.person,
+                    hint: "Contacto / Cliente",
+                    ctrl: _studentCtrl,
+                    isDark: isDark,
+                    onChanged: (v) => provider.updateMetadata(student: v),
+                  ),
+                ),
+                Container(width: 1, height: 36, color: isDark ? Colors.white10 : Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 12)),
+                Expanded(
+                  child: _MetaInput(
+                    icon: Icons.phone,
+                    hint: "Teléfono / WhatsApp",
+                    ctrl: _phoneCtrl,
+                    isDark: isDark,
+                    keyboardType: TextInputType.phone,
+                    onChanged: (v) => provider.updateMetadata(phone: v),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      case QuotationContextMode.school:
+        return Column(
+          key: const ValueKey('school_fields'),
+          children: [
+            _MetaInput(
+              icon: Icons.school,
+              hint: "Institución Educativa (Colegio)",
+              ctrl: _schoolCtrl,
+              isDark: isDark,
+              onChanged: (v) => provider.updateMetadata(institution: v),
+            ),
+            Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200])),
+            Row(
+              children: [
+                Expanded(
+                  child: _MetaInput(
+                    icon: Icons.person,
+                    hint: isClient ? "Nombre de tu hijo/a (Opcional)" : "Alumno/a o Apoderado",
+                    ctrl: _studentCtrl,
+                    isDark: isDark,
+                    onChanged: (v) => provider.updateMetadata(student: v),
+                  ),
+                ),
+                Container(width: 1, height: 36, color: isDark ? Colors.white10 : Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 12)),
+                Expanded(
+                  child: _MetaInput(
+                    icon: Icons.class_,
+                    hint: "Grado / Sección",
+                    ctrl: _gradeCtrl,
+                    isDark: isDark,
+                    onChanged: (v) => provider.updateMetadata(grade: v),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+    }
   }
 }
 
@@ -381,25 +607,36 @@ class _MetaInput extends StatelessWidget {
   final TextEditingController ctrl;
   final Function(String) onChanged;
   final bool isDark;
+  final TextInputType? keyboardType;
 
-  const _MetaInput({required this.icon, required this.hint, required this.ctrl, required this.onChanged, required this.isDark});
+  const _MetaInput({
+    required this.icon, 
+    required this.hint, 
+    required this.ctrl, 
+    required this.onChanged, 
+    required this.isDark,
+    this.keyboardType,
+  });
   
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 24, color: isDark ? Colors.blue[300] : Colors.blue[800]), 
-        const SizedBox(width: 12), 
+        Icon(icon, size: 20, color: isDark ? Colors.blue[300] : Colors.blue[800]), 
+        const SizedBox(width: 10), 
         Expanded(
           child: TextField(
             controller: ctrl, 
+            keyboardType: keyboardType,
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
+            style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.blue[900], fontWeight: FontWeight.w600), 
             decoration: InputDecoration(
               hintText: hint, 
               isDense: true, 
               border: InputBorder.none, 
-              hintStyle: TextStyle(fontSize: 15, color: isDark ? Colors.grey[600] : Colors.grey[400], fontStyle: FontStyle.italic)
+              contentPadding: const EdgeInsets.symmetric(vertical: 6),
+              hintStyle: TextStyle(fontSize: 13, color: isDark ? Colors.grey[600] : Colors.grey[400], fontStyle: FontStyle.italic)
             ), 
-            style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.blue[900], fontWeight: FontWeight.w600), 
             onChanged: onChanged
           )
         )
@@ -527,12 +764,37 @@ class _InternalItemCardState extends State<_InternalItemCard> with SingleTickerP
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(flex: 2, child: _buildTextField(controller: _qtyCtrl, label: "Cant.", isNumber: true, isDark: widget.isDark)), 
-                const SizedBox(width: 12), 
-                Expanded(flex: 3, child: _buildTextField(controller: _unitCtrl, label: "Unidad", isDark: widget.isDark)), 
-                const SizedBox(width: 12), 
-                Expanded(flex: 4, child: _buildTextField(controller: _brandCtrl, label: "Marca (Opcional)", icon: Icons.branding_watermark, isDark: widget.isDark))
-              ]
+                Expanded(
+                  flex: 3, 
+                  child: _buildTextField(
+                    controller: _qtyCtrl, 
+                    label: "Cant.", 
+                    isNumber: true, 
+                    isDark: widget.isDark,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                  ),
+                ), 
+                const SizedBox(width: 8), 
+                Expanded(
+                  flex: 4, 
+                  child: _buildTextField(
+                    controller: _unitCtrl, 
+                    label: "Unidad", 
+                    isDark: widget.isDark,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                  ),
+                ), 
+                const SizedBox(width: 8), 
+                Expanded(
+                  flex: 5, 
+                  child: _buildTextField(
+                    controller: _brandCtrl, 
+                    label: "Marca", 
+                    isDark: widget.isDark,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             _buildTextField(controller: _notesCtrl, label: "Detalles adicionales (Colores, tamaños...)", icon: Icons.info_outline, isSoft: true, isDark: widget.isDark),
@@ -542,9 +804,19 @@ class _InternalItemCardState extends State<_InternalItemCard> with SingleTickerP
     )));
   }
 
-  Widget _buildTextField({required TextEditingController controller, required String label, IconData? icon, bool isNumber = false, bool isBold = false, bool isSoft = false, required bool isDark}) {
+  Widget _buildTextField({
+    required TextEditingController controller, 
+    required String label, 
+    IconData? icon, 
+    bool isNumber = false, 
+    bool isBold = false, 
+    bool isSoft = false, 
+    required bool isDark,
+    EdgeInsetsGeometry? contentPadding,
+  }) {
     return TextFormField(
       controller: controller, 
+      onTapOutside: (_) => FocusScope.of(context).unfocus(),
       onChanged: (_) => _saveToProvider(), 
       keyboardType: isNumber ? TextInputType.number : TextInputType.text, 
       style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontSize: 16, color: isDark ? Colors.white : Colors.black87), 
@@ -560,7 +832,7 @@ class _InternalItemCardState extends State<_InternalItemCard> with SingleTickerP
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none), 
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300)), 
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.withValues(alpha: 0.3))), 
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
+        contentPadding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
       )
     );
   }

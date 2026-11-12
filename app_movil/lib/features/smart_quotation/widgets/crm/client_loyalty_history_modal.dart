@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/features/smart_quotation/services/loyalty_whatsapp_service.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/reward_review_modal.dart';
@@ -54,6 +55,7 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
   List<RewardGoalModel> _goals = [];
   Map<String, dynamic>? _nextGoalData;
   List<ClientRewardModel> _pendingRewards = [];
+  ClientClaimableRewardsSummary? _claimableSummary;
   String _selectedFilter = 'TODOS'; // 'TODOS', 'GANADOS', 'CANJES_AJUSTES'
   late ClientModel _currentClient;
 
@@ -83,6 +85,7 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
       final goals = await _clientService.getRewardGoals(_currentClient.negocioId, activeOnly: true);
       final nextGoal = await _clientService.getNextGoalForClient(_currentClient.id, _currentClient.negocioId);
       final pending = await _clientService.getClientRewards(_currentClient.id, status: 'PENDIENTE_REVISION');
+      final claimable = await _clientService.getClientClaimableRewardsSummary(_currentClient.id, _currentClient.negocioId);
 
       if (mounted) {
         setState(() {
@@ -90,6 +93,7 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
           _goals = goals;
           _nextGoalData = nextGoal;
           _pendingRewards = pending;
+          _claimableSummary = claimable;
           _isLoading = false;
         });
       }
@@ -436,15 +440,26 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
         icon = Icons.shopping_bag_rounded;
         break;
       case 'PAGO_PUNTUAL_BONO':
+      case 'PAGO_PUNTUAL_RACHA':
         icon = Icons.local_fire_department_rounded;
+        break;
+      case 'LIQUIDACION_PUNTUAL_BONO':
+        icon = Icons.verified_rounded;
+        break;
+      case 'COTIZACION_CONCRETADA_BONO':
+        icon = Icons.request_quote_rounded;
         break;
       case 'CANJE_RECOMPENSA':
         icon = Icons.card_giftcard_rounded;
+        break;
+      case 'RESTAURACION_MIGRACION':
+        icon = Icons.restore_rounded;
         break;
       case 'MORA_PENALIZACION':
         icon = Icons.warning_amber_rounded;
         break;
       case 'ANULACION_VENTA_REVERSA':
+      case 'REVERSION_PAGO':
         icon = Icons.undo_rounded;
         break;
       default:
@@ -484,17 +499,19 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
                         item.motivo,
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13.5,
                           fontWeight: FontWeight.bold,
                           color: isDark ? Colors.white : Colors.black87,
+                          height: 1.25,
                         ),
-                        maxLines: 2,
+                        maxLines: 3,
+                        softWrap: true,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -510,7 +527,7 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                         style: TextStyle(
                           color: badgeColor,
                           fontWeight: FontWeight.w900,
-                          fontSize: 13,
+                          fontSize: 12.5,
                         ),
                       ),
                     ),
@@ -749,8 +766,8 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                 ),
               ),
 
-              // Tarjeta de Próxima Meta o Recompensa Pendiente
-              _buildRewardProgressOrReviewCard(isDark, textColor),
+              // Tarjeta de Premios Reclamables, Próxima Meta y Guía
+              _buildClaimableRewardsAndProgressSection(isDark, textColor),
               const SizedBox(height: 12),
 
               // Barra de título del Kardex + Botón Bono
@@ -827,167 +844,386 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
     );
   }
 
-  Widget _buildRewardProgressOrReviewCard(bool isDark, Color textColor) {
-    if (_pendingRewards.isNotEmpty) {
-      final pending = _pendingRewards.first;
-      return Container(
-        margin: const EdgeInsets.only(top: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF332619) : const Color(0xFFFEF3C7),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.5)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade700.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
+  Widget _buildClaimableRewardsAndProgressSection(bool isDark, Color textColor) {
+    final claimableGoals = _claimableSummary?.claimableGoals ?? [];
+    final nextGoal = _claimableSummary?.nextGoal ?? (_nextGoalData?['goal'] as RewardGoalModel?);
+    final int missing = _claimableSummary?.puntosFaltantesParaSiguiente ??
+        ((_nextGoalData?['puntos_faltantes'] ?? _nextGoalData?['missing'] as num?)?.toInt() ?? 0);
+    final double progress = (_claimableSummary != null
+        ? (_claimableSummary!.progresoSiguienteMeta)
+        : (((_nextGoalData?['progreso'] ?? _nextGoalData?['progress'] as num?)?.toDouble() ?? 0.0))).clamp(0.0, 1.0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1. SECCIÓN: PREMIOS DISPONIBLES PARA RECLAMAR
+        if (claimableGoals.isNotEmpty) ...[
+          Container(
+            margin: const EdgeInsets.only(top: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [const Color(0xFF3A2E1E), const Color(0xFF241C15)]
+                    : [Colors.amber.shade50, Colors.orange.shade50],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              child: Icon(Icons.card_giftcard_rounded, color: Colors.amber[800], size: 20),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Premio pendiente de revisión",
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.amber[900],
-                    ),
-                  ),
-                  Text(
-                    pending.tituloRecompensa,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.amber.shade600.withValues(alpha: 0.6),
+                width: 1.5,
               ),
             ),
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade700.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.card_giftcard_rounded, color: Colors.amber[800], size: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Premios Listos (${claimableGoals.length})",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.amber[200] : Colors.amber[900],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            "Alcanzados con sus ${_currentClient.puntosActuales} pts",
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: isDark ? Colors.grey[400] : Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Botón avisar al cliente por WhatsApp
+                    TextButton.icon(
+                      onPressed: () async {
+                        final auth = Provider.of<AuthProvider>(context, listen: false);
+                        final msg = LoyaltyWhatsAppService.buildAvailableRewardsMessage(
+                          clientName: _currentClient.fullName,
+                          businessName: auth.activeBusinessName,
+                          puntosSaldo: _currentClient.puntosActuales,
+                          nivelReputacion: _currentClient.tier.key,
+                          claimableGoals: claimableGoals,
+                          upcomingGoal: nextGoal,
+                          missingPoints: missing,
+                        );
+                        if (!mounted) return;
+                        await LoyaltyWhatsAppService.showEditableWhatsAppPreviewModal(
+                          context: context,
+                          title: "Avisar Premios Disponibles",
+                          initialMessage: msg,
+                          phone: _currentClient.phone,
+                        );
+                      },
+                      icon: const Icon(Icons.chat_rounded, size: 13),
+                      label: const Text("Avisar", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.green[700],
+                        backgroundColor: Colors.green.withValues(alpha: 0.12),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        visualDensity: VisualDensity.compact,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...claimableGoals.map((g) {
+                  return Container(
+                    margin: const EdgeInsets.only(top: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF28221D) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark ? Colors.white12 : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                g.nombre,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "${g.puntosRequeridos} pts • ${g.tipoBeneficio == 'DESCUENTO_MONTO' ? '${AppCurrency.format(g.valorBeneficio)} descuento' : g.tipoBeneficio == 'DESCUENTO_PORCENTAJE' ? '${g.valorBeneficio.toInt()}% descuento' : (g.descripcion != null && g.descripcion!.isNotEmpty ? g.descripcion! : 'Beneficio especial')}",
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  color: isDark ? Colors.amber[300] : Colors.amber[800],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            await showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (ctx) => RewardReviewModal(
+                                goal: g,
+                                client: _currentClient,
+                                onActionCompleted: () async {
+                                  widget.onPointsChanged?.call();
+                                  await _loadHistory();
+                                },
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.touch_app_rounded, size: 13),
+                          label: const Text("Reclamar", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber[700],
+                            foregroundColor: Colors.white,
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ],
+
+        // 2. RECOMPENSA PENDIENTE (REVISIÓN / CANJE PREVIO)
+        if (_pendingRewards.isNotEmpty) ...[
+          Container(
+            margin: const EdgeInsets.only(top: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF332619) : const Color(0xFFFEF3C7),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade700.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.card_giftcard_rounded, color: Colors.amber[800], size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Premio en trámite de entrega",
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber[900],
+                        ),
+                      ),
+                      Text(
+                        _pendingRewards.first.tituloRecompensa,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (ctx) => RewardReviewModal(
+                        reward: _pendingRewards.first,
+                        client: _currentClient,
+                        onActionCompleted: () async {
+                          widget.onPointsChanged?.call();
+                          await _loadHistory();
+                        },
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                  label: const Text("Revisar", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber[700],
+                    foregroundColor: Colors.white,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        // 3. PRÓXIMA META SUPERIOR (PARA SEGUIR AHORRANDO)
+        if (nextGoal != null) ...[
+          Container(
+            margin: const EdgeInsets.only(top: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF242432) : Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.workspace_premium_rounded, size: 16, color: Colors.amber[700]),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        "Próxima Meta: ${nextGoal.titulo}",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      missing <= 0 ? "¡Meta alcanzada!" : "Faltan $missing pts",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: missing <= 0 ? Colors.green : Colors.amber[800],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 6,
+                    backgroundColor: isDark ? Colors.white10 : Colors.grey.shade200,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      progress >= 1.0 ? Colors.green : Colors.amber.shade700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "${_currentClient.puntosActuales} / ${nextGoal.puntosRequeridos} pts",
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      "${(progress * 100).toInt()}%",
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        // 4. ACCIÓN RÁPIDA: ENVIAR CARTILLA / GUÍA DE PUNTOS
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
               onPressed: () async {
-                await showModalBottomSheet(
+                final auth = Provider.of<AuthProvider>(context, listen: false);
+                final rules = await _clientService.getLoyaltyRules(_currentClient.negocioId);
+                final msg = LoyaltyWhatsAppService.buildLoyaltyGuideAndCatalogMessage(
+                  businessName: auth.activeBusinessName,
+                  rules: rules,
+                  activeGoals: _goals.where((g) => g.activo).toList(),
+                  clientName: _currentClient.fullName,
+                  puntosActuales: _currentClient.puntosActuales,
+                );
+                if (!mounted) return;
+                await LoyaltyWhatsAppService.showEditableWhatsAppPreviewModal(
                   context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (ctx) => RewardReviewModal(
-                    reward: pending,
-                    client: _currentClient,
-                    onActionCompleted: () async {
-                      widget.onPointsChanged?.call();
-                      await _loadHistory();
-                    },
-                  ),
+                  title: "Guía de Puntos y Premios",
+                  initialMessage: msg,
+                  phone: _currentClient.phone,
                 );
               },
-              icon: const Icon(Icons.arrow_forward_rounded, size: 14),
-              label: const Text("Revisar", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber[700],
-                foregroundColor: Colors.white,
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+              icon: Icon(Icons.menu_book_rounded, size: 15, color: isDark ? Colors.amber[300] : Colors.amber[800]),
+              label: Text(
+                "Enviar Cartilla de Puntos al Cliente",
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.amber[200] : Colors.amber[900],
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                visualDensity: VisualDensity.compact,
               ),
             ),
-          ],
+          ),
         ),
-      );
-    }
-
-    if (_nextGoalData != null && _nextGoalData!['goal'] != null) {
-      final meta = _nextGoalData!['goal'] as RewardGoalModel;
-      final int missing = (_nextGoalData!['puntos_faltantes'] ?? _nextGoalData!['missing'] as num?)?.toInt() ?? 0;
-      final double progress = ((_nextGoalData!['progreso'] ?? _nextGoalData!['progress'] as num?)?.toDouble() ?? 0.0).clamp(0.0, 1.0);
-
-      return Container(
-        margin: const EdgeInsets.only(top: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF242432) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.workspace_premium_rounded, size: 16, color: Colors.amber[700]),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    "Próxima Meta: ${meta.titulo}",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Text(
-                  missing <= 0 ? "Meta alcanzada" : "Faltan $missing pts",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: missing <= 0 ? Colors.green : Colors.amber[800],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 6,
-                backgroundColor: isDark ? Colors.white10 : Colors.grey.shade200,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  progress >= 1.0 ? Colors.green : Colors.amber.shade700,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  "${_currentClient.puntosActuales} / ${meta.puntosRequeridos} pts",
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  "${(progress * 100).toInt()}%",
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-
-    return const SizedBox.shrink();
+      ],
+    );
   }
 
   Widget _buildFilterChips(bool isDark) {

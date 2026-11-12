@@ -334,4 +334,27 @@ class ProductService {
       return false;
     }
   }
+
+  Future<bool> cutVariantFromProduct({
+    required int presentationId,
+    required int originProductId,
+    int? promoteToDefaultPresentationId,
+    String? transferredBarcode,
+    int transferredStock = 0,
+  }) async {
+    try {
+      await _repository.cutVariantFromProductTransaction(
+        presentationId: presentationId,
+        originProductId: originProductId,
+        promoteToDefaultPresentationId: promoteToDefaultPresentationId,
+        transferredBarcode: transferredBarcode,
+        transferredStock: transferredStock,
+      );
+      return true;
+    } catch (e, stack) {
+      _lastError = e.toString();
+      AppLogger.error('ProductService.cutVariantFromProduct', e, stack);
+      return false;
+    }
+  }
 }

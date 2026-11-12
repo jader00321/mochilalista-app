@@ -195,11 +195,13 @@ class CatalogCategoriesBar extends StatelessWidget {
             ),
             if (provider.hasOrphanCategories)
               CategoryChip(
-                label: "Sin Categoría", 
+                label: "General", 
                 isSelected: provider.selectedCategoryId == 0, 
                 onTap: () => provider.selectCategory(0)
               ),
-            ...provider.categories.map((c) => CategoryChip(
+            ...provider.categories
+                .where((c) => c.nombre.trim().toLowerCase() != 'general')
+                .map((c) => CategoryChip(
               label: c.nombre, 
               isSelected: provider.selectedCategoryId == c.id, 
               onTap: () => provider.selectCategory(c.id)

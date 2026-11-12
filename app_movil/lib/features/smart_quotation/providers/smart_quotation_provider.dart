@@ -253,11 +253,19 @@ class SmartQuotationProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void updateMetadata({String? institution, String? student, String? grade}) {
+  void updateMetadata({
+    String? institution,
+    String? student,
+    String? grade,
+    QuotationContextMode? mode,
+    String? phone,
+  }) {
     _currentState.metadata ??= ExtractedMetadata();
-    if (institution != null) _currentState.metadata!.institutionName = institution;
-    if (student != null) _currentState.metadata!.studentName = student;
-    if (grade != null) _currentState.metadata!.gradeLevel = grade;
+    if (mode != null) _currentState.metadata!.contextMode = mode;
+    if (institution != null) _currentState.metadata!.businessOrInstitutionName = institution;
+    if (student != null) _currentState.metadata!.clientOrContactName = student;
+    if (grade != null) _currentState.metadata!.referenceNotes = grade;
+    if (phone != null) _currentState.metadata!.phone = phone;
     notifyListeners();
   }
 

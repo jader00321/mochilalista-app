@@ -477,7 +477,7 @@ class _FilterDrawerState extends State<FilterDrawer> {
                         children: [
                           if (provider.hasOrphanCategories)
                             _buildFilterChip(
-                              label: '[ Sin Categoría ]',
+                              label: 'General',
                               isSelected: _selectedCategories.contains(0),
                               onTap: () {
                                 _updateFilter(() {
@@ -488,7 +488,9 @@ class _FilterDrawerState extends State<FilterDrawer> {
                               },
                               isDark: isDark,
                             ),
-                          ...provider.categories.map((Category cat) {
+                          ...provider.categories
+                              .where((c) => c.nombre.trim().toLowerCase() != 'general')
+                              .map((Category cat) {
                             final isSelected = _selectedCategories.contains(cat.id);
                             return _buildFilterChip(
                               label: cat.nombre,

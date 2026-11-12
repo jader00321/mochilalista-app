@@ -181,7 +181,7 @@ void main() {
   });
 
   group('Árbitro Adversarial - Fase 3: Ciclo Completo de Fidelización y Recompensas', () {
-    test('Compra al contado otorga puntos y desbloquea meta en PENDIENTE_REVISION reservando puntos', () async {
+    test('Compra al contado otorga puntos libremente y permite al cliente elegir reclamar premio', () async {
       await LocalDatabase.seedDefaultMetasRecompensas(db);
 
       final client = await clientService.createClient({
@@ -207,16 +207,29 @@ void main() {
       final clientAfter = await clientService.getClientById(client.id);
       expect(clientAfter, isNotNull);
       expect(clientAfter!.puntosHistoricos, equals(120));
+      // Acumulación libre: puntos_actuales no se descuenta automáticamente
+      expect(clientAfter.puntosActuales, equals(120));
 
-      // La meta de 100 pts se debió desbloquear en PENDIENTE_REVISION
-      final pending = await clientService.getPendingReviewRewards(testNegocioId);
-      expect(pending.isNotEmpty, isTrue);
-      final reward = pending.firstWhere((r) => r.clienteId == client.id);
-      expect(reward.estado, equals('PENDIENTE_REVISION'));
+      // Verificación de premios disponibles para reclamar
+      final summary = await clientService.getClientClaimableRewardsSummary(client.id, testNegocioId);
+      expect(summary, isNotNull);
+      expect(summary!.hasClaimableRewards, isTrue);
+      expect(summary.claimableGoals.length, greaterThanOrEqualTo(1));
+      final goal100 = summary.claimableGoals.firstWhere((g) => g.puntosRequeridos == 100);
+      expect(goal100.nombre, isNotEmpty);
+
+      // Reclamo manual del premio elegido por el cliente
+      final reward = (await clientService.claimAndDeliverReward(
+        client.id,
+        goal100.id,
+        deliverImmediately: false,
+      ))!;
+      expect(reward.estado, equals('APROBADA_NOTIFICADA'));
       expect(reward.puntosConsumidos, equals(100));
 
-      // 100 puntos reservados de puntos_actuales: 120 - 100 = 20
-      expect(clientAfter.puntosActuales, equals(20));
+      // Ahora sí se descuentan los 100 puntos: 120 - 100 = 20
+      final clientAfterClaim = await clientService.getClientById(client.id);
+      expect(clientAfterClaim!.puntosActuales, equals(20));
     });
 
     test('Descartar recompensa pendiente restaura los puntos reservados a puntos_actuales', () async {
@@ -241,8 +254,15 @@ void main() {
         ]
       }, testNegocioId, testUsuarioId);
 
-      final pending = await clientService.getPendingReviewRewards(testNegocioId);
-      final reward = pending.firstWhere((r) => r.clienteId == client.id);
+      final summary = await clientService.getClientClaimableRewardsSummary(client.id, testNegocioId);
+      expect(summary, isNotNull);
+      final goal100 = summary!.claimableGoals.firstWhere((g) => g.puntosRequeridos == 100);
+
+      final reward = (await clientService.claimAndDeliverReward(
+        client.id,
+        goal100.id,
+        deliverImmediately: false,
+      ))!;
 
       // Descartar recompensa
       await clientService.discardReward(reward.id, reason: 'Cliente prefirió seguir acumulando');
@@ -277,11 +297,16 @@ void main() {
         ]
       }, testNegocioId, testUsuarioId);
 
-      final pending = await clientService.getPendingReviewRewards(testNegocioId);
-      final reward = pending.firstWhere((r) => r.clienteId == client.id);
+      final summary = await clientService.getClientClaimableRewardsSummary(client.id, testNegocioId);
+      expect(summary, isNotNull);
+      final goal100 = summary!.claimableGoals.firstWhere((g) => g.puntosRequeridos == 100);
 
-      // 2. Comerciante aprueba la recompensa
-      await clientService.approveReward(reward.id);
+      // 2. Comerciante aprueba y entrega la recompensa
+      final reward = (await clientService.claimAndDeliverReward(
+        client.id,
+        goal100.id,
+        deliverImmediately: false,
+      ))!;
       final approvedRewards = await clientService.getClientRewards(client.id, status: 'APROBADA_NOTIFICADA');
       expect(approvedRewards.length, equals(1));
       expect(approvedRewards.first.estado, equals('APROBADA_NOTIFICADA'));

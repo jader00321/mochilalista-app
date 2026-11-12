@@ -1,3 +1,5 @@
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
+
 class SmartQuotationModel {
   final int id;
   final int? sequentialNumber;
@@ -21,8 +23,45 @@ class SmartQuotationModel {
   final String createdAt;
   final int itemCount;
   final List<QuotationItem> items; 
+  final QuotationContextMode? explicitContextMode;
 
   String get displayId => sequentialNumber != null ? sequentialNumber.toString() : id.toString();
+
+  QuotationContextMode get contextMode {
+    if (explicitContextMode != null) return explicitContextMode!;
+    if (notas != null) {
+      final lowerNotas = notas!.toLowerCase();
+      if (lowerNotas.contains('[modo:wholesale]') || lowerNotas.contains('[modo:mayorista]') || lowerNotas.contains('[mayorista]')) {
+        return QuotationContextMode.wholesale;
+      }
+      if (lowerNotas.contains('[modo:general]')) {
+        return QuotationContextMode.general;
+      }
+      if (lowerNotas.contains('[modo:school]') || lowerNotas.contains('[modo:escolar]')) {
+        return QuotationContextMode.school;
+      }
+    }
+    if (institutionName != null && institutionName!.isNotEmpty) {
+      final lower = institutionName!.toLowerCase();
+      if (lower.contains('ruc') || lower.contains('bodega') || lower.contains('empresa') || lower.contains('comercial') || lower.contains('distribuidora') || lower.contains('s.a.') || lower.contains('s.a.c.') || lower.contains('e.i.r.l.')) {
+        return QuotationContextMode.wholesale;
+      }
+      if (lower.contains('colegio') || lower.contains('i.e.') || lower.contains('escuela') || lower.contains('instituto')) {
+        return QuotationContextMode.school;
+      }
+    }
+    if (gradeLevel != null && gradeLevel!.isNotEmpty) {
+      final lower = gradeLevel!.toLowerCase();
+      if (lower.contains('grado') || lower.contains('prim') || lower.contains('sec') || lower.contains('inicial') || lower.contains('básico') || lower.contains('kinder')) {
+        return QuotationContextMode.school;
+      }
+      return QuotationContextMode.general;
+    }
+    return QuotationContextMode.general;
+  }
+
+  /// Devuelve las notas limpias sin los tags internos de modo ([modo:general], etc.)
+  String get displayNotas => (notas ?? "").replaceAll(RegExp(r'\[modo:\w+\]\s*'), '').replaceAll(RegExp(r'\[mayorista\]\s*'), '').trim();
 
   SmartQuotationModel({
     required this.id,
@@ -44,6 +83,7 @@ class SmartQuotationModel {
     required this.createdAt,
     this.itemCount = 0,
     this.items = const [],
+    this.explicitContextMode,
   });
 
   factory SmartQuotationModel.fromJson(Map<String, dynamic> json) {
@@ -72,6 +112,15 @@ class SmartQuotationModel {
       createdAt: json['created_at'] ?? "",
       itemCount: json['items'] != null ? itemsList.length : (json['item_count'] ?? 0),
       items: itemsList,
+      explicitContextMode: json['context_mode'] != null
+          ? QuotationContextMode.values.firstWhere((e) => e.name == json['context_mode'].toString(), orElse: () => QuotationContextMode.general)
+          : (json['notas'] != null && json['notas'].toString().contains('[modo:general]')
+              ? QuotationContextMode.general
+              : (json['notas'] != null && (json['notas'].toString().contains('[modo:wholesale]') || json['notas'].toString().contains('[modo:mayorista]') || json['notas'].toString().contains('[mayorista]'))
+                  ? QuotationContextMode.wholesale
+                  : (json['notas'] != null && (json['notas'].toString().contains('[modo:school]') || json['notas'].toString().contains('[modo:escolar]'))
+                      ? QuotationContextMode.school
+                      : null))),
     );
   }
 
@@ -224,20 +273,73 @@ class QuotationItem {
     };
   }
 
-  String get displayName {
-    final buffer = StringBuffer();
-    if (productName != null && productName!.isNotEmpty) {
-      buffer.write(productName);
-    } else {
-      buffer.write("Producto Desconocido");
+  /// Genera un nombre de producto limpio, elegante y profesional (Vector A4),
+  /// deduplicando tokens redundantes entre el nombre base, la marca y la presentación.
+  String get displayNameClean {
+    final baseProduct = (productName ?? "Producto Desconocido").trim();
+    if (baseProduct.isEmpty) return "Producto Desconocido";
+
+    final brand = (brandName != null && brandName != "null") ? brandName!.trim() : "";
+    final specific = (specificName != null && specificName != "null") ? specificName!.trim() : "";
+
+    // Normalizador de tokens para comparación insensible a mayúsculas y acentos
+    String norm(String s) => s.toLowerCase()
+        .replaceAll(RegExp(r'[áàä]'), 'a')
+        .replaceAll(RegExp(r'[éèë]'), 'e')
+        .replaceAll(RegExp(r'[íìï]'), 'i')
+        .replaceAll(RegExp(r'[óòö]'), 'o')
+        .replaceAll(RegExp(r'[úùü]'), 'u')
+        .replaceAll(RegExp(r'[^\w\s]'), '');
+
+    final productNorm = norm(baseProduct);
+    final productTokens = productNorm.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toSet();
+
+    // 1. Verificar si la marca ya está contenida en el nombre del producto
+    String? brandToAdd;
+    if (brand.isNotEmpty) {
+      final brandNorm = norm(brand);
+      final brandTokens = brandNorm.split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
+      final isBrandContained = brandTokens.isNotEmpty && brandTokens.every((t) => productTokens.contains(t) || productNorm.contains(t));
+      if (!isBrandContained) {
+        brandToAdd = brand;
+      }
     }
-    
-    if (brandName != null && brandName!.isNotEmpty && brandName != "null") {
-      buffer.write(" $brandName");
+
+    // 2. Extraer partes no redundantes de specificName
+    String? specificToAdd;
+    if (specific.isNotEmpty) {
+      if (norm(specific) != productNorm && (brandToAdd == null || norm(specific) != norm(brandToAdd))) {
+        final specificWords = specific.split(RegExp(r'\s+'));
+        final keptWords = <String>[];
+        for (final word in specificWords) {
+          final wNorm = norm(word);
+          if (wNorm.isEmpty) continue;
+          final inProduct = productTokens.contains(wNorm) || productNorm.contains(wNorm);
+          final inBrand = brand.isNotEmpty && norm(brand).contains(wNorm);
+          if (!inProduct && !inBrand) {
+            keptWords.add(word);
+          }
+        }
+        if (keptWords.isNotEmpty) {
+          specificToAdd = keptWords.join(' ');
+        }
+      }
     }
-    if (specificName != null && specificName!.isNotEmpty) {
-      buffer.write(" $specificName");
+
+    final details = <String>[];
+    if (brandToAdd != null && brandToAdd.isNotEmpty) {
+      details.add(brandToAdd);
     }
-    return buffer.toString().trim();
+    if (specificToAdd != null && specificToAdd.isNotEmpty) {
+      details.add(specificToAdd);
+    }
+
+    if (details.isEmpty) {
+      return baseProduct;
+    }
+
+    return "$baseProduct (${details.join(' • ')})";
   }
+
+  String get displayName => displayNameClean;
 }

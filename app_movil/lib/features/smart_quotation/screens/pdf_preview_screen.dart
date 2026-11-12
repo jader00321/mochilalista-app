@@ -20,6 +20,8 @@ import 'package:app_movil/features/smart_quotation/widgets/manual/client_search_
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
+
 /// 📱 PANTALLA DE VISTA PREVIA PDF ("MOBILE AWARDS")
 /// Incorpora barra de controles rápidos (A4 vs Ticket 80mm + paleta cromática),
 /// botón directo de descarga con modal animado y feedback háptico,
@@ -28,8 +30,14 @@ import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 class PdfPreviewScreen extends StatefulWidget {
   final int? quotationId; 
   final int? saleId;      
+  final QuotationContextMode? contextMode;
 
-  const PdfPreviewScreen({super.key, this.quotationId, this.saleId});
+  const PdfPreviewScreen({
+    super.key, 
+    this.quotationId, 
+    this.saleId,
+    this.contextMode,
+  });
 
   @override
   State<PdfPreviewScreen> createState() => _PdfPreviewScreenState();
@@ -175,7 +183,18 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
       else if (widget.quotationId != null) {
         final qProv = Provider.of<SmartQuotationProvider>(context, listen: false);
         _quotation = await qProv.getQuotationById(widget.quotationId!);
-        _config.documentTitle = "COTIZACIÓN"; 
+        final mode = widget.contextMode ?? _quotation?.contextMode ?? QuotationContextMode.school;
+        switch (mode) {
+          case QuotationContextMode.general:
+            _config.documentTitle = "PROFORMA COMERCIAL";
+            break;
+          case QuotationContextMode.wholesale:
+            _config.documentTitle = "PRESUPUESTO MAYORISTA";
+            break;
+          case QuotationContextMode.school:
+            _config.documentTitle = "COTIZACIÓN";
+            break;
+        }
         _config.showTransactionDetails = false;
       }
 
@@ -906,10 +925,11 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                                 runSpacing: 6,
                                 children: [
                                   "COTIZACIÓN",
-                                  "PROFORMA",
+                                  "PROFORMA COMERCIAL",
+                                  "PRESUPUESTO MAYORISTA",
+                                  "COTIZACIÓN ESCOLAR",
                                   "NOTA DE VENTA",
                                   "COMPROBANTE DE PAGO",
-                                  "ESTADO DE CUENTA",
                                 ].map((chipTitle) {
                                   final bool isSelected = _config.documentTitle == chipTitle;
                                   return ChoiceChip(
@@ -1240,6 +1260,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
                                       spacing: 6,
                                       runSpacing: 6,
                                       children: [
+                                        ("⏳ Válida por 3 días", "Válida por 3 días", 3),
                                         ("⏳ Válida por 7 días", "Válida por 7 días", 7),
                                         ("⏳ Válida por 15 días", "Válida por 15 días", 15),
                                         ("⏳ Válida por 30 días", "Válida por 30 días", 30),

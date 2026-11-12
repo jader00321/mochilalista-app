@@ -36,11 +36,19 @@ import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_business_
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_message_editor.dart';
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_final_preview_modal.dart';
 
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
+
 class WhatsAppPreviewScreen extends StatefulWidget {
   final int? quotationId;
   final int? saleId;
+  final QuotationContextMode? contextMode;
 
-  const WhatsAppPreviewScreen({super.key, this.quotationId, this.saleId});
+  const WhatsAppPreviewScreen({
+    super.key, 
+    this.quotationId, 
+    this.saleId,
+    this.contextMode,
+  });
 
   @override
   State<WhatsAppPreviewScreen> createState() => _WhatsAppPreviewScreenState();
@@ -264,6 +272,21 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
           _config,
           contextKey: _currentContextKey,
         );
+
+        final effectiveMode = widget.contextMode ?? _quotation?.contextMode;
+        if (effectiveMode != null) {
+          switch (effectiveMode) {
+            case QuotationContextMode.general:
+              _config.style = WhatsAppMessageStyle.commercial;
+              break;
+            case QuotationContextMode.wholesale:
+              _config.style = WhatsAppMessageStyle.wholesale;
+              break;
+            case QuotationContextMode.school:
+              _config.style = WhatsAppMessageStyle.school;
+              break;
+          }
+        }
       }
 
       _regenerateMessage();
@@ -362,6 +385,12 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
           case WhatsAppMessageStyle.commercial:
             sb.writeln("Es un gusto saludarte. Te comparto el detalle formal del préstamo personal registrado:");
             break;
+          case WhatsAppMessageStyle.wholesale:
+            sb.writeln("Estimados, les compartimos el detalle formal del financiamiento/préstamo comercial registrado:");
+            break;
+          case WhatsAppMessageStyle.school:
+            sb.writeln("Estimado apoderado/a, le compartimos el detalle del financiamiento registrado:");
+            break;
           case WhatsAppMessageStyle.compact:
             sb.writeln("Resumen de tu préstamo personal:");
             break;
@@ -389,6 +418,12 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
             case WhatsAppMessageStyle.commercial:
               sb.writeln("Muchas gracias por tu preferencia. A continuación, te comparto el comprobante y estado de tu compra:");
               break;
+            case WhatsAppMessageStyle.wholesale:
+              sb.writeln("Estimados, muchas gracias por su compra al por mayor. A continuación, les compartimos el comprobante y saldo pendiente:");
+              break;
+            case WhatsAppMessageStyle.school:
+              sb.writeln("¡Hola! Muchas gracias por tu compra de útiles escolares. Te compartimos el comprobante y saldo pendiente:");
+              break;
             case WhatsAppMessageStyle.compact:
               sb.writeln("Resumen de compra y saldo pendiente:");
               break;
@@ -412,6 +447,12 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                   ? "¡Muchas gracias por tu compra! Te adjunto el detalle de los productos que llevaste:"
                   : "¡Gracias por confirmar tu pedido! Aquí tienes el comprobante detallado de tu compra cancelada:");
               break;
+            case WhatsAppMessageStyle.wholesale:
+              sb.writeln("¡Muchas gracias por su preferencia comercial! Adjuntamos el comprobante de su compra mayorista 100% CANCELADA:");
+              break;
+            case WhatsAppMessageStyle.school:
+              sb.writeln("¡Muchas gracias por tu compra de útiles escolares! Tu pedido se encuentra 100% CANCELADO:");
+              break;
             case WhatsAppMessageStyle.compact:
               sb.writeln("Comprobante de compra cancelada:");
               break;
@@ -434,6 +475,12 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
         switch (_config.style) {
           case WhatsAppMessageStyle.commercial:
             sb.writeln("Es un gusto saludarte. Aquí te envío la cotización detallada de los productos solicitados:");
+            break;
+          case WhatsAppMessageStyle.wholesale:
+            sb.writeln("Estimados, les compartimos la proforma comercial por volumen solicitada para su negocio:");
+            break;
+          case WhatsAppMessageStyle.school:
+            sb.writeln("¡Hola! Aquí te comparto la cotización detallada de la lista de útiles escolares solicitada:");
             break;
           case WhatsAppMessageStyle.compact:
             sb.writeln("Resumen directo de tu cotización solicitada:");
@@ -504,7 +551,46 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       }
       sb.writeln("");
     } else {
-      final String sectionTitle = isSale ? "🛍️ *DETALLE DE TU COMPRA*" : "🛍️ *DETALLE DE PRODUCTOS*";
+      if (_config.showClientData) {
+        final String? inst = _quotation?.institutionName;
+        final String student = _clientNameCtrl.text.trim();
+        final String? grade = _quotation?.gradeLevel;
+        if (_config.style == WhatsAppMessageStyle.wholesale) {
+          if (inst != null && inst.isNotEmpty) sb.writeln("🏢 *Negocio / RUC:* $inst");
+          if (student.isNotEmpty && !PdfGenerator.isInternalDraftCode(student)) sb.writeln("👤 *Contacto:* $student");
+          if ((inst != null && inst.isNotEmpty) || (student.isNotEmpty && !PdfGenerator.isInternalDraftCode(student))) sb.writeln("");
+        } else if (_config.style == WhatsAppMessageStyle.school) {
+          if (inst != null && inst.isNotEmpty) sb.writeln("🏫 *Colegio:* $inst");
+          if (student.isNotEmpty && !PdfGenerator.isInternalDraftCode(student)) sb.writeln("👦 *Alumno:* $student");
+          if (grade != null && grade.isNotEmpty) sb.writeln("📚 *Grado:* $grade");
+          if ((inst != null && inst.isNotEmpty) || (student.isNotEmpty && !PdfGenerator.isInternalDraftCode(student))) sb.writeln("");
+        } else {
+          if (student.isNotEmpty && !PdfGenerator.isInternalDraftCode(student)) {
+            sb.writeln("👤 *Cliente:* $student");
+            sb.writeln("");
+          }
+        }
+      }
+
+      String sectionTitle;
+      if (isSale) {
+        sectionTitle = "🛍️ *DETALLE DE TU COMPRA*";
+      } else {
+        switch (_config.style) {
+          case WhatsAppMessageStyle.wholesale:
+            sectionTitle = "📦 *DETALLE DE PEDIDO AL POR MAYOR*";
+            break;
+          case WhatsAppMessageStyle.school:
+            sectionTitle = "🎓 *LISTA DE ÚTILES ESCOLARES*";
+            break;
+          case WhatsAppMessageStyle.compact:
+            sectionTitle = "⚡ *RESUMEN DE PRODUCTOS*";
+            break;
+          default:
+            sectionTitle = "🛍️ *DETALLE DE PRODUCTOS*";
+            break;
+        }
+      }
       sb.writeln(sectionTitle);
 
       for (var item in _quotation!.items) {
@@ -513,7 +599,11 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
 
         String name = (item.bundleId != null)
             ? (item.productName ?? 'Paquete')
-            : item.displayName;
+            : (_config.showBrandPackage ? item.displayNameClean : (item.productName ?? item.displayNameClean));
+
+        final String unitPriceSuffix = _config.showUnitPrices
+            ? " — ${AppCurrency.format(item.unitPriceApplied)} c/u"
+            : "";
 
         if (_config.style == WhatsAppMessageStyle.compact) {
           String line = "▪ ${item.quantity}x $name";
@@ -522,7 +612,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
           }
           sb.writeln(line);
         } else {
-          String line = "▪ ${item.quantity}x $name";
+          String line = "▪ ${item.quantity}x $name$unitPriceSuffix";
           if (_config.showSubtotals) {
             line += " -> *${AppCurrency.format(lineTotal)}*";
           }
@@ -648,37 +738,38 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
       if (_config.style == WhatsAppMessageStyle.urgentOffer) {
         sb.writeln("⏳ *Promoción por tiempo limitado:* Precios válidos por 7 días calendario.");
         sb.writeln("");
-      } else if (_config.style == WhatsAppMessageStyle.commercial) {
+      } else {
         sb.writeln("⏳ *Validez:* Precios válidos por 7 días calendario.");
         sb.writeln("");
       }
     }
 
     // 7. MEDIOS DE PAGO
-    if (_config.showPaymentInfo && _bizPaymentCtrl.text.isNotEmpty) {
+    if (_config.showPaymentInfo) {
+      final paymentText = _bizPaymentCtrl.text.trim();
       if (isLoan) {
         final double totalDebt = (_saleData!['monto_total'] ?? 0).toDouble();
         final double paid = (_saleData!['monto_pagado'] ?? 0).toDouble();
-        if ((totalDebt - paid) > 0.01) {
+        if ((totalDebt - paid) > 0.01 && paymentText.isNotEmpty) {
           sb.writeln("💳 *CUENTAS DE ABONO* (Para amortizar o cancelar cuotas)");
-          sb.writeln(_bizPaymentCtrl.text.trim());
+          sb.writeln(paymentText);
           sb.writeln("");
         }
       } else if (isSale) {
         final double total = (_saleData!['monto_total'] ?? 0).toDouble();
         final double paid = (_saleData!['monto_pagado'] ?? 0).toDouble();
 
-        if ((total - paid) > 0.01) {
+        if ((total - paid) > 0.01 && paymentText.isNotEmpty) {
           sb.writeln("💳 *MEDIOS DE PAGO* (Para cancelar saldo)");
-          sb.writeln(_bizPaymentCtrl.text.trim());
+          sb.writeln(paymentText);
           sb.writeln("");
-        } else if ((total - paid) <= 0.01) {
+        } else if ((total - paid) <= 0.01 && _saleData!['metodo_pago'] != null) {
           sb.writeln("💳 *PAGADO MEDIANTE:* ${_saleData!['metodo_pago'].toString().toUpperCase()}");
           sb.writeln("");
         }
       } else {
         sb.writeln("💳 *MEDIOS DE PAGO*");
-        sb.writeln(_bizPaymentCtrl.text.trim());
+        sb.writeln(paymentText.isNotEmpty ? paymentText : "Aceptamos efectivo, transferencias y pagos digitales (Yape / Plin).");
         sb.writeln("");
       }
     }
@@ -904,6 +995,15 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                         _recordUndoSnapshot();
                         setState(() {
                           switch (optionKey) {
+                            case 'unit_prices':
+                              _config.showUnitPrices = newValue;
+                              break;
+                            case 'brand_package':
+                              _config.showBrandPackage = newValue;
+                              break;
+                            case 'client_data':
+                              _config.showClientData = newValue;
+                              break;
                             case 'validity':
                               _config.includeValidity = newValue;
                               break;
@@ -914,9 +1014,8 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                               _config.showPaymentInfo = newValue;
                               break;
                           }
-                          if (!_isManualEdit) {
-                            _regenerateMessage();
-                          }
+                          _isManualEdit = false;
+                          _regenerateMessage();
                         });
                       },
                       onRegenerateAuto: () {

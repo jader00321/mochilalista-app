@@ -15,8 +15,8 @@ class QuotationBanner extends StatelessWidget {
 
   const QuotationBanner({
     super.key,
-    this.title = "Gestiona tus Listas",
-    this.subtitle = "Administra cotizaciones, verifica stock y cierra ventas de listas escolares.",
+    this.title = "Gestiona tus Listas y Pedidos",
+    this.subtitle = "Administra cotizaciones, verifica stock y cierra ventas de cualquier tipo de lista o pedido.",
     this.buttonText = "INGRESAR AL ÁREA",
     required this.onGoToWorkbench,
   });
@@ -45,7 +45,7 @@ class QuotationBanner extends StatelessWidget {
               _showResumeDialog(
                 context, 
                 title: "Pedido Pendiente",
-                msg: "¿Deseas retomar el pedido escolar que estabas escaneando o empezar uno nuevo?",
+                msg: "¿Deseas retomar la lista o pedido que estabas procesando o empezar uno nuevo?",
                 isDark: isDark,
                 onNew: () {
                   quotationScanner.clearState(); 

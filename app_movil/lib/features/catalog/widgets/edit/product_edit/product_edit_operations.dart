@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
+import 'package:app_movil/features/catalog/models/variant_extraction_models.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/core/services/unit_catalog_service.dart';
 import 'package:app_movil/core/widgets/presentation_card/presentation_math_engine.dart';
@@ -568,6 +569,91 @@ class ProductEditOperations {
         ),
       );
     }
+  }
+
+  /// Finaliza el corte diferido de una variante en memoria y en base de datos de forma atómica
+  static Future<void> finalizeVariantExtractionCut({
+    required BuildContext context,
+    required ProductExtractionResult result,
+    required List<Map<String, dynamic>> controllers,
+    required Map<String, GlobalKey> keys,
+    required int originProductId,
+    required VoidCallback onCompleted,
+    InventoryProvider? inventoryProvider,
+  }) async {
+    // 1. Encontrar la variante en la lista de controladores por db_id o localId
+    int index = -1;
+    if (result.variantDbId != null) {
+      index = controllers.indexWhere((c) => c['db_id'] == result.variantDbId);
+    }
+    if (index == -1) {
+      index = controllers.indexWhere((c) => c['id'] == result.variantLocalId);
+    }
+    if (index == -1 && controllers.isNotEmpty) {
+      index = 0;
+    }
+    if (index == -1) return;
+
+    final targetMap = controllers[index];
+    final bool wasDefault = targetMap['isDefault'] == true || result.wasOriginDefault;
+
+    // 2. Limpieza de referencias de variantes fraccionadas (childId / sourceParentId)
+    final String deletedId = targetMap['id']?.toString() ?? '';
+    final String? sourceParentId = targetMap['sourceParentId'] as String?;
+    for (var c in controllers) {
+      if (c['id'] == sourceParentId || c['childId'] == deletedId) {
+        c['childId'] = null;
+        c['leftoverCreated'] = false;
+      }
+      if (c['sourceParentId'] == deletedId) {
+        c['sourceParentId'] = null;
+      }
+    }
+
+    // 3. Remover de la lista de controladores y claves
+    controllers.removeAt(index);
+    keys.remove(targetMap['id']);
+
+    // 4. Reenumerar orden de las presentaciones restantes
+    for (int i = 0; i < controllers.length; i++) {
+      controllers[i]['orden'] = i;
+    }
+
+    int? newDefaultDbId;
+    // 5. Promover sucesora a Principal si la cortada era Principal
+    if (wasDefault && controllers.isNotEmpty) {
+      controllers.first['isDefault'] = true;
+      newDefaultDbId = controllers.first['db_id'] as int?;
+    }
+
+    // 6. Liberación segura de controladores en post-frame callback para evitar
+    // excepciones de "A TextEditingController was used after being disposed" al desmontar el widget
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ProductControllerFactory.disposeControllerMap(targetMap);
+    });
+
+    // 4. Si estaba en SQLite, ejecutar corte diferido atómico en backend
+    InventoryProvider? invProv;
+    try {
+      invProv = inventoryProvider ??
+          (context.mounted
+              ? Provider.of<InventoryProvider>(context, listen: false)
+              : null);
+    } catch (_) {}
+
+    if (result.variantDbId != null && invProv != null) {
+      await invProv.cutVariantFromProduct(
+        presentationId: result.variantDbId!,
+        originProductId: originProductId,
+        promoteToDefaultPresentationId: newDefaultDbId,
+        transferredBarcode: result.transferredBarcode,
+        transferredStock: result.transferredStock,
+      );
+    } else if (invProv != null) {
+      await invProv.loadMasterData(showAll: true);
+    }
+
+    onCompleted();
   }
 
   /// Ejecuta validación y guardado completo del producto editado

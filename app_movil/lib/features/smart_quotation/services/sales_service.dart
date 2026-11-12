@@ -23,7 +23,10 @@ class SalesService {
 
       await db.transaction((txn) async {
         try {
-          final nextSeqResult = await txn.rawQuery('SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM ventas WHERE negocio_id = ?', [negocioId]);
+          final nextSeqResult = await txn.rawQuery(
+            'SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM ventas WHERE negocio_id = ?',
+            [negocioId],
+          );
           sequentialId = (nextSeqResult.first['next_val'] as int?) ?? 1;
 
           saleId = await txn.insert('ventas', {
@@ -86,28 +89,43 @@ class SalesService {
             final qty = (item['quantity'] as int?) ?? 1;
             final pr = await txn.query(
               'presentaciones_producto',
-              columns: ['producto_id', 'unidades_por_venta', 'usa_stock_compartido'],
+              columns: [
+                'producto_id',
+                'unidades_por_venta',
+                'usa_stock_compartido',
+              ],
               where: 'id = ?',
               whereArgs: [pId],
             );
             if (pr.isNotEmpty) {
               final prodId = (pr.first['producto_id'] as int?) ?? 0;
-              final factor = ((pr.first['unidades_por_venta'] as int? ?? 1) > 0) ? (pr.first['unidades_por_venta'] as int) : 1;
-              final isShared = (pr.first['usa_stock_compartido'] as int? ?? 0) == 1;
+              final factor = ((pr.first['unidades_por_venta'] as int? ?? 1) > 0)
+                  ? (pr.first['unidades_por_venta'] as int)
+                  : 1;
+              final isShared =
+                  (pr.first['usa_stock_compartido'] as int? ?? 0) == 1;
               if (isShared && prodId > 0) {
-                baseDemandBySharedProduct[prodId] = (baseDemandBySharedProduct[prodId] ?? 0) + (qty * factor);
+                baseDemandBySharedProduct[prodId] =
+                    (baseDemandBySharedProduct[prodId] ?? 0) + (qty * factor);
               }
             }
           }
         }
 
         for (var entry in baseDemandBySharedProduct.entries) {
-          final pRows = await txn.query('productos', columns: ['stock_compartido', 'nombre'], where: 'id = ?', whereArgs: [entry.key]);
+          final pRows = await txn.query(
+            'productos',
+            columns: ['stock_compartido', 'nombre'],
+            where: 'id = ?',
+            whereArgs: [entry.key],
+          );
           if (pRows.isNotEmpty) {
             final pool = (pRows.first['stock_compartido'] as int?) ?? 0;
             if (entry.value > pool) {
               final name = (pRows.first['nombre'] as String?) ?? 'Producto';
-              throw Exception("Stock compartido insuficiente para '$name' (demanda: ${entry.value} und. base, disponible: $pool und. base).");
+              throw Exception(
+                "Stock compartido insuficiente para '$name' (demanda: ${entry.value} und. base, disponible: $pool und. base).",
+              );
             }
           }
         }
@@ -118,8 +136,12 @@ class SalesService {
           // UN-KITTING LOGIC
           if (item['bundle_id'] != null) {
             int bundleId = item['bundle_id'];
-            final bundleItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bundleId]);
-            
+            final bundleItems = await txn.query(
+              'items_paquete',
+              where: 'paquete_id = ?',
+              whereArgs: [bundleId],
+            );
+
             for (var bItem in bundleItems) {
               int presId = bItem['presentacion_id'] as int;
               int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
@@ -127,15 +149,26 @@ class SalesService {
 
               final presCheck = await txn.query(
                 'presentaciones_producto',
-                columns: ['producto_id', 'stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'],
+                columns: [
+                  'producto_id',
+                  'stock_actual',
+                  'costo_unitario_calculado',
+                  'precio_venta_final',
+                  'unidades_por_venta',
+                  'usa_stock_compartido',
+                  'cupo_maximo_variante',
+                ],
                 where: 'id = ?',
                 whereArgs: [presId],
               );
               if (presCheck.isNotEmpty) {
                 int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
-                int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-                int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
-                bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
+                int currentStock =
+                    (presCheck.first['stock_actual'] as int?) ?? 0;
+                int factor =
+                    (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+                bool usaCompartido =
+                    (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
                 if (factor <= 0) factor = 1;
 
                 if (prodId > 0) {
@@ -151,14 +184,20 @@ class SalesService {
                       usaCompartido = true;
                     }
                     if (usaCompartido) {
-                      currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                      currentStock =
+                          (prodRows.first['stock_compartido'] as int?) ??
+                          currentStock;
                     }
                   }
                 }
-                
+
                 int baseUnitsToDeduct = totalDeduct * factor;
-                if (currentStock < baseUnitsToDeduct) throw Exception("Stock insuficiente para un componente del paquete.");
-                
+                if (currentStock < baseUnitsToDeduct) {
+                  throw Exception(
+                    "Stock insuficiente para un componente del paquete.",
+                  );
+                }
+
                 if (usaCompartido && prodId > 0) {
                   int newPool = currentStock - baseUnitsToDeduct;
                   await txn.rawUpdate(
@@ -172,7 +211,10 @@ class SalesService {
 
                   int? bCupo = presCheck.first['cupo_maximo_variante'] as int?;
                   if (bCupo != null) {
-                    int newBCupo = (bCupo - totalDeduct).clamp(0, newPool ~/ factor);
+                    int newBCupo = (bCupo - totalDeduct).clamp(
+                      0,
+                      newPool ~/ factor,
+                    );
                     await txn.update(
                       'presentaciones_producto',
                       {'cupo_maximo_variante': newBCupo},
@@ -184,8 +226,13 @@ class SalesService {
                   // Acotar cupos de variantes hermanas compartidas si superan el nuevo máximo físico
                   final siblings = await txn.query(
                     'presentaciones_producto',
-                    columns: ['id', 'unidades_por_venta', 'cupo_maximo_variante'],
-                    where: 'producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
+                    columns: [
+                      'id',
+                      'unidades_por_venta',
+                      'cupo_maximo_variante',
+                    ],
+                    where:
+                        'producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
                     whereArgs: [prodId, presId],
                   );
                   for (var sib in siblings) {
@@ -204,9 +251,12 @@ class SalesService {
                     }
                   }
                 } else {
-                  await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - baseUnitsToDeduct, presId]);
+                  await txn.rawUpdate(
+                    'UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?',
+                    [currentStock - baseUnitsToDeduct, presId],
+                  );
                 }
-                
+
                 // Registro en Trazabilidad Histórica (Audit Log)
                 await txn.insert('stock_ledger', {
                   'presentation_id': presId,
@@ -225,7 +275,16 @@ class SalesService {
 
             final presCheck = await txn.query(
               'presentaciones_producto',
-              columns: ['producto_id', 'stock_actual', 'stock_alerta', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'],
+              columns: [
+                'producto_id',
+                'stock_actual',
+                'stock_alerta',
+                'costo_unitario_calculado',
+                'precio_venta_final',
+                'unidades_por_venta',
+                'usa_stock_compartido',
+                'cupo_maximo_variante',
+              ],
               where: 'id = ?',
               whereArgs: [presId],
             );
@@ -236,7 +295,8 @@ class SalesService {
             int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
             int stockAlerta = (presCheck.first['stock_alerta'] as int?) ?? 5;
             int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
-            bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
+            bool usaCompartido =
+                (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
             int? cupo = presCheck.first['cupo_maximo_variante'] as int?;
             if (factor <= 0) factor = 1;
 
@@ -253,21 +313,25 @@ class SalesService {
                   usaCompartido = true;
                 }
                 if (usaCompartido) {
-                  currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                  currentStock =
+                      (prodRows.first['stock_compartido'] as int?) ??
+                      currentStock;
                 }
               }
             }
-            
+
             // 🛡️ Regla 1: Validar que no supere el cupo asignado si está configurado
             if (usaCompartido && cupo != null && quantity > cupo) {
-              throw Exception("La cantidad solicitada ($quantity) supera el cupo asignado para esta variante ($cupo).");
+              throw Exception(
+                "La cantidad solicitada ($quantity) supera el cupo asignado para esta variante ($cupo).",
+              );
             }
 
             int baseUnitsToDeduct = quantity * factor;
             if (currentStock < baseUnitsToDeduct) {
               throw Exception("Stock insuficiente para uno de los productos.");
             }
-            
+
             int newStock = currentStock - baseUnitsToDeduct;
 
             if (usaCompartido && prodId > 0) {
@@ -295,7 +359,8 @@ class SalesService {
               final siblings = await txn.query(
                 'presentaciones_producto',
                 columns: ['id', 'unidades_por_venta', 'cupo_maximo_variante'],
-                where: 'producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
+                where:
+                    'producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
                 whereArgs: [prodId, presId],
               );
               for (var sib in siblings) {
@@ -319,7 +384,7 @@ class SalesService {
                 [newStock, presId],
               );
             }
-            
+
             // Registro en Trazabilidad Histórica (Audit Log)
             await txn.insert('stock_ledger', {
               'presentation_id': presId,
@@ -327,41 +392,76 @@ class SalesService {
               'tipo_transaccion': 'VENTA',
               'cantidad': -baseUnitsToDeduct,
               'costo_unitario': presCheck.first['costo_unitario_calculado'],
-              'precio_venta': item['unit_price'] ?? item['precio_unitario'] ?? presCheck.first['precio_venta_final'],
+              'precio_venta':
+                  item['unit_price'] ??
+                  item['precio_unitario'] ??
+                  presCheck.first['precio_venta_final'],
               'origen_id': saleId,
               'fecha_registro': DateTime.now().toIso8601String(),
             });
-            
+
             if (prodId > 0) {
-              final prodRows = await txn.query('productos', columns: ['fecha_creacion', 'modo_stock', 'stock_compartido', 'nombre'], where: 'id = ?', whereArgs: [prodId], limit: 1);
+              final prodRows = await txn.query(
+                'productos',
+                columns: [
+                  'fecha_creacion',
+                  'modo_stock',
+                  'stock_compartido',
+                  'nombre',
+                ],
+                where: 'id = ?',
+                whereArgs: [prodId],
+                limit: 1,
+              );
               if (prodRows.isNotEmpty) {
                 final pRow = prodRows.first;
                 final fcStr = pRow['fecha_creacion'] as String?;
                 final created = fcStr != null ? DateTime.tryParse(fcStr) : null;
-                final isGracePeriod = created != null && DateTime.now().difference(created).inDays < 7;
+                final isGracePeriod =
+                    created != null &&
+                    DateTime.now().difference(created).inDays < 7;
 
                 if (isGracePeriod) {
                   // 🛡️ Plazo de gracia de 7 días activo: silenciar y limpiar alertas de stock
-                  await txn.delete('notificaciones', where: "negocio_id = ? AND objeto_relacionado_tipo = 'producto' AND objeto_relacionado_id = ?", whereArgs: [negocioId, prodId]);
+                  await txn.delete(
+                    'notificaciones',
+                    where:
+                        "negocio_id = ? AND objeto_relacionado_tipo = 'producto' AND objeto_relacionado_id = ?",
+                    whereArgs: [negocioId, prodId],
+                  );
                 } else if (newStock <= stockAlerta) {
-                  final String prodName = pRow['nombre'] as String? ?? item['nombre_producto'] ?? item['product_name'] ?? 'Producto';
-                  final bool isShared = pRow['modo_stock'] == 'COMPARTIDO' || pRow['modo_stock'] == 'MIXTO';
-                  
+                  final String prodName =
+                      pRow['nombre'] as String? ??
+                      item['nombre_producto'] ??
+                      item['product_name'] ??
+                      'Producto';
+                  final bool isShared =
+                      pRow['modo_stock'] == 'COMPARTIDO' ||
+                      pRow['modo_stock'] == 'MIXTO';
+
                   final bool isAgotado = newStock <= 0;
-                  final String dedupKey = isShared 
-                      ? 'stock_compartido_$prodId' 
-                      : (isAgotado ? 'stock_agotado_$prodId' : 'stock_bajo_$prodId');
-                  final String nivelPrioridad = isAgotado ? 'critica' : 'preventiva';
-                  final String title = isShared 
-                      ? (isAgotado ? '🚨 Stock Compartido Agotado: $prodName' : '⚠️ Stock Compartido Bajo: $prodName')
-                      : (isAgotado ? '🚨 Producto Agotado: $prodName' : '⚠️ Stock Bajo: $prodName');
-                  final String content = isShared 
-                      ? (isAgotado 
-                          ? 'El pozo común de $prodName se agotó por completo (0 und.). Todas sus presentaciones asociadas están sin stock.' 
-                          : 'El pozo común de $prodName cayó a $newStock und. (Nivel de alerta: $stockAlerta und.). Afecta a sus presentaciones asociadas.')
-                      : (isAgotado 
-                          ? '$prodName se ha agotado por completo (0 und.). Toca para reabastecer el inventario.' 
-                          : 'Quedan solo $newStock und. de $prodName (Nivel de alerta: $stockAlerta und.). Toca para reabastecer.');
+                  final String dedupKey = isShared
+                      ? 'stock_compartido_$prodId'
+                      : (isAgotado
+                            ? 'stock_agotado_$prodId'
+                            : 'stock_bajo_$prodId');
+                  final String nivelPrioridad = isAgotado
+                      ? 'critica'
+                      : 'preventiva';
+                  final String title = isShared
+                      ? (isAgotado
+                            ? '🚨 Stock Compartido Agotado: $prodName'
+                            : '⚠️ Stock Compartido Bajo: $prodName')
+                      : (isAgotado
+                            ? '🚨 Producto Agotado: $prodName'
+                            : '⚠️ Stock Bajo: $prodName');
+                  final String content = isShared
+                      ? (isAgotado
+                            ? 'El pozo común de $prodName se agotó por completo (0 und.). Todas sus presentaciones asociadas están sin stock.'
+                            : 'El pozo común de $prodName cayó a $newStock und. (Nivel de alerta: $stockAlerta und.). Afecta a sus presentaciones asociadas.')
+                      : (isAgotado
+                            ? '$prodName se ha agotado por completo (0 und.). Toca para reabastecer el inventario.'
+                            : 'Quedan solo $newStock und. de $prodName (Nivel de alerta: $stockAlerta und.). Toca para reabastecer.');
 
                   final metaJson = jsonEncode({
                     'product_id': prodId,
@@ -371,35 +471,57 @@ class SalesService {
                     'es_compartido': isShared,
                   });
 
-                  final existNotif = await txn.query('notificaciones', where: 'negocio_id = ? AND dedup_key = ?', whereArgs: [negocioId, dedupKey], limit: 1);
-                  if (existNotif.isNotEmpty) {
-                    await txn.update('notificaciones', {
-                      'titulo': title,
-                      'mensaje': content,
-                      'nivel_prioridad': nivelPrioridad,
-                      'prioridad': isAgotado ? 'Alta' : 'Media',
-                      'leida': 0,
-                      'is_resolved': 0,
-                      'fecha_resolucion': null,
-                      'metadata_json': metaJson,
-                    }, where: 'id = ?', whereArgs: [existNotif.first['id']]);
-                  } else {
-                    await txn.insert('notificaciones', {
-                      'user_id': usuarioId,
-                      'negocio_id': negocioId,
-                      'dedup_key': dedupKey,
-                      'titulo': title,
-                      'mensaje': content,
-                      'tipo': 'alerta',
-                      'nivel_prioridad': nivelPrioridad,
-                      'prioridad': isAgotado ? 'Alta' : 'Media',
-                      'leida': 0,
-                      'is_resolved': 0,
-                      'objeto_relacionado_tipo': 'producto',
-                      'objeto_relacionado_id': prodId,
-                      'metadata_json': metaJson,
-                      'fecha_creacion': DateTime.now().toIso8601String(),
-                    });
+                  final bool isProdMuted = await LocalDatabase.isMuted(txn, negocioId, 'producto_$prodId');
+                  final String prefChannel = isAgotado
+                      ? 'notif_stock_agotado'
+                      : (isShared ? 'notif_stock_compartido' : 'notif_stock_bajo');
+                  final bool isChannelActive = await LocalDatabase.isChannelEnabled(txn, negocioId, prefChannel);
+
+                  if (!isProdMuted && isChannelActive) {
+                    final existNotif = await txn.query(
+                      'notificaciones',
+                      where: 'negocio_id = ? AND dedup_key = ?',
+                      whereArgs: [negocioId, dedupKey],
+                      limit: 1,
+                    );
+                    if (existNotif.isNotEmpty) {
+                      await txn.update(
+                        'notificaciones',
+                        {
+                          'titulo': title,
+                          'mensaje': content,
+                          'nivel_prioridad': nivelPrioridad,
+                          'prioridad': isAgotado ? 'Alta' : 'Media',
+                          'leida': 0,
+                          'is_resolved': 0,
+                          'fecha_resolucion': null,
+                          'metadata_json': metaJson,
+                          'mute_key': 'producto_$prodId',
+                        },
+                        where: 'id = ?',
+                        whereArgs: [existNotif.first['id']],
+                      );
+                    } else {
+                      await txn.insert('notificaciones', {
+                        'user_id': usuarioId,
+                        'negocio_id': negocioId,
+                        'dedup_key': dedupKey,
+                        'titulo': title,
+                        'mensaje': content,
+                        'tipo': 'alerta',
+                        'nivel_prioridad': nivelPrioridad,
+                        'prioridad': isAgotado ? 'Alta' : 'Media',
+                        'leida': 0,
+                        'is_resolved': 0,
+                        'is_archived': 0,
+                        'is_silenced': 0,
+                        'mute_key': 'producto_$prodId',
+                        'objeto_relacionado_tipo': 'producto',
+                        'objeto_relacionado_id': prodId,
+                        'metadata_json': metaJson,
+                        'fecha_creacion': DateTime.now().toIso8601String(),
+                      });
+                    }
                   }
                 }
               }
@@ -455,7 +577,7 @@ class SalesService {
           }
         }
 
-        // El Abono Inicial o Pago Adelantado se registra como un único pago, 
+        // El Abono Inicial o Pago Adelantado se registra como un único pago,
         // desvinculado de las cuotas.
         if (pagadoRaw > 0) {
           await txn.insert('pagos', {
@@ -518,8 +640,12 @@ class SalesService {
                 whereArgs: [saleData['cliente_id']],
                 limit: 1,
               );
-              int pAct = cRow.isNotEmpty ? (cRow.first['puntos_actuales'] as num?)?.toInt() ?? 0 : 0;
-              int sAct = cRow.isNotEmpty ? (cRow.first['score_reputacion'] as num?)?.toInt() ?? 500 : 500;
+              int pAct = cRow.isNotEmpty
+                  ? (cRow.first['puntos_actuales'] as num?)?.toInt() ?? 0
+                  : 0;
+              int sAct = cRow.isNotEmpty
+                  ? (cRow.first['score_reputacion'] as num?)?.toInt() ?? 500
+                  : 500;
 
               await txn.insert('historial_puntos_reputacion', {
                 'negocio_id': negocioId,
@@ -537,26 +663,83 @@ class SalesService {
             }
           }
 
-          // Otorgamiento automático de puntos por compra
+          // Otorgamiento automático de puntos por reglas del negocio (V33)
           if (saleData['cliente_id'] != null) {
             final clientId = saleData['cliente_id'];
-            int ptsToAward = pagadoRaw.floor();
-            if (ptsToAward > 0) {
+            final clientService = ClientService();
+            final rules = await clientService.getLoyaltyRulesTxn(
+              txn,
+              negocioId,
+            );
+
+            int ptsCompraOAbono = 0;
+            String tipoMov = 'GANANCIA_COMPRA';
+            String motivoPuntos =
+                'Compra al contado #$sequentialId (S/ ${pagadoRaw.toStringAsFixed(2)})';
+
+            final bool isCreditSale =
+                cuotas.isNotEmpty || saleData['metodo_pago'] == 'credito';
+
+            if (isCreditSale) {
+              // Regla 3: Abono inicial en ventas al crédito
+              if (rules.puntosAbonoInicialActivo && pagadoRaw > 0) {
+                ptsCompraOAbono =
+                    ((pagadoRaw / rules.montoBaseCompra) *
+                            rules.puntosPorUnidadMoneda)
+                        .floor();
+                tipoMov = 'ABONO_INICIAL_CREDITO';
+                motivoPuntos =
+                    'Abono inicial en venta a crédito #$sequentialId (S/ ${pagadoRaw.toStringAsFixed(2)})';
+              }
+            } else {
+              // Regla 1: Compras al contado
+              if (rules.puntosPorCompraActivo &&
+                  pagadoRaw >= rules.compraMinimaParaPuntos) {
+                ptsCompraOAbono =
+                    ((pagadoRaw / rules.montoBaseCompra) *
+                            rules.puntosPorUnidadMoneda)
+                        .floor();
+                tipoMov = 'GANANCIA_COMPRA';
+                motivoPuntos =
+                    'Compra al contado #$sequentialId (S/ ${pagadoRaw.toStringAsFixed(2)})';
+              }
+            }
+
+            // Regla 2: Cotizaciones Concretadas / Convertidas en Venta
+            int bonoCotizacion = 0;
+            if (saleData['cotizacion_id'] != null &&
+                rules.bonoCotizacionActivo &&
+                rules.puntosBonoCotizacion > 0) {
+              bonoCotizacion = rules.puntosBonoCotizacion;
+            }
+
+            int totalPtsToAward = ptsCompraOAbono + bonoCotizacion;
+
+            if (totalPtsToAward > 0) {
               final cRow = await txn.query(
                 'clientes',
-                columns: ['puntos_actuales', 'puntos_historicos', 'score_reputacion', 'nombre_completo'],
+                columns: [
+                  'puntos_actuales',
+                  'puntos_historicos',
+                  'score_reputacion',
+                  'nombre_completo',
+                ],
                 where: 'id = ?',
                 whereArgs: [clientId],
                 limit: 1,
               );
               if (cRow.isNotEmpty) {
-                int cPuntosActuales = (cRow.first['puntos_actuales'] as num?)?.toInt() ?? 0;
-                int cPuntosHistoricos = (cRow.first['puntos_historicos'] as num?)?.toInt() ?? 0;
-                int cScore = (cRow.first['score_reputacion'] as num?)?.toInt() ?? 500;
-                String cName = cRow.first['nombre_completo'] as String? ?? 'Cliente';
+                int cPuntosActuales =
+                    (cRow.first['puntos_actuales'] as num?)?.toInt() ?? 0;
+                int cPuntosHistoricos =
+                    (cRow.first['puntos_historicos'] as num?)?.toInt() ?? 0;
+                int cScore =
+                    (cRow.first['score_reputacion'] as num?)?.toInt() ?? 500;
+                String cName =
+                    cRow.first['nombre_completo'] as String? ?? 'Cliente';
 
-                int newPuntosActuales = cPuntosActuales + ptsToAward;
-                int newPuntosHistoricos = cPuntosHistoricos + ptsToAward;
+                int newPuntosActuales = cPuntosActuales + totalPtsToAward;
+                int newPuntosHistoricos = cPuntosHistoricos + totalPtsToAward;
                 int newScore = (cScore + 5).clamp(0, 1000);
 
                 await txn.update(
@@ -571,22 +754,41 @@ class SalesService {
                 );
 
                 final now = DateTime.now().toIso8601String();
-                await txn.insert('historial_puntos_reputacion', {
-                  'negocio_id': negocioId,
-                  'cliente_id': clientId,
-                  'tipo_movimiento': 'GANANCIA_COMPRA',
-                  'puntos_delta': ptsToAward,
-                  'puntos_saldo_resultante': newPuntosActuales,
-                  'score_delta': 5,
-                  'score_resultante': newScore,
-                  'motivo': 'Puntos ganados por compra en Venta #$sequentialId',
-                  'referencia_tipo': 'venta',
-                  'referencia_id': saleId,
-                  'fecha_registro': now,
-                });
+                if (ptsCompraOAbono > 0) {
+                  await txn.insert('historial_puntos_reputacion', {
+                    'negocio_id': negocioId,
+                    'cliente_id': clientId,
+                    'tipo_movimiento': tipoMov,
+                    'puntos_delta': ptsCompraOAbono,
+                    'puntos_saldo_resultante':
+                        cPuntosActuales + ptsCompraOAbono,
+                    'score_delta': 5,
+                    'score_resultante': newScore,
+                    'motivo': motivoPuntos,
+                    'referencia_tipo': 'venta',
+                    'referencia_id': saleId,
+                    'fecha_registro': now,
+                  });
+                }
 
-                // Evaluar si desbloquea metas de recompensas
-                final clientService = ClientService();
+                if (bonoCotizacion > 0) {
+                  await txn.insert('historial_puntos_reputacion', {
+                    'negocio_id': negocioId,
+                    'cliente_id': clientId,
+                    'tipo_movimiento': 'BONO_COTIZACION_CONCRETADA',
+                    'puntos_delta': bonoCotizacion,
+                    'puntos_saldo_resultante': newPuntosActuales,
+                    'score_delta': 0,
+                    'score_resultante': newScore,
+                    'motivo':
+                        'Bono por concretar cotización #${saleData['cotizacion_id']} en Venta #$sequentialId',
+                    'referencia_tipo': 'venta',
+                    'referencia_id': saleId,
+                    'fecha_registro': now,
+                  });
+                }
+
+                // Evaluar si califica para metas (sin descontar puntos)
                 await clientService.evaluateAndUnlockRewardGoals(
                   txn,
                   clientId,
@@ -598,7 +800,9 @@ class SalesService {
             }
           }
         } catch (e) {
-          debugPrint("Aviso fidelización en createSale (ignorado en esquemas sin V27): $e");
+          debugPrint(
+            "Aviso fidelización en createSale (ignorado en esquemas sin V27): $e",
+          );
         }
       });
 
@@ -678,7 +882,7 @@ class SalesService {
         origenVenta: origenVenta,
         financialStatus: financialStatus,
       );
-      
+
       int productsCount = await _repository.getProductsSoldCount(
         negocioId,
         startDate: startDate,
@@ -693,52 +897,106 @@ class SalesService {
         mutableStats['total_productos_vendidos'] = productsCount;
         return SalesStatsModel.fromJson(mutableStats);
       }
-      return SalesStatsModel(totalIngresos: 0.0, totalDeuda: 0.0, cantidadVentas: 0, totalProductosVendidos: productsCount);
+      return SalesStatsModel(
+        totalIngresos: 0.0,
+        totalDeuda: 0.0,
+        cantidadVentas: 0,
+        totalProductosVendidos: productsCount,
+      );
     } catch (e) {
       throw Exception("Error cargando estadísticas locales: $e");
     }
   }
 
-  Future<void> voidSale(int saleId, int negocioId, String motivoAnulacion) async {
+  Future<void> voidSale(
+    int saleId,
+    int negocioId,
+    String motivoAnulacion,
+  ) async {
     try {
       final db = await dbHelper.database;
       // 🛡️ Blindaje defensivo de esquema: asegurar columnas de anulación antes de operar
-      await LocalDatabase.ensureColumnExists(db, 'ventas', 'is_archived', 'INTEGER DEFAULT 0');
-      await LocalDatabase.ensureColumnExists(db, 'ventas', 'motivo_anulacion', 'TEXT');
-      await LocalDatabase.ensureColumnExists(db, 'ventas', 'fecha_anulacion', 'TEXT');
-      await LocalDatabase.ensureColumnExists(db, 'cuotas', 'estado', "TEXT DEFAULT 'pendiente'");
-      await LocalDatabase.ensureColumnExists(db, 'cuotas', 'monto_pagado', 'REAL DEFAULT 0.0');
+      await LocalDatabase.ensureColumnExists(
+        db,
+        'ventas',
+        'is_archived',
+        'INTEGER DEFAULT 0',
+      );
+      await LocalDatabase.ensureColumnExists(
+        db,
+        'ventas',
+        'motivo_anulacion',
+        'TEXT',
+      );
+      await LocalDatabase.ensureColumnExists(
+        db,
+        'ventas',
+        'fecha_anulacion',
+        'TEXT',
+      );
+      await LocalDatabase.ensureColumnExists(
+        db,
+        'cuotas',
+        'estado',
+        "TEXT DEFAULT 'pendiente'",
+      );
+      await LocalDatabase.ensureColumnExists(
+        db,
+        'cuotas',
+        'monto_pagado',
+        'REAL DEFAULT 0.0',
+      );
 
       final saleRows = await _repository.getSaleByIdRaw(saleId);
       if (saleRows.isEmpty) throw Exception("Venta no encontrada.");
-      if (saleRows.first['is_archived'] == 1) throw Exception("La venta ya está anulada.");
+      if (saleRows.first['is_archived'] == 1) {
+        throw Exception("La venta ya está anulada.");
+      }
 
       await db.transaction((txn) async {
         final nowIso = DateTime.now().toIso8601String();
 
         // 1. Marcar como anulada
-        await txn.update('ventas', {
-          'is_archived': 1,
-          'motivo_anulacion': motivoAnulacion,
-          'fecha_anulacion': nowIso,
-          'estado_pago': 'anulado',
-        }, where: 'id = ?', whereArgs: [saleId]);
-        
+        await txn.update(
+          'ventas',
+          {
+            'is_archived': 1,
+            'motivo_anulacion': motivoAnulacion,
+            'fecha_anulacion': nowIso,
+            'estado_pago': 'anulado',
+          },
+          where: 'id = ?',
+          whereArgs: [saleId],
+        );
+
         // 2. Restablecer la cotización si existe (Marcamos como ANNULLED para que no estorbe en Workbench)
         if (saleRows.first['cotizacion_id'] != null) {
-          await txn.update('smart_quotations', {'status': 'ANNULLED'}, where: 'id = ?', whereArgs: [saleRows.first['cotizacion_id']]);
+          await txn.update(
+            'smart_quotations',
+            {'status': 'ANNULLED'},
+            where: 'id = ?',
+            whereArgs: [saleRows.first['cotizacion_id']],
+          );
         }
 
         // 3. Devolver stock
-        final items = await txn.query('venta_items', where: 'venta_id = ?', whereArgs: [saleId]);
-        
+        final items = await txn.query(
+          'venta_items',
+          where: 'venta_id = ?',
+          whereArgs: [saleId],
+        );
+
         for (var item in items) {
           int quantity = item['cantidad'] as int? ?? 1;
 
           if (item['bundle_id'] != null) {
             int bundleId = item['bundle_id'] as int;
-            final bundleItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bundleId]);
-            
+            final bundleItems = await txn.query(
+              'items_paquete',
+              where: 'paquete_id = ?',
+              whereArgs: [bundleId],
+            );
+
             for (var bItem in bundleItems) {
               int presId = bItem['presentacion_id'] as int;
               int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
@@ -746,15 +1004,26 @@ class SalesService {
 
               final presCheck = await txn.query(
                 'presentaciones_producto',
-                columns: ['producto_id', 'stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'],
+                columns: [
+                  'producto_id',
+                  'stock_actual',
+                  'costo_unitario_calculado',
+                  'precio_venta_final',
+                  'unidades_por_venta',
+                  'usa_stock_compartido',
+                  'cupo_maximo_variante',
+                ],
                 where: 'id = ?',
                 whereArgs: [presId],
               );
               if (presCheck.isNotEmpty) {
                 int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
-                int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-                int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
-                bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
+                int currentStock =
+                    (presCheck.first['stock_actual'] as int?) ?? 0;
+                int factor =
+                    (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+                bool usaCompartido =
+                    (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
                 if (factor <= 0) factor = 1;
 
                 if (prodId > 0) {
@@ -770,7 +1039,9 @@ class SalesService {
                       usaCompartido = true;
                     }
                     if (usaCompartido) {
-                      currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                      currentStock =
+                          (prodRows.first['stock_compartido'] as int?) ??
+                          currentStock;
                     }
                   }
                 }
@@ -789,7 +1060,10 @@ class SalesService {
 
                   int? bCupo = presCheck.first['cupo_maximo_variante'] as int?;
                   if (bCupo != null) {
-                    int restoredBCupo = (bCupo + totalDeduct).clamp(0, newPool ~/ factor);
+                    int restoredBCupo = (bCupo + totalDeduct).clamp(
+                      0,
+                      newPool ~/ factor,
+                    );
                     await txn.update(
                       'presentaciones_producto',
                       {'cupo_maximo_variante': restoredBCupo},
@@ -798,9 +1072,12 @@ class SalesService {
                     );
                   }
                 } else {
-                  await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock + baseUnitsToRestore, presId]);
+                  await txn.rawUpdate(
+                    'UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?',
+                    [currentStock + baseUnitsToRestore, presId],
+                  );
                 }
-                
+
                 // Trazabilidad
                 await txn.insert('stock_ledger', {
                   'presentation_id': presId,
@@ -818,16 +1095,25 @@ class SalesService {
             int presId = item['presentation_id'] as int;
             final presCheck = await txn.query(
               'presentaciones_producto',
-              columns: ['producto_id', 'stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'],
+              columns: [
+                'producto_id',
+                'stock_actual',
+                'costo_unitario_calculado',
+                'precio_venta_final',
+                'unidades_por_venta',
+                'usa_stock_compartido',
+                'cupo_maximo_variante',
+              ],
               where: 'id = ?',
               whereArgs: [presId],
             );
-            
+
             if (presCheck.isNotEmpty) {
               int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
               int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
               int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
-              bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
+              bool usaCompartido =
+                  (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
               if (factor <= 0) factor = 1;
 
               if (prodId > 0) {
@@ -843,7 +1129,9 @@ class SalesService {
                     usaCompartido = true;
                   }
                   if (usaCompartido) {
-                    currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                    currentStock =
+                        (prodRows.first['stock_compartido'] as int?) ??
+                        currentStock;
                   }
                 }
               }
@@ -862,7 +1150,10 @@ class SalesService {
 
                 int? cupo = presCheck.first['cupo_maximo_variante'] as int?;
                 if (cupo != null) {
-                  int restoredCupo = (cupo + quantity).clamp(0, newPool ~/ factor);
+                  int restoredCupo = (cupo + quantity).clamp(
+                    0,
+                    newPool ~/ factor,
+                  );
                   await txn.update(
                     'presentaciones_producto',
                     {'cupo_maximo_variante': restoredCupo},
@@ -871,9 +1162,12 @@ class SalesService {
                   );
                 }
               } else {
-                await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock + baseUnitsToRestore, presId]);
+                await txn.rawUpdate(
+                  'UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?',
+                  [currentStock + baseUnitsToRestore, presId],
+                );
               }
-              
+
               // Trazabilidad
               await txn.insert('stock_ledger', {
                 'presentation_id': presId,
@@ -881,44 +1175,70 @@ class SalesService {
                 'tipo_transaccion': 'ANULACION',
                 'cantidad': baseUnitsToRestore,
                 'costo_unitario': presCheck.first['costo_unitario_calculado'],
-                'precio_venta': item['precio_unitario'] ?? presCheck.first['precio_venta_final'],
+                'precio_venta':
+                    item['precio_unitario'] ??
+                    presCheck.first['precio_venta_final'],
                 'origen_id': saleId,
                 'fecha_registro': DateTime.now().toIso8601String(),
               });
             }
           }
         }
-        
+
         // 4. Actualizar entregas pendientes (si estaba pendiente, al anular se resta)
-        if (saleRows.first['cliente_id'] != null && saleRows.first['estado_entrega'] != 'entregado') {
-           await txn.rawUpdate('UPDATE clientes SET entregas_pendientes = MAX(0, entregas_pendientes - 1) WHERE id = ?', [saleRows.first['cliente_id']]);
+        if (saleRows.first['cliente_id'] != null &&
+            saleRows.first['estado_entrega'] != 'entregado') {
+          await txn.rawUpdate(
+            'UPDATE clientes SET entregas_pendientes = MAX(0, entregas_pendientes - 1) WHERE id = ?',
+            [saleRows.first['cliente_id']],
+          );
         }
-        
+
         // 5. Preservar integridad de pagos: mantener venta_id intacto y marcar auditoría
         await txn.rawUpdate(
-          "UPDATE pagos SET nota = CASE WHEN (nota IS NULL OR nota = '') THEN '[ANULADO - Venta #$saleId]' ELSE nota || ' [ANULADO - Venta #$saleId]' END WHERE venta_id = ?", 
-          [saleId]
+          "UPDATE pagos SET nota = CASE WHEN (nota IS NULL OR nota = '') THEN '[ANULADO - Venta #$saleId]' ELSE nota || ' [ANULADO - Venta #$saleId]' END WHERE venta_id = ?",
+          [saleId],
         );
-        
+
         // 6. Marcar todas las cuotas asociadas como 'anulada'
-        await txn.update('cuotas', {
-          'estado': 'anulada',
-        }, where: 'venta_id = ?', whereArgs: [saleId]);
+        await txn.update(
+          'cuotas',
+          {'estado': 'anulada'},
+          where: 'venta_id = ?',
+          whereArgs: [saleId],
+        );
 
         // 7. 🔔 V31: Limpieza atómica de notificaciones asociadas a la venta y sus cuotas (0ms)
-        final cRows = await txn.query('cuotas', columns: ['id'], where: 'venta_id = ?', whereArgs: [saleId]);
+        final cRows = await txn.query(
+          'cuotas',
+          columns: ['id'],
+          where: 'venta_id = ?',
+          whereArgs: [saleId],
+        );
         final cIds = cRows.map((c) => c['id'] as int).toList();
         if (cIds.isNotEmpty) {
           final placeholders = List.filled(cIds.length, '?').join(',');
-          await txn.update('notificaciones', {
+          await txn.update(
+            'notificaciones',
+            {
+              'is_resolved': 1,
+              'fecha_resolucion': DateTime.now().toIso8601String(),
+            },
+            where:
+                "objeto_relacionado_tipo = 'cuota' AND objeto_relacionado_id IN ($placeholders)",
+            whereArgs: cIds,
+          );
+        }
+        await txn.update(
+          'notificaciones',
+          {
             'is_resolved': 1,
             'fecha_resolucion': DateTime.now().toIso8601String(),
-          }, where: "objeto_relacionado_tipo = 'cuota' AND objeto_relacionado_id IN ($placeholders)", whereArgs: cIds);
-        }
-        await txn.update('notificaciones', {
-          'is_resolved': 1,
-          'fecha_resolucion': DateTime.now().toIso8601String(),
-        }, where: "objeto_relacionado_tipo = 'venta' AND objeto_relacionado_id = ?", whereArgs: [saleId]);
+          },
+          where:
+              "objeto_relacionado_tipo = 'venta' AND objeto_relacionado_id = ?",
+          whereArgs: [saleId],
+        );
 
         // 8. 🏆 V27: Revertir recompensas canjeadas en esta venta de vuelta a 'APROBADA_NOTIFICADA'
         try {
@@ -940,8 +1260,9 @@ class SalesService {
             int clientId = saleRows.first['cliente_id'] as int;
             final ptsHistory = await txn.query(
               'historial_puntos_reputacion',
-              where: 'referencia_tipo = ? AND referencia_id = ? AND tipo_movimiento = ?',
-              whereArgs: ['venta', saleId, 'GANANCIA_COMPRA'],
+              where:
+                  'referencia_tipo = ? AND referencia_id = ? AND puntos_delta > 0',
+              whereArgs: ['venta', saleId],
             );
 
             int ptsAwarded = 0;
@@ -962,8 +1283,12 @@ class SalesService {
                 whereArgs: [clientId],
                 limit: 1,
               );
-              int pAct = cRow.isNotEmpty ? (cRow.first['puntos_actuales'] as num?)?.toInt() ?? 0 : 0;
-              int sAct = cRow.isNotEmpty ? (cRow.first['score_reputacion'] as num?)?.toInt() ?? 500 : 500;
+              int pAct = cRow.isNotEmpty
+                  ? (cRow.first['puntos_actuales'] as num?)?.toInt() ?? 0
+                  : 0;
+              int sAct = cRow.isNotEmpty
+                  ? (cRow.first['score_reputacion'] as num?)?.toInt() ?? 500
+                  : 500;
 
               await txn.insert('historial_puntos_reputacion', {
                 'negocio_id': negocioId,
@@ -982,7 +1307,7 @@ class SalesService {
           } catch (_) {}
         }
       });
-      
+
       // Fuera de transacción: recalcular deuda y reputación
       if (saleRows.first['cliente_id'] != null) {
         final clientService = ClientService();
@@ -1001,94 +1326,192 @@ class SalesService {
       final db = await dbHelper.database;
       final saleRows = await _repository.getSaleByIdRaw(saleId);
       if (saleRows.isEmpty) throw Exception("Venta no encontrada.");
-      if (saleRows.first['is_archived'] == 0) throw Exception("La venta no está anulada.");
+      if (saleRows.first['is_archived'] == 0) {
+        throw Exception("La venta no está anulada.");
+      }
 
       await db.transaction((txn) async {
-        final items = await txn.query('venta_items', where: 'venta_id = ?', whereArgs: [saleId]);
-        
+        final items = await txn.query(
+          'venta_items',
+          where: 'venta_id = ?',
+          whereArgs: [saleId],
+        );
+
         // 1. Validar stock primero
         for (var item in items) {
           int quantity = item['cantidad'] as int? ?? 1;
 
           if (item['bundle_id'] != null) {
             int bundleId = item['bundle_id'] as int;
-            final bundleItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bundleId]);
+            final bundleItems = await txn.query(
+              'items_paquete',
+              where: 'paquete_id = ?',
+              whereArgs: [bundleId],
+            );
             for (var bItem in bundleItems) {
               int presId = bItem['presentacion_id'] as int;
               int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
               int totalDeduct = qtyReq * quantity;
-              
-              final presCheck = await txn.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'unidades_por_venta', 'usa_stock_compartido'], where: 'id = ?', whereArgs: [presId]);
+
+              final presCheck = await txn.query(
+                'presentaciones_producto',
+                columns: [
+                  'producto_id',
+                  'stock_actual',
+                  'unidades_por_venta',
+                  'usa_stock_compartido',
+                ],
+                where: 'id = ?',
+                whereArgs: [presId],
+              );
               if (presCheck.isNotEmpty) {
-                 int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
-                 int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-                 int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
-                 bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
-                 if (factor <= 0) factor = 1;
-                 if (prodId > 0) {
-                   final prodRows = await txn.query('productos', columns: ['modo_stock', 'stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
-                   if (prodRows.isNotEmpty) {
-                     if (prodRows.first['modo_stock'] == 'COMPARTIDO') usaCompartido = true;
-                     if (usaCompartido) currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
-                   }
-                 }
-                 if (currentStock < (totalDeduct * factor)) throw Exception("Stock insuficiente para restaurar el paquete.");
+                int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
+                int currentStock =
+                    (presCheck.first['stock_actual'] as int?) ?? 0;
+                int factor =
+                    (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+                bool usaCompartido =
+                    (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
+                if (factor <= 0) factor = 1;
+                if (prodId > 0) {
+                  final prodRows = await txn.query(
+                    'productos',
+                    columns: ['modo_stock', 'stock_compartido'],
+                    where: 'id = ?',
+                    whereArgs: [prodId],
+                  );
+                  if (prodRows.isNotEmpty) {
+                    if (prodRows.first['modo_stock'] == 'COMPARTIDO') {
+                      usaCompartido = true;
+                    }
+                    if (usaCompartido) {
+                      currentStock =
+                          (prodRows.first['stock_compartido'] as int?) ??
+                          currentStock;
+                    }
+                  }
+                }
+                if (currentStock < (totalDeduct * factor)) {
+                  throw Exception(
+                    "Stock insuficiente para restaurar el paquete.",
+                  );
+                }
               } else {
-                 throw Exception("Componente de paquete no encontrado.");
+                throw Exception("Componente de paquete no encontrado.");
               }
             }
           } else if (item['presentation_id'] != null) {
             int presId = item['presentation_id'] as int;
-            final presCheck = await txn.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'], where: 'id = ?', whereArgs: [presId]);
+            final presCheck = await txn.query(
+              'presentaciones_producto',
+              columns: [
+                'producto_id',
+                'stock_actual',
+                'unidades_por_venta',
+                'usa_stock_compartido',
+                'cupo_maximo_variante',
+              ],
+              where: 'id = ?',
+              whereArgs: [presId],
+            );
             if (presCheck.isNotEmpty) {
-               int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
-               int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-               int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
-               bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
-               int? cupo = presCheck.first['cupo_maximo_variante'] as int?;
-               if (factor <= 0) factor = 1;
-               if (prodId > 0) {
-                 final prodRows = await txn.query('productos', columns: ['modo_stock', 'stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
-                 if (prodRows.isNotEmpty) {
-                   if (prodRows.first['modo_stock'] == 'COMPARTIDO') usaCompartido = true;
-                   if (usaCompartido) currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
-                 }
-               }
-               if (usaCompartido && cupo != null && quantity > cupo) {
-                 throw Exception("La cantidad solicitada ($quantity) supera el cupo asignado para esta variante ($cupo).");
-               }
-               if (currentStock < (quantity * factor)) throw Exception("Stock insuficiente para restaurar el producto.");
+              int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
+              int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
+              int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+              bool usaCompartido =
+                  (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
+              int? cupo = presCheck.first['cupo_maximo_variante'] as int?;
+              if (factor <= 0) factor = 1;
+              if (prodId > 0) {
+                final prodRows = await txn.query(
+                  'productos',
+                  columns: ['modo_stock', 'stock_compartido'],
+                  where: 'id = ?',
+                  whereArgs: [prodId],
+                );
+                if (prodRows.isNotEmpty) {
+                  if (prodRows.first['modo_stock'] == 'COMPARTIDO') {
+                    usaCompartido = true;
+                  }
+                  if (usaCompartido) {
+                    currentStock =
+                        (prodRows.first['stock_compartido'] as int?) ??
+                        currentStock;
+                  }
+                }
+              }
+              if (usaCompartido && cupo != null && quantity > cupo) {
+                throw Exception(
+                  "La cantidad solicitada ($quantity) supera el cupo asignado para esta variante ($cupo).",
+                );
+              }
+              if (currentStock < (quantity * factor)) {
+                throw Exception(
+                  "Stock insuficiente para restaurar el producto.",
+                );
+              }
             } else {
-               throw Exception("Producto no encontrado.");
+              throw Exception("Producto no encontrado.");
             }
           }
         }
-        
+
         // 2. Si pasa validación, descontar stock de nuevo
         for (var item in items) {
           int quantity = item['cantidad'] as int? ?? 1;
 
           if (item['bundle_id'] != null) {
             int bundleId = item['bundle_id'] as int;
-            final bundleItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bundleId]);
-            
+            final bundleItems = await txn.query(
+              'items_paquete',
+              where: 'paquete_id = ?',
+              whereArgs: [bundleId],
+            );
+
             for (var bItem in bundleItems) {
               int presId = bItem['presentacion_id'] as int;
               int qtyReq = (bItem['cantidad_requerida'] as int?) ?? 1;
               int totalDeduct = qtyReq * quantity;
 
-              final presCheck = await txn.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'], where: 'id = ?', whereArgs: [presId]);
+              final presCheck = await txn.query(
+                'presentaciones_producto',
+                columns: [
+                  'producto_id',
+                  'stock_actual',
+                  'costo_unitario_calculado',
+                  'precio_venta_final',
+                  'unidades_por_venta',
+                  'usa_stock_compartido',
+                  'cupo_maximo_variante',
+                ],
+                where: 'id = ?',
+                whereArgs: [presId],
+              );
               if (presCheck.isNotEmpty) {
                 int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
-                int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
-                int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
-                bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
+                int currentStock =
+                    (presCheck.first['stock_actual'] as int?) ?? 0;
+                int factor =
+                    (presCheck.first['unidades_por_venta'] as int?) ?? 1;
+                bool usaCompartido =
+                    (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
                 if (factor <= 0) factor = 1;
                 if (prodId > 0) {
-                  final prodRows = await txn.query('productos', columns: ['modo_stock', 'stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
+                  final prodRows = await txn.query(
+                    'productos',
+                    columns: ['modo_stock', 'stock_compartido'],
+                    where: 'id = ?',
+                    whereArgs: [prodId],
+                  );
                   if (prodRows.isNotEmpty) {
-                    if (prodRows.first['modo_stock'] == 'COMPARTIDO') usaCompartido = true;
-                    if (usaCompartido) currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                    if (prodRows.first['modo_stock'] == 'COMPARTIDO') {
+                      usaCompartido = true;
+                    }
+                    if (usaCompartido) {
+                      currentStock =
+                          (prodRows.first['stock_compartido'] as int?) ??
+                          currentStock;
+                    }
                   }
                 }
                 int baseUnitsToDeduct = totalDeduct * factor;
@@ -1106,7 +1529,10 @@ class SalesService {
 
                   int? bCupo = presCheck.first['cupo_maximo_variante'] as int?;
                   if (bCupo != null) {
-                    int newBCupo = (bCupo - totalDeduct).clamp(0, newPool ~/ factor);
+                    int newBCupo = (bCupo - totalDeduct).clamp(
+                      0,
+                      newPool ~/ factor,
+                    );
                     await txn.update(
                       'presentaciones_producto',
                       {'cupo_maximo_variante': newBCupo},
@@ -1117,8 +1543,13 @@ class SalesService {
 
                   final siblings = await txn.query(
                     'presentaciones_producto',
-                    columns: ['id', 'unidades_por_venta', 'cupo_maximo_variante'],
-                    where: 'producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
+                    columns: [
+                      'id',
+                      'unidades_por_venta',
+                      'cupo_maximo_variante',
+                    ],
+                    where:
+                        'producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
                     whereArgs: [prodId, presId],
                   );
                   for (var sib in siblings) {
@@ -1137,9 +1568,12 @@ class SalesService {
                     }
                   }
                 } else {
-                  await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - baseUnitsToDeduct, presId]);
+                  await txn.rawUpdate(
+                    'UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?',
+                    [currentStock - baseUnitsToDeduct, presId],
+                  );
                 }
-                
+
                 // Trazabilidad
                 await txn.insert('stock_ledger', {
                   'presentation_id': presId,
@@ -1155,21 +1589,46 @@ class SalesService {
             }
           } else if (item['presentation_id'] != null) {
             int presId = item['presentation_id'] as int;
-            final presCheck = await txn.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'costo_unitario_calculado', 'precio_venta_final', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'], where: 'id = ?', whereArgs: [presId]);
-            
+            final presCheck = await txn.query(
+              'presentaciones_producto',
+              columns: [
+                'producto_id',
+                'stock_actual',
+                'costo_unitario_calculado',
+                'precio_venta_final',
+                'unidades_por_venta',
+                'usa_stock_compartido',
+                'cupo_maximo_variante',
+              ],
+              where: 'id = ?',
+              whereArgs: [presId],
+            );
+
             if (presCheck.isNotEmpty) {
               int prodId = (presCheck.first['producto_id'] as int?) ?? 0;
               int currentStock = (presCheck.first['stock_actual'] as int?) ?? 0;
               int factor = (presCheck.first['unidades_por_venta'] as int?) ?? 1;
-              bool usaCompartido = (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
+              bool usaCompartido =
+                  (presCheck.first['usa_stock_compartido'] as int? ?? 0) == 1;
               int? cupo = presCheck.first['cupo_maximo_variante'] as int?;
               if (factor <= 0) factor = 1;
 
               if (prodId > 0) {
-                final prodRows = await txn.query('productos', columns: ['modo_stock', 'stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
+                final prodRows = await txn.query(
+                  'productos',
+                  columns: ['modo_stock', 'stock_compartido'],
+                  where: 'id = ?',
+                  whereArgs: [prodId],
+                );
                 if (prodRows.isNotEmpty) {
-                  if (prodRows.first['modo_stock'] == 'COMPARTIDO') usaCompartido = true;
-                  if (usaCompartido) currentStock = (prodRows.first['stock_compartido'] as int?) ?? currentStock;
+                  if (prodRows.first['modo_stock'] == 'COMPARTIDO') {
+                    usaCompartido = true;
+                  }
+                  if (usaCompartido) {
+                    currentStock =
+                        (prodRows.first['stock_compartido'] as int?) ??
+                        currentStock;
+                  }
                 }
               }
               int baseUnitsToDeduct = quantity * factor;
@@ -1198,7 +1657,8 @@ class SalesService {
                 final siblings = await txn.query(
                   'presentaciones_producto',
                   columns: ['id', 'unidades_por_venta', 'cupo_maximo_variante'],
-                  where: 'producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
+                  where:
+                      'producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
                   whereArgs: [prodId, presId],
                 );
                 for (var sib in siblings) {
@@ -1217,9 +1677,12 @@ class SalesService {
                   }
                 }
               } else {
-                await txn.rawUpdate('UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?', [currentStock - baseUnitsToDeduct, presId]);
+                await txn.rawUpdate(
+                  'UPDATE presentaciones_producto SET stock_actual = ? WHERE id = ?',
+                  [currentStock - baseUnitsToDeduct, presId],
+                );
               }
-              
+
               // Trazabilidad
               await txn.insert('stock_ledger', {
                 'presentation_id': presId,
@@ -1227,7 +1690,9 @@ class SalesService {
                 'tipo_transaccion': 'RESTAURACION',
                 'cantidad': -baseUnitsToDeduct,
                 'costo_unitario': presCheck.first['costo_unitario_calculado'],
-                'precio_venta': item['precio_unitario'] ?? presCheck.first['precio_venta_final'],
+                'precio_venta':
+                    item['precio_unitario'] ??
+                    presCheck.first['precio_venta_final'],
                 'origen_id': saleId,
                 'fecha_registro': DateTime.now().toIso8601String(),
               });
@@ -1236,14 +1701,19 @@ class SalesService {
         }
 
         // 3. Marcar como activa
-        await txn.update('ventas', {
-          'is_archived': 0,
-          'motivo_anulacion': null,
-          'fecha_anulacion': null,
-        }, where: 'id = ?', whereArgs: [saleId]);
+        await txn.update(
+          'ventas',
+          {'is_archived': 0, 'motivo_anulacion': null, 'fecha_anulacion': null},
+          where: 'id = ?',
+          whereArgs: [saleId],
+        );
 
         // 4. Restaurar cuotas de 'anulada' a su estado real según montos
-        final cuotasRows = await txn.query('cuotas', where: 'venta_id = ?', whereArgs: [saleId]);
+        final cuotasRows = await txn.query(
+          'cuotas',
+          where: 'venta_id = ?',
+          whereArgs: [saleId],
+        );
         for (var c in cuotasRows) {
           int cId = c['id'] as int;
           double cMonto = (c['monto'] as num).toDouble();
@@ -1258,23 +1728,37 @@ class SalesService {
           if (cStatus == 'pagado') {
             cUpdates['mora_automatica'] = 0;
           }
-          await txn.update('cuotas', cUpdates, where: 'id = ?', whereArgs: [cId]);
+          await txn.update(
+            'cuotas',
+            cUpdates,
+            where: 'id = ?',
+            whereArgs: [cId],
+          );
         }
 
         // 5. Limpiar nota de anulación en pagos asociados manteniendo venta_id
         await txn.rawUpdate(
           "UPDATE pagos SET nota = REPLACE(REPLACE(nota, ' [ANULADO - Venta #$saleId]', ''), '[ANULADO - Venta #$saleId]', '') WHERE venta_id = ?",
-          [saleId]
+          [saleId],
         );
-        
+
         // 6. Restablecer la cotización si existe
         if (saleRows.first['cotizacion_id'] != null) {
-          await txn.update('smart_quotations', {'status': 'SOLD'}, where: 'id = ?', whereArgs: [saleRows.first['cotizacion_id']]);
+          await txn.update(
+            'smart_quotations',
+            {'status': 'SOLD'},
+            where: 'id = ?',
+            whereArgs: [saleRows.first['cotizacion_id']],
+          );
         }
 
         // 7. Actualizar entregas pendientes (se vuelve a sumar)
-        if (saleRows.first['cliente_id'] != null && saleRows.first['estado_entrega'] != 'entregado') {
-           await txn.rawUpdate('UPDATE clientes SET entregas_pendientes = entregas_pendientes + 1 WHERE id = ?', [saleRows.first['cliente_id']]);
+        if (saleRows.first['cliente_id'] != null &&
+            saleRows.first['estado_entrega'] != 'entregado') {
+          await txn.rawUpdate(
+            'UPDATE clientes SET entregas_pendientes = entregas_pendientes + 1 WHERE id = ?',
+            [saleRows.first['cliente_id']],
+          );
         }
       });
 
@@ -1291,20 +1775,26 @@ class SalesService {
     }
   }
 
-  Future<String> updateDeliveryStatus(int saleId, String newStatus, {String? fotoPath}) async {
+  Future<String> updateDeliveryStatus(
+    int saleId,
+    String newStatus, {
+    String? fotoPath,
+  }) async {
     try {
       final Map<String, dynamic> updateData = {'estado_entrega': newStatus};
       if (fotoPath != null) {
         updateData['foto_entrega'] = fotoPath;
       }
       await _repository.updateSaleField(saleId, updateData);
-      
+
       final saleRows = await _repository.getSaleByIdRaw(saleId);
       if (saleRows.isNotEmpty && saleRows.first['cliente_id'] != null) {
         final clientService = ClientService();
-        await clientService.recalculateClientDeliveries(saleRows.first['cliente_id'] as int);
+        await clientService.recalculateClientDeliveries(
+          saleRows.first['cliente_id'] as int,
+        );
       }
-      
+
       return newStatus;
     } catch (e) {
       throw Exception("Error actualizando logística: $e");
@@ -1321,12 +1811,18 @@ class SalesService {
       Map<String, dynamic> saleMap = Map<String, dynamic>.from(vRows.first);
 
       // Normalización estricta: nunca null para campos contables y de préstamos
-      saleMap['porcentaje_interes'] = (saleMap['porcentaje_interes'] as num?)?.toDouble() ?? 0.0;
-      saleMap['abono_inicial'] = (saleMap['abono_inicial'] as num?)?.toDouble() ?? 0.0;
-      saleMap['monto_total'] = (saleMap['monto_total'] as num?)?.toDouble() ?? 0.0;
-      saleMap['monto_pagado'] = (saleMap['monto_pagado'] as num?)?.toDouble() ?? 0.0;
-      saleMap['descuento_aplicado'] = (saleMap['descuento_aplicado'] as num?)?.toDouble() ?? 0.0;
-      saleMap['mora_total'] = (saleMap['mora_total'] as num?)?.toDouble() ?? 0.0;
+      saleMap['porcentaje_interes'] =
+          (saleMap['porcentaje_interes'] as num?)?.toDouble() ?? 0.0;
+      saleMap['abono_inicial'] =
+          (saleMap['abono_inicial'] as num?)?.toDouble() ?? 0.0;
+      saleMap['monto_total'] =
+          (saleMap['monto_total'] as num?)?.toDouble() ?? 0.0;
+      saleMap['monto_pagado'] =
+          (saleMap['monto_pagado'] as num?)?.toDouble() ?? 0.0;
+      saleMap['descuento_aplicado'] =
+          (saleMap['descuento_aplicado'] as num?)?.toDouble() ?? 0.0;
+      saleMap['mora_total'] =
+          (saleMap['mora_total'] as num?)?.toDouble() ?? 0.0;
 
       if (saleMap['cliente_id'] != null) {
         final clientService = ClientService();
@@ -1337,20 +1833,32 @@ class SalesService {
           saleMap['cliente_telefono'] = cData.phone;
         }
       }
-      
-      List<Map<String, dynamic>> cuotasRaw = await _repository.getSaleInstallmentsRaw(saleId);
-      final double montoTot = (saleMap['monto_total'] as num?)?.toDouble() ?? 0.0;
-      final double montoPag = (saleMap['monto_pagado'] as num?)?.toDouble() ?? 0.0;
+
+      List<Map<String, dynamic>> cuotasRaw = await _repository
+          .getSaleInstallmentsRaw(saleId);
+      final double montoTot =
+          (saleMap['monto_total'] as num?)?.toDouble() ?? 0.0;
+      final double montoPag =
+          (saleMap['monto_pagado'] as num?)?.toDouble() ?? 0.0;
       final double saldoPend = montoTot - montoPag;
       final bool isArchived = (saleMap['is_archived'] as num?)?.toInt() == 1;
 
       // Auto-heal si la venta es a crédito o tiene saldo deudor pero no tiene cuotas generadas
-      if (cuotasRaw.isEmpty && !isArchived && (saleMap['metodo_pago'] == 'credito' || saleMap['origen_venta'] == 'prestamo_personal' || saldoPend > 0.01)) {
+      if (cuotasRaw.isEmpty &&
+          !isArchived &&
+          (saleMap['metodo_pago'] == 'credito' ||
+              saleMap['origen_venta'] == 'prestamo_personal' ||
+              saldoPend > 0.01)) {
         final db = await dbHelper.database;
-        final String fechaVenc = saleMap['fecha_entrega']?.toString() ?? saleMap['fecha_venta']?.toString() ?? DateTime.now().toIso8601String();
+        final String fechaVenc =
+            saleMap['fecha_entrega']?.toString() ??
+            saleMap['fecha_venta']?.toString() ??
+            DateTime.now().toIso8601String();
         final double cuotaMonto = saldoPend > 0.01 ? saldoPend : montoTot;
         final double cuotaPagado = saldoPend > 0.01 ? 0.0 : montoPag;
-        final String cEstado = saldoPend <= 0.01 ? 'pagado' : (cuotaPagado > 0 ? 'parcial' : 'pendiente');
+        final String cEstado = saldoPend <= 0.01
+            ? 'pagado'
+            : (cuotaPagado > 0 ? 'parcial' : 'pendiente');
 
         await db.insert('cuotas', {
           'venta_id': saleId,
@@ -1371,9 +1879,14 @@ class SalesService {
       saleMap['pagos'] = await _repository.getSalePaymentsRaw(saleId);
 
       // Re-using local database for simpler quotient retrieval since QuotationRepository doesn't exist
-      final db = await dbHelper.database; 
+      final db = await dbHelper.database;
       if (saleMap['cotizacion_id'] != null) {
-        final qRows = await db.query('smart_quotations', where: 'id = ?', whereArgs: [saleMap['cotizacion_id']], limit: 1);
+        final qRows = await db.query(
+          'smart_quotations',
+          where: 'id = ?',
+          whereArgs: [saleMap['cotizacion_id']],
+          limit: 1,
+        );
         if (qRows.isNotEmpty) {
           saleMap['cotizacion'] = Map<String, dynamic>.from(qRows.first);
         }
@@ -1403,7 +1916,11 @@ class SalesService {
             )
             .toList();
       } else if (saleMap['cotizacion_id'] != null) {
-        saleMap['items'] = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [saleMap['cotizacion_id']]);
+        saleMap['items'] = await db.query(
+          'smart_quotation_items',
+          where: 'quotation_id = ?',
+          whereArgs: [saleMap['cotizacion_id']],
+        );
       } else {
         saleMap['items'] = [];
       }
@@ -1432,13 +1949,16 @@ class SalesService {
   Future<Map<String, dynamic>?> getCuotaConCliente(int cuotaId) async {
     try {
       final db = await dbHelper.database;
-      final rows = await db.rawQuery('''
+      final rows = await db.rawQuery(
+        '''
         SELECT c.*, v.cliente_id, cl.nombre_completo as cliente_nombre, cl.telefono as cliente_telefono 
         FROM cuotas c
         INNER JOIN ventas v ON c.venta_id = v.id
         LEFT JOIN clientes cl ON v.cliente_id = cl.id
         WHERE c.id = ?
-      ''', [cuotaId]);
+      ''',
+        [cuotaId],
+      );
 
       if (rows.isNotEmpty) {
         return Map<String, dynamic>.from(rows.first);
@@ -1450,10 +1970,14 @@ class SalesService {
   }
 
   // 🔧 TAREA 4.4.1: Productos vendidos recientemente para acceso rápido
-  Future<List<InventoryWrapper>> getRecentSoldPresentations(int negocioId, {int limit = 6}) async {
+  Future<List<InventoryWrapper>> getRecentSoldPresentations(
+    int negocioId, {
+    int limit = 6,
+  }) async {
     try {
       final db = await dbHelper.database;
-      final results = await db.rawQuery('''
+      final results = await db.rawQuery(
+        '''
         ${ProductQueries.selectInventoryCols}
         INNER JOIN venta_items vi ON vi.presentation_id = pr.id
         INNER JOIN ventas v ON vi.venta_id = v.id
@@ -1463,7 +1987,9 @@ class SalesService {
         GROUP BY pr.id
         ORDER BY MAX(v.fecha_venta) DESC
         LIMIT ?
-      ''', [negocioId, limit]);
+      ''',
+        [negocioId, limit],
+      );
       return results.map((r) => ProductQueries.parseInventoryRow(r)).toList();
     } catch (e) {
       debugPrint("Error obteniendo productos vendidos recientemente: $e");
@@ -1500,7 +2026,11 @@ class SalesService {
   }) async {
     try {
       final db = await dbHelper.database;
-      final cRows = await db.query('cuotas', where: 'id = ?', whereArgs: [cuotaId]);
+      final cRows = await db.query(
+        'cuotas',
+        where: 'id = ?',
+        whereArgs: [cuotaId],
+      );
       if (cRows.isEmpty) throw Exception("Cuota no encontrada");
       final cuota = cRows.first;
       final int ventaId = cuota['venta_id'] as int;
@@ -1508,20 +2038,29 @@ class SalesService {
       // 🛡️ Regla Estricta: Prohibido aplicar mora directa si la cuota aún no vence (fecha_vencimiento >= hoy)
       final String? dueDateStr = cuota['fecha_vencimiento']?.toString();
       if (dueDateStr != null && dueDateStr.isNotEmpty) {
-        final DateTime? dueDate = DateTime.tryParse(dueDateStr.split('T').first);
+        final DateTime? dueDate = DateTime.tryParse(
+          dueDateStr.split('T').first,
+        );
         if (dueDate != null) {
           final now = DateTime.now();
           final todayNorm = DateTime(now.year, now.month, now.day);
-          final dueDateNorm = DateTime(dueDate.year, dueDate.month, dueDate.day);
+          final dueDateNorm = DateTime(
+            dueDate.year,
+            dueDate.month,
+            dueDate.day,
+          );
           if (!dueDateNorm.isBefore(todayNorm)) {
-            debugPrint("Rechazado: La cuota aún no vence (vence: $dueDateStr). No se puede aplicar mora directa.");
+            debugPrint(
+              "Rechazado: La cuota aún no vence (vence: $dueDateStr). No se puede aplicar mora directa.",
+            );
             return false;
           }
         }
       }
 
-      final double montoOriginal = (cuota['monto_original'] as num?)?.toDouble() 
-          ?? (cuota['monto'] as num).toDouble();
+      final double montoOriginal =
+          (cuota['monto_original'] as num?)?.toDouble() ??
+          (cuota['monto'] as num).toDouble();
 
       double moraMonto = 0.0;
       double moraPorcentaje = 0.0;
@@ -1529,44 +2068,74 @@ class SalesService {
 
       if (nuevoMontoTotal != null && nuevoMontoTotal >= montoOriginal) {
         nuevoTotal = double.parse(nuevoMontoTotal.toStringAsFixed(2));
-        moraMonto = double.parse((nuevoTotal - montoOriginal).toStringAsFixed(2));
-        moraPorcentaje = montoOriginal > 0 ? double.parse(((moraMonto / montoOriginal) * 100).toStringAsFixed(2)) : 0.0;
+        moraMonto = double.parse(
+          (nuevoTotal - montoOriginal).toStringAsFixed(2),
+        );
+        moraPorcentaje = montoOriginal > 0
+            ? double.parse(
+                ((moraMonto / montoOriginal) * 100).toStringAsFixed(2),
+              )
+            : 0.0;
       } else if (tipo == 'porcentaje') {
         moraPorcentaje = double.parse(valor.toStringAsFixed(2));
-        moraMonto = double.parse((montoOriginal * (valor / 100)).toStringAsFixed(2));
-        nuevoTotal = double.parse((montoOriginal + moraMonto).toStringAsFixed(2));
+        moraMonto = double.parse(
+          (montoOriginal * (valor / 100)).toStringAsFixed(2),
+        );
+        nuevoTotal = double.parse(
+          (montoOriginal + moraMonto).toStringAsFixed(2),
+        );
       } else {
         // Fijo
         moraMonto = double.parse(valor.toStringAsFixed(2));
-        moraPorcentaje = montoOriginal > 0 ? double.parse(((moraMonto / montoOriginal) * 100).toStringAsFixed(2)) : 0.0;
-        nuevoTotal = double.parse((montoOriginal + moraMonto).toStringAsFixed(2));
+        moraPorcentaje = montoOriginal > 0
+            ? double.parse(
+                ((moraMonto / montoOriginal) * 100).toStringAsFixed(2),
+              )
+            : 0.0;
+        nuevoTotal = double.parse(
+          (montoOriginal + moraMonto).toStringAsFixed(2),
+        );
       }
 
       int? clienteId;
       await db.transaction((txn) async {
-        await txn.update('cuotas', {
-          'monto': nuevoTotal,
-          'monto_original': montoOriginal,
-          'mora_monto': moraMonto,
-          'mora_porcentaje': moraPorcentaje,
-          'mora_tipo': tipo,
-          'mora_valor': valor,
-        }, where: 'id = ?', whereArgs: [cuotaId]);
+        await txn.update(
+          'cuotas',
+          {
+            'monto': nuevoTotal,
+            'monto_original': montoOriginal,
+            'mora_monto': moraMonto,
+            'mora_porcentaje': moraPorcentaje,
+            'mora_tipo': tipo,
+            'mora_valor': valor,
+          },
+          where: 'id = ?',
+          whereArgs: [cuotaId],
+        );
 
         // Sincronizar venta en cascada (mora_total y monto_total)
         final sumRes = await txn.rawQuery(
-          'SELECT SUM(monto) as total, SUM(mora_monto) as total_mora FROM cuotas WHERE venta_id = ?', 
-          [ventaId]
+          'SELECT SUM(monto) as total, SUM(mora_monto) as total_mora FROM cuotas WHERE venta_id = ?',
+          [ventaId],
         );
-        final double nuevoVentaTotal = (sumRes.first['total'] as num?)?.toDouble() ?? nuevoTotal;
-        final double totalMoraVenta = (sumRes.first['total_mora'] as num?)?.toDouble() ?? moraMonto;
+        final double nuevoVentaTotal =
+            (sumRes.first['total'] as num?)?.toDouble() ?? nuevoTotal;
+        final double totalMoraVenta =
+            (sumRes.first['total_mora'] as num?)?.toDouble() ?? moraMonto;
 
-        await txn.update('ventas', {
-          'monto_total': nuevoVentaTotal,
-          'mora_total': totalMoraVenta,
-        }, where: 'id = ?', whereArgs: [ventaId]);
+        await txn.update(
+          'ventas',
+          {'monto_total': nuevoVentaTotal, 'mora_total': totalMoraVenta},
+          where: 'id = ?',
+          whereArgs: [ventaId],
+        );
 
-        final vRows = await txn.query('ventas', columns: ['cliente_id'], where: 'id = ?', whereArgs: [ventaId]);
+        final vRows = await txn.query(
+          'ventas',
+          columns: ['cliente_id'],
+          where: 'id = ?',
+          whereArgs: [ventaId],
+        );
         if (vRows.isNotEmpty) {
           clienteId = vRows.first['cliente_id'] as int?;
         }
@@ -1589,36 +2158,55 @@ class SalesService {
   Future<bool> quitarMorosidad(int cuotaId) async {
     try {
       final db = await dbHelper.database;
-      final cRows = await db.query('cuotas', where: 'id = ?', whereArgs: [cuotaId]);
+      final cRows = await db.query(
+        'cuotas',
+        where: 'id = ?',
+        whereArgs: [cuotaId],
+      );
       if (cRows.isEmpty) throw Exception("Cuota no encontrada");
       final cuota = cRows.first;
       final int ventaId = cuota['venta_id'] as int;
-      final double montoOriginal = (cuota['monto_original'] as num?)?.toDouble() 
-          ?? (cuota['monto'] as num).toDouble();
+      final double montoOriginal =
+          (cuota['monto_original'] as num?)?.toDouble() ??
+          (cuota['monto'] as num).toDouble();
 
       int? clienteId;
       await db.transaction((txn) async {
-        await txn.update('cuotas', {
-          'monto': montoOriginal,
-          'mora_monto': 0.0,
-          'mora_porcentaje': 0.0,
-          'mora_automatica': 0,
-          'mora_periodos_acumulados': 0,
-        }, where: 'id = ?', whereArgs: [cuotaId]);
+        await txn.update(
+          'cuotas',
+          {
+            'monto': montoOriginal,
+            'mora_monto': 0.0,
+            'mora_porcentaje': 0.0,
+            'mora_automatica': 0,
+            'mora_periodos_acumulados': 0,
+          },
+          where: 'id = ?',
+          whereArgs: [cuotaId],
+        );
 
         final sumRes = await txn.rawQuery(
-          'SELECT SUM(monto) as total, SUM(mora_monto) as total_mora FROM cuotas WHERE venta_id = ?', 
-          [ventaId]
+          'SELECT SUM(monto) as total, SUM(mora_monto) as total_mora FROM cuotas WHERE venta_id = ?',
+          [ventaId],
         );
-        final double nuevoVentaTotal = (sumRes.first['total'] as num?)?.toDouble() ?? montoOriginal;
-        final double totalMoraVenta = (sumRes.first['total_mora'] as num?)?.toDouble() ?? 0.0;
+        final double nuevoVentaTotal =
+            (sumRes.first['total'] as num?)?.toDouble() ?? montoOriginal;
+        final double totalMoraVenta =
+            (sumRes.first['total_mora'] as num?)?.toDouble() ?? 0.0;
 
-        await txn.update('ventas', {
-          'monto_total': nuevoVentaTotal,
-          'mora_total': totalMoraVenta,
-        }, where: 'id = ?', whereArgs: [ventaId]);
+        await txn.update(
+          'ventas',
+          {'monto_total': nuevoVentaTotal, 'mora_total': totalMoraVenta},
+          where: 'id = ?',
+          whereArgs: [ventaId],
+        );
 
-        final vRows = await txn.query('ventas', columns: ['cliente_id'], where: 'id = ?', whereArgs: [ventaId]);
+        final vRows = await txn.query(
+          'ventas',
+          columns: ['cliente_id'],
+          where: 'id = ?',
+          whereArgs: [ventaId],
+        );
         if (vRows.isNotEmpty) {
           clienteId = vRows.first['cliente_id'] as int?;
         }
@@ -1650,7 +2238,11 @@ class SalesService {
   }) async {
     try {
       final db = await dbHelper.database;
-      final cRows = await db.query('cuotas', where: 'id = ?', whereArgs: [cuotaId]);
+      final cRows = await db.query(
+        'cuotas',
+        where: 'id = ?',
+        whereArgs: [cuotaId],
+      );
       if (cRows.isEmpty) throw Exception("Cuota no encontrada");
       final cuota = cRows.first;
       final int ventaId = cuota['venta_id'] as int;
@@ -1658,14 +2250,19 @@ class SalesService {
       if (!activa) {
         // 🔒 DIRECTIVA 2.3 ESTRICTA:
         // Al desactivar automático, PROHIBIDO borrar o resetear mora_monto o cuotas.monto.
-        await db.update('cuotas', {
-          'mora_automatica': 0,
-        }, where: 'id = ?', whereArgs: [cuotaId]);
+        await db.update(
+          'cuotas',
+          {'mora_automatica': 0},
+          where: 'id = ?',
+          whereArgs: [cuotaId],
+        );
         return true;
       }
 
       final String freq = frecuencia ?? 'diario';
-      int interval = (intervaloDias != null && intervaloDias > 0) ? intervaloDias : 1;
+      int interval = (intervaloDias != null && intervaloDias > 0)
+          ? intervaloDias
+          : 1;
       if (intervaloDias == null || intervaloDias <= 0) {
         switch (freq) {
           case 'cada_2_dias':
@@ -1692,25 +2289,70 @@ class SalesService {
       final String t = tipo ?? 'porcentaje';
       final double val = valor ?? 0.0;
 
-      final String fechaVencimiento = cuota['fecha_vencimiento']?.toString() ?? "";
-      final String fechaInicio = (calcularDesdeVencimiento && fechaVencimiento.isNotEmpty)
+      final String fechaVencimiento =
+          cuota['fecha_vencimiento']?.toString() ?? "";
+      final String fechaInicio =
+          (calcularDesdeVencimiento && fechaVencimiento.isNotEmpty)
           ? fechaVencimiento
-          : (referenceDate ?? DateTime.now()).toIso8601String().split('T').first;
+          : (referenceDate ?? DateTime.now())
+                .toIso8601String()
+                .split('T')
+                .first;
 
       final now = referenceDate ?? DateTime.now();
       final todayNorm = DateTime(now.year, now.month, now.day);
-      final DateTime? parsedDueDate = DateTime.tryParse(fechaVencimiento.split('T').first);
-      final bool isUnexpired = parsedDueDate != null && !parsedDueDate.isBefore(todayNorm);
+      final DateTime? parsedDueDate = DateTime.tryParse(
+        fechaVencimiento.split('T').first,
+      );
+      final bool isUnexpired =
+          parsedDueDate != null && !parsedDueDate.isBefore(todayNorm);
 
       if (isUnexpired) {
         // 🛡️ Regla Estricta: Cuota en plazo NO suma dinero ahora. Guarda la regla programada intacta.
-        final double montoOriginal = (cuota['monto_original'] as num?)?.toDouble() 
-            ?? (cuota['monto'] as num).toDouble();
+        final double montoOriginal =
+            (cuota['monto_original'] as num?)?.toDouble() ??
+            (cuota['monto'] as num).toDouble();
 
-        await db.update('cuotas', {
-          'monto': montoOriginal,
-          'mora_monto': 0.0,
-          'mora_porcentaje': 0.0,
+        await db.update(
+          'cuotas',
+          {
+            'monto': montoOriginal,
+            'mora_monto': 0.0,
+            'mora_porcentaje': 0.0,
+            'mora_automatica': 1,
+            'mora_frecuencia': freq,
+            'mora_intervalo_dias': interval,
+            'mora_tipo': t,
+            'mora_valor': val,
+            'mora_fecha_inicio': fechaInicio,
+            'mora_periodos_acumulados': 0,
+          },
+          where: 'id = ?',
+          whereArgs: [cuotaId],
+        );
+
+        final sumRes = await db.rawQuery(
+          'SELECT SUM(monto) as total, SUM(mora_monto) as total_mora FROM cuotas WHERE venta_id = ?',
+          [ventaId],
+        );
+        final double nuevoVentaTotal =
+            (sumRes.first['total'] as num?)?.toDouble() ?? montoOriginal;
+        final double totalMoraVenta =
+            (sumRes.first['total_mora'] as num?)?.toDouble() ?? 0.0;
+
+        await db.update(
+          'ventas',
+          {'monto_total': nuevoVentaTotal, 'mora_total': totalMoraVenta},
+          where: 'id = ?',
+          whereArgs: [ventaId],
+        );
+
+        return true;
+      }
+
+      await db.update(
+        'cuotas',
+        {
           'mora_automatica': 1,
           'mora_frecuencia': freq,
           'mora_intervalo_dias': interval,
@@ -1718,35 +2360,16 @@ class SalesService {
           'mora_valor': val,
           'mora_fecha_inicio': fechaInicio,
           'mora_periodos_acumulados': 0,
-        }, where: 'id = ?', whereArgs: [cuotaId]);
-
-        final sumRes = await db.rawQuery(
-          'SELECT SUM(monto) as total, SUM(mora_monto) as total_mora FROM cuotas WHERE venta_id = ?', 
-          [ventaId]
-        );
-        final double nuevoVentaTotal = (sumRes.first['total'] as num?)?.toDouble() ?? montoOriginal;
-        final double totalMoraVenta = (sumRes.first['total_mora'] as num?)?.toDouble() ?? 0.0;
-
-        await db.update('ventas', {
-          'monto_total': nuevoVentaTotal,
-          'mora_total': totalMoraVenta,
-        }, where: 'id = ?', whereArgs: [ventaId]);
-
-        return true;
-      }
-
-      await db.update('cuotas', {
-        'mora_automatica': 1,
-        'mora_frecuencia': freq,
-        'mora_intervalo_dias': interval,
-        'mora_tipo': t,
-        'mora_valor': val,
-        'mora_fecha_inicio': fechaInicio,
-        'mora_periodos_acumulados': 0,
-      }, where: 'id = ?', whereArgs: [cuotaId]);
+        },
+        where: 'id = ?',
+        whereArgs: [cuotaId],
+      );
 
       // Evaluar de inmediato periodos ya devengados
-      await evaluarMorosidadPeriodica(ventaId: ventaId, referenceDate: referenceDate);
+      await evaluarMorosidadPeriodica(
+        ventaId: ventaId,
+        referenceDate: referenceDate,
+      );
       return true;
     } catch (e) {
       debugPrint("Error configurando morosidad automática: $e");
@@ -1755,20 +2378,30 @@ class SalesService {
   }
 
   /// Evalúa e incrementa la mora periódica para cuotas activas que hayan cumplido intervalos de tiempo
-  Future<void> evaluarMorosidadPeriodica({int? ventaId, int? clienteId, DateTime? referenceDate}) async {
+  Future<void> evaluarMorosidadPeriodica({
+    int? ventaId,
+    int? clienteId,
+    DateTime? referenceDate,
+  }) async {
     try {
       final db = await dbHelper.database;
-      String where = "mora_automatica = 1 AND estado != 'pagado' AND estado != 'anulada'";
+      String where =
+          "mora_automatica = 1 AND estado != 'pagado' AND estado != 'anulada'";
       List<dynamic> whereArgs = [];
       if (ventaId != null) {
         where += " AND venta_id = ?";
         whereArgs.add(ventaId);
       } else if (clienteId != null) {
-        where += " AND venta_id IN (SELECT id FROM ventas WHERE cliente_id = ? AND (is_archived IS NULL OR is_archived = 0))";
+        where +=
+            " AND venta_id IN (SELECT id FROM ventas WHERE cliente_id = ? AND (is_archived IS NULL OR is_archived = 0))";
         whereArgs.add(clienteId);
       }
 
-      final autoCuotas = await db.query('cuotas', where: where, whereArgs: whereArgs);
+      final autoCuotas = await db.query(
+        'cuotas',
+        where: where,
+        whereArgs: whereArgs,
+      );
       if (autoCuotas.isEmpty) return;
 
       final DateTime today = referenceDate ?? DateTime.now();
@@ -1781,52 +2414,85 @@ class SalesService {
       for (var c in autoCuotas) {
         final int cId = c['id'] as int;
         final int vId = c['venta_id'] as int;
-        final double montoOriginal = (c['monto_original'] as num?)?.toDouble() 
-            ?? (c['monto'] as num).toDouble();
-        final double montoPagado = (c['monto_pagado'] as num?)?.toDouble() ?? 0.0;
+        final double montoOriginal =
+            (c['monto_original'] as num?)?.toDouble() ??
+            (c['monto'] as num).toDouble();
+        final double montoPagado =
+            (c['monto_pagado'] as num?)?.toDouble() ?? 0.0;
         final double montoActual = (c['monto'] as num).toDouble();
 
         // Si ya está totalmente pagada, apagar mora_automatica
         if (montoPagado >= montoActual && montoActual > 0) {
-          await db.update('cuotas', {'mora_automatica': 0, 'estado': 'pagado'}, where: 'id = ?', whereArgs: [cId]);
+          await db.update(
+            'cuotas',
+            {'mora_automatica': 0, 'estado': 'pagado'},
+            where: 'id = ?',
+            whereArgs: [cId],
+          );
           continue;
         }
 
-        final String? fechaInicioStr = (c['mora_fecha_inicio'] ?? c['fecha_vencimiento'])?.toString();
+        final String? fechaInicioStr =
+            (c['mora_fecha_inicio'] ?? c['fecha_vencimiento'])?.toString();
         if (fechaInicioStr == null || fechaInicioStr.isEmpty) continue;
 
-        final DateTime? fechaInicio = DateTime.tryParse(fechaInicioStr.split('T').first);
+        final DateTime? fechaInicio = DateTime.tryParse(
+          fechaInicioStr.split('T').first,
+        );
         if (fechaInicio == null) continue;
 
-        final DateTime fechaInicioNorm = DateTime(fechaInicio.year, fechaInicio.month, fechaInicio.day);
+        final DateTime fechaInicioNorm = DateTime(
+          fechaInicio.year,
+          fechaInicio.month,
+          fechaInicio.day,
+        );
         final int daysOverdue = todayNorm.difference(fechaInicioNorm).inDays;
         final int interval = (c['mora_intervalo_dias'] as num?)?.toInt() ?? 1;
         if (interval < 1) continue;
 
-        final int totalPeriods = daysOverdue > 0 ? (daysOverdue ~/ interval) : 0;
-        final int periodosAcumulados = (c['mora_periodos_acumulados'] as num?)?.toInt() ?? 0;
+        final int totalPeriods = daysOverdue > 0
+            ? (daysOverdue ~/ interval)
+            : 0;
+        final int periodosAcumulados =
+            (c['mora_periodos_acumulados'] as num?)?.toInt() ?? 0;
 
         if (totalPeriods > periodosAcumulados) {
           final int newPeriods = totalPeriods - periodosAcumulados;
           final String tipo = c['mora_tipo']?.toString() ?? 'fijo';
           final double valor = (c['mora_valor'] as num?)?.toDouble() ?? 0.0;
-          final double feePerPeriod = tipo == 'porcentaje' ? (montoOriginal * (valor / 100)) : valor;
-          final double additionalMora = double.parse((feePerPeriod * newPeriods).toStringAsFixed(2));
-          final double currentMora = (c['mora_monto'] as num?)?.toDouble() ?? 0.0;
-          final double newMora = double.parse((currentMora + additionalMora).toStringAsFixed(2));
-          final double newAmount = double.parse((montoOriginal + newMora).toStringAsFixed(2));
-          final double newPorcentaje = montoOriginal > 0 
-              ? double.parse(((newMora / montoOriginal) * 100).toStringAsFixed(2)) 
+          final double feePerPeriod = tipo == 'porcentaje'
+              ? (montoOriginal * (valor / 100))
+              : valor;
+          final double additionalMora = double.parse(
+            (feePerPeriod * newPeriods).toStringAsFixed(2),
+          );
+          final double currentMora =
+              (c['mora_monto'] as num?)?.toDouble() ?? 0.0;
+          final double newMora = double.parse(
+            (currentMora + additionalMora).toStringAsFixed(2),
+          );
+          final double newAmount = double.parse(
+            (montoOriginal + newMora).toStringAsFixed(2),
+          );
+          final double newPorcentaje = montoOriginal > 0
+              ? double.parse(
+                  ((newMora / montoOriginal) * 100).toStringAsFixed(2),
+                )
               : 0.0;
 
-          await db.update('cuotas', {
-            'monto': newAmount,
-            'monto_original': montoOriginal,
-            'mora_monto': newMora,
-            'mora_porcentaje': newPorcentaje,
-            'mora_periodos_acumulados': totalPeriods,
-            'mora_ultima_aplicacion': DateTime.now().toIso8601String(),
-          }, where: 'id = ?', whereArgs: [cId]);
+          await db.update(
+            'cuotas',
+            {
+              'monto': newAmount,
+              'monto_original': montoOriginal,
+              'mora_monto': newMora,
+              'mora_porcentaje': newPorcentaje,
+              'mora_periodos_acumulados': totalPeriods,
+              'mora_ultima_aplicacion': DateTime.now().toIso8601String(),
+            },
+            where: 'id = ?',
+            whereArgs: [cId],
+          );
 
           updatedVentas.add(vId);
           updatedCuotas.add(cId);
@@ -1835,18 +2501,27 @@ class SalesService {
 
       for (var vId in updatedVentas) {
         final sumRes = await db.rawQuery(
-          'SELECT SUM(monto) as total, SUM(mora_monto) as total_mora FROM cuotas WHERE venta_id = ?', 
-          [vId]
+          'SELECT SUM(monto) as total, SUM(mora_monto) as total_mora FROM cuotas WHERE venta_id = ?',
+          [vId],
         );
-        final double nuevoVentaTotal = (sumRes.first['total'] as num?)?.toDouble() ?? 0.0;
-        final double totalMoraVenta = (sumRes.first['total_mora'] as num?)?.toDouble() ?? 0.0;
+        final double nuevoVentaTotal =
+            (sumRes.first['total'] as num?)?.toDouble() ?? 0.0;
+        final double totalMoraVenta =
+            (sumRes.first['total_mora'] as num?)?.toDouble() ?? 0.0;
 
-        await db.update('ventas', {
-          'monto_total': nuevoVentaTotal,
-          'mora_total': totalMoraVenta,
-        }, where: 'id = ?', whereArgs: [vId]);
+        await db.update(
+          'ventas',
+          {'monto_total': nuevoVentaTotal, 'mora_total': totalMoraVenta},
+          where: 'id = ?',
+          whereArgs: [vId],
+        );
 
-        final vRows = await db.query('ventas', columns: ['cliente_id'], where: 'id = ?', whereArgs: [vId]);
+        final vRows = await db.query(
+          'ventas',
+          columns: ['cliente_id'],
+          where: 'id = ?',
+          whereArgs: [vId],
+        );
         if (vRows.isNotEmpty && vRows.first['cliente_id'] != null) {
           updatedClientes.add(vRows.first['cliente_id'] as int);
         }
@@ -1872,27 +2547,38 @@ class SalesService {
   Future<void> syncCuotaNotification(int cuotaId) async {
     try {
       final db = await dbHelper.database;
-      final cRows = await db.rawQuery('''
+      final cRows = await db.rawQuery(
+        '''
         SELECT c.id as cuota_id, c.numero_cuota, c.fecha_vencimiento, c.monto, c.monto_original, c.mora_monto, c.monto_pagado,
                v.id as venta_id, v.negocio_id, v.numero_secuencial, v.origen_venta, cl.nombre_completo, cl.id as cliente_id, cl.telefono as cliente_telefono
         FROM cuotas c
         JOIN ventas v ON c.venta_id = v.id
         JOIN clientes cl ON v.cliente_id = cl.id
         WHERE c.id = ? AND c.estado NOT IN ('pagado', 'anulada') AND (v.is_archived IS NULL OR v.is_archived = 0)
-      ''', [cuotaId]);
+      ''',
+        [cuotaId],
+      );
 
       if (cRows.isEmpty) return;
       final row = cRows.first;
       final montoTotal = (row['monto'] as num).toDouble();
-      final montoOriginal = (row['monto_original'] as num?)?.toDouble() ?? montoTotal;
+      final montoOriginal =
+          (row['monto_original'] as num?)?.toDouble() ?? montoTotal;
       final moraMonto = (row['mora_monto'] as num?)?.toDouble() ?? 0.0;
       final montoPagado = (row['monto_pagado'] as num?)?.toDouble() ?? 0.0;
-      final saldoExigible = (montoTotal - montoPagado).clamp(0.0, double.infinity);
-      final fechaVenc = DateTime.tryParse(row['fecha_vencimiento']?.toString() ?? '');
-      final diasAtraso = fechaVenc != null ? DateTime.now().difference(fechaVenc).inDays : 0;
+      final saldoExigible = (montoTotal - montoPagado).clamp(
+        0.0,
+        double.infinity,
+      );
+      final fechaVenc = DateTime.tryParse(
+        row['fecha_vencimiento']?.toString() ?? '',
+      );
+      final diasAtraso = fechaVenc != null
+          ? DateTime.now().difference(fechaVenc).inDays
+          : 0;
       final bool isLoan = row['origen_venta'] == 'prestamo_personal';
-      final String folio = isLoan 
-          ? 'Préstamo #${row['numero_secuencial'] ?? row['venta_id']}' 
+      final String folio = isLoan
+          ? 'Préstamo #${row['numero_secuencial'] ?? row['venta_id']}'
           : 'Recibo #${row['numero_secuencial'] ?? row['venta_id']}';
 
       final String content = moraMonto > 0.001
@@ -1915,10 +2601,13 @@ class SalesService {
         'fecha_vencimiento': row['fecha_vencimiento'],
       });
 
-      await db.update('notificaciones', {
-        'mensaje': content,
-        'metadata_json': metaJson,
-      }, where: "objeto_relacionado_tipo = 'cuota' AND objeto_relacionado_id = ? AND dedup_key = ?", whereArgs: [cuotaId, 'cuota_vencida_$cuotaId']);
+      await db.update(
+        'notificaciones',
+        {'mensaje': content, 'metadata_json': metaJson},
+        where:
+            "objeto_relacionado_tipo = 'cuota' AND objeto_relacionado_id = ? AND dedup_key = ?",
+        whereArgs: [cuotaId, 'cuota_vencida_$cuotaId'],
+      );
     } catch (e) {
       debugPrint("Error syncing cuota notification: $e");
     }
@@ -1928,14 +2617,17 @@ class SalesService {
   Future<SaleModel?> getSaleModel(int saleId) async {
     try {
       final db = await dbHelper.database;
-      final rows = await db.rawQuery('''
+      final rows = await db.rawQuery(
+        '''
         SELECT v.*, c.nombre_completo AS cliente_nombre, c.telefono AS cliente_telefono,
         (SELECT COUNT(*) FROM cuotas q WHERE q.venta_id = v.id AND q.estado != 'pagado' AND (q.monto - COALESCE(q.monto_pagado, 0)) > 0.01 AND date(q.fecha_vencimiento) < date('now', 'localtime')) AS cuotas_vencidas_count
         FROM ventas v
         LEFT JOIN clientes c ON v.cliente_id = c.id
         WHERE v.id = ?
         LIMIT 1
-      ''', [saleId]);
+      ''',
+        [saleId],
+      );
       if (rows.isEmpty) return null;
       var map = Map<String, dynamic>.from(rows.first);
       if (map['cliente_nombre'] != null) {
@@ -1955,7 +2647,13 @@ class SalesService {
   Future<int?> getVentaIdFromCuota(int cuotaId) async {
     try {
       final db = await dbHelper.database;
-      final rows = await db.query('cuotas', columns: ['venta_id'], where: 'id = ?', whereArgs: [cuotaId], limit: 1);
+      final rows = await db.query(
+        'cuotas',
+        columns: ['venta_id'],
+        where: 'id = ?',
+        whereArgs: [cuotaId],
+        limit: 1,
+      );
       if (rows.isNotEmpty) return rows.first['venta_id'] as int?;
     } catch (_) {}
     return null;

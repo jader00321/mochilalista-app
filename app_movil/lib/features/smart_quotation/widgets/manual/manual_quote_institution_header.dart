@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
 
 class ManualQuoteInstitutionHeader extends StatelessWidget {
   final TextEditingController schoolCtrl;
   final TextEditingController gradeCtrl;
   final bool isDark; 
+  final QuotationContextMode mode;
 
   const ManualQuoteInstitutionHeader({
     super.key,
     required this.schoolCtrl,
     required this.gradeCtrl,
     required this.isDark,
+    this.mode = QuotationContextMode.school,
   });
 
   @override
@@ -19,14 +22,61 @@ class ManualQuoteInstitutionHeader extends StatelessWidget {
     return AnimatedBuilder(
       animation: Listenable.merge([schoolCtrl, gradeCtrl]),
       builder: (context, _) {
+        final String headerTitle;
+        final String firstLabel;
+        final String firstHint;
+        final IconData firstIcon;
+        final String secondLabel;
+        final String secondHint;
+        final IconData secondIcon;
+        final IconData leadingIcon;
+
+        switch (mode) {
+          case QuotationContextMode.general:
+            headerTitle = "Referencia y Destino (Opcional)";
+            firstLabel = "Lugar / Destino / Local";
+            firstHint = "Ej: Sucursal Centro";
+            firstIcon = Icons.location_on_outlined;
+            secondLabel = "Referencia / Sector";
+            secondHint = "Ej: Almacén Principal";
+            secondIcon = Icons.notes_outlined;
+            leadingIcon = Icons.shopping_bag_outlined;
+            break;
+          case QuotationContextMode.wholesale:
+            headerTitle = "Datos del Negocio / Empresa (Opcional)";
+            firstLabel = "Negocio / Empresa / RUC";
+            firstHint = "Ej: Bodega Don Pepe EIRL";
+            firstIcon = Icons.business;
+            secondLabel = "Giro / Rubro Comercial";
+            secondHint = "Ej: Abarrotes y Bebidas";
+            secondIcon = Icons.storefront_outlined;
+            leadingIcon = Icons.storefront_rounded;
+            break;
+          case QuotationContextMode.school:
+            headerTitle = "Institución y Grado (Opcional)";
+            firstLabel = "Colegio / Institución";
+            firstHint = "Ej: San Agustín";
+            firstIcon = Icons.business;
+            secondLabel = "Grado / Nivel";
+            secondHint = "Ej: 7° Básico a 4°";
+            secondIcon = Icons.class_;
+            leadingIcon = Icons.school;
+            break;
+        }
+
+        final hasValues = schoolCtrl.text.isNotEmpty || gradeCtrl.text.isNotEmpty;
+        final displaySummary = hasValues
+            ? (gradeCtrl.text.isNotEmpty ? "${schoolCtrl.text} - ${gradeCtrl.text}" : schoolCtrl.text)
+            : headerTitle;
+
         return Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             title: Text(
-              schoolCtrl.text.isEmpty ? "Institución y Grado (Opcional)" : "${schoolCtrl.text} - ${gradeCtrl.text}",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)
+              displaySummary,
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
             ),
-            leading: Icon(Icons.school, color: isDark ? Colors.indigo[300] : Colors.indigo, size: 28),
+            leading: Icon(leadingIcon, color: isDark ? Colors.indigo[300] : Colors.indigo, size: 28),
             iconColor: isDark ? Colors.white : Colors.black87,
             collapsedIconColor: isDark ? Colors.white70 : Colors.grey,
             childrenPadding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -35,19 +85,19 @@ class ManualQuoteInstitutionHeader extends StatelessWidget {
                 children: [
                   Expanded(
                     flex: 5,
-                    child: _miniTextField(schoolCtrl, "Colegio / Institución", Icons.business, hint: "Ej: San Agustín"),
+                    child: _miniTextField(schoolCtrl, firstLabel, firstIcon, hint: firstHint),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     flex: 4,
-                    child: _miniTextField(gradeCtrl, "Grado / Nivel", Icons.class_, hint: "Ej: 7° Básico a 4°"),
+                    child: _miniTextField(gradeCtrl, secondLabel, secondIcon, hint: secondHint),
                   ),
                 ],
               )
             ],
           ),
         );
-      }
+      },
     );
   }
 

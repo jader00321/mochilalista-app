@@ -15,8 +15,10 @@ class LocalDatabase {
 
   @visibleForTesting
   static Future<void> createDBForTesting(Database db) async {
-    await instance._createDB(db, 32);
+    await instance._createDB(db, 34);
     await ensureEventosFinancierosTable(db);
+    await ensureLoyaltyRulesAndRestoration(db);
+    await ensureNotificationPreferencesAndSilenced(db);
   }
 
   Future<Database> get database async {
@@ -31,13 +33,15 @@ class LocalDatabase {
 
     final db = await openDatabase(
       path,
-      version: 32, // Upgrade to v32: Eventos financieros del cliente y trazabilidad contable
+      version: 34, // Upgrade to v34: Bandejas de Archivadas, No Deseadas (Silenciadas), Preferencias y Saneamiento
       onCreate: _createDB,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
     );
     // Verificación defensiva idempotente para cualquier base de datos existente
     await ensureEventosFinancierosTable(db);
+    await ensureLoyaltyRulesAndRestoration(db);
+    await ensureNotificationPreferencesAndSilenced(db);
     return db;
   }
 
@@ -393,6 +397,127 @@ class LocalDatabase {
         debugPrint("Error en migración V32: $e");
       }
     }
+
+    // Migración V32 -> V33: Reglas de puntos del negocio y acumulación libre con restauración de puntos
+    if (oldVersion < 33) {
+      try {
+        await ensureLoyaltyRulesAndRestoration(db);
+        debugPrint("✅ Migración V33 completada con éxito: reglas_puntos_negocio y restauración de saldo libre listas.");
+      } catch (e) {
+        debugPrint("Error en migración V33: $e");
+      }
+    }
+
+    // Migración V33 -> V34: Bandejas de Archivadas, No Deseadas (Silenciadas), Preferencias y Saneamiento
+    if (oldVersion < 34) {
+      try {
+        await ensureNotificationPreferencesAndSilenced(db);
+        
+        // Saneamiento de textos residuales en BD
+        await db.rawUpdate('''
+          UPDATE notificaciones 
+          SET mensaje = TRIM(
+            REPLACE(
+              REPLACE(
+                REPLACE(mensaje, 'Toca para ver detalles o convertir en venta.', ''),
+                'Toca para ver detalles o cerrar venta.', ''
+              ),
+              'Toca para ver detalles.', ''
+            )
+          )
+          WHERE mensaje LIKE '%Toca para ver detalles%'
+        ''');
+        
+        debugPrint("✅ Migración V34 completada con éxito: notificaciones_silenciadas, preferencias_notificaciones y saneamiento de textos.");
+      } catch (e) {
+        debugPrint("Error en migración V34: $e");
+      }
+    }
+  }
+
+  /// 🛡️ V34: Creación idempotente de tablas de notificaciones silenciadas y preferencias de notificaciones
+  static Future<void> ensureNotificationPreferencesAndSilenced(DatabaseExecutor db) async {
+    try {
+      await ensureColumnExists(db, 'notificaciones', 'is_archived', 'INTEGER DEFAULT 0');
+      await ensureColumnExists(db, 'notificaciones', 'fecha_archivado', 'TEXT');
+      await ensureColumnExists(db, 'notificaciones', 'is_silenced', 'INTEGER DEFAULT 0');
+      await ensureColumnExists(db, 'notificaciones', 'fecha_silenciado', 'TEXT');
+      await ensureColumnExists(db, 'notificaciones', 'mute_key', 'TEXT');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_notif_archived_silenced ON notificaciones(negocio_id, is_archived, is_silenced)');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS notificaciones_silenciadas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          negocio_id INTEGER NOT NULL,
+          mute_key TEXT NOT NULL,
+          objeto_tipo TEXT NOT NULL,
+          objeto_id INTEGER NOT NULL,
+          motivo TEXT,
+          fecha_silenciado TEXT NOT NULL,
+          UNIQUE(negocio_id, mute_key),
+          FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE
+        )
+      ''');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_silenciadas_negocio ON notificaciones_silenciadas(negocio_id, mute_key)');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS preferencias_notificaciones (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          negocio_id INTEGER NOT NULL UNIQUE,
+          notif_cuotas_vencidas INTEGER DEFAULT 1,
+          notif_cuotas_preventivas INTEGER DEFAULT 1,
+          notif_recargos_mora INTEGER DEFAULT 1,
+          notif_confirmacion_pagos INTEGER DEFAULT 1,
+          notif_stock_agotado INTEGER DEFAULT 1,
+          notif_stock_bajo INTEGER DEFAULT 1,
+          notif_stock_compartido INTEGER DEFAULT 1,
+          notif_cotizaciones_vencidas INTEGER DEFAULT 1,
+          notif_metas_fidelizacion INTEGER DEFAULT 1,
+          dias_anticipacion_cuotas INTEGER DEFAULT 1,
+          prioridad_minima TEXT DEFAULT 'todas',
+          activar_smart_grouping INTEGER DEFAULT 1,
+          mostrar_pulse_dashboard INTEGER DEFAULT 1,
+          comportamiento_swipe TEXT DEFAULT 'tab_navigation',
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE
+        )
+      ''');
+    } catch (e) {
+      debugPrint("Error asegurando preferencias y silenciadas V34: $e");
+    }
+  }
+
+  /// Helper estático para verificar si un mute_key está silenciado en un negocio
+  static Future<bool> isMuted(DatabaseExecutor db, int negocioId, String muteKey) async {
+    try {
+      final rows = await db.query(
+        'notificaciones_silenciadas',
+        columns: ['id'],
+        where: 'negocio_id = ? AND mute_key = ?',
+        whereArgs: [negocioId, muteKey],
+        limit: 1,
+      );
+      return rows.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Helper estático para verificar si un canal de notificación está activo según preferencias
+  static Future<bool> isChannelEnabled(DatabaseExecutor db, int negocioId, String channelColumn) async {
+    try {
+      final rows = await db.query(
+        'preferencias_notificaciones',
+        columns: [channelColumn],
+        where: 'negocio_id = ?',
+        whereArgs: [negocioId],
+        limit: 1,
+      );
+      if (rows.isEmpty) return true;
+      return (rows.first[channelColumn] as int? ?? 1) == 1;
+    } catch (_) {
+      return true;
+    }
   }
 
   /// 🛡️ Creación idempotente de la tabla de auditoría y eventos financieros del cliente
@@ -422,6 +547,152 @@ class LocalDatabase {
     ''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_eventos_cliente ON eventos_financieros_cliente(cliente_id, fecha_evento)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_eventos_venta ON eventos_financieros_cliente(venta_id)');
+  }
+
+  /// 🏆 V33: Creación idempotente de reglas de puntos del negocio y restauración de puntos reservados
+  static Future<void> ensureLoyaltyRulesAndRestoration(DatabaseExecutor db) async {
+    try {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS reglas_puntos_negocio (
+          negocio_id INTEGER PRIMARY KEY,
+          puntos_por_compra_activo INTEGER DEFAULT 1,
+          puntos_por_unidad_moneda INTEGER DEFAULT 1,
+          monto_base_compra REAL DEFAULT 1.0,
+          compra_minima_para_puntos REAL DEFAULT 0.0,
+          bono_cotizacion_activo INTEGER DEFAULT 1,
+          puntos_bono_cotizacion INTEGER DEFAULT 10,
+          puntos_abono_inicial_activo INTEGER DEFAULT 1,
+          bono_pago_puntual_activo INTEGER DEFAULT 1,
+          puntos_pago_puntual INTEGER DEFAULT 25,
+          bono_racha_activo INTEGER DEFAULT 1,
+          cada_cuantas_cuotas_racha INTEGER DEFAULT 3,
+          puntos_bono_racha INTEGER DEFAULT 30,
+          bono_liquidacion_sin_mora_activo INTEGER DEFAULT 1,
+          puntos_liquidacion_sin_mora INTEGER DEFAULT 50,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE
+        )
+      ''');
+
+      // Sembrar reglas predeterminadas para los negocios que no las tengan
+      final negocios = await db.rawQuery('SELECT id FROM negocios');
+      final now = DateTime.now().toIso8601String();
+      for (var neg in negocios) {
+        int nId = neg['id'] as int;
+        final existing = await db.rawQuery(
+          'SELECT COUNT(*) as cnt FROM reglas_puntos_negocio WHERE negocio_id = ?',
+          [nId],
+        );
+        int cnt = (existing.first['cnt'] as int?) ?? 0;
+        if (cnt == 0) {
+          await db.insert('reglas_puntos_negocio', {
+            'negocio_id': nId,
+            'puntos_por_compra_activo': 1,
+            'puntos_por_unidad_moneda': 1,
+            'monto_base_compra': 1.0,
+            'compra_minima_para_puntos': 0.0,
+            'bono_cotizacion_activo': 1,
+            'puntos_bono_cotizacion': 10,
+            'puntos_abono_inicial_activo': 1,
+            'bono_pago_puntual_activo': 1,
+            'puntos_pago_puntual': 25,
+            'bono_racha_activo': 1,
+            'cada_cuantas_cuotas_racha': 3,
+            'puntos_bono_racha': 30,
+            'bono_liquidacion_sin_mora_activo': 1,
+            'puntos_liquidacion_sin_mora': 50,
+            'updated_at': now,
+          });
+          debugPrint("✅ Sembradas reglas de fidelización por defecto para el negocio #$nId");
+        }
+      }
+
+      // Si no hay negocios aún, sembrar para negocio_id = 1 defensivamente
+      final countAll = await db.rawQuery('SELECT COUNT(*) as cnt FROM reglas_puntos_negocio');
+      int cntAll = (countAll.first['cnt'] as int?) ?? 0;
+      if (cntAll == 0) {
+        await db.insert('reglas_puntos_negocio', {
+          'negocio_id': 1,
+          'puntos_por_compra_activo': 1,
+          'puntos_por_unidad_moneda': 1,
+          'monto_base_compra': 1.0,
+          'compra_minima_para_puntos': 0.0,
+          'bono_cotizacion_activo': 1,
+          'puntos_bono_cotizacion': 10,
+          'puntos_abono_inicial_activo': 1,
+          'bono_pago_puntual_activo': 1,
+          'puntos_pago_puntual': 25,
+          'bono_racha_activo': 1,
+          'cada_cuantas_cuotas_racha': 3,
+          'puntos_bono_racha': 30,
+          'bono_liquidacion_sin_mora_activo': 1,
+          'puntos_liquidacion_sin_mora': 50,
+          'updated_at': now,
+        });
+      }
+
+      // 🔄 Rutina de Restauración Idempotente de Puntos Reservados Legacy (ej. Caso Jj)
+      // Cualquier recompensa en 'PENDIENTE_REVISION' con puntos_consumidos > 0
+      final legacyReserved = await db.rawQuery('''
+        SELECT rc.id, rc.cliente_id, rc.negocio_id, rc.puntos_consumidos, rc.titulo_recompensa
+        FROM recompensas_cliente rc
+        WHERE rc.estado = 'PENDIENTE_REVISION' AND rc.puntos_consumidos > 0
+      ''');
+
+      for (var row in legacyReserved) {
+        int rewId = row['id'] as int;
+        int clientId = row['cliente_id'] as int;
+        int negocioId = row['negocio_id'] as int;
+        int ptsToRestore = (row['puntos_consumidos'] as num).toInt();
+
+        if (ptsToRestore > 0) {
+          // 1. Devolver puntos a puntos_actuales
+          await db.rawUpdate('''
+            UPDATE clientes 
+            SET puntos_actuales = puntos_actuales + ? 
+            WHERE id = ?
+          ''', [ptsToRestore, clientId]);
+
+          // Consultar saldo resultante
+          final cRow = await db.rawQuery(
+            'SELECT puntos_actuales, score_reputacion FROM clientes WHERE id = ?',
+            [clientId],
+          );
+          int newSaldo = cRow.isNotEmpty ? (cRow.first['puntos_actuales'] as num?)?.toInt() ?? 0 : 0;
+          int score = cRow.isNotEmpty ? (cRow.first['score_reputacion'] as num?)?.toInt() ?? 500 : 500;
+
+          // 2. Registrar asiento de restauración en Kardex
+          await db.insert('historial_puntos_reputacion', {
+            'negocio_id': negocioId,
+            'cliente_id': clientId,
+            'tipo_movimiento': 'RESTAURACION_MIGRACION',
+            'puntos_delta': ptsToRestore,
+            'puntos_saldo_resultante': newSaldo,
+            'score_delta': 0,
+            'score_resultante': score,
+            'motivo': 'Restauración de puntos por cambio a acumulación libre',
+            'referencia_tipo': 'sistema',
+            'referencia_id': rewId,
+            'fecha_registro': now,
+          });
+
+          // 3. Marcar recompensa legacy como migrada
+          await db.update(
+            'recompensas_cliente',
+            {
+              'estado': 'MIGRADA_A_SALDO_LIBRE',
+              'puntos_consumidos': 0,
+              'nota_revision': 'Puntos devueltos al saldo del cliente por cambio a acumulación libre',
+            },
+            where: 'id = ?',
+            whereArgs: [rewId],
+          );
+          debugPrint("✅ Restaurados $ptsToRestore pts a cliente #$clientId (Recompensa #$rewId migrada a saldo libre)");
+        }
+      }
+    } catch (e) {
+      debugPrint("Advertencia en ensureLoyaltyRulesAndRestoration: $e");
+    }
   }
 
   /// 🎁 Siembra automática de metas predeterminadas para cada negocio si no tiene ninguna configurada.
@@ -847,7 +1118,7 @@ class LocalDatabase {
 
     // 5. Notificaciones
     await db.execute(
-      '''CREATE TABLE notificaciones (id $idType, user_id $intType, negocio_id $intType, dedup_key $textNullable, titulo $textType, mensaje $textType, tipo $textNullable DEFAULT 'info', nivel_prioridad $textNullable DEFAULT 'informativa', leida $boolTypeFalse, is_resolved $boolTypeFalse, fecha_creacion $textNullable, fecha_resolucion $textNullable, prioridad $textNullable DEFAULT 'Media', objeto_relacionado_tipo $textNullable, objeto_relacionado_id $intNullable, metadata_json $textNullable, FOREIGN KEY (user_id) REFERENCES usuarios (id) ON DELETE CASCADE, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE)''',
+      '''CREATE TABLE notificaciones (id $idType, user_id $intType, negocio_id $intType, dedup_key $textNullable, titulo $textType, mensaje $textType, tipo $textNullable DEFAULT 'info', nivel_prioridad $textNullable DEFAULT 'informativa', leida $boolTypeFalse, is_resolved $boolTypeFalse, is_archived $boolTypeFalse, fecha_archivado $textNullable, is_silenced $boolTypeFalse, fecha_silenciado $textNullable, mute_key $textNullable, fecha_creacion $textNullable, fecha_resolucion $textNullable, prioridad $textNullable DEFAULT 'Media', objeto_relacionado_tipo $textNullable, objeto_relacionado_id $intNullable, metadata_json $textNullable, FOREIGN KEY (user_id) REFERENCES usuarios (id) ON DELETE CASCADE, FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE)''',
     );
 
     // 6. Promociones y Paquetes
@@ -888,10 +1159,11 @@ class LocalDatabase {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_stock_ledger_negocio ON stock_ledger(negocio_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_product_history_entidad ON product_history(entidad_tipo, entidad_id)');
     
-    // Índices de Notificaciones (V31)
+    // Índices de Notificaciones (V31 & V34)
     await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_notif_dedup ON notificaciones(negocio_id, dedup_key)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_notif_objeto ON notificaciones(negocio_id, objeto_relacionado_tipo, objeto_relacionado_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_notif_estado ON notificaciones(negocio_id, is_resolved, leida)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_notif_archived_silenced ON notificaciones(negocio_id, is_archived, is_silenced)');
     
     // 9. BI Snapshots
     await db.execute(
@@ -922,6 +1194,12 @@ class LocalDatabase {
 
     // Sembrar metas predeterminadas
     await seedDefaultMetasRecompensas(db);
+
+    // 12. Reglas de Puntos del Negocio y Acumulación Libre (V33)
+    await ensureLoyaltyRulesAndRestoration(db);
+
+    // 13. Notificaciones Silenciadas y Preferencias (V34)
+    await ensureNotificationPreferencesAndSilenced(db);
   }
 
   Future<void> closeConnection() async {

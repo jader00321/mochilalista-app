@@ -49,15 +49,33 @@ class ProductRepository {
             .split(',')
             .map((id) => int.tryParse(id.trim()) ?? -1)
             .toList();
-        final hasOrphan = catIds.contains(0);
-        final realIds = catIds.where((id) => id > 0).toList();
-        if (hasOrphan && realIds.isEmpty) {
-          query += " AND (p.categoria_id IS NULL OR p.categoria_id = 0)";
-        } else if (hasOrphan && realIds.isNotEmpty) {
-          query += " AND (p.categoria_id IS NULL OR p.categoria_id = 0 OR p.categoria_id IN (${List.filled(realIds.length, '?').join(',')}))";
+
+        // 🏷️ FASE 3: Detección de la categoría formal 'General' para unificación
+        final genRows = await db.rawQuery(
+          "SELECT id FROM categorias WHERE negocio_id = ? AND LOWER(TRIM(nombre)) = 'general' LIMIT 1",
+          [negocioId],
+        );
+        final int? generalCatId =
+            genRows.isNotEmpty ? (genRows.first['id'] as num?)?.toInt() : null;
+
+        final hasGeneralOrOrphan = catIds.contains(0) ||
+            (generalCatId != null && catIds.contains(generalCatId));
+        final realIds =
+            catIds.where((id) => id > 0 && id != generalCatId).toList();
+
+        final generalCond = generalCatId != null
+            ? "p.categoria_id IS NULL OR p.categoria_id = 0 OR p.categoria_id = $generalCatId"
+            : "p.categoria_id IS NULL OR p.categoria_id = 0";
+
+        if (hasGeneralOrOrphan && realIds.isEmpty) {
+          query += " AND ($generalCond)";
+        } else if (hasGeneralOrOrphan && realIds.isNotEmpty) {
+          query +=
+              " AND (($generalCond) OR p.categoria_id IN (${List.filled(realIds.length, '?').join(',')}))";
           args.addAll(realIds);
         } else if (realIds.isNotEmpty) {
-          query += " AND p.categoria_id IN (${List.filled(realIds.length, '?').join(',')})";
+          query +=
+              " AND p.categoria_id IN (${List.filled(realIds.length, '?').join(',')})";
           args.addAll(realIds);
         }
       }
@@ -201,15 +219,33 @@ class ProductRepository {
             .split(',')
             .map((id) => int.tryParse(id.trim()) ?? -1)
             .toList();
-        final hasOrphan = catIds.contains(0);
-        final realIds = catIds.where((id) => id > 0).toList();
-        if (hasOrphan && realIds.isEmpty) {
-          query += " AND (p.categoria_id IS NULL OR p.categoria_id = 0)";
-        } else if (hasOrphan && realIds.isNotEmpty) {
-          query += " AND (p.categoria_id IS NULL OR p.categoria_id = 0 OR p.categoria_id IN (${List.filled(realIds.length, '?').join(',')}))";
+
+        // 🏷️ FASE 3: Detección de la categoría formal 'General' para unificación
+        final genRows = await db.rawQuery(
+          "SELECT id FROM categorias WHERE negocio_id = ? AND LOWER(TRIM(nombre)) = 'general' LIMIT 1",
+          [negocioId],
+        );
+        final int? generalCatId =
+            genRows.isNotEmpty ? (genRows.first['id'] as num?)?.toInt() : null;
+
+        final hasGeneralOrOrphan = catIds.contains(0) ||
+            (generalCatId != null && catIds.contains(generalCatId));
+        final realIds =
+            catIds.where((id) => id > 0 && id != generalCatId).toList();
+
+        final generalCond = generalCatId != null
+            ? "p.categoria_id IS NULL OR p.categoria_id = 0 OR p.categoria_id = $generalCatId"
+            : "p.categoria_id IS NULL OR p.categoria_id = 0";
+
+        if (hasGeneralOrOrphan && realIds.isEmpty) {
+          query += " AND ($generalCond)";
+        } else if (hasGeneralOrOrphan && realIds.isNotEmpty) {
+          query +=
+              " AND (($generalCond) OR p.categoria_id IN (${List.filled(realIds.length, '?').join(',')}))";
           args.addAll(realIds);
         } else if (realIds.isNotEmpty) {
-          query += " AND p.categoria_id IN (${List.filled(realIds.length, '?').join(',')})";
+          query +=
+              " AND p.categoria_id IN (${List.filled(realIds.length, '?').join(',')})";
           args.addAll(realIds);
         }
       }
@@ -286,9 +322,21 @@ class ProductRepository {
   }) async {
     try {
       final db = await _dbHelper.database;
+      // 🏷️ FASE 3: Detectar si existe una categoría formal llamada 'General'
+      final genRows = await db.rawQuery(
+        "SELECT id FROM categorias WHERE negocio_id = ? AND LOWER(TRIM(nombre)) = 'general' LIMIT 1",
+        [negocioId],
+      );
+      final int? generalCatId =
+          genRows.isNotEmpty ? (genRows.first['id'] as num?)?.toInt() : null;
+
+      final String generalOrphanCond = generalCatId != null
+          ? "(p.categoria_id IS NULL OR p.categoria_id = 0 OR p.categoria_id = $generalCatId)"
+          : "(p.categoria_id IS NULL OR p.categoria_id = 0)";
+
       String query = '''
         SELECT 
-          COUNT(DISTINCT CASE WHEN (p.categoria_id IS NULL OR p.categoria_id = 0) THEN p.id END) as orphan_categories,
+          COUNT(DISTINCT CASE WHEN $generalOrphanCond THEN p.id END) as orphan_categories,
           COUNT(DISTINCT CASE WHEN (p.marca_id IS NULL OR p.marca_id = 0) THEN p.id END) as orphan_brands
         FROM productos p
         INNER JOIN presentaciones_producto pr ON pr.producto_id = p.id
@@ -1141,13 +1189,39 @@ class ProductRepository {
       productData.removeWhere((key, _) => !_kProductoColumns.contains(key));
       await _updateProductTxn(txn, productId, productData);
 
-      // 6. Eliminar variantes marcadas
+      // 6. Eliminar variantes marcadas (Safe soft-delete si tiene historial en ventas o cotizaciones)
       for (int id in idsToDelete) {
-        await txn.delete(
-          'presentaciones_producto',
-          where: 'id = ?',
-          whereArgs: [id],
+        final ventaRows = await txn.rawQuery(
+          'SELECT COUNT(*) as c FROM venta_items WHERE presentation_id = ?',
+          [id],
         );
+        final int ventaCount = (ventaRows.first['c'] as num?)?.toInt() ?? 0;
+
+        final quoteRows = await txn.rawQuery(
+          'SELECT COUNT(*) as c FROM smart_quotation_items WHERE presentation_id = ?',
+          [id],
+        );
+        final int quoteCount = (quoteRows.first['c'] as num?)?.toInt() ?? 0;
+
+        if (ventaCount > 0 || quoteCount > 0) {
+          await txn.update(
+            'presentaciones_producto',
+            {
+              'activo': 0,
+              'es_default': 0,
+              'codigo_barras': null,
+              'stock_actual': 0,
+            },
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        } else {
+          await txn.delete(
+            'presentaciones_producto',
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        }
       }
 
       // 7. Whitelist y actualización de presentaciones existentes
@@ -1200,6 +1274,87 @@ class ProductRepository {
         await txn.rawUpdate(
           'UPDATE presentaciones_producto SET stock_actual = ? WHERE producto_id = ? AND usa_stock_compartido = 1',
           [sharedStock, productId],
+        );
+      }
+    });
+  }
+
+  /// Realiza el corte atómico diferido de una variante en SQLite:
+  /// Desactiva la variante origen (soft-delete), libera el código de barras si se transfirió,
+  /// registra la salida en stock_ledger si hubo stock trasladado,
+  /// y promueve la siguiente variante a principal si la original era default.
+  Future<void> cutVariantFromProductTransaction({
+    required int presentationId,
+    required int originProductId,
+    int? promoteToDefaultPresentationId,
+    String? transferredBarcode,
+    int transferredStock = 0,
+  }) async {
+    final db = await _dbHelper.database;
+    await db.transaction((txn) async {
+      // 1. Obtener datos de la presentación a cortar
+      final presRows = await txn.query(
+        'presentaciones_producto',
+        where: 'id = ?',
+        whereArgs: [presentationId],
+        limit: 1,
+      );
+      if (presRows.isEmpty) return;
+      final pres = presRows.first;
+
+      // Obtener negocio_id del producto
+      final prodRows = await txn.query(
+        'productos',
+        columns: ['negocio_id'],
+        where: 'id = ?',
+        whereArgs: [originProductId],
+        limit: 1,
+      );
+      final int negocioId = prodRows.isNotEmpty
+          ? (prodRows.first['negocio_id'] as num?)?.toInt() ?? 1
+          : 1;
+
+      // 2. Registrar salida en stock_ledger si se trasladó stock
+      if (transferredStock > 0) {
+        final double cost =
+            (pres['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
+        final double price =
+            (pres['precio_venta_final'] as num?)?.toDouble() ?? 0.0;
+        await txn.insert('stock_ledger', {
+          'presentation_id': presentationId,
+          'negocio_id': negocioId,
+          'tipo_transaccion': 'TRANSFERENCIA_EXTRACCIÓN',
+          'cantidad': -transferredStock,
+          'costo_unitario': cost,
+          'precio_venta': price,
+          'fecha_registro': DateTime.now().toIso8601String(),
+        });
+      }
+
+      // 3. Desactivar variante origen y liberar código de barras si se transfirió
+      final Map<String, dynamic> updateValues = {
+        'activo': 0,
+        'es_default': 0,
+        'stock_actual': 0,
+      };
+      if (transferredBarcode != null && transferredBarcode.isNotEmpty) {
+        updateValues['codigo_barras'] = null;
+      }
+      await txn.update(
+        'presentaciones_producto',
+        updateValues,
+        where: 'id = ?',
+        whereArgs: [presentationId],
+      );
+
+      // 4. Promover la siguiente variante a principal si aplica
+      if (promoteToDefaultPresentationId != null &&
+          promoteToDefaultPresentationId > 0) {
+        await txn.update(
+          'presentaciones_producto',
+          {'es_default': 1},
+          where: 'id = ?',
+          whereArgs: [promoteToDefaultPresentationId],
         );
       }
     });

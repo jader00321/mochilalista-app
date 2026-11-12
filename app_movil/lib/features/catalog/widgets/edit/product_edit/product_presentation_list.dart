@@ -17,6 +17,7 @@ class ProductPresentationList extends StatelessWidget {
   final Function(int)? onMoveUp;
   final Function(int)? onMoveDown;
   final Function(int)? onClone;
+  final Function(int)? onConvertToProduct;
   final Map<String, GlobalKey>? presentationKeys;
   final VoidCallback? onBeforeDiscreteMutation;
   final VoidCallback? onDiscreteMutationCompleted;
@@ -37,6 +38,7 @@ class ProductPresentationList extends StatelessWidget {
     this.onMoveUp,
     this.onMoveDown,
     this.onClone,
+    this.onConvertToProduct,
     this.presentationKeys,
     this.onBeforeDiscreteMutation,
     this.onDiscreteMutationCompleted,
@@ -146,6 +148,7 @@ class ProductPresentationList extends StatelessWidget {
               ? () => onMoveDown!(index)
               : null,
           onClone: onClone != null ? () => onClone!(index) : null,
+          onConvertToProduct: onConvertToProduct != null ? () => onConvertToProduct!(index) : null,
           onDelete: () => deletePresentation(index, isDark),
           onStateChange: (val) {
             onBeforeDiscreteMutation?.call();

@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
+import 'package:app_movil/features/catalog/models/variant_extraction_models.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
+import 'package:app_movil/features/catalog/widgets/variants/variant_extract_config_modal.dart';
 import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_presentation_list.dart';
 import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_general_info.dart';
 import 'package:app_movil/features/catalog/widgets/edit/product_edit/product_edit_change_detector.dart';
@@ -687,6 +690,90 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     );
   }
 
+  Future<void> _handleConvertToProduct(int index, bool isDark) async {
+    if (index < 0 || index >= _presentationControllers.length) return;
+    final variantMap = _presentationControllers[index];
+
+    final bundle = await VariantExtractConfigModal.show(
+      context: context,
+      originProductName: _nameCtrl.text.trim().isNotEmpty
+          ? _nameCtrl.text.trim()
+          : widget.productToEdit.nombre,
+      originProductId: widget.productToEdit.id,
+      variantControllerMap: variantMap,
+      totalPresentations: _presentationControllers.length,
+      categoryId: _selectedCategoryId,
+      categoryName: _selectedCategoryName,
+      brandId: _selectedBrandId,
+      brandName: _selectedBrandName,
+      generalProviderId: _generalProviderId,
+      generalProviderName: _generalProviderName,
+      parentDescription: _descCtrl.text.trim(),
+      parentImageUrl: _imgUrlCtrl.text.trim(),
+      isDark: isDark,
+    );
+
+    if (bundle == null || !mounted) return;
+
+    final dynamic navResult = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductCreateScreen(
+          extractionBundle: bundle,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (navResult is ProductExtractionResult && navResult.success) {
+      if (navResult.mode == ProductExtractionMode.cut) {
+        _debounceTimer?.cancel();
+        _undoStack.clear();
+        await ProductEditOperations.finalizeVariantExtractionCut(
+          context: context,
+          result: navResult,
+          controllers: _presentationControllers,
+          keys: _presentationKeys,
+          originProductId: widget.productToEdit.id,
+          onCompleted: () {
+            _captureInitialSnapshot();
+            _recordUndoSnapshot();
+            setState(() {});
+          },
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                "✂️ Variante trasladada. Nuevo producto '${navResult.newProductName}' creado con éxito.",
+              ),
+              backgroundColor: Colors.teal,
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        // Modo Copiar: el producto origen se mantiene intacto
+        final invProv = Provider.of<InventoryProvider>(context, listen: false);
+        await invProv.loadMasterData(showAll: true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                "📋 Nuevo producto '${navResult.newProductName}' creado a partir de la variante.",
+              ),
+              backgroundColor: Colors.teal,
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   void _handleBeforeDiscreteMutation() {
     _debounceTimer?.cancel();
     _recordUndoSnapshot();
@@ -969,6 +1056,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                   onMoveUp: _handleMoveUp,
                   onMoveDown: _handleMoveDown,
                   onClone: _clonePresentation,
+                  onConvertToProduct: (idx) => _handleConvertToProduct(idx, isDark),
                   onBeforeDiscreteMutation: _handleBeforeDiscreteMutation,
                   onDiscreteMutationCompleted: _handleDiscreteMutationCompleted,
                 ),

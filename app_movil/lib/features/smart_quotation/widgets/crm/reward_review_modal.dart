@@ -6,22 +6,28 @@ import 'package:app_movil/features/smart_quotation/services/client_service.dart'
 import 'package:app_movil/features/smart_quotation/services/loyalty_whatsapp_service.dart';
 
 class RewardReviewModal extends StatefulWidget {
-  final ClientRewardModel reward;
+  final ClientRewardModel? reward;
+  final RewardGoalModel? goal;
   final ClientModel client;
   final VoidCallback onActionCompleted;
+  final bool deliverImmediately;
 
   const RewardReviewModal({
     super.key,
-    required this.reward,
+    this.reward,
+    this.goal,
     required this.client,
     required this.onActionCompleted,
-  });
+    this.deliverImmediately = false,
+  }) : assert(reward != null || goal != null, 'Debe proporcionarse reward o goal');
 
   static Future<void> show({
     required BuildContext context,
-    required ClientRewardModel reward,
+    ClientRewardModel? reward,
+    RewardGoalModel? goal,
     required ClientModel client,
     required VoidCallback onActionCompleted,
+    bool deliverImmediately = false,
   }) async {
     await showModalBottomSheet(
       context: context,
@@ -30,8 +36,10 @@ class RewardReviewModal extends StatefulWidget {
       backgroundColor: Colors.transparent,
       builder: (ctx) => RewardReviewModal(
         reward: reward,
+        goal: goal,
         client: client,
         onActionCompleted: onActionCompleted,
+        deliverImmediately: deliverImmediately,
       ),
     );
   }
@@ -47,16 +55,32 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
   late TextEditingController _noteController;
 
   late String _selectedBenefitType;
+  late int _metaId;
+  late int _puntosRequeridos;
+  late bool _isExistingReward;
   bool _isCustomizing = false;
   bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.reward.tituloRecompensa);
-    _valueController = TextEditingController(text: widget.reward.valorBeneficio.toStringAsFixed(2));
-    _noteController = TextEditingController(text: widget.reward.notaRevision ?? '');
-    _selectedBenefitType = widget.reward.tipoBeneficio;
+    _isExistingReward = widget.reward != null && widget.reward!.id > 0;
+    if (widget.reward != null) {
+      _metaId = widget.reward!.metaId;
+      _puntosRequeridos = widget.reward!.puntosConsumidos;
+      _titleController = TextEditingController(text: widget.reward!.tituloRecompensa);
+      _valueController = TextEditingController(text: widget.reward!.valorBeneficio.toStringAsFixed(2));
+      _noteController = TextEditingController(text: widget.reward!.notaRevision ?? '');
+      _selectedBenefitType = widget.reward!.tipoBeneficio;
+    } else {
+      final g = widget.goal!;
+      _metaId = g.id;
+      _puntosRequeridos = g.puntosRequeridos;
+      _titleController = TextEditingController(text: g.nombre);
+      _valueController = TextEditingController(text: g.valorBeneficio.toStringAsFixed(2));
+      _noteController = TextEditingController();
+      _selectedBenefitType = g.tipoBeneficio;
+    }
   }
 
   @override
@@ -71,37 +95,56 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
     setState(() => _isProcessing = true);
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final businessName = auth.activeBusinessName;
+    final userId = auth.activeUserId;
 
-    final double customValue = double.tryParse(_valueController.text.trim()) ?? widget.reward.valorBeneficio;
+    final double customValue = double.tryParse(_valueController.text.trim()) ??
+        (widget.reward?.valorBeneficio ?? widget.goal?.valorBeneficio ?? 0.0);
     final String customTitle = _titleController.text.trim().isNotEmpty
         ? _titleController.text.trim()
-        : widget.reward.tituloRecompensa;
+        : (widget.reward?.tituloRecompensa ?? widget.goal?.nombre ?? 'Premio');
     final String? note = _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : null;
 
-    final success = await _clientService.approveReward(
-      widget.reward.id,
-      customTitle: customTitle,
-      customBenefitType: _selectedBenefitType,
-      customBenefitValue: customValue,
-      note: note,
-    );
+    ClientRewardModel? finalReward;
 
-    if (success && mounted) {
-      final updatedReward = widget.reward.copyWith(
-        estado: 'APROBADA_NOTIFICADA',
-        tituloRecompensa: customTitle,
-        tipoBeneficio: _selectedBenefitType,
-        valorBeneficio: customValue,
-        notaRevision: note,
+    if (_isExistingReward) {
+      final success = await _clientService.approveReward(
+        widget.reward!.id,
+        customTitle: customTitle,
+        customBenefitType: _selectedBenefitType,
+        customBenefitValue: customValue,
+        note: note,
       );
+      if (success) {
+        finalReward = widget.reward!.copyWith(
+          estado: 'APROBADA_NOTIFICADA',
+          tituloRecompensa: customTitle,
+          tipoBeneficio: _selectedBenefitType,
+          valorBeneficio: customValue,
+          notaRevision: note,
+        );
+      }
+    } else {
+      // Reclamo nuevo: aquí se descuentan los puntos de forma atómica
+      finalReward = await _clientService.claimAndDeliverReward(
+        widget.client.id,
+        _metaId,
+        usuarioId: userId,
+        customTitle: customTitle,
+        customBenefitType: _selectedBenefitType,
+        customBenefitValue: customValue,
+        note: note,
+        deliverImmediately: widget.deliverImmediately,
+      );
+    }
 
+    if (finalReward != null && mounted) {
       await LoyaltyWhatsAppService.sendRewardNotification(
         context: context,
         phone: widget.client.phone,
         clientName: widget.client.fullName,
         businessName: businessName,
-        reward: updatedReward,
-        puntosSaldo: widget.client.puntosActuales,
+        reward: finalReward,
+        puntosSaldo: widget.client.puntosActuales - _puntosRequeridos,
         nivelReputacion: widget.client.nivelReputacion,
       );
 
@@ -109,30 +152,59 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
       if (!mounted) return;
       Navigator.pop(context);
     } else {
-      if (mounted) setState(() => _isProcessing = false);
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo procesar el reclamo de recompensa'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   Future<void> _handleApproveOnly() async {
     setState(() => _isProcessing = true);
-    final double customValue = double.tryParse(_valueController.text.trim()) ?? widget.reward.valorBeneficio;
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final userId = auth.activeUserId;
+
+    final double customValue = double.tryParse(_valueController.text.trim()) ??
+        (widget.reward?.valorBeneficio ?? widget.goal?.valorBeneficio ?? 0.0);
     final String customTitle = _titleController.text.trim().isNotEmpty
         ? _titleController.text.trim()
-        : widget.reward.tituloRecompensa;
+        : (widget.reward?.tituloRecompensa ?? widget.goal?.nombre ?? 'Premio');
     final String? note = _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : null;
 
-    final success = await _clientService.approveReward(
-      widget.reward.id,
-      customTitle: customTitle,
-      customBenefitType: _selectedBenefitType,
-      customBenefitValue: customValue,
-      note: note,
-    );
+    bool success = false;
+
+    if (_isExistingReward) {
+      success = await _clientService.approveReward(
+        widget.reward!.id,
+        customTitle: customTitle,
+        customBenefitType: _selectedBenefitType,
+        customBenefitValue: customValue,
+        note: note,
+      );
+    } else {
+      // Reclamo nuevo: descuenta puntos atómicamente y genera la recompensa
+      final created = await _clientService.claimAndDeliverReward(
+        widget.client.id,
+        _metaId,
+        usuarioId: userId,
+        customTitle: customTitle,
+        customBenefitType: _selectedBenefitType,
+        customBenefitValue: customValue,
+        note: note,
+        deliverImmediately: widget.deliverImmediately,
+      );
+      success = created != null;
+    }
 
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Recompensa aprobada y lista para canjear'),
+        SnackBar(
+          content: Text(_isExistingReward ? 'Recompensa aprobada y lista para canjear' : '¡Premio reclamado con éxito! Puntos descontados.'),
           backgroundColor: Colors.green,
         ),
       );
@@ -145,6 +217,12 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
   }
 
   Future<void> _handleDiscard() async {
+    if (!_isExistingReward) {
+      // Si era un reclamo no efectuado, simplemente cerramos sin tocar puntos
+      Navigator.pop(context);
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -169,7 +247,7 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
     if (confirmed == true) {
       setState(() => _isProcessing = true);
       final success = await _clientService.discardReward(
-        widget.reward.id,
+        widget.reward!.id,
         reason: 'Descartada por el comerciante desde el modal de revisión',
       );
 
@@ -345,7 +423,9 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      widget.reward.tituloRecompensa,
+                                      _titleController.text.isNotEmpty
+                                          ? _titleController.text
+                                          : (widget.reward?.tituloRecompensa ?? widget.goal?.nombre ?? 'Premio'),
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
@@ -353,7 +433,7 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
                                       ),
                                     ),
                                     Text(
-                                      'Costo: ${widget.reward.puntosConsumidos} puntos reservados',
+                                      'Costo: $_puntosRequeridos puntos',
                                       style: TextStyle(
                                         fontSize: 12,
                                         color: isDark ? Colors.grey[400] : Colors.grey[600],

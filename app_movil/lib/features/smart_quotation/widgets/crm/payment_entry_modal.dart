@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
@@ -46,6 +47,9 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
   // Cabecera retráctil para maximizar el espacio en Pago Específico
   bool _isHeaderCollapsed = false;
 
+  // 🏷️ FASE 4: Rastreo unívoco del chip de monto rápido activo para Toggle On/Off
+  String? _selectedQuickChipLabel;
+
   @override
   void initState() {
     super.initState();
@@ -59,10 +63,23 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
     }
     if (widget.initialAmount != null && widget.initialAmount! > 0) {
       _amountCtrl.text = widget.initialAmount!.toStringAsFixed(2);
+      if ((widget.initialAmount! - widget.client.totalDebt).abs() < 0.01) {
+        _selectedQuickChipLabel = "Total";
+      }
     }
     
     _amountCtrl.addListener(() {
-      if (mounted) setState(() {}); 
+      if (mounted) {
+        // Desmarcar chip automáticamente si el usuario escribe o borra un valor manual distinto
+        if (_selectedQuickChipLabel != null) {
+          final entered = double.tryParse(_amountCtrl.text) ?? 0.0;
+          final expected = _getExpectedAmountForLabel(_selectedQuickChipLabel!);
+          if ((entered - expected).abs() > 0.01) {
+            _selectedQuickChipLabel = null;
+          }
+        }
+        setState(() {});
+      }
     });
     
     _tabController.addListener(() {
@@ -596,20 +613,53 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
     );
   }
 
+  /// Obtiene el monto numérico esperado asociado a una etiqueta de chip rápido
+  double _getExpectedAmountForLabel(String label) {
+    final provider = Provider.of<TrackingProvider>(context, listen: false);
+    switch (label) {
+      case "Total":
+      case "Deuda Total":
+        return widget.client.totalDebt;
+      case "Cuota Ant.":
+        return _getOldestInstallmentAmount(provider) ?? 0.0;
+      case "Total Vencido":
+        return _getTotalOverdueAmount(provider);
+      case "Próxima Cuota":
+        return _getNextUpcomingInstallmentAmount(provider) ?? 0.0;
+      case "50% Deuda":
+        return widget.client.totalDebt / 2;
+      default:
+        return 0.0;
+    }
+  }
+
+  /// Manejo interactivo de Toggle On / Off para etiquetas de monto rápido
+  void _handleQuickChipTap(String label, double amount) {
+    HapticFeedback.lightImpact();
+    if (_selectedQuickChipLabel == label) {
+      // 🏷️ FASE 4: Segundo toque en el chip activo -> Desmarcar y limpiar campo
+      _selectedQuickChipLabel = null;
+      _amountCtrl.clear();
+    } else {
+      // Primer toque -> Marcar este chip e inyectar el monto
+      _selectedQuickChipLabel = label;
+      _amountCtrl.text = amount.toStringAsFixed(2);
+    }
+    setState(() {});
+  }
+
   /// Tarjeta compacta de monto rápido con animación suave e indicador activo de selección
   Widget _buildQuickAmountCard({
     required String label,
     required double amount,
     required Color color,
     required bool isDark,
-    required VoidCallback onTap,
     bool isWarning = false,
   }) {
-    final double entered = double.tryParse(_amountCtrl.text) ?? 0.0;
-    final bool isSelected = entered > 0 && (entered - amount).abs() < 0.01;
+    final bool isSelected = _selectedQuickChipLabel == label;
 
     return InkWell(
-      onTap: onTap,
+      onTap: () => _handleQuickChipTap(label, amount),
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -725,7 +775,7 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
 
           const SizedBox(height: 8),
 
-          // Chips de Monto Rápido en Carrusel Horizontal de 1 Sola Línea con auto-detección
+          // Chips de Monto Rápido en Carrusel Horizontal de 1 Sola Línea con Toggle On/Off
           SizedBox(
             height: 52,
             child: SingleChildScrollView(
@@ -738,9 +788,6 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                     amount: widget.client.totalDebt,
                     color: isDark ? Colors.green[300]! : const Color(0xFF2E7D32),
                     isDark: isDark,
-                    onTap: () {
-                      _amountCtrl.text = widget.client.totalDebt.toStringAsFixed(2);
-                    },
                   ),
                   const SizedBox(width: 8),
                   if (oldestInstallmentAmt != null && oldestInstallmentAmt > 0) ...[
@@ -750,9 +797,6 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                       color: isDark ? Colors.orange[300]! : Colors.orange[800]!,
                       isDark: isDark,
                       isWarning: true,
-                      onTap: () {
-                        _amountCtrl.text = oldestInstallmentAmt.toStringAsFixed(2);
-                      },
                     ),
                     const SizedBox(width: 8),
                   ],
@@ -763,9 +807,6 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                       color: isDark ? Colors.red[300]! : Colors.red[800]!,
                       isDark: isDark,
                       isWarning: true,
-                      onTap: () {
-                        _amountCtrl.text = totalOverdueAmt.toStringAsFixed(2);
-                      },
                     ),
                     const SizedBox(width: 8),
                   ],
@@ -775,9 +816,6 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                       amount: nextInstallmentAmt,
                       color: isDark ? Colors.blue[300]! : Colors.blue[800]!,
                       isDark: isDark,
-                      onTap: () {
-                        _amountCtrl.text = nextInstallmentAmt.toStringAsFixed(2);
-                      },
                     ),
                     const SizedBox(width: 8),
                   ],
@@ -786,10 +824,6 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                     amount: widget.client.totalDebt / 2,
                     color: isDark ? Colors.cyan[300]! : Colors.cyan[800]!,
                     isDark: isDark,
-                    onTap: () {
-                      final half = widget.client.totalDebt / 2;
-                      _amountCtrl.text = half.toStringAsFixed(2);
-                    },
                   ),
                   const SizedBox(width: 8),
                   _buildQuickAmountCard(
@@ -797,9 +831,6 @@ class _PaymentEntryModalState extends State<PaymentEntryModal> with SingleTicker
                     amount: widget.client.totalDebt,
                     color: isDark ? Colors.green[300]! : const Color(0xFF2E7D32),
                     isDark: isDark,
-                    onTap: () {
-                      _amountCtrl.text = widget.client.totalDebt.toStringAsFixed(2);
-                    },
                   ),
                 ],
               ),

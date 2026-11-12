@@ -627,7 +627,7 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
                                 children: [
                                   if (catProv.hasOrphanCategories)
                                     _buildFilterChip(
-                                      label: '[ Sin Categoría ]',
+                                      label: 'General',
                                       isSelected: _selectedCategoryIds.contains(0),
                                       onTap: () {
                                         _updateFilter(() {
@@ -640,7 +640,9 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
                                       },
                                       isDark: isDark,
                                     ),
-                                  ...categories.map((Category cat) {
+                                  ...categories
+                                      .where((c) => c.nombre.trim().toLowerCase() != 'general')
+                                      .map((Category cat) {
                                     final isSelected =
                                         _selectedCategoryIds.contains(cat.id);
                                     return _buildFilterChip(

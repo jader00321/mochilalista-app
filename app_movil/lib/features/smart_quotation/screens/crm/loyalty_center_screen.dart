@@ -10,6 +10,7 @@ import 'package:app_movil/features/smart_quotation/services/loyalty_whatsapp_ser
 import 'package:app_movil/features/smart_quotation/screens/crm/client_detail_screen.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/reward_review_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/meta_reward_editor_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/crm/loyalty_rules_config_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/promotion_broadcast_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_loyalty_history_modal.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
@@ -45,6 +46,8 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
   List<ClientRewardModel> _pastRewards = [];
   List<RewardGoalModel> _goals = [];
   List<Map<String, dynamic>> _catalogProducts = [];
+  List<Map<String, dynamic>> _clientsWithClaimableRewards = [];
+  Map<int, List<RewardGoalModel>> _clientsClaimableMap = {};
 
   // Tab 1: Filtros de Reputación
   String _reputationSearchQuery = '';
@@ -113,6 +116,14 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
       for (var item in almostAtGoal) {
         final client = item['client'] as ClientModel;
         almostMap[client.id] = item;
+      }
+
+      // 3.5. Cargar clientes con metas alcanzadas listas para reclamar
+      final claimableList = await _clientService.getClientsWithClaimableRewards(negocioId);
+      final claimableMap = <int, List<RewardGoalModel>>{};
+      for (var item in claimableList) {
+        final client = item['client'] as ClientModel;
+        claimableMap[client.id] = (item['claimable_goals'] as List).cast<RewardGoalModel>();
       }
 
       // 4. Cargar recompensas pendientes
@@ -190,12 +201,44 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
           _pendingRewards = pending;
           _pastRewards = past;
           _catalogProducts = prods;
+          _clientsWithClaimableRewards = claimableList;
+          _clientsClaimableMap = claimableMap;
           _isLoading = false;
         });
       }
     } catch (e, stack) {
       debugPrint("EXCEPCION EN _loadData: $e\n$stack");
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _openRulesConfig() {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final negocioId = auth.activeBusinessId ?? 1;
+    LoyaltyRulesConfigModal.show(
+      context,
+      negocioId: negocioId,
+      onRulesSaved: _loadData,
+    );
+  }
+
+  Future<void> _openLoyaltyGuidePreview() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final negocioId = auth.activeBusinessId ?? 1;
+    final rules = await _clientService.getLoyaltyRules(negocioId);
+    if (!mounted) return;
+    final msg = LoyaltyWhatsAppService.buildLoyaltyGuideAndCatalogMessage(
+      businessName: auth.activeBusinessName,
+      rules: rules,
+      activeGoals: _goals.where((g) => g.activo).toList(),
+    );
+    if (mounted) {
+      await LoyaltyWhatsAppService.showEditableWhatsAppPreviewModal(
+        context: context,
+        title: "Cartilla de Puntos y Premios",
+        phone: "",
+        initialMessage: msg,
+      );
     }
   }
 
@@ -308,6 +351,12 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            icon: const Icon(Icons.tune_rounded),
+            tooltip: "Reglas de Puntos",
+            onPressed: _openRulesConfig,
+          ),
           IconButton(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             icon: const Icon(Icons.refresh_rounded),
@@ -727,6 +776,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     final tier = client.tier;
     final almostAtGoal = _almostAtGoalMap[client.id];
     final clientPendingRewards = _pendingRewards.where((rw) => rw.clienteId == client.id).toList();
+    final clientClaimable = _clientsClaimableMap[client.id];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -846,8 +896,74 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                 ],
               ),
 
-              // Indicador de Premio Listo para Revisar o Casi en la Meta
-              if (clientPendingRewards.isNotEmpty) ...[
+              // Indicador de Premios Disponibles, Premio en Revisión o Casi en la Meta
+              if (clientClaimable != null && clientClaimable.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.6), width: 1.2),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.workspace_premium_rounded, size: 16, color: Colors.amber[800]),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          "${clientClaimable.length} premio(s) listo(s) (${client.puntosActuales} pts)",
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.amber[300] : Colors.amber[900],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () async {
+                          await showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (ctx) => RewardReviewModal(
+                              goal: clientClaimable.first,
+                              client: client,
+                              onActionCompleted: _loadData,
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber[700],
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.touch_app_rounded, size: 11, color: Colors.white),
+                              SizedBox(width: 3),
+                              Text(
+                                "Reclamar",
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (clientPendingRewards.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1080,7 +1196,77 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- SECCIÓN 1: RECOMPENSAS PENDIENTES DE REVISIÓN ---
+            // --- BARRA DE ACCIONES EJECUTIVAS: REGLAS Y CARTILLA ---
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _openRulesConfig,
+                    icon: const Icon(Icons.tune_rounded, size: 16),
+                    label: const Text("Reglas de Puntos", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.amber[800],
+                      side: BorderSide(color: Colors.amber.withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _openLoyaltyGuidePreview,
+                    icon: const Icon(Icons.menu_book_rounded, size: 16),
+                    label: const Text("Cartilla WhatsApp", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: isDark ? Colors.grey[200] : Colors.blueGrey[800],
+                      side: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade400),
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // --- SECCIÓN 1: PREMIOS DISPONIBLES PARA RECLAMAR ---
+            if (_clientsWithClaimableRewards.isNotEmpty) ...[
+              Row(
+                children: [
+                  Icon(Icons.workspace_premium_rounded, color: Colors.amber[700], size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "Premios Disponibles para Reclamar",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber[800],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      "${_clientsWithClaimableRewards.length}",
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ..._clientsWithClaimableRewards.map((item) => _buildClaimableClientCard(item, isDark, cardColor, textColor)),
+              const SizedBox(height: 20),
+            ],
+
+            // --- SECCIÓN 2: RECOMPENSAS PENDIENTES DE REVISIÓN ---
             Row(
               children: [
                 Icon(Icons.pending_actions_rounded, color: Colors.orange[700], size: 20),
@@ -1115,7 +1301,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
             ),
             const SizedBox(height: 10),
 
-            if (_pendingRewards.isEmpty)
+            if (_pendingRewards.isEmpty && _clientsWithClaimableRewards.isEmpty)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
@@ -1227,6 +1413,134 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildClaimableClientCard(
+    Map<String, dynamic> item,
+    bool isDark,
+    Color cardColor,
+    Color textColor,
+  ) {
+    final client = item['client'] as ClientModel;
+    final goals = (item['claimable_goals'] as List).cast<RewardGoalModel>();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.6), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.amber.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: Color(client.tier.colorHex).withValues(alpha: 0.2),
+                child: Text(
+                  client.fullName.isNotEmpty ? client.fullName[0].toUpperCase() : "?",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(client.tier.colorHex),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      client.fullName,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      "${client.puntosActuales} pts disponibles",
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.amber[300] : Colors.amber[800],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                icon: const Icon(Icons.chat_rounded, size: 18),
+                color: Colors.green[700],
+                tooltip: "Avisar premios por WhatsApp",
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () async {
+                  final auth = Provider.of<AuthProvider>(context, listen: false);
+                  final msg = LoyaltyWhatsAppService.buildAvailableRewardsMessage(
+                    clientName: client.fullName,
+                    businessName: auth.activeBusinessName,
+                    puntosSaldo: client.puntosActuales,
+                    nivelReputacion: client.tier.key,
+                    claimableGoals: goals,
+                  );
+                  if (!context.mounted) return;
+                  await LoyaltyWhatsAppService.showEditableWhatsAppPreviewModal(
+                    context: context,
+                    title: "Avisar Premios Disponibles",
+                    initialMessage: msg,
+                    phone: client.phone,
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: goals.map((g) {
+              return ActionChip(
+                avatar: Icon(Icons.card_giftcard_rounded, size: 14, color: Colors.amber[800]),
+                label: Text(
+                  "${g.nombre} (${g.puntosRequeridos} pts)",
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                backgroundColor: isDark ? const Color(0xFF2E2419) : Colors.amber.shade50,
+                side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
+                onPressed: () async {
+                  await showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (ctx) => RewardReviewModal(
+                      goal: g,
+                      client: client,
+                      onActionCompleted: _loadData,
+                    ),
+                  );
+                },
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }

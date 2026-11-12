@@ -181,17 +181,17 @@ class _ScanScreenState extends State<ScanScreen>
 
       if (tick <= 2) {
         statusNotifier.value = widget.mode == ScanMode.quotation
-            ? "Optimizando nitidez y legibilidad de la lista..."
+            ? "Optimizando nitidez y legibilidad de la lista o pedido..."
             : "Optimizando nitidez y resolución del comprobante...";
       } else if (tick <= 9) {
         statusNotifier.value = "Conectando con Agente IA (Gemini 3.8 Flash)...";
       } else if (tick <= 22) {
         statusNotifier.value = widget.mode == ScanMode.quotation
-            ? "Leyendo productos, marcas y cantidades requeridas..."
+            ? "Leyendo productos, marcas, empaques y cantidades requeridas..."
             : "Leyendo detalle de productos, códigos y precios...";
       } else if (tick <= 45) {
         statusNotifier.value = widget.mode == ScanMode.quotation
-            ? "Normalizando nombres, unidades y notas escolares..."
+            ? "Normalizando nombres, unidades y presentaciones..."
             : "Deduciendo empaques, fracciones y cálculos contables...";
       } else if (tick <= 68) {
         statusNotifier.value = "Estructurando catálogo con máxima precisión...";
@@ -284,7 +284,7 @@ class _ScanScreenState extends State<ScanScreen>
 
     final String title = isQuotation ? "Escanear Lista" : "Escanear Factura";
     final String subtitle = isQuotation
-        ? "Toma una foto clara y bien iluminada de la lista de útiles escolares."
+        ? "Toma una foto clara de cualquier lista de compras, pedido al por mayor, requerimiento de negocio o lista escolar."
         : "Sube tu factura de compra para procesar y reponer el stock.";
     final IconData mainIcon = isQuotation
         ? Icons.document_scanner_rounded
@@ -486,17 +486,48 @@ class _ScanScreenState extends State<ScanScreen>
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
           child: Text(
             subtitle,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: isDark ? Colors.grey[400] : Colors.grey[600],
-              fontSize: 16,
-              height: 1.5,
+              fontSize: 15,
+              height: 1.45,
             ),
           ),
         ),
+
+        // 🏷️ Chips informativos de escenarios multi-rubro soportados (Fase 1)
+        if (isQuotation)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 8, left: 16, right: 16),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildScenarioPill(
+                  icon: Icons.shopping_bag_outlined,
+                  label: "🛒 Compras / Pedido",
+                  color: Colors.blue,
+                  isDark: isDark,
+                ),
+                _buildScenarioPill(
+                  icon: Icons.storefront_rounded,
+                  label: "📦 Mayorista / Negocio",
+                  color: Colors.teal,
+                  isDark: isDark,
+                ),
+                _buildScenarioPill(
+                  icon: Icons.school_outlined,
+                  label: "🎓 Lista Escolar",
+                  color: Colors.orange,
+                  isDark: isDark,
+                ),
+              ],
+            ),
+          ),
 
         if (isGuest)
           Container(
@@ -605,6 +636,40 @@ class _ScanScreenState extends State<ScanScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildScenarioPill({
+    required IconData icon,
+    required String label,
+    required MaterialColor color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? color.withValues(alpha: 0.15) : color.shade50,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? color.withValues(alpha: 0.3) : color.shade200,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: isDark ? color.shade300 : color.shade700),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: isDark ? color.shade200 : color.shade900,
+            ),
+          ),
+        ],
       ),
     );
   }
