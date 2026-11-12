@@ -1,0 +1,133 @@
+================================================================================
+                    MOCHILALISTA APP - NOTAS DE VERSION V9.22
+================================================================================
+Version: 9.22.0+72
+Nombre del Paquete: mochilalista_v9.22
+Fecha: 12 de Noviembre de 2026
+Compilacion: Release APK (mochilalista_v9.22.apk)
+Plataforma: Android (Flutter SDK ^3.9.0)
+Arquitectura: 100% Local-First Offline SQLite con reactividad a 0ms
+Calidad de Codigo: 0 Errores | 0 Advertencias | 0 Infos | 100% Tests Aprobados (27/27)
+Repositorio: Rama dev/mejoras-v9.0-comercializacion-seguridad (Sincronizado)
+Destino: C:\Users\vjuli\Documents\v-app-offline apks\mochilalista_v9.22.apk
+
+===============================================================================
+RESUMEN EJECUTIVO DE LA ACTUALIZACION V9.22
+===============================================================================
+La version 9.22 de MochilaLista expande integralmente todo el potencial comercial
+del modulo "Smart Quotation" (Escanear Lista, Datos Extraidos, Cotizacion
+Inteligente, Vista Previa PDF y Editor WhatsApp), superando la limitacion historica
+que orientaba la herramienta exclusivamente a campana escolar. A partir de esta
+version, el comerciante cuenta con una solucion universal para gestionar compras
+familiares o de menudeo, pedidos B2B al por mayor por volumen y listas escolares.
+
+-------------------------------------------------------------------------------
+1. UNIVERSALIZACION DEL ESCANER Y COTIZADOR IA MULTIPROPOSITO:
+-------------------------------------------------------------------------------
+   * Sistema de 3 Modos de Contexto (QuotationContextMode):
+     - 🛒 Pedido General (compras familiares, abarrotes, bazar, ferreteria, limpieza).
+     - 📦 Mayorista / Negocio (pedidos B2B por cajas, paquetes, packs, fardos, docenas).
+     - 🎓 Lista Escolar (campana escolar tradicional por colegios y grados).
+   * Rediseño inclusivo en pantallas de acceso:
+     - "Escanear Lista", el banner de inicio y la cuadricula de gestion operativa
+       ahora comunican soporte para cualquier lista manuscrita o impresa.
+     - Chips informativos de los 3 rubros comerciales soportados.
+   * IA y Parsers de Extraccion Optimizados:
+     - El prompt del servicio IA/OCR y los regex de extraccion reconocen pedidos
+       por volumen (cajas, packs, fardos, docenas, unidades) y metadatos de
+       empresas, RUC o clientes particulares.
+   * Formulario de "Datos Extraidos" sin cortes tipograficos:
+     - Rebalanceo de proporciones en tarjetas de producto (flex 3 para cantidad,
+       flex 4 para unidad y flex 5 para marca sin iconos prefijos invasivos).
+     - Titulo del AppBar adaptativo ("Datos Extraídos" / "X productos identificados")
+       legible al 100% en pantallas compactas de 320dp y 360dp.
+     - Cierre automatico de teclado al tocar fuera de cualquier campo de texto.
+
+-------------------------------------------------------------------------------
+2. MODAL DINAMICO Y ANIMADO "GENERAR COTIZACION" (QuotationConfirmationModal):
+-------------------------------------------------------------------------------
+   * Despliegue interactivo con animacion ScaleTransition + FadeTransition al
+     pulsar el boton "COTIZAR (X/Y)".
+   * Resumen visual del lote: indicador amigable del estado de los productos
+     (X de Y productos listos) y aviso si existen items con cantidad 0 o vacios.
+   * Selector interactivo de estrategia de inventario y stock:
+     - 🏷️ Precio Publico / Menudeo (prioriza precio unitario al detalle).
+     - 📦 Priorizar Mayorista / Cajas / Paquetes (prioriza presentaciones por volumen).
+   * Ergonomia Mobile First blindada:
+     - Cabecera fija superior y cuerpo central escrolleable (Flexible + SingleChildScrollView).
+     - Fila inferior con botones [Revisar] y [Sí, Cotizar →] fijada al pie del
+       dialogo, 100% visible y accesible en pantallas compactas (320x568 y 360x640dp)
+       sin overflows de renderizado.
+
+-------------------------------------------------------------------------------
+3. MOTOR DE MATCHING PONDERADO POR VOLUMEN Y PRESENTACIONES (MatchingService):
+-------------------------------------------------------------------------------
+   * Metodo calculatePresentationBonus con ponderacion inteligente:
+     - +35 puntos para coincidencia exacta de empaque mayorista declarado.
+     - +25 puntos para presentaciones por volumen cuando la estrategia mayorista esta activa.
+     - +10 puntos para presentaciones por unidad cuando la estrategia es menudeo.
+   * Fallback robusto a unidad: si un producto no cuenta con empaque por caja o
+     paquete, el sistema cotiza automaticamente la presentacion individual sin
+     quebrar el flujo ni dejar items huerfanos.
+
+-------------------------------------------------------------------------------
+4. SELECTOR DE MODO EN COTIZACION INTELIGENTE (MatchingScreen / Cotizar Manual):
+-------------------------------------------------------------------------------
+   * Selector segmentado de 3 modos integrado en el Acordeon de Datos del Cliente.
+   * Adaptabilidad instantanea de campos en ManualQuoteInstitutionHeader:
+     - Modo Escolar: Colegio / Institucion y Grado / Nivel.
+     - Modo Mayorista: Negocio / Empresa / RUC y Giro / Rubro Comercial.
+     - Modo General: Lugar / Destino / Local y Referencia de Entrega.
+   * Motor de Nombres (QuotationNamingEngine): el boton magico (✨) genera titulos
+     limpios y directos segun el rubro activo sin forzar sufijos escolares.
+   * Propagacion del modo activo hacia la generacion de PDF y WhatsApp.
+
+-------------------------------------------------------------------------------
+5. FIDELIDAD TOTAL EN VISTA PREVIA PDF (Formatos A4 y Ticket 80mm):
+-------------------------------------------------------------------------------
+   * Erradicacion total del formato invertido "1,00 S/": el 100% de celdas,
+     totales, subtotales, cuotas y recargos usan AppCurrency.format (ej. S/ 1.00).
+   * Nombres limpios deduplicados (displayNameClean): elimina palabras redundantes
+     o marcas duplicadas tanto en hojas A4 como en tickets termicos de 80mm.
+   * Modal de OPCIONES con 4 titulos de comprobante seleccionables en 1 toque:
+     [COTIZACIÓN], [PROFORMA COMERCIAL], [PRESUPUESTO MAYORISTA], [COTIZACIÓN ESCOLAR].
+   * Selector interactivo de dias de validez (3, 7, 15, 30 dias).
+   * Sanitizacion de notas: elimina etiquetas internas [modo:...] para garantizar
+     un documento impreso formal y elegante.
+
+-------------------------------------------------------------------------------
+6. ESTUDIO Y EDITOR DE WHATSAPP DINAMICO:
+-------------------------------------------------------------------------------
+   * 4 Plantillas comerciales por escenario:
+     - 🛒 Estándar / Pedido (cotizacion balanceada con detalle de productos y total).
+     - 📦 Mayorista / Negocio (proforma B2B con presentacion por bultos y cuentas bancarias).
+     - ⚡ Resumen Rapido (resumen compacto de productos y total global).
+     - 🎓 Lista Escolar (detalle por colegios, grados y articulos escolares).
+   * 5 Chips Modulares de Personalizacion en 1 Toque:
+     - [✓ Precios Unitarios (c/u)]: incluye desglose "— S/ X.XX c/u" por linea.
+     - [✓ Marca / Empaque]: activa/desactiva la visualizacion limpia de empaque y marca.
+     - [✓ Datos del Cliente / RUC]: enciende/apaga cabecera con datos comerciales.
+     - [✓ Validez]: agrega/remueve la clausula de vigencia temporal en todos los modos.
+     - [✓ Medios de Pago]: incluye/omite cuentas de transferencia con fallback reactivo.
+   * Botones directos [🔄 Restaurar] y [📋 Copiar] con retroalimentacion inmediata.
+
+-------------------------------------------------------------------------------
+7. PERSISTENCIA Y RETROCOMPATIBILIDAD EN SQLITE:
+-------------------------------------------------------------------------------
+   * Reconstruccion universal en SmartQuotationModel: si una cotizacion no contiene
+     colegio ni grado, se restaura por defecto como modo general.
+   * Serializacion transparente de tags [modo:wholesale], [modo:general], [modo:school]
+     dentro del registro SQLite, garantizando fidelidad total al recargar del historial.
+   * Getter displayNotas para visualizacion amigable al comerciante.
+   * Mantenimiento de getters retrocompatibles (institutionName, studentName, gradeLevel).
+
+===============================================================================
+CERTIFICACION DE CALIDAD Y PRUEBAS ADVERSARIALES
+===============================================================================
+- Analizador Estatico: flutter analyze --no-pub lib test
+  Resultado: No issues found! (0 errores, 0 advertencias, 0 infos).
+- Suite Automatizada: universal_quotation_scanner_confirmation_modal_pdf_whatsapp_test.dart
+  Resultado: +27 tests ejecutados y aprobados al 100%.
+- Verificacion en Dispositivos Compactos:
+  Sin desbordes (overflow) en resoluciones de 320x568dp y 360x640dp.
+===============================================================================
