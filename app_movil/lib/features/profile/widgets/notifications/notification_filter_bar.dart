@@ -31,101 +31,127 @@ class NotificationFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = isDark ? const Color(0xFF1E1E28) : Colors.grey[50]!;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: isDark ? const Color(0xFF1E1E28) : Colors.grey[50],
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: [
-            // Categorías con Badges
-            _buildCategoryChip(
-              id: 'Todas',
-              label: 'Todas',
-              count: totalCount,
-              icon: Icons.all_inbox_rounded,
-              color: isDark ? Colors.blue[300]! : Colors.blue[700]!,
-            ),
-            _buildCategoryChip(
-              id: 'Cobranzas',
-              label: 'Cobranzas',
-              count: cobranzasCount,
-              icon: Icons.payments_outlined,
-              color: isDark ? Colors.red[300]! : Colors.red[600]!,
-            ),
-            _buildCategoryChip(
-              id: 'Inventario',
-              label: 'Inventario',
-              count: inventarioCount,
-              icon: Icons.inventory_2_outlined,
-              color: isDark ? Colors.amber[300]! : Colors.orange[800]!,
-            ),
-            _buildCategoryChip(
-              id: 'Cotizaciones',
-              label: 'Cotizaciones',
-              count: cotizacionesCount,
-              icon: Icons.receipt_long_rounded,
-              color: isDark ? Colors.indigo[300]! : Colors.indigo[700]!,
-            ),
+      color: bgColor,
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 28, 8),
+            child: Row(
+              children: [
+                // Categorías con Badges
+                _buildCategoryChip(
+                  id: 'Todas',
+                  label: 'Todas',
+                  count: totalCount,
+                  icon: Icons.all_inbox_rounded,
+                  color: isDark ? Colors.blue[300]! : Colors.blue[700]!,
+                ),
+                _buildCategoryChip(
+                  id: 'Cobranzas',
+                  label: 'Cobranzas',
+                  count: cobranzasCount,
+                  icon: Icons.payments_outlined,
+                  color: isDark ? Colors.red[300]! : Colors.red[600]!,
+                ),
+                _buildCategoryChip(
+                  id: 'Inventario',
+                  label: 'Inventario',
+                  count: inventarioCount,
+                  icon: Icons.inventory_2_outlined,
+                  color: isDark ? Colors.amber[300]! : Colors.orange[800]!,
+                ),
+                _buildCategoryChip(
+                  id: 'Cotizaciones',
+                  label: 'Cotizaciones',
+                  count: cotizacionesCount,
+                  icon: Icons.receipt_long_rounded,
+                  color: isDark ? Colors.indigo[300]! : Colors.indigo[700]!,
+                ),
 
-            const SizedBox(width: 8),
-            Container(width: 1.2, height: 22, color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.grey[300]),
-            const SizedBox(width: 12),
+                const SizedBox(width: 8),
+                Container(width: 1.2, height: 22, color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.grey[300]),
+                const SizedBox(width: 12),
 
-            // Filtros Temporales
-            ...['Todo', 'Hoy', '7 Días'].map((f) {
-              final isSel = timeFilter == f;
-              return Padding(
-                padding: const EdgeInsets.only(right: 6.0),
-                child: ChoiceChip(
-                  label: Text(f, style: const TextStyle(fontSize: 12.5)),
-                  selected: isSel,
-                  onSelected: (v) {
-                    if (v) onTimeFilterChanged(f);
-                  },
-                  selectedColor: isDark ? Colors.purple.withValues(alpha: 0.25) : Colors.purple[50],
-                  backgroundColor: isDark ? const Color(0xFF2A2A36) : Colors.grey[200],
-                  labelStyle: TextStyle(
-                    color: isSel ? (isDark ? Colors.purple[200] : Colors.purple[700]) : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                    fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: isSel ? (isDark ? Colors.purple[400]! : Colors.purple[300]!) : Colors.transparent,
+                // Filtros Temporales
+                ...['Todo', 'Hoy', '7 Días'].map((f) {
+                  final isSel = timeFilter == f;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6.0),
+                    child: ChoiceChip(
+                      label: Text(f, style: const TextStyle(fontSize: 12.5)),
+                      selected: isSel,
+                      onSelected: (v) {
+                        if (v) onTimeFilterChanged(f);
+                      },
+                      selectedColor: isDark ? Colors.purple.withValues(alpha: 0.25) : Colors.purple[50],
+                      backgroundColor: isDark ? const Color(0xFF2A2A36) : Colors.grey[200],
+                      labelStyle: TextStyle(
+                        color: isSel ? (isDark ? Colors.purple[200] : Colors.purple[700]) : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                        fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: isSel ? (isDark ? Colors.purple[400]! : Colors.purple[300]!) : Colors.transparent,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+                Padding(
+                  padding: const EdgeInsets.only(right: 6.0),
+                  child: ChoiceChip(
+                    label: Text(
+                      specificDate == null ? 'Específico' : DateFormat('MMM yyyy').format(specificDate!), 
+                      style: const TextStyle(fontSize: 12.5),
+                    ),
+                    selected: timeFilter == 'Específico',
+                    onSelected: (v) {
+                      if (v) onSpecificDateTapped();
+                    },
+                    selectedColor: isDark ? Colors.purple.withValues(alpha: 0.25) : Colors.purple[50],
+                    backgroundColor: isDark ? const Color(0xFF2A2A36) : Colors.grey[200],
+                    labelStyle: TextStyle(
+                      color: timeFilter == 'Específico' ? (isDark ? Colors.purple[200] : Colors.purple[700]) : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                      fontWeight: timeFilter == 'Específico' ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(
+                        color: timeFilter == 'Específico' ? (isDark ? Colors.purple[400]! : Colors.purple[300]!) : Colors.transparent,
+                      ),
                     ),
                   ),
                 ),
-              );
-            }),
-            Padding(
-              padding: const EdgeInsets.only(right: 6.0),
-              child: ChoiceChip(
-                label: Text(
-                  specificDate == null ? 'Específico' : DateFormat('MMM yyyy').format(specificDate!), 
-                  style: const TextStyle(fontSize: 12.5),
-                ),
-                selected: timeFilter == 'Específico',
-                onSelected: (v) {
-                  if (v) onSpecificDateTapped();
-                },
-                selectedColor: isDark ? Colors.purple.withValues(alpha: 0.25) : Colors.purple[50],
-                backgroundColor: isDark ? const Color(0xFF2A2A36) : Colors.grey[200],
-                labelStyle: TextStyle(
-                  color: timeFilter == 'Específico' ? (isDark ? Colors.purple[200] : Colors.purple[700]) : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                  fontWeight: timeFilter == 'Específico' ? FontWeight.bold : FontWeight.normal,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(
-                    color: timeFilter == 'Específico' ? (isDark ? Colors.purple[400]! : Colors.purple[300]!) : Colors.transparent,
+              ],
+            ),
+          ),
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 24,
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      bgColor.withValues(alpha: 0.0),
+                      bgColor,
+                    ],
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -474,6 +474,8 @@ class LocalDatabase {
           notif_cotizaciones_vencidas INTEGER DEFAULT 1,
           notif_metas_fidelizacion INTEGER DEFAULT 1,
           dias_anticipacion_cuotas INTEGER DEFAULT 1,
+          dias_gracia_stock_bajo INTEGER DEFAULT 3,
+          anti_spam_stock_silencioso INTEGER DEFAULT 1,
           prioridad_minima TEXT DEFAULT 'todas',
           activar_smart_grouping INTEGER DEFAULT 1,
           mostrar_pulse_dashboard INTEGER DEFAULT 1,
@@ -482,6 +484,14 @@ class LocalDatabase {
           FOREIGN KEY (negocio_id) REFERENCES negocios (id) ON DELETE CASCADE
         )
       ''');
+
+      // Asegurar columnas V35 para stock inteligente
+      try {
+        await db.execute('ALTER TABLE preferencias_notificaciones ADD COLUMN dias_gracia_stock_bajo INTEGER DEFAULT 3');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE preferencias_notificaciones ADD COLUMN anti_spam_stock_silencioso INTEGER DEFAULT 1');
+      } catch (_) {}
     } catch (e) {
       debugPrint("Error asegurando preferencias y silenciadas V34: $e");
     }

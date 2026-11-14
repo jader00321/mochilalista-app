@@ -507,9 +507,17 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   }
 
   String? get _generalProviderName {
-    if (_generalProviderId == null || _generalProviderId == -2) return null;
-    if (_presentationControllers.isEmpty) return null;
-    return _presentationControllers.first['deferredProviderName'] as String?;
+    final provId = _generalProviderId;
+    if (provId == null || provId == -2) return null;
+    if (provId < 0) {
+      return _deferredProviderNames[provId] ??
+          (_presentationControllers.isNotEmpty
+              ? _presentationControllers.first['deferredProviderName'] as String?
+              : null);
+    }
+    final invProv = Provider.of<InventoryProvider>(context, listen: false);
+    final found = invProv.providers.where((p) => p.id == provId).firstOrNull;
+    return found?.nombreEmpresa;
   }
 
   Future<void> _handleGeneralProviderChange(int? newId, String? newName, bool isDark) async {
@@ -694,6 +702,23 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
     if (index < 0 || index >= _presentationControllers.length) return;
     final variantMap = _presentationControllers[index];
 
+    final int? variantProvId = variantMap['providerId'] as int?;
+    String? resolvedProviderName = _generalProviderName;
+    int? resolvedProviderId = _generalProviderId;
+    if (variantProvId != null && variantProvId != 0) {
+      resolvedProviderId = variantProvId;
+      if (variantProvId < 0) {
+        resolvedProviderName = _deferredProviderNames[variantProvId] ??
+            (variantMap['deferredProviderName'] as String?);
+      } else {
+        final invProv = Provider.of<InventoryProvider>(context, listen: false);
+        final found = invProv.providers.where((p) => p.id == variantProvId).firstOrNull;
+        if (found != null) {
+          resolvedProviderName = found.nombreEmpresa;
+        }
+      }
+    }
+
     final bundle = await VariantExtractConfigModal.show(
       context: context,
       originProductName: _nameCtrl.text.trim().isNotEmpty
@@ -706,10 +731,12 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       categoryName: _selectedCategoryName,
       brandId: _selectedBrandId,
       brandName: _selectedBrandName,
-      generalProviderId: _generalProviderId,
-      generalProviderName: _generalProviderName,
+      generalProviderId: resolvedProviderId,
+      generalProviderName: resolvedProviderName,
       parentDescription: _descCtrl.text.trim(),
       parentImageUrl: _imgUrlCtrl.text.trim(),
+      modoStock: _modoStock,
+      parentSharedStock: int.tryParse(_sharedStockCtrl.text) ?? 0,
       isDark: isDark,
     );
 
@@ -736,6 +763,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
           controllers: _presentationControllers,
           keys: _presentationKeys,
           originProductId: widget.productToEdit.id,
+          sharedStockCtrl: _sharedStockCtrl,
           onCompleted: () {
             _captureInitialSnapshot();
             _recordUndoSnapshot();

@@ -923,58 +923,245 @@ class ProductCreateOperations {
         : (detail.includeVariantImage ? (detail.variantImage ?? "") : "");
     barcodeCtrl.text = detail.includeBarcode ? (detail.barcode ?? "") : "";
 
-    final String variantStock = detail.includeStock
-        ? (detail.transferFullStock ? detail.stockUnits.toString() : "0")
-        : "0";
+    final bool hasStockToTransfer =
+        detail.includeStock && detail.transferFullStock;
+    final int safeFactor = detail.unitFactor <= 0 ? 1 : detail.unitFactor;
+    final int safePackageUnits = hasStockToTransfer
+        ? (detail.packageUnits > 0 ? detail.packageUnits : detail.stockUnits)
+        : 0;
+    final int safeBaseUnits = hasStockToTransfer
+        ? (detail.baseUnits > 0
+            ? detail.baseUnits
+            : safePackageUnits * safeFactor)
+        : 0;
 
-    // 3. Crear variante principal en posición 0
-    final String newId = UniqueKey().toString();
-    keys[newId] = GlobalKey();
+    // Escalamiento proporcional de descuentos para presentaciones convertidas a Unidad (x1)
+    final bool hasDiscount = detail.hasDiscount;
+    final String discountType = detail.discountType ?? "porcentaje";
+    final double? origDiscountVal = detail.discountValue;
+    final double? origOfferPrice = detail.offerPrice;
 
-    final newMap = ProductControllerFactory.createNewControllerMap(
-      id: newId,
-      isDefault: true,
-      isExpanded: true,
-      isEditMode: false,
-      specificName: detail.specificName ?? "",
-      unidadVenta: detail.includeUnit ? detail.unitName : "Unidad",
-      unidadesVenta: detail.includeUnit ? detail.unitFactor.toString() : "1",
-      costoPres: detail.includePricing ? detail.costPrice.toStringAsFixed(2) : "0.00",
-      margen: detail.includePricing ? detail.margin.toStringAsFixed(2) : "1.35",
-      precioVenta: detail.includePricing ? detail.salePrice.toStringAsFixed(2) : "0.00",
-      stockInicial: variantStock,
-      stockFinal: variantStock,
-      barcode: detail.includeBarcode ? (detail.barcode ?? "") : "",
-      image: detail.includeVariantImage ? (detail.variantImage ?? "") : "",
-      providerId: detail.variantProviderId,
-      deferredProviderName: detail.variantProviderName,
-      descuentoActivo: detail.hasDiscount,
-      tipoDescuento: detail.discountType ?? "porcentaje",
-      valorDescuento: detail.discountValue != null ? detail.discountValue.toString() : "",
-    );
-    newMap['stockAlerta'] = detail.includeStockAlert ? (detail.alertStock ?? 5) : 5;
+    final double? unitOfferPrice = (origOfferPrice != null && origOfferPrice > 0)
+        ? double.parse((origOfferPrice / safeFactor).toStringAsFixed(2))
+        : null;
+    final double? unitDiscountVal = origDiscountVal != null
+        ? ((discountType == 'monto' || discountType == 'fijo')
+            ? double.parse((origDiscountVal / safeFactor).toStringAsFixed(2))
+            : origDiscountVal)
+        : null;
+    final String unitDiscountValStr = unitDiscountVal != null
+        ? (unitDiscountVal % 1 == 0
+            ? unitDiscountVal.toInt().toString()
+            : unitDiscountVal.toStringAsFixed(2))
+        : "";
 
-    (newMap['specific'] as TextEditingController).addListener(onSyncDraft);
-    (newMap['precioVenta'] as TextEditingController).addListener(onSyncDraft);
-    (newMap['costoPres'] as TextEditingController).addListener(onSyncDraft);
-    (newMap['image'] as TextEditingController).addListener(onSyncDraft);
-    (newMap['barcode'] as TextEditingController).addListener(onSyncDraft);
-    (newMap['stockFinal'] as TextEditingController).addListener(onSyncDraft);
+    String modoStockFinal = 'INDEPENDIENTE';
+    int sharedStockFinal = 0;
+    double baseCostFinal = 0.0;
+
+    // 3. Hidratación según estructura elegida (Opción 1, 2 o 3)
+    if (detail.targetStructure == VariantExtractionStructure.bothUnitAndPackage) {
+      // OPCIÓN 3: Crear con Ambas Presentaciones (Unidad x1 + Caja xN) en Stock Compartido
+      modoStockFinal = 'COMPARTIDO';
+      sharedStockFinal = safeBaseUnits;
+      baseCostFinal = detail.includePricing ? detail.unitCostPrice : 0.0;
+
+      // Presentación 1: ⭐ Principal (Unidad x1)
+      final String idPrincipal = UniqueKey().toString();
+      keys[idPrincipal] = GlobalKey();
+      final mapPrincipal = ProductControllerFactory.createNewControllerMap(
+        id: idPrincipal,
+        isDefault: true,
+        isExpanded: true,
+        isEditMode: false,
+        specificName: "",
+        unidadVenta: "Unidad",
+        unidadesVenta: "1",
+        costoPres: detail.includePricing
+            ? detail.unitCostPrice.toStringAsFixed(2)
+            : "0.00",
+        margen: detail.includePricing ? detail.margin.toStringAsFixed(2) : "1.35",
+        precioVenta: detail.includePricing
+            ? detail.unitSalePrice.toStringAsFixed(2)
+            : "0.00",
+        stockInicial: "0",
+        stockFinal: safeBaseUnits.toString(),
+        usaStockCompartido: true,
+        cupoMaximoVariante: null,
+        barcode: "",
+        image: detail.includeVariantImage ? (detail.variantImage ?? "") : "",
+        providerId: detail.variantProviderId,
+        deferredProviderName: detail.variantProviderName,
+        descuentoActivo: hasDiscount,
+        tipoDescuento: discountType,
+        valorDescuento: hasDiscount ? unitDiscountValStr : "",
+        precioOfertaExacto: hasDiscount ? unitOfferPrice : null,
+      );
+      mapPrincipal['stockAlerta'] =
+          detail.includeStockAlert ? (detail.alertStock ?? 5) : 5;
+      (mapPrincipal['specific'] as TextEditingController).addListener(onSyncDraft);
+      (mapPrincipal['precioVenta'] as TextEditingController).addListener(onSyncDraft);
+      (mapPrincipal['costoPres'] as TextEditingController).addListener(onSyncDraft);
+      (mapPrincipal['image'] as TextEditingController).addListener(onSyncDraft);
+      (mapPrincipal['barcode'] as TextEditingController).addListener(onSyncDraft);
+      (mapPrincipal['stockFinal'] as TextEditingController).addListener(onSyncDraft);
+      controllers.add(mapPrincipal);
+
+      // Presentación 2: #2 Secundaria (Empaque xN)
+      final String idSecundaria = UniqueKey().toString();
+      keys[idSecundaria] = GlobalKey();
+      final mapSecundaria = ProductControllerFactory.createNewControllerMap(
+        id: idSecundaria,
+        isDefault: false,
+        isExpanded: true,
+        isEditMode: false,
+        specificName: detail.specificName ?? "",
+        unidadVenta: detail.includeUnit ? detail.unitName : "Caja",
+        unidadesVenta: detail.includeUnit ? detail.unitFactor.toString() : "1",
+        costoPres: detail.includePricing
+            ? detail.costPrice.toStringAsFixed(2)
+            : "0.00",
+        margen: detail.includePricing ? detail.margin.toStringAsFixed(2) : "1.35",
+        precioVenta: detail.includePricing
+            ? detail.salePrice.toStringAsFixed(2)
+            : "0.00",
+        stockInicial: "0",
+        stockFinal: safePackageUnits.toString(),
+        usaStockCompartido: true,
+        cupoMaximoVariante: safePackageUnits > 0 ? safePackageUnits : null,
+        barcode: detail.includeBarcode ? (detail.barcode ?? "") : "",
+        image: detail.includeVariantImage ? (detail.variantImage ?? "") : "",
+        providerId: detail.variantProviderId,
+        deferredProviderName: detail.variantProviderName,
+        descuentoActivo: hasDiscount,
+        tipoDescuento: discountType,
+        valorDescuento: origDiscountVal != null
+            ? origDiscountVal.toString()
+            : "",
+        precioOfertaExacto: origOfferPrice,
+        umpCompra: detail.umpCompra ?? "",
+        unidadesLote: detail.unidadesLote.toString(),
+        cantCompra:
+            detail.cantCompra != null ? detail.cantCompra.toString() : "",
+        totalPago: detail.totalPago != null ? detail.totalPago.toString() : "",
+        desc: detail.variantDescription ?? "",
+      );
+      mapSecundaria['stockAlerta'] =
+          detail.includeStockAlert ? (detail.alertStock ?? 5) : 5;
+      (mapSecundaria['specific'] as TextEditingController).addListener(onSyncDraft);
+      (mapSecundaria['precioVenta'] as TextEditingController).addListener(onSyncDraft);
+      (mapSecundaria['costoPres'] as TextEditingController).addListener(onSyncDraft);
+      (mapSecundaria['image'] as TextEditingController).addListener(onSyncDraft);
+      (mapSecundaria['barcode'] as TextEditingController).addListener(onSyncDraft);
+      (mapSecundaria['stockFinal'] as TextEditingController).addListener(onSyncDraft);
+      controllers.add(mapSecundaria);
+    } else if (detail.targetStructure == VariantExtractionStructure.unitOnly) {
+      // OPCIÓN 2: Convertir a Unidad Individual (Unidad x1) en Modo INDEPENDIENTE
+      final String newId = UniqueKey().toString();
+      keys[newId] = GlobalKey();
+      final newMap = ProductControllerFactory.createNewControllerMap(
+        id: newId,
+        isDefault: true,
+        isExpanded: true,
+        isEditMode: false,
+        specificName: "",
+        unidadVenta: "Unidad",
+        unidadesVenta: "1",
+        costoPres: detail.includePricing
+            ? detail.unitCostPrice.toStringAsFixed(2)
+            : "0.00",
+        margen: detail.includePricing ? detail.margin.toStringAsFixed(2) : "1.35",
+        precioVenta: detail.includePricing
+            ? detail.unitSalePrice.toStringAsFixed(2)
+            : "0.00",
+        stockInicial: safeBaseUnits.toString(),
+        stockFinal: safeBaseUnits.toString(),
+        barcode: detail.includeBarcode ? (detail.barcode ?? "") : "",
+        image: detail.includeVariantImage ? (detail.variantImage ?? "") : "",
+        providerId: detail.variantProviderId,
+        deferredProviderName: detail.variantProviderName,
+        descuentoActivo: hasDiscount,
+        tipoDescuento: discountType,
+        valorDescuento: hasDiscount ? unitDiscountValStr : "",
+        precioOfertaExacto: hasDiscount ? unitOfferPrice : null,
+        desc: detail.variantDescription ?? "",
+      );
+      newMap['stockAlerta'] =
+          detail.includeStockAlert ? (detail.alertStock ?? 5) : 5;
+      (newMap['specific'] as TextEditingController).addListener(onSyncDraft);
+      (newMap['precioVenta'] as TextEditingController).addListener(onSyncDraft);
+      (newMap['costoPres'] as TextEditingController).addListener(onSyncDraft);
+      (newMap['image'] as TextEditingController).addListener(onSyncDraft);
+      (newMap['barcode'] as TextEditingController).addListener(onSyncDraft);
+      (newMap['stockFinal'] as TextEditingController).addListener(onSyncDraft);
+      controllers.add(newMap);
+    } else {
+      // OPCIÓN 1 (keepPackaging): Mantener en su Empaque (ej. Caja x3)
+      final String newId = UniqueKey().toString();
+      keys[newId] = GlobalKey();
+      final newMap = ProductControllerFactory.createNewControllerMap(
+        id: newId,
+        isDefault: true,
+        isExpanded: true,
+        isEditMode: false,
+        specificName: detail.specificName ?? "",
+        unidadVenta: detail.includeUnit ? detail.unitName : "Unidad",
+        unidadesVenta: detail.includeUnit ? detail.unitFactor.toString() : "1",
+        costoPres: detail.includePricing
+            ? detail.costPrice.toStringAsFixed(2)
+            : "0.00",
+        margen: detail.includePricing ? detail.margin.toStringAsFixed(2) : "1.35",
+        precioVenta: detail.includePricing
+            ? detail.salePrice.toStringAsFixed(2)
+            : "0.00",
+        // Inyectamos las unidades base físicas en stockInicial para que el cálculo
+        // totalBase ~/ factorVenta dé exactamente el número de empaques (safePackageUnits)
+        stockInicial: safeBaseUnits.toString(),
+        stockFinal: safePackageUnits.toString(),
+        barcode: detail.includeBarcode ? (detail.barcode ?? "") : "",
+        image: detail.includeVariantImage ? (detail.variantImage ?? "") : "",
+        providerId: detail.variantProviderId,
+        deferredProviderName: detail.variantProviderName,
+        descuentoActivo: detail.hasDiscount,
+        tipoDescuento: detail.discountType ?? "porcentaje",
+        valorDescuento: detail.discountValue != null
+            ? detail.discountValue.toString()
+            : "",
+        precioOfertaExacto: detail.offerPrice,
+        umpCompra: detail.umpCompra ?? "",
+        unidadesLote: detail.unidadesLote.toString(),
+        cantCompra:
+            detail.cantCompra != null ? detail.cantCompra.toString() : "",
+        totalPago: detail.totalPago != null ? detail.totalPago.toString() : "",
+        desc: detail.variantDescription ?? "",
+      );
+      newMap['stockAlerta'] =
+          detail.includeStockAlert ? (detail.alertStock ?? 5) : 5;
+      (newMap['specific'] as TextEditingController).addListener(onSyncDraft);
+      (newMap['precioVenta'] as TextEditingController).addListener(onSyncDraft);
+      (newMap['costoPres'] as TextEditingController).addListener(onSyncDraft);
+      (newMap['image'] as TextEditingController).addListener(onSyncDraft);
+      (newMap['barcode'] as TextEditingController).addListener(onSyncDraft);
+      (newMap['stockFinal'] as TextEditingController).addListener(onSyncDraft);
+      controllers.add(newMap);
+    }
 
     if (detail.variantProviderId != null &&
         detail.variantProviderId! < 0 &&
         detail.variantProviderName != null) {
-      deferredProviderNames[detail.variantProviderId!] = detail.variantProviderName!;
+      deferredProviderNames[detail.variantProviderId!] =
+          detail.variantProviderName!;
     }
-
-    controllers.add(newMap);
 
     final int? brandId = general.copyBrand ? general.brandId : null;
     final String? brandName = general.copyBrand ? general.brandName : null;
     final int? categoryId = general.copyCategory ? general.categoryId : null;
-    final String? categoryName = general.copyCategory ? general.categoryName : null;
-    final int? providerId = general.copyProvider ? general.generalProviderId : null;
-    final String? providerName = general.copyProvider ? general.generalProviderName : null;
+    final String? categoryName =
+        general.copyCategory ? general.categoryName : null;
+    final int? providerId =
+        general.copyProvider ? general.generalProviderId : null;
+    final String? providerName =
+        general.copyProvider ? general.generalProviderName : null;
 
     if (providerId != null && providerId < 0 && providerName != null) {
       deferredProviderNames[providerId] = providerName;
@@ -987,9 +1174,9 @@ class ProductCreateOperations {
       categoryName: categoryName,
       generalProviderId: providerId,
       generalProviderName: providerName,
-      modoStock: 'INDEPENDIENTE',
-      stockCompartido: 0,
-      costoBase: 0.0,
+      modoStock: modoStockFinal,
+      stockCompartido: sharedStockFinal,
+      costoBase: baseCostFinal,
     );
   }
 

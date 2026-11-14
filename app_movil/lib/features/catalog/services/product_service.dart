@@ -341,6 +341,9 @@ class ProductService {
     int? promoteToDefaultPresentationId,
     String? transferredBarcode,
     int transferredStock = 0,
+    int transferredBaseUnits = 0,
+    bool isSharedVariant = false,
+    bool shouldDeductSharedPool = true,
   }) async {
     try {
       await _repository.cutVariantFromProductTransaction(
@@ -349,6 +352,9 @@ class ProductService {
         promoteToDefaultPresentationId: promoteToDefaultPresentationId,
         transferredBarcode: transferredBarcode,
         transferredStock: transferredStock,
+        transferredBaseUnits: transferredBaseUnits,
+        isSharedVariant: isSharedVariant,
+        shouldDeductSharedPool: shouldDeductSharedPool,
       );
       return true;
     } catch (e, stack) {

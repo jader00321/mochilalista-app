@@ -61,9 +61,9 @@ class NotificationProvider with ChangeNotifier {
     return true;
   }
 
-  /// Lista activa visible (excluye archivadas, silenciadas y canales apagados)
+  /// Lista activa visible (excluye archivadas, silenciadas, pospuestas y canales apagados)
   List<NotificationModel> get notifications => _allNotifications
-      .where((n) => !n.isArchived && !n.isSilenced && _matchesPreferences(n))
+      .where((n) => !n.isArchived && !n.isSilenced && !n.isSnoozed && _matchesPreferences(n))
       .toList();
 
   /// Todas las notificaciones en base de datos sin filtrar
@@ -206,18 +206,41 @@ class NotificationProvider with ChangeNotifier {
       ''', [_negocioId]);
       final resolvedQuoteIds = resolvedQuoteRows.map((r) => r['id'] as int).toSet();
 
-      // Productos en periodo de gracia (< 7 días de creados)
-      final graceProducts = await db.rawQuery('''
+      // Productos con salidas reales en stock_ledger
+      final salesRows = await db.rawQuery('''
+        SELECT DISTINCT pp.producto_id 
+        FROM stock_ledger sl
+        INNER JOIN presentaciones_producto pp ON sl.presentation_id = pp.id
+        WHERE sl.negocio_id = ? AND sl.tipo_transaccion IN ('VENTA', 'SALIDA_MANUAL')
+      ''', [_negocioId]);
+      final productsWithSales = salesRows.map((r) => r['producto_id'] as int).toSet();
+
+      // Productos en periodo de gracia (< días configurados y sin salidas por venta)
+      final allProducts = await db.rawQuery('''
         SELECT id, fecha_creacion FROM productos WHERE negocio_id = ?
       ''', [_negocioId]);
       final graceProductIds = <int>{};
       final now = DateTime.now();
-      for (var p in graceProducts) {
-        final fcStr = p['fecha_creacion'] as String?;
-        if (fcStr != null) {
-          final created = DateTime.tryParse(fcStr);
-          if (created != null && now.difference(created).inDays < 7) {
-            graceProductIds.add(p['id'] as int);
+      final int diasGracia = preferences.diasGraciaStockBajo;
+      for (var p in allProducts) {
+        final pId = p['id'] as int;
+        if (!productsWithSales.contains(pId)) {
+          if (diasGracia == 0) {
+            graceProductIds.add(pId);
+          } else {
+            final fcStr = p['fecha_creacion'] as String?;
+            if (fcStr != null) {
+              final created = DateTime.tryParse(fcStr);
+              if (created != null) {
+                if (now.difference(created).inDays < diasGracia) {
+                  graceProductIds.add(pId);
+                }
+              } else {
+                graceProductIds.add(pId);
+              }
+            } else {
+              graceProductIds.add(pId);
+            }
           }
         }
       }
@@ -240,8 +263,12 @@ class NotificationProvider with ChangeNotifier {
           }
         } else if (notif.objetoRelacionadoTipo == 'producto' && notif.isActionable) {
           final pId = notif.objetoRelacionadoId;
+          final isAgotadoNotif = notif.dedupKey != null && notif.dedupKey!.startsWith('stock_agotado_');
           if (pId != null) {
-            if (inStockProductIds.contains(pId) || graceProductIds.contains(pId) || archivedProductIds.contains(pId)) {
+            final shouldResolve = inStockProductIds.contains(pId) || 
+                                  archivedProductIds.contains(pId) ||
+                                  (!isAgotadoNotif && graceProductIds.contains(pId));
+            if (shouldResolve) {
               if (!notif.isResolved) idsToMarkResolvedInDb.add(notif.id);
               notif.isResolved = true;
             }
@@ -554,28 +581,64 @@ class NotificationProvider with ChangeNotifier {
       ''', [_negocioId]);
       final archivedProductIds = archivedProducts.map((r) => r['id'] as int).toSet();
 
-      final graceProducts = await db.rawQuery('''
+      // Productos con salidas reales en stock_ledger
+      final salesRows = await db.rawQuery('''
+        SELECT DISTINCT pp.producto_id 
+        FROM stock_ledger sl
+        INNER JOIN presentaciones_producto pp ON sl.presentation_id = pp.id
+        WHERE sl.negocio_id = ? AND sl.tipo_transaccion IN ('VENTA', 'SALIDA_MANUAL')
+      ''', [_negocioId]);
+      final productsWithSales = salesRows.map((r) => r['producto_id'] as int).toSet();
+
+      // Productos en periodo de gracia (sin salidas y dentro de la ventana de gracia)
+      final allProducts = await db.rawQuery('''
         SELECT id, fecha_creacion FROM productos WHERE negocio_id = ?
       ''', [_negocioId]);
       final graceProductIds = <int>{};
-      for (var p in graceProducts) {
-        final fcStr = p['fecha_creacion'] as String?;
-        if (fcStr != null) {
-          final created = DateTime.tryParse(fcStr);
-          if (created != null && now.difference(created).inDays < 7) {
-            graceProductIds.add(p['id'] as int);
+      final int diasGracia = prefs.diasGraciaStockBajo;
+      for (var p in allProducts) {
+        final pId = p['id'] as int;
+        if (!productsWithSales.contains(pId)) {
+          if (diasGracia == 0) {
+            graceProductIds.add(pId);
+          } else {
+            final fcStr = p['fecha_creacion'] as String?;
+            if (fcStr != null) {
+              final created = DateTime.tryParse(fcStr);
+              if (created != null) {
+                if (now.difference(created).inDays < diasGracia) {
+                  graceProductIds.add(pId);
+                }
+              } else {
+                graceProductIds.add(pId);
+              }
+            } else {
+              graceProductIds.add(pId);
+            }
           }
         }
       }
 
-      final resolvedProductIds = {...inStockProductIds, ...archivedProductIds, ...graceProductIds};
-      if (resolvedProductIds.isNotEmpty) {
-        final placeholders = List.filled(resolvedProductIds.length, '?').join(',');
+      // Auto-resolver alertas de productos con stock seguro o archivados
+      final resolvedSafeProductIds = {...inStockProductIds, ...archivedProductIds};
+      if (resolvedSafeProductIds.isNotEmpty) {
+        final placeholders = List.filled(resolvedSafeProductIds.length, '?').join(',');
         final count = await db.update('notificaciones', {
           'is_resolved': 1,
           'fecha_resolucion': nowStr,
         }, where: "negocio_id = ? AND objeto_relacionado_tipo = 'producto' AND is_resolved = 0 AND objeto_relacionado_id IN ($placeholders)",
-        whereArgs: [_negocioId, ...resolvedProductIds]);
+        whereArgs: [_negocioId, ...resolvedSafeProductIds]);
+        if (count > 0) hasChanges = true;
+      }
+
+      // Auto-purgar / auto-sanear falsas alarmas preventivas de productos en gracia
+      if (graceProductIds.isNotEmpty) {
+        final placeholders = List.filled(graceProductIds.length, '?').join(',');
+        final count = await db.update('notificaciones', {
+          'is_resolved': 1,
+          'fecha_resolucion': nowStr,
+        }, where: "negocio_id = ? AND objeto_relacionado_tipo = 'producto' AND is_resolved = 0 AND dedup_key NOT LIKE 'stock_agotado_%' AND objeto_relacionado_id IN ($placeholders)",
+        whereArgs: [_negocioId, ...graceProductIds]);
         if (count > 0) hasChanges = true;
       }
 
@@ -597,21 +660,23 @@ class NotificationProvider with ChangeNotifier {
 
       for (var row in deficitRows) {
         final prodId = row['producto_id'] as int;
-        if (graceProductIds.contains(prodId)) continue;
-
-        final String prodMuteKey = 'producto_$prodId';
-        if (silencedKeys.contains(prodMuteKey)) continue;
 
         final bool isCompartido = (row['usa_stock_compartido'] == 1 || row['modo_stock'] == 'COMPARTIDO');
         final stockActual = isCompartido
             ? ((row['stock_compartido'] as num?)?.toDouble() ?? 0.0)
             : ((row['stock_actual'] as num?)?.toDouble() ?? 0.0);
+        final bool isAgotado = stockActual <= 0;
+
+        // Si NO está agotado y está en periodo de gracia (sin salidas reales por venta): OMITIR
+        if (!isAgotado && graceProductIds.contains(prodId)) continue;
+
+        final String prodMuteKey = 'producto_$prodId';
+        if (silencedKeys.contains(prodMuteKey)) continue;
+
         final stockAlerta = (row['stock_alerta'] as num?)?.toDouble() ?? 5.0;
         final prodNombre = row['producto_nombre']?.toString() ?? 'Producto';
         final presNombre = row['nombre_especifico']?.toString() ?? '';
         final tipoInv = isCompartido ? 'COMPARTIDO' : 'PROPIO';
-
-        final bool isAgotado = stockActual <= 0;
 
         // Comprobar si el canal está activo en Preferencias
         if (isAgotado && !prefs.notifStockAgotado) continue;
@@ -622,9 +687,10 @@ class NotificationProvider with ChangeNotifier {
             ? 'stock_compartido_$prodId' 
             : (isAgotado ? 'stock_agotado_$prodId' : 'stock_bajo_$prodId');
         final String nivelPrioridad = isAgotado ? 'critica' : 'preventiva';
+        // Títulos limpios sin emojis crudos (Mobile Awards Standard)
         final String titulo = isAgotado
-            ? '🚨 Producto Agotado • $prodNombre'
-            : (isCompartido ? '⚠️ Stock Compartido Bajo • $prodNombre' : '⚠️ Stock Bajo • $prodNombre');
+            ? 'Producto Agotado • $prodNombre'
+            : (isCompartido ? 'Stock Compartido Bajo • $prodNombre' : 'Stock Bajo • $prodNombre');
         final String mensaje = isAgotado
             ? 'El producto "$prodNombre${presNombre.isNotEmpty ? ' ($presNombre)' : ''}" se encuentra totalmente agotado (0 und.). Reabastece para continuar vendiendo.'
             : 'El stock de "$prodNombre${presNombre.isNotEmpty ? ' ($presNombre)' : ''}" cayó a ${stockActual.toInt()} und. (umbral: ${stockAlerta.toInt()} und.). Reabastece pronto.';
@@ -650,12 +716,30 @@ class NotificationProvider with ChangeNotifier {
           final currentNotif = existing.first;
           if (currentNotif['is_silenced'] == 1) continue;
 
-          if (currentNotif['mensaje'] != mensaje || currentNotif['is_resolved'] == 1) {
+          final bool isArchived = currentNotif['is_archived'] == 1;
+          final bool isResolved = currentNotif['is_resolved'] == 1;
+
+          // Anti-Spam: Si el comerciante ya archivó o resolvió la alerta preventiva y NO está agotado (0 und.),
+          // respetar su decisión: actualización silenciosa in-place sin desarchivar ni revivir a pendientes.
+          if (!isAgotado && (isArchived || isResolved) && prefs.antiSpamStockSilencioso) {
+            if (currentNotif['mensaje'] != mensaje) {
+              await db.update('notificaciones', {
+                'titulo': titulo,
+                'mensaje': mensaje,
+                'metadata_json': metaJson,
+              }, where: 'id = ?', whereArgs: [currentNotif['id']]);
+              hasChanges = true;
+            }
+            continue;
+          }
+
+          if (currentNotif['mensaje'] != mensaje || (isAgotado && isResolved) || (!isAgotado && isResolved && !isArchived && !prefs.antiSpamStockSilencioso)) {
             await db.update('notificaciones', {
               'titulo': titulo,
               'mensaje': mensaje,
               'nivel_prioridad': nivelPrioridad,
               'prioridad': isAgotado ? 'Alta' : 'Media',
+              'leida': isAgotado ? 0 : (currentNotif['leida'] ?? 0),
               'is_resolved': 0,
               'fecha_resolucion': null,
               'metadata_json': metaJson,
@@ -812,7 +896,9 @@ class NotificationProvider with ChangeNotifier {
         await fetchNotifications();
       }
     } catch (e) {
-      debugPrint("Error generating auto notifications: $e");
+      if (!e.toString().contains("database_closed")) {
+        debugPrint("Error generating auto notifications: $e");
+      }
     }
   }
 
@@ -1312,6 +1398,46 @@ class NotificationProvider with ChangeNotifier {
         notifyListeners();
         debugPrint("Error borrando notificación: $e");
       }
+    }
+  }
+
+  Future<void> snoozeNotification(int id, Duration duration) async {
+    try {
+      final db = await dbHelper.database;
+      final rows = await db.query('notificaciones', where: 'id = ?', whereArgs: [id], limit: 1);
+      if (rows.isEmpty) return;
+      final currentMetaStr = rows.first['metadata_json'] as String?;
+      Map<String, dynamic> meta = {};
+      if (currentMetaStr != null && currentMetaStr.isNotEmpty) {
+        try { meta = jsonDecode(currentMetaStr); } catch (_) {}
+      }
+      meta['snoozed_until'] = DateTime.now().add(duration).toIso8601String();
+      await db.update('notificaciones', {
+        'metadata_json': jsonEncode(meta),
+      }, where: 'id = ?', whereArgs: [id]);
+      await fetchNotifications();
+    } catch (e) {
+      debugPrint("Error posponiendo notificación: $e");
+    }
+  }
+
+  Future<void> unsnoozeNotification(int id) async {
+    try {
+      final db = await dbHelper.database;
+      final rows = await db.query('notificaciones', where: 'id = ?', whereArgs: [id], limit: 1);
+      if (rows.isEmpty) return;
+      final currentMetaStr = rows.first['metadata_json'] as String?;
+      Map<String, dynamic> meta = {};
+      if (currentMetaStr != null && currentMetaStr.isNotEmpty) {
+        try { meta = jsonDecode(currentMetaStr); } catch (_) {}
+      }
+      meta.remove('snoozed_until');
+      await db.update('notificaciones', {
+        'metadata_json': jsonEncode(meta),
+      }, where: 'id = ?', whereArgs: [id]);
+      await fetchNotifications();
+    } catch (e) {
+      debugPrint("Error cancelando posposición: $e");
     }
   }
 

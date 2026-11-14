@@ -4,6 +4,14 @@ enum ProductExtractionMode {
   cut,
 }
 
+/// Opciones de estructuración de presentaciones en el nuevo producto
+/// cuando la variante extraída tiene Factor > 1 (Par, Pack, Caja, Docena, etc.)
+enum VariantExtractionStructure {
+  keepPackaging, // Mantener en su empaque original (ej. Caja x3)
+  unitOnly, // Convertir a venta por unidad individual (Unidad x1)
+  bothUnitAndPackage, // Crear con ambas presentaciones (Unidad x1 + Caja x3) vinculadas en Stock Compartido
+}
+
 /// Datos generales del producto padre que se pueden copiar al nuevo producto
 class VariantExtractionGeneralData {
   final bool copyCategory;
@@ -86,7 +94,21 @@ class VariantExtractionDetailData {
   final double salePrice;
   final double costPrice;
   final double margin;
-  final int stockUnits;
+
+  // Manejo exacto y bidireccional de empaques vs unidades base
+  final int stockUnits; // Empaques o unidades según contexto (retrocompatibilidad)
+  final int packageUnits; // Cantidad en unidades de empaque (ej. 3 Cajas)
+  final int baseUnits; // Cantidad total física en unidades base (ej. 9 und. base)
+  final bool isSharedOrigin; // ¿Provenía de stock compartido?
+  final int parentSharedStock; // Stock base compartido del producto padre
+  final bool deductStockFromOrigin; // ¿Descontar del stock compartido / variante de origen?
+
+  // Inteligencia de factores (Factor > 1) y desglose económico
+  final VariantExtractionStructure targetStructure;
+  final double unitCostPrice; // Costo por unidad individual (C_pkg / Factor)
+  final double unitSalePrice; // Precio proporcional por unidad individual (P_pkg / Factor)
+
+  // Datos secundarios completos
   final String? barcode;
   final String? variantImage;
   final int? alertStock;
@@ -97,6 +119,13 @@ class VariantExtractionDetailData {
   final double? discountValue;
   final double? offerPrice;
   final String? specificName;
+
+  // Datos de compra / factura
+  final String? umpCompra;
+  final int unidadesLote;
+  final double? cantCompra;
+  final double? totalPago;
+  final String? variantDescription;
 
   const VariantExtractionDetailData({
     required this.newProductName,
@@ -113,6 +142,14 @@ class VariantExtractionDetailData {
     this.costPrice = 0.0,
     this.margin = 1.35,
     this.stockUnits = 0,
+    this.packageUnits = 0,
+    this.baseUnits = 0,
+    this.isSharedOrigin = false,
+    this.parentSharedStock = 0,
+    this.deductStockFromOrigin = true,
+    this.targetStructure = VariantExtractionStructure.keepPackaging,
+    this.unitCostPrice = 0.0,
+    this.unitSalePrice = 0.0,
     this.barcode,
     this.variantImage,
     this.alertStock = 5,
@@ -123,6 +160,11 @@ class VariantExtractionDetailData {
     this.discountValue,
     this.offerPrice,
     this.specificName,
+    this.umpCompra,
+    this.unidadesLote = 1,
+    this.cantCompra,
+    this.totalPago,
+    this.variantDescription,
   });
 
   VariantExtractionDetailData copyWith({
@@ -140,6 +182,14 @@ class VariantExtractionDetailData {
     double? costPrice,
     double? margin,
     int? stockUnits,
+    int? packageUnits,
+    int? baseUnits,
+    bool? isSharedOrigin,
+    int? parentSharedStock,
+    bool? deductStockFromOrigin,
+    VariantExtractionStructure? targetStructure,
+    double? unitCostPrice,
+    double? unitSalePrice,
     String? barcode,
     String? variantImage,
     int? alertStock,
@@ -150,6 +200,11 @@ class VariantExtractionDetailData {
     double? discountValue,
     double? offerPrice,
     String? specificName,
+    String? umpCompra,
+    int? unidadesLote,
+    double? cantCompra,
+    double? totalPago,
+    String? variantDescription,
   }) {
     return VariantExtractionDetailData(
       newProductName: newProductName ?? this.newProductName,
@@ -166,6 +221,15 @@ class VariantExtractionDetailData {
       costPrice: costPrice ?? this.costPrice,
       margin: margin ?? this.margin,
       stockUnits: stockUnits ?? this.stockUnits,
+      packageUnits: packageUnits ?? this.packageUnits,
+      baseUnits: baseUnits ?? this.baseUnits,
+      isSharedOrigin: isSharedOrigin ?? this.isSharedOrigin,
+      parentSharedStock: parentSharedStock ?? this.parentSharedStock,
+      deductStockFromOrigin:
+          deductStockFromOrigin ?? this.deductStockFromOrigin,
+      targetStructure: targetStructure ?? this.targetStructure,
+      unitCostPrice: unitCostPrice ?? this.unitCostPrice,
+      unitSalePrice: unitSalePrice ?? this.unitSalePrice,
       barcode: barcode ?? this.barcode,
       variantImage: variantImage ?? this.variantImage,
       alertStock: alertStock ?? this.alertStock,
@@ -176,6 +240,11 @@ class VariantExtractionDetailData {
       discountValue: discountValue ?? this.discountValue,
       offerPrice: offerPrice ?? this.offerPrice,
       specificName: specificName ?? this.specificName,
+      umpCompra: umpCompra ?? this.umpCompra,
+      unidadesLote: unidadesLote ?? this.unidadesLote,
+      cantCompra: cantCompra ?? this.cantCompra,
+      totalPago: totalPago ?? this.totalPago,
+      variantDescription: variantDescription ?? this.variantDescription,
     );
   }
 }
@@ -214,6 +283,9 @@ class ProductExtractionResult {
   final bool wasOriginDefault;
   final String? transferredBarcode;
   final int transferredStock;
+  final int transferredBaseUnits;
+  final bool isSharedOrigin;
+  final bool shouldDeductSharedPool;
 
   const ProductExtractionResult({
     required this.success,
@@ -225,6 +297,8 @@ class ProductExtractionResult {
     this.wasOriginDefault = false,
     this.transferredBarcode,
     this.transferredStock = 0,
+    this.transferredBaseUnits = 0,
+    this.isSharedOrigin = false,
+    this.shouldDeductSharedPool = true,
   });
 }
-

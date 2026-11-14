@@ -1281,6 +1281,7 @@ class ProductRepository {
 
   /// Realiza el corte atómico diferido de una variante en SQLite:
   /// Desactiva la variante origen (soft-delete), libera el código de barras si se transfirió,
+  /// descuenta el stock del pool compartido si correspondía,
   /// registra la salida en stock_ledger si hubo stock trasladado,
   /// y promueve la siguiente variante a principal si la original era default.
   Future<void> cutVariantFromProductTransaction({
@@ -1289,6 +1290,9 @@ class ProductRepository {
     int? promoteToDefaultPresentationId,
     String? transferredBarcode,
     int transferredStock = 0,
+    int transferredBaseUnits = 0,
+    bool isSharedVariant = false,
+    bool shouldDeductSharedPool = true,
   }) async {
     final db = await _dbHelper.database;
     await db.transaction((txn) async {
@@ -1302,10 +1306,10 @@ class ProductRepository {
       if (presRows.isEmpty) return;
       final pres = presRows.first;
 
-      // Obtener negocio_id del producto
+      // Obtener datos del producto origen (negocio_id y stock_compartido)
       final prodRows = await txn.query(
         'productos',
-        columns: ['negocio_id'],
+        columns: ['negocio_id', 'stock_compartido', 'modo_stock'],
         where: 'id = ?',
         whereArgs: [originProductId],
         limit: 1,
@@ -1314,8 +1318,16 @@ class ProductRepository {
           ? (prodRows.first['negocio_id'] as num?)?.toInt() ?? 1
           : 1;
 
+      final bool isShared = isSharedVariant ||
+          (pres['usa_stock_compartido'] == 1) ||
+          (prodRows.isNotEmpty &&
+              prodRows.first['modo_stock']?.toString() == 'COMPARTIDO');
+
+      final int unitsToDeduct =
+          transferredBaseUnits > 0 ? transferredBaseUnits : transferredStock;
+
       // 2. Registrar salida en stock_ledger si se trasladó stock
-      if (transferredStock > 0) {
+      if (unitsToDeduct > 0) {
         final double cost =
             (pres['costo_unitario_calculado'] as num?)?.toDouble() ?? 0.0;
         final double price =
@@ -1324,11 +1336,32 @@ class ProductRepository {
           'presentation_id': presentationId,
           'negocio_id': negocioId,
           'tipo_transaccion': 'TRANSFERENCIA_EXTRACCIÓN',
-          'cantidad': -transferredStock,
+          'cantidad': -unitsToDeduct,
           'costo_unitario': cost,
           'precio_venta': price,
           'fecha_registro': DateTime.now().toIso8601String(),
         });
+      }
+
+      // 2.1. Descuento atómico del pool de stock compartido si corresponde
+      if (isShared && shouldDeductSharedPool && unitsToDeduct > 0) {
+        final int currentPool = prodRows.isNotEmpty
+            ? (prodRows.first['stock_compartido'] as num?)?.toInt() ?? 0
+            : 0;
+        final int newPool =
+            (currentPool - unitsToDeduct) > 0 ? (currentPool - unitsToDeduct) : 0;
+
+        await txn.update(
+          'productos',
+          {'stock_compartido': newPool},
+          where: 'id = ?',
+          whereArgs: [originProductId],
+        );
+
+        await txn.rawUpdate(
+          'UPDATE presentaciones_producto SET stock_actual = ? WHERE producto_id = ? AND usa_stock_compartido = 1 AND id != ?',
+          [newPool, originProductId, presentationId],
+        );
       }
 
       // 3. Desactivar variante origen y liberar código de barras si se transfirió

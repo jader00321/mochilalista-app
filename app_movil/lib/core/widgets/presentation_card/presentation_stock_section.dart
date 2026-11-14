@@ -71,14 +71,47 @@ class _PresentationStockSectionState extends State<PresentationStockSection> {
   String? _quotaWarningMessage;
   late final FocusNode _sharedQuotaFocusNode;
 
+  late final TextEditingController _packageInputCtrl;
+  bool _isSyncingPackagingStock = false;
+
   @override
   void initState() {
     super.initState();
     _sharedQuotaFocusNode = FocusNode();
+
+    final int factor = int.tryParse(widget.unidadesVentaCtrl.text) ?? 1;
+    final int safeFactor = factor <= 0 ? 1 : factor;
+    final int base = int.tryParse(widget.stockInicialCtrl.text) ?? 0;
+    _packageInputCtrl = TextEditingController(
+      text: safeFactor > 1 ? (base ~/ safeFactor).toString() : base.toString(),
+    );
+    widget.stockInicialCtrl.addListener(_syncFromBaseToPackageInput);
+
     widget.sharedStockCtrl?.addListener(_onSharedOrUnitChanged);
     widget.unidadesVentaCtrl.addListener(_onSharedOrUnitChanged);
 
     _syncSharedStockQuotaIfUnbounded();
+  }
+
+  void _syncFromBaseToPackageInput() {
+    if (_isSyncingPackagingStock) return;
+    final int factor = int.tryParse(widget.unidadesVentaCtrl.text) ?? 1;
+    final int safeFactor = factor <= 0 ? 1 : factor;
+    final int base = int.tryParse(widget.stockInicialCtrl.text) ?? 0;
+    if (safeFactor <= 1) {
+      if (_packageInputCtrl.text != base.toString()) {
+        _isSyncingPackagingStock = true;
+        _packageInputCtrl.text = base.toString();
+        _isSyncingPackagingStock = false;
+      }
+      return;
+    }
+    final int pkgs = base ~/ safeFactor;
+    if (_packageInputCtrl.text != pkgs.toString()) {
+      _isSyncingPackagingStock = true;
+      _packageInputCtrl.text = pkgs.toString();
+      _isSyncingPackagingStock = false;
+    }
   }
 
   @override
@@ -92,11 +125,18 @@ class _PresentationStockSectionState extends State<PresentationStockSection> {
       oldWidget.unidadesVentaCtrl.removeListener(_onSharedOrUnitChanged);
       widget.unidadesVentaCtrl.addListener(_onSharedOrUnitChanged);
     }
+    if (oldWidget.stockInicialCtrl != widget.stockInicialCtrl) {
+      oldWidget.stockInicialCtrl.removeListener(_syncFromBaseToPackageInput);
+      widget.stockInicialCtrl.addListener(_syncFromBaseToPackageInput);
+    }
     _syncSharedStockQuotaIfUnbounded();
+    _syncFromBaseToPackageInput();
   }
 
   @override
   void dispose() {
+    widget.stockInicialCtrl.removeListener(_syncFromBaseToPackageInput);
+    _packageInputCtrl.dispose();
     widget.sharedStockCtrl?.removeListener(_onSharedOrUnitChanged);
     widget.unidadesVentaCtrl.removeListener(_onSharedOrUnitChanged);
     _sharedQuotaFocusNode.dispose();
@@ -106,6 +146,7 @@ class _PresentationStockSectionState extends State<PresentationStockSection> {
 
   void _onSharedOrUnitChanged() {
     _syncSharedStockQuotaIfUnbounded();
+    _syncFromBaseToPackageInput();
     if (mounted) setState(() {});
   }
 
@@ -584,20 +625,64 @@ class _PresentationStockSectionState extends State<PresentationStockSection> {
                     const SizedBox(height: 12),
                   ],
                   if (!widget.isEditMode) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: MiniInput(
-                            ctrl: widget.stockInicialCtrl,
-                            label: "Stock Inicial (Sueltas físicas)",
-                            isNum: true,
-                            hint: "0",
-                            isDark: isDark,
-                            onChanged: widget.onStockChanged,
+                    if (safeFactor > 1) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: MiniInput(
+                              ctrl: _packageInputCtrl,
+                              label: "Stock en $unidadLabel",
+                              hint: "0",
+                              isNum: true,
+                              isBold: true,
+                              isDark: isDark,
+                              onChanged: () {
+                                if (_isSyncingPackagingStock) return;
+                                _isSyncingPackagingStock = true;
+                                final pkgs =
+                                    int.tryParse(_packageInputCtrl.text) ?? 0;
+                                widget.stockInicialCtrl.text =
+                                    (pkgs * safeFactor).toString();
+                                widget.onStockChanged();
+                                _isSyncingPackagingStock = false;
+                                if (mounted) setState(() {});
+                              },
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: MiniInput(
+                              ctrl: widget.stockInicialCtrl,
+                              label: "Sueltas físicas base",
+                              hint: "0",
+                              isNum: true,
+                              isDark: isDark,
+                              onChanged: () {
+                                if (_isSyncingPackagingStock) return;
+                                _syncFromBaseToPackageInput();
+                                widget.onStockChanged();
+                                if (mounted) setState(() {});
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: MiniInput(
+                              ctrl: widget.stockInicialCtrl,
+                              label: "Stock Inicial (Sueltas físicas)",
+                              isNum: true,
+                              hint: "0",
+                              isDark: isDark,
+                              onChanged: widget.onStockChanged,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ] else ...[
                     Row(
                       children: [
@@ -696,65 +781,65 @@ class _PresentationStockSectionState extends State<PresentationStockSection> {
                       ],
                     ),
                   ],
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () =>
-                        setState(() => _mostrarAjusteStock = !_mostrarAjusteStock),
-                    icon: Icon(
-                      Icons.settings_suggest,
-                      size: 16,
-                      color: isDark
-                          ? Colors.green[400]
-                          : Colors.green[700],
-                    ),
-                    label: Text(
-                      "Ajuste por ventas previas",
-                      style: TextStyle(
-                        fontSize: 12,
+                if (widget.isEditMode) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () =>
+                          setState(() => _mostrarAjusteStock = !_mostrarAjusteStock),
+                      icon: Icon(
+                        Icons.settings_suggest,
+                        size: 16,
                         color: isDark
                             ? Colors.green[400]
                             : Colors.green[700],
                       ),
-                    ),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                      label: Text(
+                        "Ajuste por ventas previas",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? Colors.green[400]
+                              : Colors.green[700],
+                        ),
                       ),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
                     ),
                   ),
-                ),
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  child: _mostrarAjusteStock
-                      ? Container(
-                          margin: const EdgeInsets.only(top: 8),
-                          child: Row(
-                            children: [
-                              Expanded(child: Container()),
-                              Expanded(
-                                flex: 3,
-                                child: MiniInput(
-                                  ctrl: widget.stockDescuentoCtrl,
-                                  label: widget.isEditMode
-                                      ? "- Ajuste Ventas Previas"
-                                      : "- Ajuste (Sueltas)",
-                                  isNum: true,
-                                  hint: "0",
-                                  isDark: isDark,
-                                  onChanged: widget.onStockChanged,
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    child: _mostrarAjusteStock
+                        ? Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            child: Row(
+                              children: [
+                                Expanded(child: Container()),
+                                Expanded(
+                                  flex: 3,
+                                  child: MiniInput(
+                                    ctrl: widget.stockDescuentoCtrl,
+                                    label: "- Ajuste Ventas Previas",
+                                    isNum: true,
+                                    hint: "0",
+                                    isDark: isDark,
+                                    onChanged: widget.onStockChanged,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
+                              ],
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
                 if (widget.isEditMode) ...[
                   const Divider(height: 16),
                   Align(

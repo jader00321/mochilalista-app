@@ -9,6 +9,7 @@ import 'package:app_movil/features/smart_quotation/services/client_service.dart'
 import 'package:app_movil/features/smart_quotation/services/loyalty_whatsapp_service.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/loyalty_toast_feedback.dart';
 import 'package:app_movil/features/smart_quotation/widgets/crm/reward_review_modal.dart';
 
 class ClientLoyaltyHistoryModal extends StatefulWidget {
@@ -18,6 +19,7 @@ class ClientLoyaltyHistoryModal extends StatefulWidget {
   final List<LoyaltyLedgerModel>? initialMovements;
   final Map<String, dynamic>? initialNextGoalData;
   final List<ClientRewardModel>? initialPendingRewards;
+  final int initialTabIndex;
 
   const ClientLoyaltyHistoryModal({
     super.key,
@@ -27,11 +29,13 @@ class ClientLoyaltyHistoryModal extends StatefulWidget {
     this.initialMovements,
     this.initialNextGoalData,
     this.initialPendingRewards,
+    this.initialTabIndex = 0,
   });
 
   static Future<void> show(BuildContext context, {
     required ClientModel client,
     VoidCallback? onPointsChanged,
+    int initialTabIndex = 0,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -40,6 +44,7 @@ class ClientLoyaltyHistoryModal extends StatefulWidget {
       builder: (ctx) => ClientLoyaltyHistoryModal(
         client: client,
         onPointsChanged: onPointsChanged,
+        initialTabIndex: initialTabIndex,
       ),
     );
   }
@@ -103,12 +108,28 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
   }
 
   List<LoyaltyLedgerModel> get _filteredMovements {
+    // Excluir ruido técnico de migración que se anula mutuamente (ej. -50 pts reservado + 50 pts restauración acumulación libre)
+    final cleanMovements = _movements.where((m) {
+      final mot = m.motivo.toLowerCase();
+      final isTechMigrationRestoration = m.tipoMovimiento == 'RESTAURACION_MIGRACION' ||
+          mot.contains('restauración de puntos por cambio a acumulación libre') ||
+          mot.contains('restauracion de puntos por cambio a acumulacion libre');
+      final isTechMigrationReservation = mot.contains('puntos reservados por desbloqueo de meta') &&
+          _movements.any((other) {
+            final otherMot = other.motivo.toLowerCase();
+            return other.tipoMovimiento == 'RESTAURACION_MIGRACION' ||
+                otherMot.contains('restauración de puntos por cambio a acumulación libre') ||
+                otherMot.contains('restauracion de puntos por cambio a acumulacion libre');
+          });
+      return !isTechMigrationRestoration && !isTechMigrationReservation;
+    }).toList();
+
     if (_selectedFilter == 'GANADOS') {
-      return _movements.where((m) => m.puntosDelta > 0).toList();
+      return cleanMovements.where((m) => m.puntosDelta > 0).toList();
     } else if (_selectedFilter == 'CANJES_AJUSTES') {
-      return _movements.where((m) => m.puntosDelta < 0).toList();
+      return cleanMovements.where((m) => m.puntosDelta < 0).toList();
     }
-    return _movements;
+    return cleanMovements;
   }
 
   void _showAddManualBonusModal() {
@@ -156,210 +177,256 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                   "Ajuste administrativo",
                 ];
 
-          return AlertDialog(
-            backgroundColor: cardBg,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Row(
-              children: [
-                Icon(Icons.stars_rounded, color: Colors.amber[700], size: 24),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "Ajuste / Bono Manual",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: textC),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: AlertDialog(
+              backgroundColor: cardBg,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
                 children: [
-                  // Fila de Chips con Expanded y FittedBox (0 Overflow garantizado en 320/360dp)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ChoiceChip(
-                          label: const Center(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text("+ Sumar Puntos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
-                            ),
-                          ),
-                          selected: isAdding,
-                          selectedColor: Colors.green.withValues(alpha: 0.25),
-                          onSelected: (val) {
-                            setDialogState(() {
-                              isAdding = true;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ChoiceChip(
-                          label: const Center(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text("- Restar Puntos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
-                            ),
-                          ),
-                          selected: !isAdding,
-                          selectedColor: Colors.red.withValues(alpha: 0.25),
-                          onSelected: (val) {
-                            setDialogState(() {
-                              isAdding = false;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  TextField(
-                    controller: pointsCtrl,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onChanged: (_) => setDialogState(() {}),
-                    decoration: InputDecoration(
-                      labelText: "Cantidad de Puntos",
-                      suffixText: "pts",
-                      filled: true,
-                      fillColor: isDark ? Colors.white10 : Colors.grey.shade100,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  Icon(Icons.stars_rounded, color: Colors.amber[700], size: 24),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "Ajuste / Bono Manual",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: textC),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(height: 12),
-
-                  // Indicador Dinámico de Impacto en Vivo
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.black26 : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: exceedsCurrent
-                            ? Colors.red.withValues(alpha: 0.6)
-                            : (isDark ? Colors.white12 : Colors.grey.shade300),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                ],
+              ),
+              content: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Fila de Chips con Expanded y FittedBox (0 Overflow garantizado en 320/360dp)
+                    Row(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                "Saldo actual: $currentPts pts",
-                                style: TextStyle(fontSize: 11.5, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text("+ Sumar Puntos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
                               ),
                             ),
-                            const SizedBox(width: 4),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
+                            selected: isAdding,
+                            selectedColor: Colors.green.withValues(alpha: 0.25),
+                            onSelected: (val) {
+                              setDialogState(() {
+                                isAdding = true;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text("- Restar Puntos", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                              ),
+                            ),
+                            selected: !isAdding,
+                            selectedColor: Colors.red.withValues(alpha: 0.25),
+                            onSelected: (val) {
+                              setDialogState(() {
+                                isAdding = false;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Chips Rápidos de Cantidad de Puntos en 1 Toque (+10, +25, +50, +100)
+                    Text(
+                      "Puntos Rápidos:",
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [10, 25, 50, 100].map((pts) {
+                        return ActionChip(
+                          avatar: Icon(
+                            isAdding ? Icons.add_circle_outline_rounded : Icons.remove_circle_outline_rounded,
+                            size: 13,
+                            color: isAdding ? Colors.green[700] : Colors.red[700],
+                          ),
+                          label: Text(
+                            "$pts pts",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isAdding ? (isDark ? Colors.green[300] : Colors.green[800]) : (isDark ? Colors.red[300] : Colors.red[800]),
+                            ),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor: (isAdding ? Colors.green : Colors.red).withValues(alpha: 0.12),
+                          side: BorderSide(
+                            color: (isAdding ? Colors.green : Colors.red).withValues(alpha: 0.35),
+                          ),
+                          onPressed: () {
+                            setDialogState(() {
+                              pointsCtrl.text = "$pts";
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 10),
+
+                    TextField(
+                      controller: pointsCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: InputDecoration(
+                        labelText: "Cantidad de Puntos",
+                        suffixText: "pts",
+                        filled: true,
+                        fillColor: isDark ? Colors.white10 : Colors.grey.shade100,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Indicador Dinámico de Impacto en Vivo
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.black26 : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: exceedsCurrent
+                              ? Colors.red.withValues(alpha: 0.6)
+                              : (isDark ? Colors.white12 : Colors.grey.shade300),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  "Saldo actual: $currentPts pts",
+                                  style: TextStyle(fontSize: 11.5, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.arrow_forward_rounded, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "Nuevo: $newBalance pts",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: exceedsCurrent
+                                          ? Colors.red
+                                          : (isAdding ? Colors.green[600] : Colors.orange[800]),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          if (exceedsCurrent) ...[
+                            const SizedBox(height: 4),
+                            const Row(
                               children: [
-                                Icon(Icons.arrow_forward_rounded, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                                const SizedBox(width: 4),
-                                Text(
-                                  "Nuevo: $newBalance pts",
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: exceedsCurrent
-                                        ? Colors.red
-                                        : (isAdding ? Colors.green[600] : Colors.orange[800]),
+                                Icon(Icons.warning_amber_rounded, size: 13, color: Colors.red),
+                                SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    "El saldo no puede ser negativo (Excede el saldo)",
+                                    style: TextStyle(fontSize: 10.5, color: Colors.red, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ],
                             ),
                           ],
-                        ),
-                        if (exceedsCurrent) ...[
-                          const SizedBox(height: 4),
-                          const Row(
-                            children: [
-                              Icon(Icons.warning_amber_rounded, size: 13, color: Colors.red),
-                              SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  "El saldo no puede ser negativo (Excede el saldo)",
-                                  style: TextStyle(fontSize: 10.5, color: Colors.red, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (willUnlockGoal != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(Icons.workspace_premium_rounded, size: 14, color: Colors.amber[800]),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  "Desbloqueará '${willUnlockGoal.nombre}' (${willUnlockGoal.puntosRequeridos} pts) para revisión",
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    color: isDark ? Colors.amber[300] : Colors.amber[900],
-                                    fontWeight: FontWeight.bold,
+                          if (willUnlockGoal != null) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.workspace_premium_rounded, size: 14, color: Colors.amber[800]),
+                                SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    "Desbloqueará '${willUnlockGoal.nombre}' (${willUnlockGoal.puntosRequeridos} pts) para revisión",
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      color: isDark ? Colors.amber[300] : Colors.amber[900],
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
+                              ],
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
 
-                  TextField(
-                    controller: reasonCtrl,
-                    onChanged: (_) => setDialogState(() {}),
-                    decoration: InputDecoration(
-                      labelText: "Motivo / Justificación",
-                      hintText: "Ej. Bono por recomendación",
-                      filled: true,
-                      fillColor: isDark ? Colors.white10 : Colors.grey.shade100,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    TextField(
+                      controller: reasonCtrl,
+                      onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                      onChanged: (_) => setDialogState(() {}),
+                      decoration: InputDecoration(
+                        labelText: "Motivo / Justificación",
+                        hintText: "Ej. Bono por recomendación",
+                        filled: true,
+                        fillColor: isDark ? Colors.white10 : Colors.grey.shade100,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
+                    const SizedBox(height: 8),
 
-                  // Chips Rápidos de Motivo en 1 Toque
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    child: Row(
+                    // Chips Rápidos de Motivo en 1 Toque con Wrap (Cero Cortes visuales tipo '[ Co')
+                    Text(
+                      "Motivos Frecuentes:",
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
                       children: quickMotives.map((m) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: ActionChip(
-                            label: Text(m, style: const TextStyle(fontSize: 10.5)),
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                            visualDensity: VisualDensity.compact,
-                            backgroundColor: isDark ? Colors.white10 : Colors.grey.shade100,
-                            onPressed: () {
-                              setDialogState(() {
-                                reasonCtrl.text = m;
-                              });
-                            },
-                          ),
+                        return ActionChip(
+                          label: Text(m, style: const TextStyle(fontSize: 10.5)),
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 0),
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor: isDark ? Colors.white10 : Colors.grey.shade100,
+                          onPressed: () {
+                            setDialogState(() {
+                              reasonCtrl.text = m;
+                            });
+                          },
                         );
                       }).toList(),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -375,7 +442,6 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                             ? reasonCtrl.text.trim()
                             : (isAdding ? "Bono de fidelización otorgado" : "Ajuste manual de puntos");
 
-                        final messenger = ScaffoldMessenger.of(context);
                         final auth = Provider.of<AuthProvider>(context, listen: false);
                         final userId = auth.activeUserId;
                         Navigator.pop(ctx);
@@ -392,24 +458,20 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                         widget.onPointsChanged?.call();
                         await _loadHistory();
 
-                        if (mounted && unlocked.isNotEmpty) {
-                          messenger.showSnackBar(
-                            SnackBar(
-                              backgroundColor: Colors.amber[800],
-                              content: Row(
-                                children: [
-                                  const Icon(Icons.card_giftcard_rounded, color: Colors.white),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      "Meta '${unlocked.first.tituloRecompensa}' desbloqueada para revisión",
-                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
+                        if (context.mounted) {
+                          if (unlocked.isNotEmpty) {
+                            LoyaltyToastFeedback.showSuccess(
+                              context,
+                              "Meta '${unlocked.first.tituloRecompensa}' desbloqueada para revisión",
+                            );
+                          } else {
+                            LoyaltyToastFeedback.showSuccess(
+                              context,
+                              isAdding
+                                  ? "Se otorgaron +$rawPoints pts a ${_currentClient.fullName}"
+                                  : "Se descontaron -$rawPoints pts a ${_currentClient.fullName}",
+                            );
+                          }
                         }
                       },
                 style: ElevatedButton.styleFrom(
@@ -420,11 +482,12 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                 child: const Text("Aplicar", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      },
+    ),
+  );
+}
 
   Widget _buildMovementCard(LoyaltyLedgerModel item, bool isDark) {
     final isPositive = item.puntosDelta > 0;
@@ -596,248 +659,318 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
     final bgColor = isDark ? const Color(0xFF1E1E2A) : Colors.white;
     final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
     final tier = _currentClient.tier;
+    final claimableGoals = _claimableSummary?.claimableGoals ?? [];
 
     final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
       context,
       minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
     );
 
-    return Container(
-      constraints: BoxFormatConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.88,
-      ),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        bottom: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(20, 16, 20, effectiveBottom),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Asa superior
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white24 : Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // Cabecera con cliente y botón cerrar
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: Color(tier.colorHex).withValues(alpha: 0.2),
-                    child: Text(
-                      _currentClient.fullName.isNotEmpty
-                          ? _currentClient.fullName[0].toUpperCase()
-                          : "?",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: Color(tier.colorHex),
-                      ),
+    return DefaultTabController(
+      length: 2,
+      initialIndex: widget.initialTabIndex,
+      child: Container(
+        constraints: BoxFormatConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.90,
+        ),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(18, 14, 18, effectiveBottom),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Asa superior
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white24 : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _currentClient.fullName,
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+
+                // Cabecera con cliente y botón cerrar
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Color(tier.colorHex).withValues(alpha: 0.2),
+                      child: Text(
+                        _currentClient.fullName.isNotEmpty
+                            ? _currentClient.fullName[0].toUpperCase()
+                            : "?",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 17,
+                          color: Color(tier.colorHex),
                         ),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Color(tier.colorHex).withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  tier.badgeText,
-                                  style: TextStyle(
-                                    color: Color(tier.colorHex),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _currentClient.fullName,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Color(tier.colorHex).withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    tier.badgeText,
+                                    style: TextStyle(
+                                      color: Color(tier.colorHex),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                "Score: ${_currentClient.scoreReputacion}/1000",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Tarjeta Resumen de Puntos y Crédito
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark
-                        ? [const Color(0xFF2E231F), const Color(0xFF1E1E2A)]
-                        : [Colors.amber.shade50, Colors.orange.shade50],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: Colors.amber.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: _buildMetricCol(
-                          "Puntos Actuales",
-                          "${_currentClient.puntosActuales} pts",
-                          Icons.stars_rounded,
-                          Colors.amber[700]!,
-                          textColor,
-                        ),
-                      ),
-                    ),
-                    Container(height: 36, width: 1, color: isDark ? Colors.white12 : Colors.grey[300]),
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: _buildMetricCol(
-                          "Racha Pagos",
-                          "${_currentClient.rachaPagosPuntuales} a tiempo",
-                          Icons.local_fire_department_rounded,
-                          Colors.orange,
-                          textColor,
-                        ),
-                      ),
-                    ),
-                    Container(height: 36, width: 1, color: isDark ? Colors.white12 : Colors.grey[300]),
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: _buildMetricCol(
-                          "Límite Sugerido",
-                          AppCurrency.format(tier.limiteCreditoSugerido),
-                          Icons.credit_score_rounded,
-                          Colors.green[600]!,
-                          textColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Tarjeta de Premios Reclamables, Próxima Meta y Guía
-              _buildClaimableRewardsAndProgressSection(isDark, textColor),
-              const SizedBox(height: 12),
-
-              // Barra de título del Kardex + Botón Bono
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      "Kardex de Movimientos",
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: _showAddManualBonusModal,
-                    icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
-                    label: const Text(
-                      "Bono Manual",
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.amber[800],
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-
-              // Chips de filtro rápido
-              _buildFilterChips(isDark),
-              const SizedBox(height: 4),
-
-              // Lista de movimientos filtrada
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _filteredMovements.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.history_rounded, size: 48, color: isDark ? Colors.grey[600] : Colors.grey[400]),
-                                const SizedBox(height: 10),
+                                const SizedBox(width: 8),
                                 Text(
-                                  _movements.isEmpty
-                                      ? "Sin movimientos de fidelización registrados"
-                                      : "No hay movimientos con el filtro seleccionado",
+                                  "Score: ${_currentClient.scoreReputacion}/1000",
                                   style: TextStyle(
+                                    fontSize: 11.5,
                                     color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
                             ),
-                          )
-                        : ListView.builder(
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: _filteredMovements.length,
-                            itemBuilder: (ctx, i) => _buildMovementCard(_filteredMovements[i], isDark),
                           ),
-              ),
-            ],
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 22),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Tarjeta Resumen Compacta de 3 Métricas
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: isDark
+                          ? [const Color(0xFF2E231F), const Color(0xFF1E1E2A)]
+                          : [Colors.amber.shade50, Colors.orange.shade50],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.amber.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: _buildMetricCol(
+                            "Puntos Actuales",
+                            "${_currentClient.puntosActuales} pts",
+                            Icons.stars_rounded,
+                            Colors.amber[700]!,
+                            textColor,
+                          ),
+                        ),
+                      ),
+                      Container(height: 32, width: 1, color: isDark ? Colors.white12 : Colors.grey[300]),
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: _buildMetricCol(
+                            "Racha Pagos",
+                            "${_currentClient.rachaPagosPuntuales} a tiempo",
+                            Icons.local_fire_department_rounded,
+                            Colors.orange,
+                            textColor,
+                          ),
+                        ),
+                      ),
+                      Container(height: 32, width: 1, color: isDark ? Colors.white12 : Colors.grey[300]),
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: _buildMetricCol(
+                            "Límite Sugerido",
+                            AppCurrency.format(tier.limiteCreditoSugerido),
+                            Icons.credit_score_rounded,
+                            Colors.green[600]!,
+                            textColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // TabBar Moderno de 2 Pestañas
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF282836) : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TabBar(
+                    indicator: BoxDecoration(
+                      color: Colors.amber[700],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    labelColor: Colors.white,
+                    unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    padding: const EdgeInsets.all(3),
+                    tabs: [
+                      Tab(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.card_giftcard_rounded, size: 15),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                claimableGoals.isNotEmpty
+                                    ? "Premios y Metas (${claimableGoals.length})"
+                                    : "Premios y Metas",
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Tab(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.history_rounded, size: 15),
+                            SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                "Historial de Puntos",
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Contenido de las Pestañas
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      // Pestaña 1: Premios y Metas
+                      SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: _buildClaimableRewardsAndProgressSection(isDark, textColor),
+                      ),
+
+                      // Pestaña 2: Historial de Puntos (Amplio >70% de altura)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: _buildFilterChips(isDark),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                onPressed: _showAddManualBonusModal,
+                                icon: const Icon(Icons.add_circle_outline_rounded, size: 14),
+                                label: const Text(
+                                  "+ Bono Manual",
+                                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.amber[700],
+                                  foregroundColor: Colors.white,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  elevation: 0,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+
+                          Expanded(
+                            child: _isLoading
+                                ? const Center(child: CircularProgressIndicator())
+                                : _filteredMovements.isEmpty
+                                    ? Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.history_rounded, size: 44, color: isDark ? Colors.grey[600] : Colors.grey[400]),
+                                            const SizedBox(height: 10),
+                                            Text(
+                                              _movements.isEmpty
+                                                  ? "Sin movimientos de puntos registrados"
+                                                  : "No hay movimientos con el filtro seleccionado",
+                                              style: TextStyle(
+                                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                fontSize: 13.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : ListView.builder(
+                                        physics: const BouncingScrollPhysics(),
+                                        itemCount: _filteredMovements.length,
+                                        itemBuilder: (ctx, i) => _buildMovementCard(_filteredMovements[i], isDark),
+                                      ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -853,13 +986,19 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
         ? (_claimableSummary!.progresoSiguienteMeta)
         : (((_nextGoalData?['progreso'] ?? _nextGoalData?['progress'] as num?)?.toDouble() ?? 0.0))).clamp(0.0, 1.0);
 
+    // Metas del catálogo siguientes
+    final followingGoals = _goals
+        .where((g) => g.activo && (nextGoal == null || g.puntosRequeridos > nextGoal.puntosRequeridos))
+        .toList()
+      ..sort((a, b) => a.puntosRequeridos.compareTo(b.puntosRequeridos));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 1. SECCIÓN: PREMIOS DISPONIBLES PARA RECLAMAR
         if (claimableGoals.isNotEmpty) ...[
           Container(
-            margin: const EdgeInsets.only(top: 10),
+            margin: const EdgeInsets.only(top: 4),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -948,6 +1087,21 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                 ),
                 const SizedBox(height: 8),
                 ...claimableGoals.map((g) {
+                  String benefitDescription;
+                  if (g.tipoBeneficio == 'DESCUENTO_MONTO') {
+                    benefitDescription = "Descuento de ${AppCurrency.format(g.valorBeneficio)}";
+                  } else if (g.tipoBeneficio == 'DESCUENTO_PORCENTAJE') {
+                    benefitDescription = "${g.valorBeneficio.toInt()}% de Descuento";
+                  } else if (g.tipoBeneficio == 'PRODUCTO_REGALO') {
+                    benefitDescription = g.valorBeneficio > 0
+                        ? "Producto de Regalo (${AppCurrency.format(g.valorBeneficio)})"
+                        : "Producto de Regalo";
+                  } else if (g.descripcion != null && g.descripcion!.isNotEmpty) {
+                    benefitDescription = g.descripcion!;
+                  } else {
+                    benefitDescription = g.nombre;
+                  }
+
                   return Container(
                     margin: const EdgeInsets.only(top: 6),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -976,7 +1130,7 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                "${g.puntosRequeridos} pts • ${g.tipoBeneficio == 'DESCUENTO_MONTO' ? '${AppCurrency.format(g.valorBeneficio)} descuento' : g.tipoBeneficio == 'DESCUENTO_PORCENTAJE' ? '${g.valorBeneficio.toInt()}% descuento' : (g.descripcion != null && g.descripcion!.isNotEmpty ? g.descripcion! : 'Beneficio especial')}",
+                                "${g.puntosRequeridos} pts • $benefitDescription",
                                 style: TextStyle(
                                   fontSize: 10.5,
                                   color: isDark ? Colors.amber[300] : Colors.amber[800],
@@ -1050,7 +1204,7 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Premio en trámite de entrega",
+                        "Premio pendiente de revisión",
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -1102,7 +1256,7 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
           ),
         ],
 
-        // 3. PRÓXIMA META SUPERIOR (PARA SEGUIR AHORRANDO)
+        // 3. PRÓXIMA META SUPERIOR (ESPACIADO DEFENSIVO ANTI-COLISIÓN)
         if (nextGoal != null) ...[
           Container(
             margin: const EdgeInsets.only(top: 10),
@@ -1118,7 +1272,7 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                 Row(
                   children: [
                     Icon(Icons.workspace_premium_rounded, size: 16, color: Colors.amber[700]),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         "Próxima Meta: ${nextGoal.titulo}",
@@ -1131,6 +1285,7 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 10), // <-- Espaciador defensivo garantizado
                     Text(
                       missing <= 0 ? "¡Meta alcanzada!" : "Faltan $missing pts",
                       style: TextStyle(
@@ -1180,9 +1335,60 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
           ),
         ],
 
-        // 4. ACCIÓN RÁPIDA: ENVIAR CARTILLA / GUÍA DE PUNTOS
+        // 4. CATÁLOGO DE SIGUIENTES METAS PARA MOTIVAR EL AHORRO
+        if (followingGoals.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            "Próximos Premios del Catálogo",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.grey[300] : Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 6),
+          ...followingGoals.take(3).map((g) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.emoji_events_outlined, size: 14, color: Colors.amber[700]),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      g.nombre,
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: textColor),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      "${g.puntosRequeridos} pts",
+                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.amber[800]),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+
+        // 5. ACCIÓN RÁPIDA: ENVIAR CARTILLA / GUÍA DE PUNTOS
         Padding(
-          padding: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.only(top: 12, bottom: 8),
           child: SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -1202,20 +1408,25 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
                   title: "Guía de Puntos y Premios",
                   initialMessage: msg,
                   phone: _currentClient.phone,
+                  rules: rules,
+                  activeGoals: _goals.where((g) => g.activo).toList(),
+                  businessName: auth.activeBusinessName,
+                  clientName: _currentClient.fullName,
+                  puntosActuales: _currentClient.puntosActuales,
                 );
               },
               icon: Icon(Icons.menu_book_rounded, size: 15, color: isDark ? Colors.amber[300] : Colors.amber[800]),
               label: Text(
                 "Enviar Cartilla de Puntos al Cliente",
                 style: TextStyle(
-                  fontSize: 11.5,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: isDark ? Colors.amber[200] : Colors.amber[900],
                 ),
               ),
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 visualDensity: VisualDensity.compact,
               ),
@@ -1228,7 +1439,7 @@ class _ClientLoyaltyHistoryModalState extends State<ClientLoyaltyHistoryModal> {
 
   Widget _buildFilterChips(bool isDark) {
     final filters = [
-      {'id': 'TODOS', 'label': 'Todos (${_movements.length})', 'icon': Icons.list_rounded},
+      {'id': 'TODOS', 'label': 'Todos', 'icon': Icons.list_rounded},
       {'id': 'GANADOS', 'label': '+ Ganados', 'icon': Icons.add_circle_outline_rounded},
       {'id': 'CANJES_AJUSTES', 'label': '- Salidas', 'icon': Icons.remove_circle_outline_rounded},
     ];

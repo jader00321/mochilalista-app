@@ -3,15 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/loyalty_toast_feedback.dart';
 
 class LoyaltyRulesConfigModal extends StatefulWidget {
   final int negocioId;
   final VoidCallback? onRulesSaved;
+  final LoyaltyRulesModel? initialRules;
 
   const LoyaltyRulesConfigModal({
     super.key,
     required this.negocioId,
     this.onRulesSaved,
+    this.initialRules,
   });
 
   static Future<void> show(BuildContext context, {
@@ -53,7 +56,13 @@ class _LoyaltyRulesConfigModalState extends State<LoyaltyRulesConfigModal> {
   @override
   void initState() {
     super.initState();
-    _loadRules();
+    if (widget.initialRules != null) {
+      _rules = widget.initialRules!;
+      _isLoading = false;
+      _initControllers();
+    } else {
+      _loadRules();
+    }
   }
 
   Future<void> _loadRules() async {
@@ -111,12 +120,9 @@ class _LoyaltyRulesConfigModalState extends State<LoyaltyRulesConfigModal> {
       _ptsRachaCtrl.text = '${def.puntosBonoRacha}';
       _ptsLiquidacionCtrl.text = '${def.puntosLiquidacionSinMora}';
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Valores recomendados restablecidos. Presiona Guardar para aplicar.'),
-        backgroundColor: Colors.blueAccent,
-        duration: Duration(seconds: 2),
-      ),
+    LoyaltyToastFeedback.showInfo(
+      context,
+      'Valores recomendados restablecidos. Presiona Guardar para aplicar.',
     );
   }
 
@@ -139,20 +145,16 @@ class _LoyaltyRulesConfigModalState extends State<LoyaltyRulesConfigModal> {
     if (mounted) {
       setState(() => _isSaving = false);
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Reglas de ganancia de puntos guardadas correctamente'),
-            backgroundColor: Colors.green,
-          ),
+        LoyaltyToastFeedback.showSuccess(
+          context,
+          'Reglas de ganancia de puntos guardadas correctamente',
         );
         widget.onRulesSaved?.call();
         Navigator.pop(context);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error al guardar las reglas'),
-            backgroundColor: Colors.red,
-          ),
+        LoyaltyToastFeedback.showWarning(
+          context,
+          'Error al guardar las reglas',
         );
       }
     }
@@ -221,15 +223,17 @@ class _LoyaltyRulesConfigModalState extends State<LoyaltyRulesConfigModal> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            "Configurar Reglas de Puntos",
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              "Configurar Reglas de Puntos",
+                              style: TextStyle(
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             "Define cómo ganan puntos tus clientes",
@@ -437,11 +441,11 @@ class _LoyaltyRulesConfigModalState extends State<LoyaltyRulesConfigModal> {
                 Row(
                   children: [
                     Expanded(
-                      flex: 4,
+                      flex: 5,
                       child: OutlinedButton(
                         onPressed: _isLoading || _isSaving ? null : _restoreDefaults,
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                         child: const FittedBox(
@@ -452,17 +456,20 @@ class _LoyaltyRulesConfigModalState extends State<LoyaltyRulesConfigModal> {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      flex: 6,
+                      flex: 5,
                       child: ElevatedButton.icon(
                         onPressed: _isLoading || _isSaving ? null : _saveRules,
                         icon: _isSaving
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.save_rounded, size: 18),
-                        label: const Text("Guardar Reglas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        label: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text("Guardar Reglas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.amber[700],
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           elevation: 0,
                         ),
@@ -522,11 +529,13 @@ class _LoyaltyRulesConfigModalState extends State<LoyaltyRulesConfigModal> {
                 child: Text(
                   title,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13.5,
                     fontWeight: FontWeight.bold,
                     color: isActive ? textColor : Colors.grey,
+                    height: 1.2,
                   ),
-                  maxLines: 1,
+                  maxLines: 2,
+                  softWrap: true,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -537,6 +546,7 @@ class _LoyaltyRulesConfigModalState extends State<LoyaltyRulesConfigModal> {
               ),
             ],
           ),
+          const SizedBox(height: 4),
           Text(
             description,
             style: TextStyle(fontSize: 11.5, color: isDark ? Colors.grey[400] : Colors.grey[600]),
@@ -564,6 +574,7 @@ class _LoyaltyRulesConfigModalState extends State<LoyaltyRulesConfigModal> {
       inputFormatters: [
         if (!isDecimal) FilteringTextInputFormatter.digitsOnly,
       ],
+      onTapOutside: (_) => FocusScope.of(context).unfocus(),
       style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.bold,

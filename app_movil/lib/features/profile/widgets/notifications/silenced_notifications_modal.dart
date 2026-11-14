@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:app_movil/core/providers/notification_provider.dart';
 import 'package:app_movil/core/models/notification_model.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/notification_toast_feedback.dart';
 
 class SilencedNotificationsModal extends StatefulWidget {
   final bool isDark;
@@ -53,12 +54,7 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
             onPressed: () {
               prov.deleteNotification(notif.id);
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Registro eliminado"),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              NotificationToastFeedback.showSuccess(context, "Registro eliminado");
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600], foregroundColor: Colors.white),
             child: const Text("Sí, Eliminar"),
@@ -83,12 +79,7 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
             onPressed: () {
               prov.unsilenceAll();
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Todas las alertas han sido reactivadas y restauradas"),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              NotificationToastFeedback.showSuccess(context, "Todas las alertas han sido reactivadas y restauradas");
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white),
             child: const Text("Sí, Restaurar Todas"),
@@ -113,12 +104,7 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
             onPressed: () {
               prov.deleteAllSilenced();
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Bandeja de No Deseadas vaciada"),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              NotificationToastFeedback.showSuccess(context, "Bandeja de No Deseadas vaciada");
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600], foregroundColor: Colors.white),
             child: const Text("Sí, Vaciar"),
@@ -182,12 +168,66 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
     );
   }
 
+  String _formatMuteKeyLabel(NotificationModel notif) {
+    final key = notif.effectiveMuteKey;
+    if (notif.objetoRelacionadoTipo == 'cuota' || key.startsWith('cuota_') || key.startsWith('cliente_')) {
+      String cName = notif.clientName ?? '';
+      if (cName.isEmpty) {
+        final parts = notif.cleanTitle.split('•');
+        if (parts.length > 1) {
+          cName = parts.sublist(1).join('•').trim();
+        }
+      }
+      if (cName.isNotEmpty) {
+        return "Silenciado: Cuota de $cName";
+      }
+      return "Silenciado: Cuota pendiente";
+    }
+    if (notif.objetoRelacionadoTipo == 'producto' || key.startsWith('producto_')) {
+      String pName = notif.metadata['producto_nombre']?.toString() ?? '';
+      if (pName.isEmpty) {
+        final parts = notif.cleanTitle.split('•');
+        if (parts.length > 1) {
+          pName = parts.sublist(1).join('•').trim();
+        } else {
+          pName = notif.cleanTitle.replaceFirst(RegExp(r'^(Stock Bajo|Producto Agotado|Stock Compartido Bajo)\s*•?\s*'), '').trim();
+        }
+      }
+      if (pName.isNotEmpty) {
+        return "Silenciado: $pName";
+      }
+      return "Silenciado: Alertas de producto";
+    }
+    if (notif.objetoRelacionadoTipo == 'cotizacion' || key.startsWith('cotizacion_')) {
+      final parts = notif.cleanTitle.split('•');
+      if (parts.length > 1) {
+        return "Silenciado: Cotización de ${parts.sublist(1).join('•').trim()}";
+      }
+      return "Silenciado: Cotización";
+    }
+    return "Silenciado: Alertas relacionadas bloqueadas";
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
     final prov = Provider.of<NotificationProvider>(context);
-    final silencedList = prov.silencedNotifications;
+    final rawSilencedList = prov.silencedNotifications;
     final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: kMinDefensiveBottomClearance);
+
+    // Deduplicación canónica por effectiveMuteKey para no mostrar tarjetas repetidas
+    final Map<String, NotificationModel> dedupMap = {};
+    for (var n in rawSilencedList) {
+      final key = n.effectiveMuteKey;
+      if (!dedupMap.containsKey(key)) {
+        dedupMap[key] = n;
+      } else {
+        if (n.createdAt.isAfter(dedupMap[key]!.createdAt)) {
+          dedupMap[key] = n;
+        }
+      }
+    }
+    final List<NotificationModel> silencedList = dedupMap.values.toList();
 
     final bgCardColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final sectionBg = isDark ? const Color(0xFF1E1E28) : Colors.grey[50];
@@ -329,9 +369,10 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
               child: TextField(
                 controller: _searchCtrl,
                 onChanged: (val) => setState(() => _searchQuery = val),
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 style: TextStyle(fontSize: 13, color: textColor),
                 decoration: InputDecoration(
-                  hintText: "Buscar por palabra clave, folio o mute key...",
+                  hintText: "Buscar por cliente, producto o referencia...",
                   hintStyle: TextStyle(fontSize: 12, color: subtitleColor),
                   prefixIcon: Icon(Icons.search_rounded, size: 18, color: subtitleColor),
                   suffixIcon: _searchQuery.isNotEmpty
@@ -442,7 +483,7 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        notif.title,
+                                        notif.cleanTitle,
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 15,
@@ -468,7 +509,7 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
                                 ),
                                 const SizedBox(height: 8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: Colors.red.withValues(alpha: isDark ? 0.2 : 0.08),
                                     borderRadius: BorderRadius.circular(8),
@@ -477,21 +518,27 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(Icons.block_rounded, size: 13, color: isDark ? Colors.red[300] : Colors.red[700]),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        "Alertas relacionadas bloqueadas (${notif.effectiveMuteKey})",
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: isDark ? Colors.red[300] : Colors.red[700],
+                                      const SizedBox(width: 5),
+                                      Flexible(
+                                        child: Text(
+                                          _formatMuteKeyLabel(notif),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: isDark ? Colors.red[300] : Colors.red[700],
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                                 const SizedBox(height: 14),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
+                                Wrap(
+                                  alignment: WrapAlignment.end,
+                                  spacing: 8,
+                                  runSpacing: 6,
                                   children: [
                                     OutlinedButton.icon(
                                       onPressed: () => _confirmPermanentDelete(context, notif, prov),
@@ -500,19 +547,16 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.red[600],
                                         side: BorderSide(color: Colors.red.withValues(alpha: 0.3)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
                                     ElevatedButton.icon(
                                       onPressed: () {
                                         prov.unsilenceNotification(notif.id);
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text("Ítem restaurado a lista principal y alertas reactivadas"),
-                                            duration: Duration(seconds: 2),
-                                          ),
+                                        NotificationToastFeedback.showSuccess(
+                                          context,
+                                          "Ítem restaurado y alertas reactivadas",
                                         );
                                       },
                                       icon: const Icon(Icons.notifications_active_rounded, size: 16),
@@ -520,7 +564,7 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.green[700],
                                         foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                       ),
                                     ),
@@ -532,6 +576,59 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
                         },
                       ),
           ),
+          if (silencedList.isNotEmpty)
+            Container(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, effectiveBottom + 8),
+              decoration: BoxDecoration(
+                color: bgCardColor,
+                border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _confirmDeleteAll(context, prov),
+                      icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text("Limpiar bandeja", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red[600],
+                        side: BorderSide(color: Colors.red.withValues(alpha: 0.35)),
+                        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _confirmUnsilenceAll(context, prov),
+                      icon: const Icon(Icons.notifications_active_rounded, size: 16),
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text("Restaurar todo", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green[700],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

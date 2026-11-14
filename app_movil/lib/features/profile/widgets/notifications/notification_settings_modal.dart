@@ -5,6 +5,7 @@ import 'package:app_movil/core/models/notification_preferences_model.dart';
 import 'package:app_movil/features/profile/widgets/notifications/archived_notifications_modal.dart';
 import 'package:app_movil/features/profile/widgets/notifications/silenced_notifications_modal.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/notification_toast_feedback.dart';
 
 class NotificationSettingsModal extends StatefulWidget {
   final bool isDark;
@@ -32,6 +33,14 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
   late NotificationPreferences _localPrefs;
   bool _initialized = false;
 
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _bandejasKey = GlobalKey();
+  final GlobalKey _cobranzasKey = GlobalKey();
+  final GlobalKey _inventarioKey = GlobalKey();
+  final GlobalKey _cotizacionesKey = GlobalKey();
+  final GlobalKey _tiemposKey = GlobalKey();
+  final GlobalKey _interaccionKey = GlobalKey();
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -42,11 +51,38 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
     }
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _updatePreference(NotificationPreferences newPrefs) {
     setState(() {
       _localPrefs = newPrefs;
     });
     Provider.of<NotificationProvider>(context, listen: false).updatePreferences(newPrefs);
+  }
+
+  void _scrollToSection(GlobalKey key) {
+    final ctx = key.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeInOut,
+        alignment: 0.05,
+      );
+    }
+  }
+
+  void _restoreDefaults() {
+    final defaultPrefs = NotificationPreferences.defaultFor(_localPrefs.negocioId);
+    _updatePreference(defaultPrefs);
+    NotificationToastFeedback.showSuccess(
+      context,
+      "Preferencias restauradas a valores predeterminados",
+    );
   }
 
   @override
@@ -70,7 +106,7 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
         children: [
           // Drag handle y Header
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 16, 12),
+            padding: const EdgeInsets.fromLTRB(20, 12, 16, 8),
             child: Column(
               children: [
                 Center(
@@ -116,14 +152,47 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
               ],
             ),
           ),
-          const Divider(height: 1),
 
+          // Barra Superior de Píldoras de Salto Rápido
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF191922) : Colors.grey[100],
+              border: Border(
+                top: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200),
+                bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200),
+              ),
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _buildJumpPill("Bandejas", Icons.inventory_2_outlined, () => _scrollToSection(_bandejasKey), isDark),
+                  const SizedBox(width: 6),
+                  _buildJumpPill("Cobranzas", Icons.monetization_on_outlined, () => _scrollToSection(_cobranzasKey), isDark),
+                  const SizedBox(width: 6),
+                  _buildJumpPill("Inventario", Icons.inventory_rounded, () => _scrollToSection(_inventarioKey), isDark),
+                  const SizedBox(width: 6),
+                  _buildJumpPill("Cotizaciones", Icons.receipt_long_rounded, () => _scrollToSection(_cotizacionesKey), isDark),
+                  const SizedBox(width: 6),
+                  _buildJumpPill("Tiempos", Icons.timer_outlined, () => _scrollToSection(_tiemposKey), isDark),
+                  const SizedBox(width: 6),
+                  _buildJumpPill("Interacción", Icons.tune_rounded, () => _scrollToSection(_interaccionKey), isDark),
+                ],
+              ),
+            ),
+          ),
+
+          // Cuerpo con Secciones
           Expanded(
             child: ListView(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, effectiveBottom + 20),
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
               physics: const BouncingScrollPhysics(),
               children: [
                 // ACCESOS A BANDEJAS DE RESGUARDO
+                Container(key: _bandejasKey),
                 _buildSectionHeader("BANDEJAS DE RESGUARDO", isDark),
                 Container(
                   decoration: BoxDecoration(
@@ -138,7 +207,7 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                           backgroundColor: Colors.amber.withValues(alpha: isDark ? 0.2 : 0.1),
                           child: Icon(Icons.inventory_2_outlined, color: isDark ? Colors.amber[300] : Colors.orange[800]),
                         ),
-                        title: const Text("Notificaciones Archivadas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5)),
+                        title: const Text("Notificaciones Archivadas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         subtitle: Text("Alertas retiradas temporalmente de la lista activa", style: TextStyle(fontSize: 12, color: subtitleColor)),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -168,7 +237,7 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                           backgroundColor: Colors.red.withValues(alpha: isDark ? 0.2 : 0.1),
                           child: Icon(Icons.notifications_off_outlined, color: isDark ? Colors.red[300] : Colors.red[700]),
                         ),
-                        title: const Text("Ítems No Deseados / Silenciados", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5)),
+                        title: const Text("Ítems No Deseados / Silenciados", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         subtitle: Text("Cuotas, clientes o productos con alertas bloqueadas", style: TextStyle(fontSize: 12, color: subtitleColor)),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -198,9 +267,10 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                 const SizedBox(height: 24),
 
                 // CANALES DE COBRANZAS
+                Container(key: _cobranzasKey),
                 _buildSectionHeader("ALERTAS DE COBRANZAS", isDark),
                 _buildContainer([
-                  _buildSwitchTile(
+                  _buildPremiumSwitchCard(
                     title: "Cuotas Vencidas (Mora)",
                     subtitle: "Avisos críticos de cuotas con fecha límite superada",
                     value: _localPrefs.notifCuotasVencidas,
@@ -209,7 +279,8 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                     iconColor: Colors.red,
                     isDark: isDark,
                   ),
-                  _buildSwitchTile(
+                  Divider(height: 1, indent: 60, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  _buildPremiumSwitchCard(
                     title: "Avisos Preventivos de Vencimiento",
                     subtitle: "Recordatorios anticipados de cuotas próximas a vencer",
                     value: _localPrefs.notifCuotasPreventivas,
@@ -218,7 +289,8 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                     iconColor: Colors.orange,
                     isDark: isDark,
                   ),
-                  _buildSwitchTile(
+                  Divider(height: 1, indent: 60, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  _buildPremiumSwitchCard(
                     title: "Confirmación de Pagos y Abonos",
                     subtitle: "Historial de cuotas canceladas con éxito",
                     value: _localPrefs.notifConfirmacionPagos,
@@ -230,28 +302,31 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                 ], bgCardColor, isDark),
                 const SizedBox(height: 24),
 
-                // CANALES DE INVENTARIO
+                // CANALES DE INVENTARIO (CON NUEVA INTELIGENCIA ANTI-SPAM Y REGLA DE GRACIA)
+                Container(key: _inventarioKey),
                 _buildSectionHeader("ALERTAS DE INVENTARIO", isDark),
                 _buildContainer([
-                  _buildSwitchTile(
+                  _buildPremiumSwitchCard(
                     title: "Productos Agotados (0 und.)",
-                    subtitle: "Aviso crítico inmediato al agotarse existencias",
+                    subtitle: "Aviso crítico inmediato al agotarse existencias por completo",
                     value: _localPrefs.notifStockAgotado,
                     onChanged: (v) => _updatePreference(_localPrefs.copyWith(notifStockAgotado: v)),
                     icon: Icons.remove_shopping_cart_rounded,
                     iconColor: Colors.red,
                     isDark: isDark,
                   ),
-                  _buildSwitchTile(
+                  Divider(height: 1, indent: 60, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  _buildPremiumSwitchCard(
                     title: "Stock Bajo Preventivo",
-                    subtitle: "Alertas al alcanzar el umbral mínimo configurado",
+                    subtitle: "Alertas al alcanzar o caer por debajo del umbral mínimo configurado",
                     value: _localPrefs.notifStockBajo,
                     onChanged: (v) => _updatePreference(_localPrefs.copyWith(notifStockBajo: v)),
                     icon: Icons.inventory_2_outlined,
                     iconColor: Colors.amber,
                     isDark: isDark,
                   ),
-                  _buildSwitchTile(
+                  Divider(height: 1, indent: 60, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  _buildPremiumSwitchCard(
                     title: "Stock Compartido Bajo",
                     subtitle: "Vigilancia de presentaciones con stock común",
                     value: _localPrefs.notifStockCompartido,
@@ -260,13 +335,78 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                     iconColor: Colors.purple,
                     isDark: isDark,
                   ),
+                  Divider(height: 1, indent: 60, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  _buildPremiumSwitchCard(
+                    title: "Anti-Spam en Ventas Sucesivas",
+                    subtitle: "Actualiza el stock en la alerta existente sin duplicar ni reabrir alertas archivadas",
+                    value: _localPrefs.antiSpamStockSilencioso,
+                    onChanged: (v) => _updatePreference(_localPrefs.copyWith(antiSpamStockSilencioso: v)),
+                    icon: Icons.mark_email_read_outlined,
+                    iconColor: Colors.blue,
+                    isDark: isDark,
+                  ),
+                  Divider(height: 1, indent: 60, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  // Selector de Regla de Gracia para Productos Nuevos
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.teal.withValues(alpha: isDark ? 0.2 : 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(Icons.hourglass_top_rounded, color: Colors.teal[400], size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Regla de Gracia para Nuevos Productos",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13.5,
+                                      color: textColor,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "Evita alertar stock bajo al registrar un producto si aún no tiene ventas",
+                                    style: TextStyle(fontSize: 11.5, color: subtitleColor, height: 1.25),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            _buildGraceChip(0, "Solo tras 1ra venta", isDark),
+                            _buildGraceChip(3, "3 días de gracia", isDark),
+                            _buildGraceChip(7, "7 días de gracia", isDark),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ], bgCardColor, isDark),
                 const SizedBox(height: 24),
 
                 // CANALES DE COTIZACIONES Y METAS
+                Container(key: _cotizacionesKey),
                 _buildSectionHeader("VENTAS, COTIZACIONES Y PREMIOS", isDark),
                 _buildContainer([
-                  _buildSwitchTile(
+                  _buildPremiumSwitchCard(
                     title: "Cotizaciones por Vencer / Vencidas",
                     subtitle: "Seguimiento para cerrar acuerdos pendientes",
                     value: _localPrefs.notifCotizacionesVencidas,
@@ -275,7 +415,8 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                     iconColor: Colors.indigo,
                     isDark: isDark,
                   ),
-                  _buildSwitchTile(
+                  Divider(height: 1, indent: 60, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  _buildPremiumSwitchCard(
                     title: "Metas y Fidelización",
                     subtitle: "Avisos cuando un cliente alcanza puntos para un premio",
                     value: _localPrefs.notifMetasFidelizacion,
@@ -288,6 +429,7 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                 const SizedBox(height: 24),
 
                 // TIEMPOS Y UMBRALES
+                Container(key: _tiemposKey),
                 _buildSectionHeader("TIEMPOS Y CONDICIONES", isDark),
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -301,7 +443,7 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                     children: [
                       Text(
                         "Anticipación de Avisos Preventivos",
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: textColor),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -318,12 +460,12 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                           _buildAnticipationChip(3, "3 días antes", isDark),
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 16),
                       Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 16),
                       Text(
                         "Prioridad Mínima Visible",
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: textColor),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -345,9 +487,10 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                 const SizedBox(height: 24),
 
                 // APARIENCIA E INTERACCIÓN
+                Container(key: _interaccionKey),
                 _buildSectionHeader("INTERACCIÓN Y NAVEGACIÓN", isDark),
                 _buildContainer([
-                  _buildSwitchTile(
+                  _buildPremiumSwitchCard(
                     title: "Smart Grouping por Cliente",
                     subtitle: "Agrupa clientes con 2 o más cuotas en mora en tarjeta maestra",
                     value: _localPrefs.activarSmartGrouping,
@@ -356,7 +499,8 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                     iconColor: Colors.blue,
                     isDark: isDark,
                   ),
-                  _buildSwitchTile(
+                  Divider(height: 1, indent: 60, color: isDark ? Colors.white10 : Colors.grey[200]),
+                  _buildPremiumSwitchCard(
                     title: "Dashboard de Pulso Ejecutivo",
                     subtitle: "Muestra KPIs rápidos de mora e inventario en Pendientes",
                     value: _localPrefs.mostrarPulseDashboard,
@@ -365,14 +509,15 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
                     iconColor: Colors.teal,
                     isDark: isDark,
                   ),
+                  Divider(height: 1, indent: 60, color: isDark ? Colors.white10 : Colors.grey[200]),
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           "Comportamiento al Deslizar (Swipe)",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: textColor),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -408,7 +553,98 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
               ],
             ),
           ),
+
+          // PIE FIJO ACOPLADO (Docked Footer) CON RESPETO ESTRICTO AL BORDE INFERIOR (SafeArea)
+          Container(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, effectiveBottom + 12),
+            decoration: BoxDecoration(
+              color: bgCardColor,
+              border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -3),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: OutlinedButton.icon(
+                    onPressed: _restoreDefaults,
+                    icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        "Restaurar recomendados",
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5),
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: isDark ? Colors.grey[300] : Colors.grey[800],
+                      side: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[600],
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        "Listo / Guardar",
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildJumpPill(String title, IconData icon, VoidCallback onTap, bool isDark) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF23232F) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade300),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+            const SizedBox(width: 5),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.grey[200] : Colors.grey[800],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -441,7 +677,7 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
     );
   }
 
-  Widget _buildSwitchTile({
+  Widget _buildPremiumSwitchCard({
     required String title,
     required String subtitle,
     required bool value,
@@ -450,20 +686,78 @@ class _NotificationSettingsModalState extends State<NotificationSettingsModal> {
     required Color iconColor,
     required bool isDark,
   }) {
-    return SwitchListTile.adaptive(
-      value: value,
-      onChanged: onChanged,
-      secondary: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: isDark ? 0.2 : 0.1),
-          shape: BoxShape.circle,
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: isDark ? 0.2 : 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5,
+                      color: isDark ? Colors.white : Colors.black87,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Transform.scale(
+              scale: 0.88,
+              child: Switch.adaptive(
+                value: value,
+                onChanged: onChanged,
+                activeThumbColor: Colors.blue[600],
+              ),
+            ),
+          ],
         ),
-        child: Icon(icon, color: iconColor, size: 20),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-      subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-      activeThumbColor: Colors.blue[600],
+    );
+  }
+
+  Widget _buildGraceChip(int days, String label, bool isDark) {
+    final isSel = _localPrefs.diasGraciaStockBajo == days;
+    return ChoiceChip(
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      selected: isSel,
+      onSelected: (v) {
+        if (v) _updatePreference(_localPrefs.copyWith(diasGraciaStockBajo: days));
+      },
+      selectedColor: Colors.teal.withValues(alpha: isDark ? 0.3 : 0.15),
+      labelStyle: TextStyle(
+        fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+        color: isSel ? (isDark ? Colors.teal[200] : Colors.teal[800]) : (isDark ? Colors.grey[400] : Colors.grey[700]),
+      ),
     );
   }
 

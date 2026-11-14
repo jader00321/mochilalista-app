@@ -10,6 +10,8 @@ class NotificationPreferences {
   final bool notifCotizacionesVencidas;
   final bool notifMetasFidelizacion;
   final int diasAnticipacionCuotas; // 0 = mismo día, 1 = 1 día antes, 2 = 2 días, 3 = 3 días
+  final int diasGraciaStockBajo; // 0 = solo tras 1ra venta, 3 = 3 días, 7 = 7 días
+  final bool antiSpamStockSilencioso; // true = actualiza in-place sin revivir alertas resueltas/archivadas
   final String prioridadMinima; // 'todas', 'preventivas_criticas', 'solo_criticas'
   final bool activarSmartGrouping;
   final bool mostrarPulseDashboard;
@@ -28,6 +30,8 @@ class NotificationPreferences {
     this.notifCotizacionesVencidas = true,
     this.notifMetasFidelizacion = true,
     this.diasAnticipacionCuotas = 1,
+    this.diasGraciaStockBajo = 3,
+    this.antiSpamStockSilencioso = true,
     this.prioridadMinima = 'todas',
     this.activarSmartGrouping = true,
     this.mostrarPulseDashboard = true,
@@ -55,6 +59,8 @@ class NotificationPreferences {
       notifCotizacionesVencidas: json['notif_cotizaciones_vencidas'] == 1 || json['notif_cotizaciones_vencidas'] == true,
       notifMetasFidelizacion: json['notif_metas_fidelizacion'] == 1 || json['notif_metas_fidelizacion'] == true,
       diasAnticipacionCuotas: (json['dias_anticipacion_cuotas'] as num?)?.toInt() ?? 1,
+      diasGraciaStockBajo: (json['dias_gracia_stock_bajo'] as num?)?.toInt() ?? 3,
+      antiSpamStockSilencioso: json['anti_spam_stock_silencioso'] != 0 && json['anti_spam_stock_silencioso'] != false,
       prioridadMinima: json['prioridad_minima'] as String? ?? 'todas',
       activarSmartGrouping: json['activar_smart_grouping'] != 0 && json['activar_smart_grouping'] != false,
       mostrarPulseDashboard: json['mostrar_pulse_dashboard'] != 0 && json['mostrar_pulse_dashboard'] != false,
@@ -76,6 +82,8 @@ class NotificationPreferences {
       'notif_cotizaciones_vencidas': notifCotizacionesVencidas ? 1 : 0,
       'notif_metas_fidelizacion': notifMetasFidelizacion ? 1 : 0,
       'dias_anticipacion_cuotas': diasAnticipacionCuotas,
+      'dias_gracia_stock_bajo': diasGraciaStockBajo,
+      'anti_spam_stock_silencioso': antiSpamStockSilencioso ? 1 : 0,
       'prioridad_minima': prioridadMinima,
       'activar_smart_grouping': activarSmartGrouping ? 1 : 0,
       'mostrar_pulse_dashboard': mostrarPulseDashboard ? 1 : 0,
@@ -96,6 +104,8 @@ class NotificationPreferences {
     bool? notifCotizacionesVencidas,
     bool? notifMetasFidelizacion,
     int? diasAnticipacionCuotas,
+    int? diasGraciaStockBajo,
+    bool? antiSpamStockSilencioso,
     String? prioridadMinima,
     bool? activarSmartGrouping,
     bool? mostrarPulseDashboard,
@@ -114,6 +124,8 @@ class NotificationPreferences {
       notifCotizacionesVencidas: notifCotizacionesVencidas ?? this.notifCotizacionesVencidas,
       notifMetasFidelizacion: notifMetasFidelizacion ?? this.notifMetasFidelizacion,
       diasAnticipacionCuotas: diasAnticipacionCuotas ?? this.diasAnticipacionCuotas,
+      diasGraciaStockBajo: diasGraciaStockBajo ?? this.diasGraciaStockBajo,
+      antiSpamStockSilencioso: antiSpamStockSilencioso ?? this.antiSpamStockSilencioso,
       prioridadMinima: prioridadMinima ?? this.prioridadMinima,
       activarSmartGrouping: activarSmartGrouping ?? this.activarSmartGrouping,
       mostrarPulseDashboard: mostrarPulseDashboard ?? this.mostrarPulseDashboard,

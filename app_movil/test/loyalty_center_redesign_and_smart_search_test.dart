@@ -326,7 +326,7 @@ void main() {
 
       // 3. Métricas ejecutivas anti-colisión
       expect(find.text("Puntos Activos"), findsOneWidget);
-      expect(find.text("Por Revisar"), findsOneWidget);
+      expect(find.text("Premios Listos"), findsOneWidget);
       expect(find.text("Clientes VIP"), findsOneWidget);
 
       // 4. Clientes sincronizados: Huk aparece como Plata (no Bronce)

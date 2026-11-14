@@ -4,6 +4,7 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/features/smart_quotation/services/loyalty_whatsapp_service.dart';
+import 'package:app_movil/core/widgets/loyalty_toast_feedback.dart';
 
 class RewardReviewModal extends StatefulWidget {
   final ClientRewardModel? reward;
@@ -154,11 +155,9 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
     } else {
       if (mounted) {
         setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo procesar el reclamo de recompensa'),
-            backgroundColor: Colors.red,
-          ),
+        LoyaltyToastFeedback.showWarning(
+          context,
+          'No se pudo procesar el reclamo de recompensa',
         );
       }
     }
@@ -202,17 +201,25 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
     }
 
     if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isExistingReward ? 'Recompensa aprobada y lista para canjear' : '¡Premio reclamado con éxito! Puntos descontados.'),
-          backgroundColor: Colors.green,
-        ),
+      LoyaltyToastFeedback.showSuccess(
+        context,
+        _isExistingReward
+            ? 'Recompensa aprobada y lista para canjear'
+            : (widget.deliverImmediately
+                ? 'Premio entregado al cliente con éxito'
+                : 'Premio reclamado con éxito. Puntos descontados.'),
       );
       widget.onActionCompleted();
       if (!mounted) return;
       Navigator.pop(context);
     } else {
-      if (mounted) setState(() => _isProcessing = false);
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        LoyaltyToastFeedback.showWarning(
+          context,
+          'Saldo insuficiente para canjear este premio',
+        );
+      }
     }
   }
 
@@ -252,11 +259,9 @@ class _RewardReviewModalState extends State<RewardReviewModal> {
       );
 
       if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Recompensa descartada. Puntos restaurados al cliente.'),
-            backgroundColor: Colors.orange,
-          ),
+        LoyaltyToastFeedback.showInfo(
+          context,
+          'Recompensa descartada. Puntos restaurados al cliente.',
         );
         widget.onActionCompleted();
         Navigator.pop(context);

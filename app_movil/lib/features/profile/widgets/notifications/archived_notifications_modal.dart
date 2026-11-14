@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:app_movil/core/providers/notification_provider.dart';
 import 'package:app_movil/core/models/notification_model.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/notification_toast_feedback.dart';
 
 class ArchivedNotificationsModal extends StatefulWidget {
   final bool isDark;
@@ -53,12 +54,7 @@ class _ArchivedNotificationsModalState extends State<ArchivedNotificationsModal>
             onPressed: () {
               prov.deleteNotification(notif.id);
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Notificación eliminada definitivamente"),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              NotificationToastFeedback.showSuccess(context, "Notificación eliminada definitivamente");
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600], foregroundColor: Colors.white),
             child: const Text("Sí, Eliminar"),
@@ -83,12 +79,7 @@ class _ArchivedNotificationsModalState extends State<ArchivedNotificationsModal>
             onPressed: () {
               prov.unarchiveAll();
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Todas las notificaciones han sido desarchivadas"),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              NotificationToastFeedback.showSuccess(context, "Todas las notificaciones han sido desarchivadas");
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[600], foregroundColor: Colors.white),
             child: const Text("Sí, Desarchivar"),
@@ -113,12 +104,7 @@ class _ArchivedNotificationsModalState extends State<ArchivedNotificationsModal>
             onPressed: () {
               prov.deleteAllArchived();
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Bandeja de archivadas vaciada"),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              NotificationToastFeedback.showSuccess(context, "Bandeja de archivadas vaciada");
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600], foregroundColor: Colors.white),
             child: const Text("Sí, Vaciar"),
@@ -257,11 +243,13 @@ class _ArchivedNotificationsModalState extends State<ArchivedNotificationsModal>
                           Text(
                             "Notificaciones Archivadas",
                             style: TextStyle(
-                              fontSize: 17.5,
+                              fontSize: 16.0,
                               fontWeight: FontWeight.w900,
                               color: textColor,
                               letterSpacing: -0.3,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             "${archivedList.length} notificación${archivedList.length != 1 ? 'es' : ''} resguardada${archivedList.length != 1 ? 's' : ''}",
@@ -322,6 +310,7 @@ class _ArchivedNotificationsModalState extends State<ArchivedNotificationsModal>
                 child: TextField(
                   controller: _searchCtrl,
                   onChanged: (v) => setState(() => _searchQuery = v),
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
                   style: TextStyle(fontSize: 13, color: textColor),
                   decoration: InputDecoration(
                     hintText: "Buscar en archivadas...",
@@ -459,8 +448,10 @@ class _ArchivedNotificationsModalState extends State<ArchivedNotificationsModal>
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 14),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
+                                Wrap(
+                                  alignment: WrapAlignment.end,
+                                  spacing: 8,
+                                  runSpacing: 6,
                                   children: [
                                     OutlinedButton.icon(
                                       onPressed: () => _confirmPermanentDelete(context, notif, prov),
@@ -469,19 +460,16 @@ class _ArchivedNotificationsModalState extends State<ArchivedNotificationsModal>
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.red[600],
                                         side: BorderSide(color: Colors.red.withValues(alpha: 0.3)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
                                     ElevatedButton.icon(
                                       onPressed: () {
                                         prov.unarchiveNotification(notif.id);
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text("Notificación desarchivada y devuelta a la lista principal"),
-                                            duration: Duration(seconds: 2),
-                                          ),
+                                        NotificationToastFeedback.showSuccess(
+                                          context,
+                                          "Notificación desarchivada y devuelta a la lista principal",
                                         );
                                       },
                                       icon: const Icon(Icons.unarchive_rounded, size: 16),
@@ -489,7 +477,7 @@ class _ArchivedNotificationsModalState extends State<ArchivedNotificationsModal>
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.blue[600],
                                         foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                       ),
                                     ),
@@ -501,6 +489,59 @@ class _ArchivedNotificationsModalState extends State<ArchivedNotificationsModal>
                         },
                       ),
           ),
+          if (archivedList.isNotEmpty)
+            Container(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, effectiveBottom + 8),
+              decoration: BoxDecoration(
+                color: bgCardColor,
+                border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _confirmDeleteAll(context, prov),
+                      icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text("Limpiar bandeja", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red[600],
+                        side: BorderSide(color: Colors.red.withValues(alpha: 0.35)),
+                        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _confirmUnarchiveAll(context, prov),
+                      icon: const Icon(Icons.unarchive_rounded, size: 16),
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text("Restaurar todo", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[700],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

@@ -580,6 +580,7 @@ class ProductEditOperations {
     required int originProductId,
     required VoidCallback onCompleted,
     InventoryProvider? inventoryProvider,
+    TextEditingController? sharedStockCtrl,
   }) async {
     // 1. Encontrar la variante en la lista de controladores por db_id o localId
     int index = -1;
@@ -607,6 +608,34 @@ class ProductEditOperations {
       }
       if (c['sourceParentId'] == deletedId) {
         c['sourceParentId'] = null;
+      }
+    }
+
+    // 2.1. Descuento atómico en memoria del pool compartido si corresponde
+    if (result.isSharedOrigin &&
+        result.shouldDeductSharedPool &&
+        result.transferredBaseUnits > 0 &&
+        sharedStockCtrl != null) {
+      final int currentShared = int.tryParse(sharedStockCtrl.text) ?? 0;
+      final int newShared = (currentShared - result.transferredBaseUnits) > 0
+          ? (currentShared - result.transferredBaseUnits)
+          : 0;
+      sharedStockCtrl.text = newShared.toString();
+
+      // Sincronizar reactivamente el cupo visual de las variantes restantes
+      for (var c in controllers) {
+        if (c['id'] != targetMap['id'] && c['usaStockCompartido'] == true) {
+          final int factor = int.tryParse(
+                  (c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ??
+              1;
+          final int safeFactor = factor <= 0 ? 1 : factor;
+          final int availableUnits = newShared ~/ safeFactor;
+          final int? cupo = c['cupoMaximoVariante'] as int?;
+          if (cupo == null || cupo > availableUnits) {
+            (c['stockFinal'] as TextEditingController?)?.text =
+                availableUnits.toString();
+          }
+        }
       }
     }
 
@@ -648,6 +677,9 @@ class ProductEditOperations {
         promoteToDefaultPresentationId: newDefaultDbId,
         transferredBarcode: result.transferredBarcode,
         transferredStock: result.transferredStock,
+        transferredBaseUnits: result.transferredBaseUnits,
+        isSharedVariant: result.isSharedOrigin,
+        shouldDeductSharedPool: result.shouldDeductSharedPool,
       );
     } else if (invProv != null) {
       await invProv.loadMasterData(showAll: true);

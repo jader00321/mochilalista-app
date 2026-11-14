@@ -1,295 +1,272 @@
-# 🔒 INFORME 1: Auditoría de Seguridad — Estado Actual de MochilaLista v8.5.0
+# 🔒 INFORME 1: Auditoría de Seguridad — Estado Actual de MochilaLista v9.23.0
 
-**Fecha:** 3 de Octubre de 2026  
-**Versión Analizada:** 8.5.0+47  
-**Autor:** Auditoría Automatizada de Seguridad  
-**Objetivo:** Identificar vulnerabilidades de seguridad en la app antes de la comercialización.
-
----
-
-## 📋 Resumen Ejecutivo
-
-MochilaLista es una aplicación Flutter offline-first con una base de datos SQLite local, integración con Google Gemini AI, y un sistema de backups robusto. Tras un análisis exhaustivo del código fuente, se han identificado **18 vulnerabilidades** clasificadas por severidad. Este informe detalla cada una con su riesgo real, impacto en un escenario comercial, y la solución recomendada.
-
-### Tabla de Severidad
-
-| Severidad | Cantidad | Descripción |
-|-----------|----------|-------------|
-| 🔴 **CRÍTICA** | 5 | Explotables inmediatamente. Bloquean la comercialización. |
-| 🟠 **ALTA** | 5 | Riesgo significativo para datos de usuarios y el modelo de negocio. |
-| 🟡 **MEDIA** | 4 | Podrían ser explotadas con conocimiento técnico moderado. |
-| 🟢 **BAJA** | 4 | Mejoras de hardening y buenas prácticas. |
+**Fecha de Auditoría:** 13 de Noviembre de 2026  
+**Versión de Código Analizada:** `v9.23.0+73`  
+**Esquema de Base de Datos:** Versión `34`  
+**Entorno de Ejecución:** Flutter 3.9.0+ / Dart 3.9.0 (Android SDK 36, Java 17)  
+**Autor:** Auditoría Integral de Seguridad y Arquitectura de Software  
+**Objetivo:** Evaluar las vulnerabilidades de seguridad de la aplicación tras la incorporación de los módulos de Noviembre 2026 (Cotizador Universal IA, Extracción/Corte de Variantes con Stock Compartido, Fidelización/Premios/Reputación y Centro de Notificaciones Inteligente) y diseñar las soluciones técnicas definitivas antes de su comercialización.
 
 ---
 
-## 🔴 VULNERABILIDADES CRÍTICAS (Bloquean Comercialización)
+## 📋 1. Resumen Ejecutivo y Estado a Noviembre 2026
 
-### CRIT-01: API Key de Google Gemini Expuesta en Texto Plano
+MochilaLista ha evolucionado de forma sustancial durante 2026, consolidándose como una suite comercial **offline-first de alto rendimiento** para comerciantes mayoristas y minoristas en Perú. La versión actual (`9.23.0+73`) integra módulos críticos de negocio:
+1. **Cotizador Universal IA (`smart_quotation`):** Procesamiento multimodal de listas escolares y pedidos complejos con modelos Gemini 3.8 Flash y Gemini 3.1 Flash-Lite.
+2. **Extracción y Corte de Variantes con Stock Compartido:** Auditoría de facturas de proveedores con distribución de stock dependiente/independiente.
+3. **Centro de Fidelización, Premios y Reputación Financiera:** Sistema de scoring crediticio, límites de mora y canje de recompensas.
+4. **Centro de Notificaciones Inteligente:** Bandejas categorizadas (Prioritarias, Archivadas, Silenciadas/No deseadas) y alertas en tiempo real.
 
-**Archivo afectado:** [`.env`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/.env)
+A pesar de su robustez funcional, la auditoría de seguridad sobre el código base actual revela **vulnerabilidades críticas que bloquean su distribución comercial**. Si la app se distribuyera hoy en formato APK directo, un atacante o competidor podría:
+- Extraer la clave de Google Gemini y generar consumos masivos no autorizados.
+- Descompilar el código binario (`libapp.so`) y clonar los algoritmos propietarios de cotización y fidelización.
+- Copiar la base de datos completa de un cliente (`mochilalista.db` v34) en texto plano con precios de costo, márgenes y clientes.
+- Burlar cualquier sistema de licencias si se implementara con llaves simétricas compartidas.
 
-**Descripción:** La clave de API de Google Gemini (`GOOGLE_API_KEY`) está almacenada directamente en el archivo `.env`, el cual se incluye como asset del APK (`assets: [.env]` en [`pubspec.yaml`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/pubspec.yaml#L76)). Esto significa que:
+### Matriz de Vulnerabilidades Identificadas
 
-1. Cualquier persona con el APK puede descomprimir el archivo (un APK es un ZIP) y leer la API Key en texto plano.
-2. Un atacante puede usar tu API Key para hacer llamadas ilimitadas a Gemini AI, generando costos a tu cuenta de Google.
-3. Google podría bloquear tu API Key por abuso, dejando a TODOS tus usuarios sin funciones de IA.
-
-**Impacto:** ⚠️ **FINANCIERO DIRECTO** — Un atacante podría generar miles de dólares en costos de API usando tu clave.
-
-**Evidencia en código:**
-```yaml
-# pubspec.yaml línea 76
-assets:
-  - .env   # ← El archivo .env se empaqueta dentro del APK
-```
-```env
-# .env línea 9
-GOOGLE_API_KEY=AQ.Ab8RN6L****REDACTADO_POR_SEGURIDAD****  # ← Visible para cualquiera
-```
-
-**Solución recomendada:**
-- **Inmediata:** Rotar (cambiar) la API Key actual en Google AI Studio, la actual está comprometida al estar en un repositorio.
-- **Permanente:** Mover la API Key fuera del APK. Opciones:
-  - *Opción A (Recomendada):* Usar `--dart-define` en tiempo de compilación para inyectar la key sin incluirla en assets.
-  - *Opción B:* Hacer que cada usuario registre su propia API Key de Gemini (distribución del costo).
-  - *Opción C:* Crear un proxy server mínimo que controle el acceso (pero requiere infraestructura online).
+| Severidad | Total | Estado | Impacto Comercial Directo |
+|-----------|:-----:|:------:|---------------------------|
+| 🔴 **CRÍTICA** | 5 | Bloqueante | Riesgo financiero, clonación de software y robo de secretos |
+| 🟠 **ALTA** | 5 | Urgente | Compromiso de integridad de datos y suplantación |
+| 🟡 **MEDIA** | 4 | Importante | Fuga de datos en tránsito local y fuerza bruta |
+| 🟢 **BAJA** | 4 | Hardening | Higiene de código y exposición de metadatos |
 
 ---
 
-### CRIT-02: Application ID Genérico — `com.example.app_movil`
+## 🔴 2. Vulnerabilidades Críticas (Bloqueantes Comerciales)
 
-**Archivo afectado:** [`build.gradle.kts`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/android/app/build.gradle.kts#L26)
+### CRIT-01: Exposición de `GOOGLE_API_KEY` en Assets y Memoria Binaria
 
-**Descripción:** El `applicationId` sigue siendo `com.example.app_movil`, que es el nombre por defecto de los proyectos Flutter. Esto tiene múltiples implicaciones críticas:
-
-1. **Google Play Store rechazará** cualquier publicación con `com.example.*`.
-2. **No se puede firmar con keystore de producción** de forma profesional.
-3. **Cualquier otra app con el mismo ID podría reemplazar la tuya** en el dispositivo del usuario.
-4. Los usuarios no podrían identificar la app legítima de una falsa.
-
-**Solución recomendada:**
-- Cambiar a un `applicationId` único como `com.mochilalista.app` o `com.tunombre.mochilalista`.
-- Generar un keystore de producción propio para firmar la app.
-
----
-
-### CRIT-03: APK Firmado con Debug Key — Sin Firma de Producción
-
-**Archivo afectado:** [`build.gradle.kts`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/android/app/build.gradle.kts#L33-L39)
-
-**Descripción:** La compilación release usa la firma de debug:
-```kotlin
-release {
-    signingConfig = signingConfigs.getByName("debug")  // ← PELIGRO
-    isMinifyEnabled = false
-    isShrinkResources = false
-}
-```
-
-**Impacto:**
-1. Cualquiera puede crear una versión "modificada" de tu app y distribuirla como si fuera original.
-2. Los usuarios no tienen forma de verificar que el APK que reciben es legítimo.
-3. Un atacante podría inyectar malware, robar datos del negocio, y redistribuir el APK.
-
-**Solución recomendada:**
-- Crear un keystore de producción: `keytool -genkey -v -keystore mochilalista-release.jks`.
-- Configurar `signingConfigs` con el keystore de producción.
-- Activar `isMinifyEnabled = true` y `isShrinkResources = true` para ofuscar el código.
-- **NUNCA perder el keystore** — sin él, no podrás publicar actualizaciones.
+* **Ubicación en código:**
+  * `pubspec.yaml` (Línea 79): `assets: - .env`
+  * `lib/core/config/api_constants.dart` (Líneas 7-16): Lectura directa mediante `dotenv.env['GOOGLE_API_KEY']`
+  * `lib/main.dart`: Inicialización obligatoria con `dotenv.load()`
+* **Diagnóstico de Riesgo:**
+  1. Al estar `.env` declarado en los `assets` del `pubspec.yaml`, el archivo se empaqueta sin cifrar dentro del archivo ZIP del APK (`assets/flutter_assets/.env`). Cualquier usuario puede cambiar la extensión `.apk` a `.zip`, descomprimirlo y obtener la clave en 5 segundos.
+  2. Aunque se retire del `.env` y se inyecte con `--dart-define`, un binario compilado contiene cadenas literales en la sección `.rodata` de `libapp.so`. Al ejecutar el comando `strings libapp.so | grep "AIza"`, la clave de Google Cloud queda visible en texto plano.
+  3. Un tercero puede usar esa clave para consumir cuotas de Gemini 3.8 Flash, generando costos imprevistos o provocando la suspensión de la cuenta por parte de Google.
+* **Solución Técnica Definitiva (Doble Capa: XOR en Memoria + Restricción Google Cloud):**
+  1. **Retiro de Assets:** Eliminar `.env` del archivo `pubspec.yaml` y agregar `.env` a `.gitignore`.
+  2. **Ofuscación XOR en Memoria:** Almacenar la API Key como un arreglo de bytes enmascarado con una clave XOR de ciclo variable. La reconstrucción de la cadena ocurre únicamente en memoria volátil en el microsegundo exacto en que se instancia `GoogleAIClient`, y se limpia de inmediato. De esta forma, el comando `strings` sobre `libapp.so` solo encuentra secuencias de bytes aleatorias.
+  3. **Restricción Criptográfica en Google Cloud Console:**
+     * Acceder a **Google Cloud Console > Credentials > API Key**.
+     * Configurar **Application restrictions** en **Android apps**.
+     * Registrar el nombre de paquete de producción: `com.mochilalista.app`.
+     * Registrar la huella digital **SHA-1** y **SHA-256** del certificado de firma (`mochilalista-release.jks`).
+     * *Efecto del blindaje:* Aunque un atacante obtenga los bytes de la clave, Google rechazará el 100% de las peticiones HTTP que no provengan de un binario firmado con tu Keystore de producción oficial.
 
 ---
 
-### CRIT-04: Base de Datos SQLite Sin Cifrado
+### CRIT-02: Identificador de Aplicación Genérico (`com.example.app_movil`)
 
-**Archivo afectado:** [`local_db.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/database/local_db.dart)
-
-**Descripción:** La base de datos `mochilalista.db` se almacena sin cifrado alguno. En un dispositivo rooteado, o incluso con un cable USB y herramientas como ADB, es posible:
-
-1. Extraer el archivo `.db` completo del dispositivo.
-2. Abrirlo con cualquier visor SQLite y leer TODA la información del negocio.
-3. Obtener datos de clientes, ventas, precios de costo, márgenes de ganancia, proveedores y deudas.
-
-**Impacto en comercial:** Si un competidor obtiene acceso al teléfono de tu cliente, podría extraer toda su información comercial confidencial.
-
-**Solución recomendada:**
-- Reemplazar `sqflite` por `sqflite_sqlcipher` que usa SQLCipher (AES-256).
-- Derivar la clave de cifrado del PIN del usuario + un salt único del dispositivo.
-- La base de datos sería completamente ilegible sin la clave.
-
----
-
-### CRIT-05: Código Fuente Visible — Sin Ofuscación Dart
-
-**Contexto:** Compilación actual
-
-**Descripción:** Al compilar con `flutter build apk --release` sin el flag `--obfuscate`, todo el código Dart queda expuesto en el snapshot del APK. Un atacante con herramientas de ingeniería inversa puede:
-
-1. Extraer los nombres de todas las clases, métodos y variables.
-2. Entender la lógica de negocio, el algoritmo de matching, y los flujos de validación.
-3. **Clonar la funcionalidad completa de la app** en su propia aplicación.
-4. **Descubrir y burlar cualquier sistema de licencias/códigos de acceso** que implementemos.
-
-**Solución recomendada:**
-```bash
-flutter build apk --release --obfuscate --split-debug-info=build/debug-info
-```
-- Agregar `--obfuscate` convierte todos los nombres legibles en strings aleatorios.
-- `--split-debug-info` guarda el mapeo (necesario para debugging) en una carpeta separada que NO se distribuye.
+* **Ubicación en código:**
+  * `android/app/build.gradle.kts` (Línea 8 y Línea 26):
+    ```kotlin
+    namespace = "com.example.app_movil"
+    defaultConfig {
+        applicationId = "com.example.app_movil"
+        ...
+    }
+    ```
+  * `android/app/src/main/AndroidManifest.xml` (Línea 2): `package="com.example.app_movil"`
+* **Diagnóstico de Riesgo:**
+  1. `com.example.*` es el identificador por defecto de plantillas Flutter. Los sistemas operativos Android tratan las aplicaciones con el mismo `applicationId` como el mismo paquete: cualquier otra app instalada con dicho ID intentará sobrescribirla.
+  2. Google Play Store rechaza automáticamente cualquier intento de registro bajo el namespace `com.example`.
+  3. Impide la vinculación de servicios protegidos de Google Cloud (Maps, Gemini, Play Integrity) que exigen un dominio inverso profesional.
+* **Solución Técnica Definitiva:**
+  * Modificar de forma sincronizada en `build.gradle.kts`, `AndroidManifest.xml` y la estructura de carpetas de Kotlin (`android/app/src/main/kotlin/com/mochilalista/app/MainActivity.kt`) al identificador oficial: `com.mochilalista.app`.
 
 ---
 
-## 🟠 VULNERABILIDADES ALTAS
+### CRIT-03: Compilación Release Firmada con Clave de Debug
 
-### ALTA-01: PIN de Seguridad Almacenado en Texto Plano (Reversible)
-
-**Archivo afectado:** [`auth_provider.dart`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/lib/core/providers/auth_provider.dart#L124)
-
-**Descripción:** Aunque se usa `FlutterSecureStorage`, el PIN se almacena como texto plano:
-```dart
-await _secureStorage.write(key: 'pin_${newUser.id}', value: pin);
-```
-
-Si bien `FlutterSecureStorage` cifra los datos en Android Keystore, el PIN en sí no está hasheado. Esto significa que si alguien tiene acceso al secure storage (dispositivo rooteado), puede leer el PIN directamente.
-
-**Solución:** Almacenar un hash SHA-256 del PIN + salt, en vez del PIN en texto plano. Al verificar, hashear la entrada del usuario y comparar hashes.
-
----
-
-### ALTA-02: `allowBackup="false"` Insuficiente Sin Network Security Config
-
-**Archivo afectado:** [`AndroidManifest.xml`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/android/app/src/main/AndroidManifest.xml#L34)
-
-**Descripción:** Se tiene `android:usesCleartextTraffic="true"` que permite tráfico HTTP sin cifrar. Esto expone las comunicaciones de la app (como las llamadas a la API de Gemini) a ataques Man-in-the-Middle (MITM) en redes WiFi públicas.
-
-**Solución:**
-- Cambiar `android:usesCleartextTraffic="false"`.
-- Crear un `network_security_config.xml` que solo permita HTTPS.
+* **Ubicación en código:**
+  * `android/app/build.gradle.kts` (Líneas 34-38):
+    ```kotlin
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("debug") // 🔴 CRÍTICO
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+    }
+    ```
+* **Diagnóstico de Riesgo:**
+  1. La firma de debug (`debug.keystore`) utiliza contraseñas públicas universales (`android` / `androiddebugkey`).
+  2. Un atacante puede decompilar la aplicación, inyectar código malicioso para extraer la base de datos o burlar el sistema de licencias, volver a firmarla con cualquier debug keystore e instalarla como si fuera legítima.
+  3. No hay garantía de autoría ni protección de identidad digital del creador.
+* **Solución Técnica Definitiva:**
+  1. Generar un Keystore RSA de 4096 bits exclusivo y privado: `mochilalista-release.jks`.
+  2. Configurar la lectura de credenciales desacoplada mediante `android/key.properties` (archivo que se excluye explícitamente de Git).
+  3. Configurar en `build.gradle.kts` el bloque `signingConfigs.create("release")`.
+  4. Custodiar dicho archivo con copias de seguridad desconectadas (unidad física encriptada). Perder este archivo impediría actualizar las instalaciones de los clientes.
 
 ---
 
-### ALTA-03: Sin Validación de Integridad del APK (Tampering)
+### CRIT-04: Base de Datos SQLite (v34) en Texto Plano y Estrategia de Cifrado sin Ruptura de Pruebas
 
-**Descripción:** No existe ningún mecanismo para detectar si el APK ha sido modificado después de la compilación. Un atacante podría:
-1. Descompilar el APK.
-2. Remover el sistema de licencias o validación.
-3. Recompilar y distribuir una versión "crackeada".
-
-**Solución:** Implementar verificación de firma del APK en runtime para detectar si la app ha sido reempaquetada.
-
----
-
-### ALTA-04: Permisos Excesivos en el Manifiesto
-
-**Archivo afectado:** [`AndroidManifest.xml`](file:///c:/Users/vjuli/Documents/mochilalista-app/app_movil/android/app/src/main/AndroidManifest.xml)
-
-**Descripción:** La app solicita permisos que podrían no necesitar todas las veces:
-- `ACCESS_BACKGROUND_LOCATION` — Riesgo de vigilancia percibida por el usuario.
-- `READ_EXTERNAL_STORAGE` + `WRITE_EXTERNAL_STORAGE` — Acceso amplio al almacenamiento.
-
-**Impacto:** Los usuarios podrían rechazar la app o Google Play podría restringir la publicación.
-
-**Solución:** Revisar cada permiso y solicitar solo los estrictamente necesarios, usando scoped storage para archivos.
-
----
-
-### ALTA-05: No Existe Protección Anti-Root / Anti-Emulador
-
-**Descripción:** La app funciona igual en dispositivos rooteados y emuladores. En un dispositivo rooteado, cualquier app maliciosa puede acceder a los datos de MochilaLista, incluyendo la base de datos, el secure storage, y los archivos de backup.
-
-**Solución:** Implementar detección de root (usando `flutter_jailbreak_detection` o checks manuales) y mostrar una advertencia al usuario.
+* **Ubicación en código:**
+  * `lib/core/database/local_db.dart` (Línea 34): `openDatabase(path, version: 34, ...)`
+  * `lib/core/utils/backup_manager.dart`: Copia directa de `mochilalista.db`
+* **Diagnóstico de Riesgo:**
+  1. La base de datos contiene más de 20 tablas operativas: `ventas`, `productos`, `clientes`, `facturas_carga`, `eventos_financieros_cliente`, `historial_puntos_reputacion`, `smart_quotations` y `stock_ledger`.
+  2. En dispositivos con acceso root, copias de seguridad por depuración USB (ADB) o mediante inspección física de almacenamiento, cualquier persona puede extraer el archivo `mochilalista.db` y examinar costos de importación, precios de compra a proveedores, listas de clientes y números de teléfono.
+* **Corrección Técnica Rigurosa (Arquitectura Dual para Producción y `flutter test`):**
+  * **El Peligro de Reemplazo Directo:** Si se reemplaza indiscriminadamente `sqflite` por `sqflite_sqlcipher` en `local_db.dart`:
+    1. Se rompen inmediatamente las **más de 96 suites de pruebas unitarias y de integración** que corren en Windows (`flutter test`) usando `sqflite_common_ffi`, ya que SQLCipher requiere binarios nativos compilados de OpenSSL C que no existen en el entorno de desarrollo estándar de Windows.
+    2. Si un comerciante ya tiene datos en su versión actual sin cifrar, abrir la base de datos con una contraseña de SQLCipher lanzará una excepción fatal: `DatabaseException: file is not a database`, provocando pérdida de datos aparente y caída de la app.
+  * **Solución Arquitectónica:**
+    1. **Abstracción del Factory de Conexión:**
+       Implementar un `DatabaseConnectionProvider` que detecte el entorno:
+       - Si está en ejecución de pruebas (`Platform.environment.containsKey('FLUTTER_TEST')` o `kIsTestEnvironment`): inicializa SQLite plano en memoria mediante `sqflite_common_ffi` sin requerir librerías externas de Windows.
+       - Si está en dispositivo móvil físico (Android): inicializa el driver cifrado `sqflite_sqlcipher` con cifrado AES-256.
+    2. **Migración Transparente y Segura de Bases de Datos Existentes:**
+       Al inicializar la app en un dispositivo de actualización:
+       - Inspeccionar los primeros 16 bytes del archivo `mochilalista.db`. Si la cabecera coincide exactamente con la cadena mágica `"SQLite format 3\000"`, el archivo está sin cifrar.
+       - Ejecutar el comando SQLCipher seguro de migración sin riesgo de corrupción:
+         ```sql
+         ATTACH DATABASE 'mochilalista_encrypted.db' AS encrypted KEY 'CLAVE_AES256_DERIVADA';
+         SELECT sqlcipher_export('encrypted');
+         DETACH DATABASE encrypted;
+         ```
+       - Cerrar la conexión original, renombrar `mochilalista.db` como `mochilalista_legacy.bak` y promover `mochilalista_encrypted.db` a `mochilalista.db`.
+       - Si los primeros 16 bytes no corresponden a la cabecera de texto plano, la base de datos ya está cifrada y se abre directamente con la clave en memoria.
 
 ---
 
-## 🟡 VULNERABILIDADES MEDIAS
+### CRIT-05: Exposición Total de la Lógica de Negocio en el Binario (Falta de Ofuscación Dart)
 
-### MED-01: Backup `.mlbg` y `.mlb` Sin Cifrado
-
-Los archivos de backup contienen toda la base de datos y se pueden abrir con WinRAR/7-Zip. Si alguien intercepta el archivo compartido por WhatsApp, tiene acceso total a los datos del negocio.
-
-**Solución:** Cifrar el contenido del ZIP con una contraseña derivada del PIN del usuario.
-
----
-
-### MED-02: Sin Rate Limiting en Verificación de PIN
-
-El sistema de verificación de PIN no tiene límite de intentos. Un atacante con acceso físico puede probar todas las combinaciones posibles (fuerza bruta) — un PIN de 4 dígitos tiene solo 10,000 combinaciones.
-
-**Solución:** Implementar bloqueo progresivo (3 intentos → esperar 30s, 5 intentos → esperar 5min, 10 intentos → bloqueo temporal).
-
----
-
-### MED-03: Imágenes de Facturas Almacenadas Sin Protección
-
-Las imágenes escaneadas de facturas se guardan en el directorio de documentos de la app sin cifrado. Contienen información comercial sensible (precios de costo, proveedores, condiciones).
-
-**Solución:** Almacenar imágenes en el directorio privado de la app con nombres ofuscados.
+* **Diagnóstico de Riesgo:**
+  1. Las compilaciones estándar `flutter build apk --release` preservan nombres de clases, nombres de tablas SQLite, identificadores de campos, prompts de IA y métodos de cálculo financiero en la tabla de símbolos de `libapp.so`.
+  2. Herramientas automatizadas como `darter` o desensambladores ARM permiten reconstruir el árbol de widgets y la lógica de validación de licencias en pocas horas.
+* **Solución Técnica Definitiva:**
+  * Adoptar obligatoriamente la regla de compilación comercial con ofuscación profunda y separación de símbolos:
+    ```bash
+    flutter build apk --release \
+      --obfuscate \
+      --split-debug-info=./build/symbols_v9230/ \
+      --dart-define=PRODUCTION=true
+    ```
+  * Los mapas de desofuscación generados en `./build/symbols_v9230/` deben guardarse junto con el código fuente en el archivo maestro del proyecto, permitiendo traducir futuros reportes de fallos mientras el APK distribuido queda completamente anonimizado.
 
 ---
 
-### MED-04: Logs de Debug Activos en Producción
+## 🟠 3. Vulnerabilidades Altas (Integridad y Acceso)
 
-Múltiples `debugPrint()` a lo largo del código podrían exponer información sensible en logcat:
-```dart
-debugPrint("Error leyendo perfiles locales: $e");  // Podría revelar estructura DB
-```
+### ALTA-01: Hash de PIN Débil o Almacenamiento en Texto Plano
 
-**Solución:** Crear un wrapper de logging que solo imprima en modo debug, silenciando en release.
-
----
-
-## 🟢 VULNERABILIDADES BAJAS
-
-| ID | Descripción | Solución |
-|----|-------------|----------|
-| LOW-01 | `db_inspector_screen.dart` disponible en producción | Proteger con flag de debug o eliminar |
-| LOW-02 | Versión de base de datos expuesta en nombre del archivo | Ofuscar nombre del archivo DB |
-| LOW-03 | Sin detección de screenshots/grabación de pantalla | Implementar `FLAG_SECURE` en ventanas sensibles |
-| LOW-04 | No se borra la caché temporal de imágenes procesadas | Implementar limpieza automática post-procesamiento |
+* **Ubicación en código:** `lib/core/providers/auth_provider.dart`
+* **Diagnóstico:** Si bien `FlutterSecureStorage` utiliza Android KeyStore, almacenar el PIN de 4 a 6 dígitos en texto plano permite que, en caso de compromiso de root o extracción de memoria, el atacante recupere el PIN numérico de inmediato.
+* **Solución:** Almacenar en `FlutterSecureStorage` únicamente el hash criptográfico `PBKDF2-HMAC-SHA256` del PIN junto con una sal (`salt`) aleatoria de 32 bytes única por instalación. Al validar el acceso, se calcula el hash del PIN ingresado y se compara en tiempo constante (`constant-time comparison`) para evitar ataques de temporización (`timing attacks`).
 
 ---
 
-## 📊 Mapa de Riesgo Visual
+### ALTA-02: Tráfico en Texto Plano Permitido en Manifiesto Android
+
+* **Ubicación en código:** `android/app/src/main/AndroidManifest.xml` (Línea 34): `android:usesCleartextTraffic="true"`
+* **Diagnóstico:** Permite que cualquier componente de la app realice solicitudes HTTP sin cifrar. En redes WiFi comerciales o públicas, un atacante puede interceptar peticiones de red mediante Man-in-the-Middle (MITM).
+* **Solución:**
+  1. Cambiar a `android:usesCleartextTraffic="false"`.
+  2. Configurar `android:networkSecurityConfig="@xml/network_security_config"` restringiendo el tráfico exclusivamente a HTTPS con TLS 1.3 para los endpoints de Google AI (`generativelanguage.googleapis.com`).
+
+---
+
+### ALTA-03: Ausencia de Verificación de Integridad en Tiempo de Ejecución (Anti-Tampering)
+
+* **Diagnóstico:** La app carece de un mecanismo que compruebe si el APK que se está ejecutando fue recompilado o alterado por un tercero tras remover controles de acceso.
+* **Solución:** Implementar un validador nativo en `MainActivity.kt` o mediante invocación por MethodChannel que consulte el PackageInfo de Android y compare la huella digital SHA-256 de las firmas del certificado en ejecución contra la huella legítima del autor. Si difiere, la app aborta su inicialización inmediatamente.
+
+---
+
+### ALTA-04: Permisos Excesivos y Obsoletos en `AndroidManifest.xml`
+
+* **Ubicación en código:** `android/app/src/main/AndroidManifest.xml` (Líneas 4-22)
+* **Diagnóstico:** Se solicitan permisos como:
+  * `ACCESS_BACKGROUND_LOCATION` (Línea 10): Genera alertas de privacidad invasivas en Android 11+ y no es requerido para un sistema POS de mostrador.
+  * `READ_EXTERNAL_STORAGE` y `WRITE_EXTERNAL_STORAGE`: Obsoletos en Android 13+ (API 33+), sustituidos por Scoped Storage y PhotoPicker.
+* **Solución:** Eliminar `ACCESS_BACKGROUND_LOCATION`. Reemplazar los permisos de almacenamiento por los selectores estándar de Android (`READ_MEDIA_IMAGES` para Android 13+ y retención de archivos en el sandbox privado `/data/user/0/com.mochilalista.app/files`).
+
+---
+
+### ALTA-05: Falta de Detección Defensiva de Entornos Root / Emuladores Inseguros
+
+* **Diagnóstico:** El uso de la app en entornos rooteados o emuladores de desarrollo desprotegidos expone el almacenamiento interno a herramientas de memoria como Frida, Xposed o GameGuardian para alterar variables de stock o fechas de licencia.
+* **Solución:** Implementar rutinas de detección de binarios `su`, paquetes de superusuario (`com.topjohnwu.magisk`) y propiedades de compilación de emuladores (`ro.kernel.qemu`). Mostrar advertencia de seguridad operacional al usuario sin bloquear de forma destructiva a comerciantes que utilicen dispositivos legítimos modificados.
+
+---
+
+## 🟡 4. Vulnerabilidades Medias
+
+### MED-01: Archivos de Respaldo (`.mlbg`) sin Cifrado Criptográfico
+
+* **Ubicación en código:** `lib/core/utils/backup_manager.dart` (Líneas 17-66)
+* **Diagnóstico:** La función `_createGlobalBackupZip` genera un archivo ZIP estándar comprimido con la base de datos `mochilalista.db` y las imágenes de facturas. Cuando el comerciante comparte su backup por WhatsApp o lo guarda en Google Drive, cualquier persona con acceso al archivo puede abrirlo con 7-Zip o WinRAR y examinar toda la contabilidad del negocio.
+* **Solución:** Cifrar el flujo de bytes del archivo de backup usando **AES-256-GCM**. La clave de cifrado se derivará mediante `PBKDF2` a partir de una "Contraseña de Respaldo del Negocio" definida por el usuario, o de una clave maestra de recuperación vinculada a su licencia. De este modo, el archivo `.mlbg` es completamente ilegible si se extravía o se envía por canales de mensajería abiertos.
+
+---
+
+### MED-02: Ausencia de Rate Limiting en Verificación de PIN
+
+* **Ubicación en código:** `lib/core/providers/auth_provider.dart`
+* **Diagnóstico:** No existe penalización de tiempo ante intentos fallidos consecutivos de ingreso de PIN. Un PIN de 4 dígitos (10,000 combinaciones) puede adivinarse en pocos minutos si alguien tiene acceso físico temporal al teléfono.
+* **Solución:** Implementar bloqueo temporal progresivo:
+  * 3 intentos erróneos: espera de 30 segundos.
+  * 5 intentos erróneos: espera de 5 minutos.
+  * 10 intentos erróneos: bloqueo temporal requiriendo el código de recuperación o clave maestra.
+
+---
+
+### MED-03: Imágenes de Facturas Almacenadas en Caché Temporal sin Limpieza
+
+* **Ubicación en código:** `lib/features/scanner/services/invoice_processor_service.dart`
+* **Diagnóstico:** Las fotografías de facturas y boletas de proveedores capturadas por la cámara se procesan y almacenan en directorios temporales sin un ciclo de recolección garantizado. Si el dispositivo se conecta a una computadora mediante MTP, estas imágenes podrían ser leídas.
+* **Solución:** Guardar las imágenes temporales exclusivamente en el directorio `getTemporaryDirectory()`, aplicar nombres UUID sin metadatos del proveedor y ejecutar una rutina de borrado seguro (`shred/delete`) una vez que los ítems han sido transferidos a `facturas_carga` en la base de datos.
+
+---
+
+### MED-04: Emisión de Logs de Depuración en Producción (`debugPrint`)
+
+* **Ubicación en código:** Dispersos en más de 40 archivos de `lib/core/` y `lib/features/`
+* **Diagnóstico:** Se emiten trazas de error con consultas SQL, respuestas de API de Gemini y estructuras JSON internas en Logcat mediante `debugPrint()`. Cualquier aplicación con permiso `READ_LOGS` en versiones antiguas de Android o conectada a un visor de logs puede monitorear la actividad del negocio.
+* **Solución:** Centralizar todas las salidas en un servicio unificado `AppLogger` que condicione toda salida a `kDebugMode`. En compilaciones `--release`, las llamadas deben resolverse como operaciones nulas (no-op).
+
+---
+
+## 🟢 5. Vulnerabilidades Bajas
+
+| ID | Hallazgo | Riesgo | Solución Recomendada |
+|----|----------|--------|----------------------|
+| **LOW-01** | `db_inspector_screen.dart` accesible en código | Exposición de visor interno de base de datos | Envolver la ruta en una bandera condicional de modo depuración (`if (kDebugMode)`) para que no se incluya en release. |
+| **LOW-02** | Nombre del archivo de base de datos predecible (`mochilalista.db`) | Facilita la localización por herramientas forenses | Renombrar internamente el archivo de almacenamiento a un identificador neutro (ej. `.ml_data_store.dat`). |
+| **LOW-03** | Capturas de pantalla permitidas en pantallas sensibles | Fuga de saldos y márgenes por capturas accidentales | Implementar `FlutterWindowManager.addFlags(FLAG_SECURE)` en pantallas financieras críticas (Balance, Ganancias, Lista de Clientes con Deuda). |
+| **LOW-04** | Metadatos EXIF no depurados en imágenes de recibos | Geoposición GPS y datos de cámara adjuntos a fotos | Utilizar la librería `image` para decodificar y reescribir los bytes eliminando bloques EXIF antes de guardar. |
+
+---
+
+## 📊 6. Mapa de Priorización y Plan de Acción Inmediato
 
 ```
-IMPACTO ALTO    │  ALTA-05    │  CRIT-01  CRIT-03
-                │  ALTA-02    │  CRIT-04  CRIT-05
-                │             │  CRIT-02
-────────────────┼─────────────┼───────────────────
-IMPACTO MEDIO   │  MED-01     │  ALTA-01  ALTA-03
-                │  MED-02     │  ALTA-04
-                │  MED-03     │
-────────────────┼─────────────┼───────────────────
-IMPACTO BAJO    │  LOW-01     │  MED-04
-                │  LOW-02     │
-                │  LOW-03     │
-                │  LOW-04     │
-────────────────┼─────────────┼───────────────────
-                │ BAJA        │ ALTA
-                │ PROBABILIDAD │ PROBABILIDAD
+ALTO IMPACTO   │  ALTA-05  ALTA-02    │  CRIT-01 (API Key)  CRIT-03 (Firma Release)
+               │                      │  CRIT-04 (Cifrado)  CRIT-05 (Ofuscación)
+               │                      │  CRIT-02 (App ID)
+───────────────┼──────────────────────┼─────────────────────────────────────────────
+MEDIO IMPACTO  │  MED-01 (Backups)    │  ALTA-01 (Hash PIN)  ALTA-03 (Anti-Tamper)
+               │  MED-02 (Rate Limit) │  ALTA-04 (Permisos)
+               │  MED-03 (Imágenes)   │
+───────────────┼──────────────────────┼─────────────────────────────────────────────
+BAJO IMPACTO   │  LOW-01   LOW-02     │  MED-04 (Logs Release)
+               │  LOW-03   LOW-04     │
+───────────────┼──────────────────────┼─────────────────────────────────────────────
+               │ BAJA PROBABILIDAD    │ ALTA PROBABILIDAD DE EXPLOTACIÓN
 ```
 
----
+### Matriz de Ejecución Técnica Pre-Comercialización
 
-## ✅ Prioridad de Remediación (Orden Recomendado)
-
-| Prioridad | ID | Esfuerzo Estimado | Bloquea Comercialización |
-|-----------|-----|-------------------|--------------------------|
-| 1 | CRIT-01 | 2-3 horas | ✅ SÍ |
-| 2 | CRIT-02 | 1 hora | ✅ SÍ |
-| 3 | CRIT-03 | 2 horas | ✅ SÍ |
-| 4 | CRIT-05 | 30 minutos | ✅ SÍ |
-| 5 | CRIT-04 | 4-6 horas | ✅ SÍ |
-| 6 | ALTA-02 | 1 hora | ⚠️ Recomendado |
-| 7 | ALTA-01 | 2 horas | ⚠️ Recomendado |
-| 8 | ALTA-03 | 3-4 horas | ⚠️ Recomendado |
-| 9 | MED-02 | 2 horas | ❌ No |
-| 10 | MED-01 | 3 horas | ❌ No |
+1. **Paso 1 (Inmediato - 1 hora):** Configurar `com.mochilalista.app`, generar `mochilalista-release.jks` y configurar `build.gradle.kts`.
+2. **Paso 2 (Inmediato - 2 horas):** Retirar `.env` de assets, aplicar ofuscación XOR a la API Key y configurar restricciones de SHA-1 en Google Cloud Console.
+3. **Paso 3 (Arquitectura - 3 horas):** Implementar abstracción de base de datos (`DatabaseConnectionProvider`) que asegure compatibilidad con SQLCipher en Android mientras preserva el 100% de los tests en Windows con `sqflite_common_ffi`.
+4. **Paso 4 (Higiene - 1 hora):** Ajustar permisos en `AndroidManifest.xml` y silenciar `AppLogger` en modo release.
 
 ---
-
-> [!CAUTION]
-> **Las 5 vulnerabilidades CRÍTICAS deben resolverse ANTES de distribuir la app comercialmente.** Cualquier persona con conocimiento técnico básico puede explotar CRIT-01 (robar tu API Key) y CRIT-05 (clonar tu app) en menos de 10 minutos con herramientas gratuitas.
-
----
-
 *Continúa en → [02_PROPUESTAS_COMERCIALIZACION.md](file:///c:/Users/vjuli/Documents/mochilalista-app/informe_proyecto/02_PROPUESTAS_COMERCIALIZACION.md)*

@@ -490,8 +490,8 @@ class _NotificationItemCardState extends State<NotificationItemCard> with Single
       }
       if (widget.onActionKardex != null) {
         actions.add(_buildActionBtn(
-          icon: Icons.analytics_outlined,
-          label: "Kardex",
+          icon: Icons.insights_rounded,
+          label: "Análisis",
           color: widget.isDark ? Colors.teal[300]! : Colors.teal[800]!,
           onTap: widget.onActionKardex!,
         ));

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:app_movil/features/catalog/models/variant_extraction_models.dart';
@@ -18,6 +19,8 @@ class VariantExtractConfigModal extends StatefulWidget {
   final String? generalProviderName;
   final String? parentDescription;
   final String? parentImageUrl;
+  final String modoStock;
+  final int parentSharedStock;
   final bool isDark;
 
   const VariantExtractConfigModal({
@@ -34,6 +37,8 @@ class VariantExtractConfigModal extends StatefulWidget {
     this.generalProviderName,
     this.parentDescription,
     this.parentImageUrl,
+    this.modoStock = 'INDEPENDIENTE',
+    this.parentSharedStock = 0,
     required this.isDark,
   });
 
@@ -51,6 +56,8 @@ class VariantExtractConfigModal extends StatefulWidget {
     String? generalProviderName,
     String? parentDescription,
     String? parentImageUrl,
+    String modoStock = 'INDEPENDIENTE',
+    int parentSharedStock = 0,
     required bool isDark,
   }) {
     return showModalBottomSheet<VariantExtractionBundle>(
@@ -70,13 +77,16 @@ class VariantExtractConfigModal extends StatefulWidget {
         generalProviderName: generalProviderName,
         parentDescription: parentDescription,
         parentImageUrl: parentImageUrl,
+        modoStock: modoStock,
+        parentSharedStock: parentSharedStock,
         isDark: isDark,
       ),
     );
   }
 
   @override
-  State<VariantExtractConfigModal> createState() => _VariantExtractConfigModalState();
+  State<VariantExtractConfigModal> createState() =>
+      _VariantExtractConfigModalState();
 }
 
 class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
@@ -100,6 +110,15 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
   bool _includeBarcode = false;
   bool _includeStockAlert = true;
 
+  // Manejo de Stock y Factor
+  late final bool _isSharedOrigin;
+  late final int _parentSharedStock;
+  bool _deductStockFromOrigin = true;
+
+  // Estructura seleccionada (para Factor > 1)
+  VariantExtractionStructure _targetStructure =
+      VariantExtractionStructure.keepPackaging;
+
   // Datos extraídos de la variante
   late final String _specificName;
   late final String _unidadVenta;
@@ -107,7 +126,16 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
   late final double _precioVenta;
   late final double _costoUnitario;
   late final double _margen;
-  late final int _stockUnits;
+
+  // Desglose matemático unitario
+  late final double _unitCostPrice;
+  late final double _unitSalePrice;
+
+  // Cantidades de stock en empaque y en unidades base
+  late final int _packageUnits;
+  late final int _baseUnits;
+
+  // Datos secundarios y avanzados
   late final String _barcode;
   late final String _variantImage;
   late final int? _variantProviderId;
@@ -117,15 +145,21 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
   late final double? _discountValue;
   late final double? _offerPrice;
 
+  // Datos de compra / factura
+  late final String? _umpCompra;
+  late final int _unidadesLote;
+  late final double? _cantCompra;
+  late final double? _totalPago;
+  late final String? _variantDescription;
+
   @override
   void initState() {
     super.initState();
-    // Si solo hay 1 presentación, forzar modo copiar
     final canCut = widget.totalPresentations > 1;
     _mode = canCut ? ProductExtractionMode.copy : ProductExtractionMode.copy;
 
-    // Extracción limpia de los controladores de la variante
     final map = widget.variantControllerMap;
+
     _specificName = (map['specific'] is TextEditingController)
         ? (map['specific'] as TextEditingController).text.trim()
         : (map['specific']?.toString().trim() ?? '');
@@ -138,6 +172,8 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
               : map['unidadesVenta']?.toString() ?? '1',
         ) ??
         1;
+    final safeFactor = _factorVenta <= 0 ? 1 : _factorVenta;
+
     _precioVenta = double.tryParse(
           (map['precioVenta'] is TextEditingController)
               ? (map['precioVenta'] as TextEditingController).text.trim()
@@ -156,12 +192,35 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
               : map['margen']?.toString() ?? '1.35',
         ) ??
         1.35;
-    _stockUnits = int.tryParse(
+
+    // Desglose económico unitario estricto
+    _unitCostPrice = _costoUnitario / safeFactor;
+    _unitSalePrice = _precioVenta / safeFactor;
+
+    // Detección precisa de modo de stock de origen
+    final bool isSharedFlag = map['usaStockCompartido'] == true ||
+        widget.modoStock == 'COMPARTIDO';
+    _isSharedOrigin = isSharedFlag;
+
+    // Cantidad visual de empaques disponibles
+    _packageUnits = int.tryParse(
           (map['stockFinal'] is TextEditingController)
               ? (map['stockFinal'] as TextEditingController).text.trim()
               : map['stockFinal']?.toString() ?? '0',
         ) ??
         0;
+
+    // Cantidad total física en unidades base
+    _baseUnits = _packageUnits * safeFactor;
+
+    // Stock base compartido del producto padre
+    if (widget.parentSharedStock > 0) {
+      _parentSharedStock = widget.parentSharedStock;
+    } else {
+      final int rawParent = int.tryParse(map['stockBaseTotal']?.toString() ?? '0') ?? 0;
+      _parentSharedStock = rawParent > 0 ? rawParent : (_isSharedOrigin ? _baseUnits : 0);
+    }
+
     _barcode = (map['barcode'] is TextEditingController)
         ? (map['barcode'] as TextEditingController).text.trim()
         : (map['barcode']?.toString().trim() ?? '');
@@ -180,10 +239,39 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
     );
     _offerPrice = (map['precioOfertaExacto'] as num?)?.toDouble();
 
+    // Datos de compra / factura
+    final rawUmp = (map['umpCompra'] is TextEditingController)
+        ? (map['umpCompra'] as TextEditingController).text.trim()
+        : (map['umpCompra']?.toString().trim() ?? '');
+    _umpCompra = rawUmp.isNotEmpty ? rawUmp : null;
+
+    final rawLote = int.tryParse(
+      (map['unidadesLote'] is TextEditingController)
+          ? (map['unidadesLote'] as TextEditingController).text.trim()
+          : map['unidadesLote']?.toString() ?? '1',
+    );
+    _unidadesLote = (rawLote != null && rawLote > 0) ? rawLote : 1;
+
+    _cantCompra = double.tryParse(
+      (map['cantCompra'] is TextEditingController)
+          ? (map['cantCompra'] as TextEditingController).text.trim()
+          : map['cantCompra']?.toString() ?? '',
+    );
+
+    _totalPago = double.tryParse(
+      (map['totalPago'] is TextEditingController)
+          ? (map['totalPago'] as TextEditingController).text.trim()
+          : map['totalPago']?.toString() ?? '',
+    );
+
+    final rawDesc = (map['desc'] is TextEditingController)
+        ? (map['desc'] as TextEditingController).text.trim()
+        : (map['desc']?.toString().trim() ?? '');
+    _variantDescription = rawDesc.isNotEmpty ? rawDesc : null;
+
     // En modo Cortar el barcode va encendido por defecto; en Copiar apagado
     _includeBarcode = (_mode == ProductExtractionMode.cut && _barcode.isNotEmpty);
 
-    // Sugerencia inteligente inicial del nombre del nuevo producto
     _nameCtrl = TextEditingController(text: _generateCombinedName());
   }
 
@@ -215,11 +303,12 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
     HapticFeedback.selectionClick();
     setState(() {
       _mode = newMode;
-      // Regla de código de barras: si es Cortar, activarlo por defecto; si es Copiar, desactivarlo
       if (_mode == ProductExtractionMode.cut) {
         _includeBarcode = _barcode.isNotEmpty;
+        _deductStockFromOrigin = true;
       } else {
         _includeBarcode = false;
+        _deductStockFromOrigin = false;
       }
     });
   }
@@ -268,9 +357,19 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
       salePrice: _precioVenta,
       costPrice: _costoUnitario,
       margin: _margen,
-      stockUnits: _stockUnits,
+      stockUnits: _packageUnits,
+      packageUnits: _packageUnits,
+      baseUnits: _baseUnits,
+      isSharedOrigin: _isSharedOrigin,
+      parentSharedStock: _parentSharedStock,
+      deductStockFromOrigin:
+          _mode == ProductExtractionMode.cut && _deductStockFromOrigin,
+      targetStructure: _targetStructure,
+      unitCostPrice: _unitCostPrice,
+      unitSalePrice: _unitSalePrice,
       barcode: _barcode.isNotEmpty ? _barcode : null,
       variantImage: _variantImage.isNotEmpty ? _variantImage : null,
+      alertStock: 5,
       variantProviderId: _variantProviderId,
       variantProviderName: _variantProviderName,
       hasDiscount: _hasDiscount,
@@ -278,6 +377,11 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
       discountValue: _discountValue,
       offerPrice: _offerPrice,
       specificName: _specificName,
+      umpCompra: _umpCompra,
+      unidadesLote: _unidadesLote,
+      cantCompra: _cantCompra,
+      totalPago: _totalPago,
+      variantDescription: _variantDescription,
     );
 
     final bundle = VariantExtractionBundle(
@@ -303,12 +407,16 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
     final borderColor = isDark ? Colors.white12 : Colors.grey.shade300;
     final mediaQuery = MediaQuery.of(context);
 
+    final String empaqueLabel = _factorVenta > 1
+        ? "$_packageUnits $_unidadVenta${_packageUnits == 1 ? '' : 's'} ($_baseUnits und. base)"
+        : "$_baseUnits uds";
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       behavior: HitTestBehavior.opaque,
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: mediaQuery.size.height * 0.90,
+          maxHeight: mediaQuery.size.height * 0.92,
         ),
         decoration: BoxDecoration(
           color: surfaceColor,
@@ -320,20 +428,20 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // ============================================================
-              // ZONA 1: CABECERA FIJA Y SELECTOR DE MODO
+              // ZONA 1: CABECERA FIJA Y RESUMEN
               // ============================================================
               Container(
                 padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF171722) : Colors.grey.shade50,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(22)),
                   border: Border(bottom: BorderSide(color: borderColor)),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Tirador superior discreto
                     Center(
                       child: Container(
                         width: 38,
@@ -345,8 +453,6 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                         ),
                       ),
                     ),
-
-                    // Título y botón cerrar
                     Row(
                       children: [
                         Container(
@@ -360,7 +466,8 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                           child: Icon(
                             Icons.drive_file_move_outlined,
                             size: 20,
-                            color: isDark ? Colors.teal[300] : Colors.teal[700],
+                            color:
+                                isDark ? Colors.teal[300] : Colors.teal[700],
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -382,7 +489,9 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
                                 ),
                               ),
                             ],
@@ -395,11 +504,12 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
-                    // Resumen compacto de la variante seleccionada
+                    // Resumen compacto con empaques y unidades base claras
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
                         color: isDark ? Colors.white10 : Colors.white,
                         borderRadius: BorderRadius.circular(10),
@@ -409,7 +519,8 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                         children: [
                           Expanded(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
                                 color: isDark
                                     ? Colors.purple.withValues(alpha: 0.25)
@@ -417,119 +528,107 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                "$_unidadVenta (x$_factorVenta) ${_specificName.isNotEmpty ? _specificName : ''}",
+                                "$_unidadVenta (x$_factorVenta) ${_specificName.isNotEmpty ? _specificName : ''}".trim(),
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.purple[200] : Colors.purple[800],
+                                  color: isDark
+                                      ? Colors.purple[200]
+                                      : Colors.purple[800],
                                 ),
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            "S/ ${_precioVenta.toStringAsFixed(2)}",
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.teal[300] : Colors.teal[800],
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            "• $_stockUnits uds",
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isDark ? Colors.grey[300] : Colors.grey[700],
+                          Flexible(
+                            child: Text(
+                              "S/ ${_precioVenta.toStringAsFixed(2)} • $empaqueLabel",
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.teal[300] : Colors.teal[800],
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-
-                    // Selector interactivo de 2 tarjetas: Copiar vs Cortar
-                    Row(
-                      children: [
-                        // Tarjeta Copiar
-                        Expanded(
-                          child: _buildModeCard(
-                            mode: ProductExtractionMode.copy,
-                            icon: Icons.copy_all_rounded,
-                            title: "Copiar",
-                            desc: "Mantiene en este producto y crea uno nuevo.",
-                            isSelected: _mode == ProductExtractionMode.copy,
-                            isEnabled: true,
-                            isDark: isDark,
-                            onTap: () => _onModeChanged(ProductExtractionMode.copy),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Tarjeta Cortar
-                        Expanded(
-                          child: _buildModeCard(
-                            mode: ProductExtractionMode.cut,
-                            icon: Icons.content_cut_rounded,
-                            title: "Cortar / Mover",
-                            desc: canCut
-                                ? "Traslada al nuevo y retira de aquí al guardar."
-                                : "Bloqueado: Única variante del producto.",
-                            isSelected: _mode == ProductExtractionMode.cut,
-                            isEnabled: canCut,
-                            isDark: isDark,
-                            onTap: () => _onModeChanged(ProductExtractionMode.cut),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    if (!canCut) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        "⚠️ Este producto solo tiene 1 variante; usa 'Copiar' o agrega otra antes de moverla.",
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.amber.shade700,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
 
               // ============================================================
-              // ZONA 2: CUERPO ESCROLLEABLE CON BOUNCING PHYSICS
+              // ZONA 2: CUERPO ESCROLLEABLE
               // ============================================================
               Flexible(
                 child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Selector de Modo (Copiar vs Cortar)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildModeCard(
+                              mode: ProductExtractionMode.copy,
+                              icon: Icons.copy_rounded,
+                              title: "Copiar",
+                              desc: "Mantiene en este producto y crea uno nuevo.",
+                              isSelected: _mode == ProductExtractionMode.copy,
+                              isEnabled: true,
+                              isDark: isDark,
+                              onTap: () =>
+                                  _onModeChanged(ProductExtractionMode.copy),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildModeCard(
+                              mode: ProductExtractionMode.cut,
+                              icon: Icons.content_cut_rounded,
+                              title: "Cortar / Mover",
+                              desc: canCut
+                                  ? "Traslada al nuevo y retira de aquí al guardar."
+                                  : "Bloqueado. Este producto solo tiene 1 variante.",
+                              isSelected: _mode == ProductExtractionMode.cut,
+                              isEnabled: canCut,
+                              isDark: isDark,
+                              onTap: canCut
+                                  ? () =>
+                                      _onModeChanged(ProductExtractionMode.cut)
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
                       // Input Nombre del nuevo producto
                       Text(
                         "NOMBRE DEL NUEVO PRODUCTO",
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 0.6,
+                          letterSpacing: 0.5,
                           color: isDark ? Colors.grey[300] : Colors.grey[700],
                         ),
                       ),
                       const SizedBox(height: 6),
-                      TextField(
+                      TextFormField(
                         controller: _nameCtrl,
-                        onTapOutside: (_) => FocusScope.of(context).unfocus(),
                         decoration: InputDecoration(
-                          hintText: "Ej. Cuaderno Standford - verde",
                           prefixIcon: const Icon(Icons.edit_outlined, size: 18),
+                          hintText: "Ej. ${_generateCombinedName()}",
                           filled: true,
-                          fillColor: isDark ? Colors.white10 : Colors.grey.shade100,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          fillColor:
+                              isDark ? Colors.white10 : Colors.grey.shade50,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(color: borderColor),
@@ -540,46 +639,194 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Colors.teal, width: 1.8),
+                            borderSide: BorderSide(
+                              color: isDark
+                                  ? Colors.teal.shade300
+                                  : Colors.teal,
+                              width: 1.5,
+                            ),
                           ),
                         ),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
 
-                      // Chips de sugerencia rápida
+                      // Sugerencias rápidas de nombre
                       Wrap(
                         spacing: 6,
-                        runSpacing: 6,
+                        runSpacing: 4,
                         children: [
-                          _buildPresetChip(
+                          _buildNameChip(
                             label: "Padre + Variante",
-                            onTap: () {
-                              setState(() => _nameCtrl.text = _generateCombinedName());
-                            },
+                            onTap: () => setState(() =>
+                                _nameCtrl.text = _generateCombinedName()),
                             isDark: isDark,
                           ),
                           if (_specificName.isNotEmpty)
-                            _buildPresetChip(
+                            _buildNameChip(
                               label: "Solo Variante: $_specificName",
-                              onTap: () {
-                                setState(() => _nameCtrl.text = _specificName);
-                              },
+                              onTap: () =>
+                                  setState(() => _nameCtrl.text = _specificName),
                               isDark: isDark,
                             ),
-                          _buildPresetChip(
+                          _buildNameChip(
                             label: "Solo Padre",
-                            onTap: () {
-                              setState(() => _nameCtrl.text = widget.originProductName.trim());
-                            },
+                            onTap: () => setState(() => _nameCtrl.text =
+                                widget.originProductName.trim()),
                             isDark: isDark,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      Divider(color: borderColor, height: 1),
                       const SizedBox(height: 14),
 
-                      // SECCIÓN A: Datos generales del producto actual
+                      // ======================================================
+                      // DESGLOSE ECONÓMICO Y SELECTOR DE ESTRUCTURA (Factor > 1)
+                      // ======================================================
+                      if (_factorVenta > 1) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF1E2638)
+                                : const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.blue.withValues(alpha: 0.3)
+                                  : const Color(0xFFBFDBFE),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.auto_awesome_rounded,
+                                    size: 16,
+                                    color: isDark
+                                        ? Colors.blue[300]
+                                        : const Color(0xFF1E40AF),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      "DESGLOSE ECONÓMICO INTELIGENTE",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                        color: isDark
+                                            ? Colors.blue[300]
+                                            : const Color(0xFF1E40AF),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.black26
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.white10
+                                        : Colors.grey.shade200,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "• $_unidadVenta (x$_factorVenta): Costo S/ ${_costoUnitario.toStringAsFixed(2)} • Venta S/ ${_precioVenta.toStringAsFixed(2)}",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.teal[300]
+                                            : Colors.teal[800],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "• Por unidad: Costo S/ ${_unitCostPrice.toStringAsFixed(2)} • Venta S/ ${_unitSalePrice.toStringAsFixed(2)} • Margen ${((_margen - 1) * 100).toStringAsFixed(1)}%",
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.blue[300]
+                                            : const Color(0xFF1E40AF),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                "¿Cómo deseas estructurar el nuevo producto?",
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark
+                                      ? Colors.grey[200]
+                                      : Colors.grey[900],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+
+                              // Opción 1: Mantener en su empaque
+                              _buildStructureOption(
+                                structure:
+                                    VariantExtractionStructure.keepPackaging,
+                                title: "1. Mantener en Empaque ($_unidadVenta x$_factorVenta)",
+                                subtitle:
+                                    "Se vende por $_unidadVenta a S/ ${_precioVenta.toStringAsFixed(2)} con stock de $_packageUnits ${_unidadVenta}s ($_baseUnits und. base).",
+                                isSelected: _targetStructure ==
+                                    VariantExtractionStructure.keepPackaging,
+                                isDark: isDark,
+                              ),
+                              const SizedBox(height: 6),
+
+                              // Opción 2: Convertir a Unidad individual
+                              _buildStructureOption(
+                                structure: VariantExtractionStructure.unitOnly,
+                                title: "2. Convertir a Unidad Individual (Unidad x1)",
+                                subtitle:
+                                    "Se venderá al por menor a S/ ${_unitSalePrice.toStringAsFixed(2)} con stock de $_baseUnits Unidades.",
+                                isSelected: _targetStructure ==
+                                    VariantExtractionStructure.unitOnly,
+                                isDark: isDark,
+                              ),
+                              const SizedBox(height: 6),
+
+                              // Opción 3: Crear con ambas presentaciones vinculadas
+                              _buildStructureOption(
+                                structure: VariantExtractionStructure
+                                    .bothUnitAndPackage,
+                                title: "3. Crear con Ambas (Unidad x1 + $_unidadVenta x$_factorVenta)",
+                                subtitle:
+                                    "Crea 2 presentaciones en Stock Compartido ($_baseUnits und. base) para vender por menor y por mayor.",
+                                isSelected: _targetStructure ==
+                                    VariantExtractionStructure
+                                        .bothUnitAndPackage,
+                                isDark: isDark,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // SECCIÓN A: Datos generales
                       Row(
                         children: [
                           Expanded(
@@ -589,15 +836,18 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 0.5,
-                                color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                color:
+                                    isDark ? Colors.grey[300] : Colors.grey[700],
                               ),
                             ),
                           ),
                           Transform.scale(
-                            scale: 0.75,
+                            scale: 0.8,
                             child: Switch(
                               value: _copyGeneralData,
                               activeThumbColor: Colors.teal,
+                              activeTrackColor:
+                                  Colors.teal.withValues(alpha: 0.3),
                               onChanged: (val) {
                                 HapticFeedback.selectionClick();
                                 setState(() {
@@ -630,9 +880,11 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                             label: "Categoría: ${widget.categoryName ?? 'Ninguna'}",
                             icon: Icons.category_outlined,
                             isSelected: _copyCategory,
-                            enabled: _copyGeneralData && widget.categoryId != null,
+                            enabled:
+                                _copyGeneralData && widget.categoryId != null,
                             isDark: isDark,
-                            onToggle: () => setState(() => _copyCategory = !_copyCategory),
+                            onToggle: () => setState(
+                                () => _copyCategory = !_copyCategory),
                           ),
                           _buildToggleChip(
                             label: "Marca: ${widget.brandName ?? 'Ninguna'}",
@@ -640,15 +892,20 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                             isSelected: _copyBrand,
                             enabled: _copyGeneralData && widget.brandId != null,
                             isDark: isDark,
-                            onToggle: () => setState(() => _copyBrand = !_copyBrand),
+                            onToggle: () =>
+                                setState(() => _copyBrand = !_copyBrand),
                           ),
                           _buildToggleChip(
-                            label: "Proveedor: ${widget.generalProviderName ?? 'Ninguno'}",
+                            label:
+                                "Proveedor: ${widget.generalProviderName ?? 'Ninguno'}",
                             icon: Icons.local_shipping_outlined,
                             isSelected: _copyProvider,
-                            enabled: _copyGeneralData && widget.generalProviderId != null,
+                            enabled: _copyGeneralData &&
+                                (widget.generalProviderId != null ||
+                                    widget.generalProviderName != null),
                             isDark: isDark,
-                            onToggle: () => setState(() => _copyProvider = !_copyProvider),
+                            onToggle: () => setState(
+                                () => _copyProvider = !_copyProvider),
                           ),
                           _buildToggleChip(
                             label: "Descripción / Notas",
@@ -657,7 +914,8 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                             enabled: _copyGeneralData &&
                                 (widget.parentDescription?.isNotEmpty ?? false),
                             isDark: isDark,
-                            onToggle: () => setState(() => _copyDescription = !_copyDescription),
+                            onToggle: () => setState(
+                                () => _copyDescription = !_copyDescription),
                           ),
                           _buildToggleChip(
                             label: "Fotos generales",
@@ -666,7 +924,8 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                             enabled: _copyGeneralData &&
                                 (widget.parentImageUrl?.isNotEmpty ?? false),
                             isDark: isDark,
-                            onToggle: () => setState(() => _copyImages = !_copyImages),
+                            onToggle: () =>
+                                setState(() => _copyImages = !_copyImages),
                           ),
                         ],
                       ),
@@ -674,7 +933,7 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                       Divider(color: borderColor, height: 1),
                       const SizedBox(height: 14),
 
-                      // SECCIÓN B: Datos detallados de la variante a trasladar
+                      // SECCIÓN B: Datos detallados de la variante
                       Text(
                         "B. DATOS DETALLADOS DE LA VARIANTE",
                         style: TextStyle(
@@ -690,12 +949,14 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                         runSpacing: 8,
                         children: [
                           _buildToggleChip(
-                            label: "Precios, Costo y Margen (S/ ${_precioVenta.toStringAsFixed(2)})",
+                            label:
+                                "Precios, Costo y Margen (S/ ${_precioVenta.toStringAsFixed(2)})",
                             icon: Icons.attach_money_rounded,
                             isSelected: _includePricing,
                             enabled: true,
                             isDark: isDark,
-                            onToggle: () => setState(() => _includePricing = !_includePricing),
+                            onToggle: () => setState(
+                                () => _includePricing = !_includePricing),
                           ),
                           _buildToggleChip(
                             label: "Unidad / Empaque ($_unidadVenta x$_factorVenta)",
@@ -703,7 +964,8 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                             isSelected: _includeUnit,
                             enabled: true,
                             isDark: isDark,
-                            onToggle: () => setState(() => _includeUnit = !_includeUnit),
+                            onToggle: () =>
+                                setState(() => _includeUnit = !_includeUnit),
                           ),
                           if (_variantImage.isNotEmpty)
                             _buildToggleChip(
@@ -712,16 +974,17 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                               isSelected: _includeVariantImage,
                               enabled: true,
                               isDark: isDark,
-                              onToggle: () =>
-                                  setState(() => _includeVariantImage = !_includeVariantImage),
+                              onToggle: () => setState(() =>
+                                  _includeVariantImage = !_includeVariantImage),
                             ),
                           _buildToggleChip(
-                            label: "Stock Actual ($_stockUnits uds)",
+                            label: "Stock Actual ($empaqueLabel)",
                             icon: Icons.warehouse_outlined,
                             isSelected: _includeStock,
                             enabled: true,
                             isDark: isDark,
-                            onToggle: () => setState(() => _includeStock = !_includeStock),
+                            onToggle: () =>
+                                setState(() => _includeStock = !_includeStock),
                           ),
                           _buildToggleChip(
                             label: _barcode.isNotEmpty
@@ -733,7 +996,8 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                             isDark: isDark,
                             onToggle: () {
                               if (_barcode.isEmpty) return;
-                              setState(() => _includeBarcode = !_includeBarcode);
+                              setState(
+                                  () => _includeBarcode = !_includeBarcode);
                             },
                           ),
                           _buildToggleChip(
@@ -742,66 +1006,178 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                             isSelected: _includeStockAlert,
                             enabled: true,
                             isDark: isDark,
-                            onToggle: () => setState(() => _includeStockAlert = !_includeStockAlert),
+                            onToggle: () => setState(
+                                () => _includeStockAlert = !_includeStockAlert),
                           ),
                         ],
                       ),
 
                       // Detalle si incluye stock
-                      if (_includeStock && _stockUnits > 0) ...[
+                      if (_includeStock && _packageUnits > 0) ...[
                         const SizedBox(height: 10),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
                             color: isDark ? Colors.white10 : Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: borderColor),
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                _transferFullStock
-                                    ? Icons.swap_horiz_rounded
-                                    : Icons.exposure_zero_rounded,
-                                size: 18,
-                                color: isDark ? Colors.teal[300] : Colors.teal[700],
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _transferFullStock
-                                      ? (_mode == ProductExtractionMode.cut
-                                          ? "Trasladar las $_stockUnits uds al nuevo producto"
-                                          : "Iniciar el nuevo producto con $_stockUnits uds")
-                                      : "Iniciar el nuevo producto con Stock: 0 uds",
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.grey[200] : Colors.grey[800],
+                              Row(
+                                children: [
+                                  Icon(
+                                    _isSharedOrigin
+                                        ? Icons.hub_rounded
+                                        : Icons.inventory_2_outlined,
+                                    size: 16,
+                                    color: _isSharedOrigin
+                                        ? (isDark
+                                            ? Colors.blue[300]
+                                            : const Color(0xFF1E40AF))
+                                        : (isDark
+                                            ? Colors.teal[300]
+                                            : Colors.teal[700]),
                                   ),
-                                ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      _isSharedOrigin
+                                          ? "Stock disponible: $_packageUnits $_unidadVenta${_packageUnits == 1 ? '' : 's'} ($_baseUnits und. base de $_parentSharedStock und. compartidas)"
+                                          : "Stock actual: $_packageUnits $_unidadVenta${_packageUnits == 1 ? '' : 's'} ($_baseUnits und. base individuales)",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: _isSharedOrigin
+                                            ? (isDark
+                                                ? Colors.blue[200]
+                                                : const Color(0xFF1E40AF))
+                                            : (isDark
+                                                ? Colors.teal[200]
+                                                : Colors.teal[900]),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              TextButton(
-                                onPressed: () {
-                                  HapticFeedback.selectionClick();
-                                  setState(() => _transferFullStock = !_transferFullStock);
-                                },
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                child: Text(
-                                  _transferFullStock ? "Cambiar a 0" : "Llevar $_stockUnits uds",
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(
+                                    _transferFullStock
+                                        ? Icons.swap_horiz_rounded
+                                        : Icons.exposure_zero_rounded,
+                                    size: 18,
+                                    color: isDark
+                                        ? Colors.teal[300]
+                                        : Colors.teal[700],
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _transferFullStock
+                                          ? (_mode == ProductExtractionMode.cut
+                                              ? "Trasladar las $_packageUnits $_unidadVenta${_packageUnits == 1 ? '' : 's'} ($_baseUnits und. base) al nuevo producto"
+                                              : "Iniciar el nuevo producto con $_packageUnits $_unidadVenta${_packageUnits == 1 ? '' : 's'} ($_baseUnits und. base)")
+                                          : "Iniciar el nuevo producto con Stock: 0",
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark
+                                            ? Colors.grey[200]
+                                            : Colors.grey[800],
+                                      ),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      HapticFeedback.selectionClick();
+                                      setState(() => _transferFullStock =
+                                          !_transferFullStock);
+                                    },
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    child: Text(
+                                      _transferFullStock
+                                          ? "Cambiar a 0"
+                                          : "Llevar stock",
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
                               ),
+
+                              // Switch de descuento de inventario origen si es Cortar + Stock Compartido
+                              if (_mode == ProductExtractionMode.cut &&
+                                  _isSharedOrigin &&
+                                  _transferFullStock) ...[
+                                const SizedBox(height: 8),
+                                Divider(color: borderColor, height: 1),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "¿Descontar $_baseUnits und. base del inventario compartido de '${widget.originProductName}'?",
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark
+                                                  ? Colors.amber[200]
+                                                  : const Color(0xFF92400E),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            _deductStockFromOrigin
+                                                ? "El producto '${widget.originProductName}' quedará con ${math.max(0, _parentSharedStock - _baseUnits)} und. base restantes."
+                                                : "El producto '${widget.originProductName}' conservará sus $_parentSharedStock und. base intactas.",
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: isDark
+                                                  ? Colors.grey[400]
+                                                  : Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Transform.scale(
+                                      scale: 0.8,
+                                      child: Switch(
+                                        value: _deductStockFromOrigin,
+                                        activeThumbColor: Colors.amber.shade700,
+                                        activeTrackColor: Colors.amber
+                                            .withValues(alpha: 0.3),
+                                        onChanged: (val) {
+                                          HapticFeedback.selectionClick();
+                                          setState(() =>
+                                              _deductStockFromOrigin = val);
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
                       ],
 
                       // Advertencia amigable de código de barras en modo Copiar
-                      if (_mode == ProductExtractionMode.copy && _barcode.isNotEmpty) ...[
+                      if (_mode == ProductExtractionMode.copy &&
+                          _barcode.isNotEmpty) ...[
                         const SizedBox(height: 10),
                         Container(
                           padding: const EdgeInsets.all(8),
@@ -811,7 +1187,9 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                                 : Colors.blueGrey.shade50,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: isDark ? Colors.white12 : Colors.blueGrey.shade200,
+                              color: isDark
+                                  ? Colors.white12
+                                  : Colors.blueGrey.shade200,
                             ),
                           ),
                           child: Row(
@@ -819,7 +1197,9 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                               Icon(
                                 Icons.info_outline_rounded,
                                 size: 15,
-                                color: isDark ? Colors.blueGrey[200] : Colors.blueGrey[700],
+                                color: isDark
+                                    ? Colors.blueGrey[200]
+                                    : Colors.blueGrey[700],
                               ),
                               const SizedBox(width: 6),
                               Expanded(
@@ -829,7 +1209,9 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                                       : "ℹ️ Código desactivado por defecto en modo Copiar para evitar duplicidad.",
                                   style: TextStyle(
                                     fontSize: 10.5,
-                                    color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                    color: isDark
+                                        ? Colors.grey[300]
+                                        : Colors.grey[700],
                                   ),
                                 ),
                               ),
@@ -854,7 +1236,6 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Texto dinámico explicativo
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 220),
                       child: Row(
@@ -877,7 +1258,9 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                                   : "Se abrirá Crear Producto con estos datos. El producto actual conservará sus variantes.",
                               style: TextStyle(
                                 fontSize: 10.5,
-                                color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                color: isDark
+                                    ? Colors.grey[300]
+                                    : Colors.grey[700],
                               ),
                             ),
                           ),
@@ -886,7 +1269,7 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Botones Cancelar y Continuar
+                    // Botones Cancelar y Continuar (Texto limpio sin flechas duplicadas)
                     Row(
                       children: [
                         Expanded(
@@ -894,7 +1277,8 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                           child: OutlinedButton(
                             onPressed: () => Navigator.pop(context),
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -904,7 +1288,9 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                               "Cancelar",
                               style: TextStyle(
                                 fontSize: 13,
-                                color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                color: isDark
+                                    ? Colors.grey[300]
+                                    : Colors.grey[700],
                               ),
                             ),
                           ),
@@ -912,20 +1298,28 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                         const SizedBox(width: 10),
                         Expanded(
                           flex: 2,
-                          child: ElevatedButton.icon(
+                          child: ElevatedButton(
                             onPressed: _submit,
-                            icon: const Icon(Icons.arrow_forward_rounded, size: 17),
-                            label: const Text(
-                              "Continuar a Crear →",
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                            ),
                             style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              backgroundColor: isDark ? const Color(0xFF00897B) : Colors.teal,
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                              backgroundColor: isDark
+                                  ? const Color(0xFF00897B)
+                                  : Colors.teal,
                               foregroundColor: Colors.white,
+                              elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
+                            ),
+                            child: const Text(
+                              "Continuar a Crear →",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
@@ -941,6 +1335,84 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
     );
   }
 
+  Widget _buildStructureOption({
+    required VariantExtractionStructure structure,
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required bool isDark,
+  }) {
+    return InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _targetStructure = structure);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark
+                  ? Colors.blue.withValues(alpha: 0.25)
+                  : const Color(0xFFDBEAFE))
+              : (isDark ? Colors.black12 : Colors.white),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected
+                ? (isDark ? Colors.blue.shade400 : const Color(0xFF2563EB))
+                : (isDark ? Colors.white10 : Colors.grey.shade300),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(
+                isSelected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                size: 15,
+                color: isSelected
+                    ? (isDark ? Colors.blue[300] : const Color(0xFF1E40AF))
+                    : Colors.grey,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected
+                          ? (isDark
+                              ? Colors.blue[100]
+                              : const Color(0xFF1E3A8A))
+                          : (isDark ? Colors.grey[200] : Colors.grey[800]),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildModeCard({
     required ProductExtractionMode mode,
     required IconData icon,
@@ -949,9 +1421,11 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
     required bool isSelected,
     required bool isEnabled,
     required bool isDark,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
-    final activeColor = mode == ProductExtractionMode.copy ? Colors.teal : Colors.amber.shade700;
+    final activeColor =
+        mode == ProductExtractionMode.cut ? Colors.amber.shade700 : Colors.teal;
+
     return Opacity(
       opacity: isEnabled ? 1.0 : 0.45,
       child: InkWell(
@@ -960,7 +1434,7 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           decoration: BoxDecoration(
             color: isSelected
                 ? (isDark
@@ -972,7 +1446,7 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
               color: isSelected
                   ? activeColor
                   : (isDark ? Colors.white12 : Colors.grey.shade300),
-              width: isSelected ? 1.8 : 1,
+              width: isSelected ? 1.8 : 1.0,
             ),
           ),
           child: Column(
@@ -980,7 +1454,11 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
             children: [
               Row(
                 children: [
-                  Icon(icon, size: 17, color: isSelected ? activeColor : Colors.grey),
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: isSelected ? activeColor : Colors.grey,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -988,12 +1466,16 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: isSelected ? activeColor : (isDark ? Colors.white70 : Colors.black87),
+                        color: isSelected
+                            ? (isDark ? Colors.white : Colors.black87)
+                            : (isDark ? Colors.grey[300] : Colors.grey[700]),
                       ),
                     ),
                   ),
                   Icon(
-                    isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                    isSelected
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_unchecked_rounded,
                     size: 15,
                     color: isSelected ? activeColor : Colors.grey,
                   ),
@@ -1002,10 +1484,9 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
               const SizedBox(height: 4),
               Text(
                 desc,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 10,
+                  height: 1.25,
                   color: isDark ? Colors.grey[400] : Colors.grey[600],
                 ),
               ),
@@ -1016,36 +1497,29 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
     );
   }
 
-  Widget _buildPresetChip({
+  Widget _buildNameChip({
     required String label,
     required VoidCallback onTap,
     required bool isDark,
   }) {
     return InkWell(
       onTap: () {
-        HapticFeedback.lightImpact();
+        HapticFeedback.selectionClick();
         onTap();
       },
       borderRadius: BorderRadius.circular(6),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeInOut,
+      child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: isDark ? Colors.white10 : Colors.grey.shade200,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isDark ? Colors.white12 : Colors.grey.shade300,
-          ),
         ),
         child: Text(
           label,
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
           style: TextStyle(
             fontSize: 10.5,
             fontWeight: FontWeight.w600,
-            color: isDark ? Colors.teal[300] : Colors.teal[800],
+            color: isDark ? Colors.teal[200] : Colors.teal[800],
           ),
         ),
       ),
@@ -1103,7 +1577,8 @@ class _VariantExtractConfigModalState extends State<VariantExtractConfigModal> {
                   maxLines: 1,
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    fontWeight:
+                        isSelected ? FontWeight.bold : FontWeight.normal,
                     color: isSelected
                         ? (isDark ? Colors.teal[200] : Colors.teal[900])
                         : (isDark ? Colors.grey[300] : Colors.grey[700]),

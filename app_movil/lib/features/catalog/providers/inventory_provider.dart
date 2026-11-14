@@ -904,6 +904,9 @@ class InventoryProvider with ChangeNotifier {
     int? promoteToDefaultPresentationId,
     String? transferredBarcode,
     int transferredStock = 0,
+    int transferredBaseUnits = 0,
+    bool isSharedVariant = false,
+    bool shouldDeductSharedPool = true,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -914,6 +917,9 @@ class InventoryProvider with ChangeNotifier {
         promoteToDefaultPresentationId: promoteToDefaultPresentationId,
         transferredBarcode: transferredBarcode,
         transferredStock: transferredStock,
+        transferredBaseUnits: transferredBaseUnits,
+        isSharedVariant: isSharedVariant,
+        shouldDeductSharedPool: shouldDeductSharedPool,
       );
       if (ok) {
         _errorMessage = '';

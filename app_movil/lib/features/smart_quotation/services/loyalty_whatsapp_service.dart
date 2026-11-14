@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/loyalty_toast_feedback.dart';
 
 class LoyaltyWhatsAppService {
   LoyaltyWhatsAppService._();
@@ -24,10 +26,9 @@ class LoyaltyWhatsAppService {
     final clean = _cleanPhone(phone);
     if (clean.isEmpty || clean == '000000000') {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('El cliente no tiene un teléfono válido registrado'),
-          ),
+        LoyaltyToastFeedback.showWarning(
+          context,
+          'El cliente no tiene un teléfono válido registrado',
         );
       }
       return false;
@@ -42,18 +43,18 @@ class LoyaltyWhatsAppService {
         return true;
       } else {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No se pudo abrir WhatsApp en este dispositivo'),
-            ),
+          LoyaltyToastFeedback.showWarning(
+            context,
+            'No se pudo abrir WhatsApp en este dispositivo',
           );
         }
         return false;
       }
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al intentar abrir WhatsApp')),
+        LoyaltyToastFeedback.showWarning(
+          context,
+          'Error al intentar abrir WhatsApp',
         );
       }
       return false;
@@ -197,6 +198,13 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
     return buffer.toString().trim();
   }
 
+  /// Formatea el nombre del negocio en mayúsculas limpias para presentaciones formales
+  static String formatBusinessName(String name) {
+    final clean = name.trim();
+    if (clean.isEmpty) return "NUESTRA TIENDA";
+    return clean.toUpperCase();
+  }
+
   /// 📜 Plantilla 6: Cartilla / Guía Oficial de Cómo Ganar Puntos y Premios
   static String buildLoyaltyGuideAndCatalogMessage({
     required String businessName,
@@ -204,15 +212,20 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
     required List<RewardGoalModel> activeGoals,
     String? clientName,
     int? puntosActuales,
+    bool includeRules = true,
+    bool includeCatalog = true,
+    bool includeStoreInfo = true,
+    String? businessAddress,
+    String? businessPhone,
   }) {
     final buffer = StringBuffer();
-    buffer.writeln(
-      '📜 *GUÍA OFICIAL DE PUNTOS Y PREMIOS • $businessName* 🎁\n',
-    );
+    final cleanBiz = formatBusinessName(businessName);
 
-    if (clientName != null && clientName.isNotEmpty) {
+    buffer.writeln('📜 *GUÍA OFICIAL DE PUNTOS Y PREMIOS • $cleanBiz* 🎁\n');
+
+    if (clientName != null && clientName.trim().isNotEmpty) {
       buffer.writeln(
-        'Estimado(a) *$clientName*, te compartimos cómo funciona nuestro programa de lealtad para premiar tu preferencia:\n',
+        'Estimado(a) *${clientName.trim()}*, te compartimos cómo funciona nuestro programa de lealtad para premiar tu preferencia:\n',
       );
     } else {
       buffer.writeln(
@@ -220,59 +233,88 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
       );
     }
 
-    buffer.writeln('💡 *¿CÓMO GANAR PUNTOS EN NUESTRA TIENDA?*');
+    if (includeRules) {
+      buffer.writeln('💡 *¿CÓMO GANAR PUNTOS EN NUESTRA TIENDA?*');
 
-    if (rules.puntosPorCompraActivo) {
-      final baseStr = rules.montoBaseCompra == 1.0
-          ? 'S/ 1.00'
-          : AppCurrency.format(rules.montoBaseCompra);
-      final minStr = rules.compraMinimaParaPuntos > 0
-          ? ' (en compras desde ${AppCurrency.format(rules.compraMinimaParaPuntos)})'
-          : '';
-      buffer.writeln(
-        '✅ *Compras al Contado:* Ganas *+${rules.puntosPorUnidadMoneda} pto* por cada $baseStr de compra$minStr.',
-      );
+      if (rules.puntosPorCompraActivo) {
+        final baseStr = rules.montoBaseCompra == 1.0
+            ? 'S/ 1.00'
+            : AppCurrency.format(rules.montoBaseCompra);
+        final minStr = rules.compraMinimaParaPuntos > 0
+            ? ' (en compras desde ${AppCurrency.format(rules.compraMinimaParaPuntos)})'
+            : '';
+        buffer.writeln(
+          '✅ *Compras al Contado:* Ganas *+${rules.puntosPorUnidadMoneda} pto* por cada $baseStr de compra$minStr.',
+        );
+      }
+
+      if (rules.bonoCotizacionActivo && rules.puntosBonoCotizacion > 0) {
+        buffer.writeln(
+          '✅ *Cotizaciones Concretadas:* *+${rules.puntosBonoCotizacion} pts extra* al confirmar tu cotización en venta.',
+        );
+      }
+
+      if (rules.puntosAbonoInicialActivo) {
+        buffer.writeln(
+          '✅ *Compras al Crédito:* Ganas puntos proporcionales a tu abono inicial al momento de llevar mercadería.',
+        );
+      }
+
+      if (rules.bonoPagoPuntualActivo && rules.puntosPagoPuntual > 0) {
+        buffer.writeln(
+          '✅ *Pagos Puntuales:* *+${rules.puntosPagoPuntual} pts* cada vez que cancelas tu cuota en o antes de su vencimiento.',
+        );
+      }
+
+      if (rules.bonoRachaActivo && rules.puntosBonoRacha > 0) {
+        buffer.writeln(
+          '🔥 *Racha Impecable:* *+${rules.puntosBonoRacha} pts extra* cada ${rules.cadaCuantasCuotasRacha} pagos puntuales consecutivos.',
+        );
+      }
+
+      if (rules.bonoLiquidacionSinMoraActivo &&
+          rules.puntosLiquidacionSinMora > 0) {
+        buffer.writeln(
+          '🏆 *Compromiso Total:* *+${rules.puntosLiquidacionSinMora} pts* al liquidar tu crédito o préstamo sin retrasos.',
+        );
+      }
+
+      buffer.writeln();
     }
 
-    if (rules.bonoCotizacionActivo && rules.puntosBonoCotizacion > 0) {
-      buffer.writeln(
-        '✅ *Cotizaciones Concretadas:* *+${rules.puntosBonoCotizacion} pts extra* al confirmar tu cotización en venta.',
-      );
-    }
-
-    if (rules.puntosAbonoInicialActivo) {
-      buffer.writeln(
-        '✅ *Compras al Crédito:* Ganas puntos proporcionales a tu abono inicial al momento de llevar mercadería.',
-      );
-    }
-
-    if (rules.bonoPagoPuntualActivo && rules.puntosPagoPuntual > 0) {
-      buffer.writeln(
-        '✅ *Pagos Puntuales:* *+${rules.puntosPagoPuntual} pts* cada vez que cancelas tu cuota en o antes de su vencimiento.',
-      );
-    }
-
-    if (rules.bonoRachaActivo && rules.puntosBonoRacha > 0) {
-      buffer.writeln(
-        '🔥 *Racha Impecable:* *+${rules.puntosBonoRacha} pts extra* cada ${rules.cadaCuantasCuotasRacha} pagos puntuales consecutivos.',
-      );
-    }
-
-    if (rules.bonoLiquidacionSinMoraActivo &&
-        rules.puntosLiquidacionSinMora > 0) {
-      buffer.writeln(
-        '🏆 *Compromiso Total:* *+${rules.puntosLiquidacionSinMora} pts* al liquidar tu crédito o préstamo sin retrasos.',
-      );
-    }
-
-    buffer.writeln();
-
-    if (activeGoals.isNotEmpty) {
+    if (includeCatalog && activeGoals.isNotEmpty) {
       buffer.writeln('🎁 *CATÁLOGO DE PREMIOS Y DESCUENTOS:*');
       for (var g in activeGoals) {
-        buffer.writeln(
-          '• *${g.puntosRequeridos} pts:* ${g.nombre} (${g.formattedBenefit})',
-        );
+        String benefitLabel;
+        if (g.tipoBeneficio == 'DESCUENTO_MONTO') {
+          benefitLabel = "Descuento de ${AppCurrency.format(g.valorBeneficio)}";
+        } else if (g.tipoBeneficio == 'DESCUENTO_PORCENTAJE') {
+          benefitLabel = "${g.valorBeneficio.toInt()}% de Descuento";
+        } else if (g.tipoBeneficio == 'PRODUCTO_REGALO') {
+          benefitLabel = g.valorBeneficio > 0
+              ? "Producto de Regalo - ${AppCurrency.format(g.valorBeneficio)}"
+              : "Producto de Regalo";
+        } else {
+          benefitLabel = g.valorBeneficio > 0
+              ? "Línea de Crédito hasta ${AppCurrency.format(g.valorBeneficio)}"
+              : "Línea de Crédito Preferencial";
+        }
+
+        // Supresión de redundancias en paréntesis (ej. no duplicar 10% de Ahorro Especial (10% de Descuento))
+        final String lowerName = g.nombre.toLowerCase();
+        final bool isRedundant = (g.tipoBeneficio == 'DESCUENTO_PORCENTAJE' && lowerName.contains('${g.valorBeneficio.toInt()}%')) ||
+            (g.tipoBeneficio == 'DESCUENTO_MONTO' && lowerName.contains(AppCurrency.format(g.valorBeneficio).toLowerCase())) ||
+            lowerName.contains(benefitLabel.toLowerCase());
+
+        if (isRedundant) {
+          if (g.descripcion != null && g.descripcion!.isNotEmpty && !lowerName.contains(g.descripcion!.toLowerCase())) {
+            buffer.writeln('• *${g.puntosRequeridos} pts:* ${g.nombre} (${g.descripcion!})');
+          } else {
+            buffer.writeln('• *${g.puntosRequeridos} pts:* ${g.nombre}');
+          }
+        } else {
+          buffer.writeln('• *${g.puntosRequeridos} pts:* ${g.nombre} ($benefitLabel)');
+        }
       }
       buffer.writeln();
     }
@@ -281,18 +323,97 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
       buffer.writeln('⭐ *Tu saldo disponible hoy:* *$puntosActuales pts*\n');
     }
 
-    buffer.writeln(
-      '¡Tus puntos se acumulan libremente y tú eliges cuándo reclamar! Visítanos y sigue sumando. Estamos para servirte. ✨',
-    );
+    if (includeStoreInfo) {
+      buffer.writeln(
+        '¡Tus puntos se acumulan libremente y tú eliges cuándo reclamar! Visítanos y sigue sumando. Estamos para servirte. ✨',
+      );
+      if (businessAddress != null && businessAddress.trim().isNotEmpty) {
+        buffer.writeln('📍 *Dirección:* ${businessAddress.trim()}');
+      }
+      if (businessPhone != null && businessPhone.trim().isNotEmpty) {
+        buffer.writeln('📞 *Contacto:* ${businessPhone.trim()}');
+      }
+    }
+
     return buffer.toString().trim();
   }
 
-  /// 📱 Modal de Vista Previa Editable antes de enviar cualquier mensaje a WhatsApp
+  /// ⚡ Plantilla Rápida Resumida (Lectura rápida en WhatsApp)
+  static String buildSummaryGuideMessage({
+    required String businessName,
+    required LoyaltyRulesModel rules,
+    required List<RewardGoalModel> activeGoals,
+    String? clientName,
+    int? puntosActuales,
+  }) {
+    final buffer = StringBuffer();
+    final cleanBiz = formatBusinessName(businessName);
+
+    buffer.writeln('⚡ *PROGRAMA DE PUNTOS • $cleanBiz* 🎁\n');
+    if (clientName != null && clientName.trim().isNotEmpty) {
+      buffer.writeln('¡Hola, *${clientName.trim()}*! Te resumimos cómo ganar premios:');
+    } else {
+      buffer.writeln('¡Gana premios por tus compras y pagos puntuales!');
+    }
+
+    buffer.writeln('⭐ *Compras al Contado:* +${rules.puntosPorUnidadMoneda} pto por cada S/ ${rules.montoBaseCompra.toStringAsFixed(2)}.');
+    if (rules.bonoPagoPuntualActivo) {
+      buffer.writeln('⭐ *Pagos Puntuales:* +${rules.puntosPagoPuntual} pts por cancelar tu cuota a tiempo.');
+    }
+    if (activeGoals.isNotEmpty) {
+      final firstGoal = activeGoals.first;
+      buffer.writeln('🎁 *Primer Premio:* ${firstGoal.nombre} a los ${firstGoal.puntosRequeridos} pts.');
+    }
+    if (puntosActuales != null) {
+      buffer.writeln('📊 *Tu saldo actual:* *$puntosActuales pts*');
+    }
+    buffer.writeln('\n¡Visítanos para seguir sumando y canjear tus premios! ✨');
+    return buffer.toString().trim();
+  }
+
+  /// 🔥 Plantilla Promocional de Invitación
+  static String buildPromoInviteMessage({
+    required String businessName,
+    required List<RewardGoalModel> activeGoals,
+    String? clientName,
+    int? puntosActuales,
+  }) {
+    final buffer = StringBuffer();
+    final cleanBiz = formatBusinessName(businessName);
+
+    buffer.writeln('🔥 *¡DESCUBRE TUS BENEFICIOS EN $cleanBiz!* 🎁\n');
+    if (clientName != null && clientName.trim().isNotEmpty) {
+      buffer.writeln('¡Hola, *${clientName.trim()}*! Queremos consentirte por ser nuestro cliente preferencial.');
+    } else {
+      buffer.writeln('Queremos consentirte por ser nuestro cliente preferencial.');
+    }
+    if (puntosActuales != null) {
+      buffer.writeln('⭐ Ya cuentas con *$puntosActuales pts* acumulados en tu cuenta.');
+    }
+    if (activeGoals.isNotEmpty) {
+      buffer.writeln('\n🏆 *Premios que puedes llevarte:*');
+      for (var g in activeGoals.take(3)) {
+        buffer.writeln('• ${g.nombre} (Con ${g.puntosRequeridos} pts)');
+      }
+    }
+    buffer.writeln('\n¡Haz tu pedido hoy y sigue acumulando beneficios exclusivos! 📦✨');
+    return buffer.toString().trim();
+  }
+
+  /// 📱 Modal de Vista Previa Editable con Selector de Compartir Nativo y Barra de Personalización
   static Future<void> showEditableWhatsAppPreviewModal({
     required BuildContext context,
     required String title,
     required String phone,
     required String initialMessage,
+    LoyaltyRulesModel? rules,
+    List<RewardGoalModel>? activeGoals,
+    String? businessName,
+    String? clientName,
+    int? puntosActuales,
+    List<ClientModel>? availableClients,
+    String? businessAddress,
+    String? businessPhone,
     VoidCallback? onSent,
   }) async {
     final msgCtrl = TextEditingController(text: initialMessage);
@@ -307,12 +428,59 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
       minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
     );
 
+    // Estado local de personalización
+    String currentFormat = 'COMPLETO'; // 'COMPLETO', 'RESUMEN', 'PROMO'
+    bool secRules = true;
+    bool secCatalog = true;
+    bool secStore = true;
+    ClientModel? selectedClient;
+    String currentPhone = phone;
+    String? currentClientName = clientName;
+    int? currentPuntos = puntosActuales;
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
+          void updateMessageText([String? newFormat]) {
+            if (newFormat != null) currentFormat = newFormat;
+            if (rules != null && activeGoals != null && businessName != null) {
+              if (currentFormat == 'COMPLETO') {
+                msgCtrl.text = buildLoyaltyGuideAndCatalogMessage(
+                  businessName: businessName,
+                  rules: rules,
+                  activeGoals: activeGoals,
+                  clientName: currentClientName,
+                  puntosActuales: currentPuntos,
+                  includeRules: secRules,
+                  includeCatalog: secCatalog,
+                  includeStoreInfo: secStore,
+                  businessAddress: businessAddress,
+                  businessPhone: businessPhone,
+                );
+              } else if (currentFormat == 'RESUMEN') {
+                msgCtrl.text = buildSummaryGuideMessage(
+                  businessName: businessName,
+                  rules: rules,
+                  activeGoals: activeGoals,
+                  clientName: currentClientName,
+                  puntosActuales: currentPuntos,
+                );
+              } else if (currentFormat == 'PROMO') {
+                msgCtrl.text = buildPromoInviteMessage(
+                  businessName: businessName,
+                  activeGoals: activeGoals,
+                  clientName: currentClientName,
+                  puntosActuales: currentPuntos,
+                );
+              }
+            }
+          }
+
+          final bool hasActivePhone = currentPhone.trim().isNotEmpty && currentPhone.trim() != '000000000';
+
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => FocusScope.of(ctx).unfocus(),
@@ -330,11 +498,11 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
                 top: false,
                 bottom: false,
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(20, 16, 20, effectiveBottom),
+                  padding: EdgeInsets.fromLTRB(18, 14, 18, effectiveBottom),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Asa
+                      // Asa superior
                       Center(
                         child: Container(
                           width: 44,
@@ -347,26 +515,24 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
                           ),
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
 
                       // Encabezado
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(9),
+                            padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: const Color(
-                                0xFF25D366,
-                              ).withValues(alpha: 0.18),
+                              color: const Color(0xFF25D366).withValues(alpha: 0.18),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
                               Icons.chat_bubble_rounded,
                               color: Color(0xFF25D366),
-                              size: 22,
+                              size: 20,
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,11 +548,11 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 Text(
-                                  phone.isNotEmpty
-                                      ? "Destino: $phone"
-                                      : "Vista previa del mensaje",
+                                  hasActivePhone
+                                      ? "Destino WhatsApp: $currentPhone"
+                                      : "Compartir cartilla con clientes",
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11.5,
                                     color: isDark
                                         ? Colors.grey[400]
                                         : Colors.grey[600],
@@ -397,13 +563,228 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
                           ),
                           IconButton(
                             icon: const Icon(Icons.close_rounded),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
                             onPressed: () => Navigator.pop(ctx),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
 
-                      // Campo de texto editable
+                      // Selector rápido opcional de Cliente (cuando se abre sin cliente fijo)
+                      if (availableClients != null &&
+                          availableClients.isNotEmpty &&
+                          (phone.trim().isEmpty || phone.trim() == '000000000')) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF282838) : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isDark ? Colors.white12 : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.person_pin_rounded, size: 15, color: Colors.amber[700]),
+                              const SizedBox(width: 6),
+                              Text(
+                                "Personalizar:",
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: textColor,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<int?>(
+                                    isDense: true,
+                                    isExpanded: true,
+                                    value: selectedClient?.id,
+                                    hint: Text(
+                                      "General para todos",
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w500,
+                                        color: isDark ? Colors.grey[400] : Colors.grey[700],
+                                      ),
+                                    ),
+                                    items: [
+                                      DropdownMenuItem<int?>(
+                                        value: null,
+                                        child: Text(
+                                          "General para todos",
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: textColor,
+                                          ),
+                                        ),
+                                      ),
+                                      ...availableClients.map(
+                                        (c) => DropdownMenuItem<int?>(
+                                          value: c.id,
+                                          child: Text(
+                                            "${c.fullName} (${c.puntosActuales} pts)",
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              color: textColor,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (newId) {
+                                      setModalState(() {
+                                        if (newId == null) {
+                                          selectedClient = null;
+                                          currentClientName = null;
+                                          currentPuntos = null;
+                                          currentPhone = "";
+                                        } else {
+                                          selectedClient = availableClients.firstWhere((c) => c.id == newId);
+                                          currentClientName = selectedClient!.fullName;
+                                          currentPuntos = selectedClient!.puntosActuales;
+                                          currentPhone = selectedClient!.phone;
+                                        }
+                                        updateMessageText();
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // Barra Compacta de Personalización Rápida
+                      if (rules != null && activeGoals != null && businessName != null) ...[
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: Row(
+                            children: [
+                              // Formato
+                              ChoiceChip(
+                                avatar: const Icon(Icons.auto_awesome_rounded, size: 13),
+                                label: const Text("Completo", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                selected: currentFormat == 'COMPLETO',
+                                selectedColor: Colors.amber[700],
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                onSelected: (val) {
+                                  if (val) setModalState(() => updateMessageText('COMPLETO'));
+                                },
+                              ),
+                              const SizedBox(width: 6),
+                              ChoiceChip(
+                                avatar: const Icon(Icons.bolt_rounded, size: 13),
+                                label: const Text("Resumen Corto", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                selected: currentFormat == 'RESUMEN',
+                                selectedColor: Colors.amber[700],
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                onSelected: (val) {
+                                  if (val) setModalState(() => updateMessageText('RESUMEN'));
+                                },
+                              ),
+                              const SizedBox(width: 6),
+                              ChoiceChip(
+                                avatar: const Icon(Icons.local_fire_department_rounded, size: 13),
+                                label: const Text("Invitación Promocional", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                selected: currentFormat == 'PROMO',
+                                selectedColor: Colors.amber[700],
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                onSelected: (val) {
+                                  if (val) setModalState(() => updateMessageText('PROMO'));
+                                },
+                              ),
+                              const SizedBox(width: 8),
+
+                              // Toggles de Secciones (cuando está en formato COMPLETO)
+                              if (currentFormat == 'COMPLETO') ...[
+                                Container(width: 1, height: 16, color: isDark ? Colors.white24 : Colors.grey.shade300),
+                                const SizedBox(width: 8),
+                                FilterChip(
+                                  avatar: Icon(secRules ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, size: 13),
+                                  label: const Text("Cómo ganar", style: TextStyle(fontSize: 11)),
+                                  selected: secRules,
+                                  selectedColor: Colors.green.withValues(alpha: 0.2),
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                  onSelected: (val) {
+                                    setModalState(() {
+                                      secRules = val;
+                                      updateMessageText();
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 6),
+                                FilterChip(
+                                  avatar: Icon(secCatalog ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, size: 13),
+                                  label: const Text("Catálogo premios", style: TextStyle(fontSize: 11)),
+                                  selected: secCatalog,
+                                  selectedColor: Colors.green.withValues(alpha: 0.2),
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                  onSelected: (val) {
+                                    setModalState(() {
+                                      secCatalog = val;
+                                      updateMessageText();
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 6),
+                                FilterChip(
+                                  avatar: Icon(secStore ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, size: 13),
+                                  label: const Text("Datos tienda", style: TextStyle(fontSize: 11)),
+                                  selected: secStore,
+                                  selectedColor: Colors.green.withValues(alpha: 0.2),
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                  onSelected: (val) {
+                                    setModalState(() {
+                                      secStore = val;
+                                      updateMessageText();
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+
+                              // Botón Restaurar con icono restart_alt
+                              ActionChip(
+                                avatar: const Icon(Icons.restart_alt_rounded, size: 13),
+                                label: const Text("Restaurar", style: TextStyle(fontSize: 11)),
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                onPressed: () {
+                                  setModalState(() {
+                                    secRules = true;
+                                    secCatalog = true;
+                                    secStore = true;
+                                    updateMessageText('COMPLETO');
+                                  });
+                                  LoyaltyToastFeedback.showInfo(
+                                    ctx,
+                                    "Mensaje restaurado al formato original",
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+
+                      // Campo de texto editable (Ocupa 60%-65% del alto)
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.all(12),
@@ -420,6 +801,7 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
                             controller: msgCtrl,
                             maxLines: null,
                             expands: true,
+                            onTapOutside: (_) => FocusScope.of(ctx).unfocus(),
                             style: TextStyle(
                               fontSize: 13,
                               color: textColor,
@@ -433,9 +815,9 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
                           ),
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
 
-                      // Botones de acción
+                      // Botones de acción inferiores
                       Row(
                         children: [
                           OutlinedButton.icon(
@@ -443,64 +825,125 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
                               Clipboard.setData(
                                 ClipboardData(text: msgCtrl.text.trim()),
                               );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Mensaje copiado al portapapeles',
-                                  ),
-                                  duration: Duration(seconds: 2),
-                                ),
+                              LoyaltyToastFeedback.showSuccess(
+                                context,
+                                'Mensaje copiado al portapapeles',
                               );
                             },
                             icon: const Icon(Icons.copy_rounded, size: 16),
                             label: const Text("Copiar"),
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
+                                horizontal: 12,
+                                vertical: 11,
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                final textToSend = msgCtrl.text.trim();
-                                Navigator.pop(ctx);
-                                await launchWhatsApp(
-                                  context,
-                                  phone,
-                                  textToSend,
-                                );
-                                onSent?.call();
-                              },
-                              icon: const Icon(
-                                Icons.send_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                              label: const Text(
-                                "Enviar por WhatsApp",
-                                style: TextStyle(
+                          const SizedBox(width: 8),
+
+                          // Si no hay teléfono registrado, el botón principal es [Compartir Cartilla] nativo
+                          if (!hasActivePhone) ...[
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final textToSend = msgCtrl.text.trim();
+                                  Navigator.pop(ctx);
+                                  await SharePlus.instance.share(
+                                    ShareParams(
+                                      text: textToSend,
+                                      subject: "Programa de Puntos y Premios • ${businessName ?? 'Tienda'}",
+                                    ),
+                                  );
+                                  onSent?.call();
+                                },
+                                icon: const Icon(
+                                  Icons.share_rounded,
                                   color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                                  size: 18,
                                 ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF25D366),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
+                                label: const Text(
+                                  "Compartir Cartilla",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13.5,
+                                  ),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF25D366),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  elevation: 0,
                                 ),
-                                elevation: 0,
                               ),
                             ),
-                          ),
+                          ] else ...[
+                            // Si tiene teléfono, ofrecemos compartir nativo secundario y botón principal enviar WhatsApp
+                            IconButton(
+                              onPressed: () async {
+                                final textToSend = msgCtrl.text.trim();
+                                await SharePlus.instance.share(
+                                  ShareParams(
+                                    text: textToSend,
+                                    subject: "Programa de Puntos y Premios • ${businessName ?? 'Tienda'}",
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.share_rounded, size: 18),
+                              tooltip: "Compartir a otras apps",
+                              style: IconButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final textToSend = msgCtrl.text.trim();
+                                  Navigator.pop(ctx);
+                                  await launchWhatsApp(
+                                    context,
+                                    currentPhone,
+                                    textToSend,
+                                  );
+                                  onSent?.call();
+                                },
+                                icon: const Icon(
+                                  Icons.send_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                                label: const Text(
+                                  "Enviar por WhatsApp",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF25D366),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  elevation: 0,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ],

@@ -450,11 +450,11 @@ class SalesService {
                       : 'preventiva';
                   final String title = isShared
                       ? (isAgotado
-                            ? '🚨 Stock Compartido Agotado: $prodName'
-                            : '⚠️ Stock Compartido Bajo: $prodName')
+                            ? 'Stock Compartido Agotado • $prodName'
+                            : 'Stock Compartido Bajo • $prodName')
                       : (isAgotado
-                            ? '🚨 Producto Agotado: $prodName'
-                            : '⚠️ Stock Bajo: $prodName');
+                            ? 'Producto Agotado • $prodName'
+                            : 'Stock Bajo • $prodName');
                   final String content = isShared
                       ? (isAgotado
                             ? 'El pozo común de $prodName se agotó por completo (0 und.). Todas sus presentaciones asociadas están sin stock.'
@@ -485,22 +485,41 @@ class SalesService {
                       limit: 1,
                     );
                     if (existNotif.isNotEmpty) {
-                      await txn.update(
-                        'notificaciones',
-                        {
-                          'titulo': title,
-                          'mensaje': content,
-                          'nivel_prioridad': nivelPrioridad,
-                          'prioridad': isAgotado ? 'Alta' : 'Media',
-                          'leida': 0,
-                          'is_resolved': 0,
-                          'fecha_resolucion': null,
-                          'metadata_json': metaJson,
-                          'mute_key': 'producto_$prodId',
-                        },
-                        where: 'id = ?',
-                        whereArgs: [existNotif.first['id']],
-                      );
+                      final currentNotif = existNotif.first;
+                      final bool isArchived = currentNotif['is_archived'] == 1;
+                      final bool isResolved = currentNotif['is_resolved'] == 1;
+
+                      // Anti-Spam: Si el comerciante ya archivó o resolvió la alerta de stock bajo y NO está agotado (0 und.),
+                      // respetar su decisión: actualización silenciosa in-place sin desarchivar ni reabrir a pendientes.
+                      if (!isAgotado && (isArchived || isResolved)) {
+                        await txn.update(
+                          'notificaciones',
+                          {
+                            'titulo': title,
+                            'mensaje': content,
+                            'metadata_json': metaJson,
+                          },
+                          where: 'id = ?',
+                          whereArgs: [currentNotif['id']],
+                        );
+                      } else {
+                        await txn.update(
+                          'notificaciones',
+                          {
+                            'titulo': title,
+                            'mensaje': content,
+                            'nivel_prioridad': nivelPrioridad,
+                            'prioridad': isAgotado ? 'Alta' : 'Media',
+                            'leida': isAgotado ? 0 : (currentNotif['leida'] ?? 0),
+                            'is_resolved': 0,
+                            'fecha_resolucion': null,
+                            'metadata_json': metaJson,
+                            'mute_key': 'producto_$prodId',
+                          },
+                          where: 'id = ?',
+                          whereArgs: [currentNotif['id']],
+                        );
+                      }
                     } else {
                       await txn.insert('notificaciones', {
                         'user_id': usuarioId,

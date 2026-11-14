@@ -1,399 +1,293 @@
-# 💰 INFORME 2: Propuestas de Modelo de Comercialización para MochilaLista
+# 💰 INFORME 2: Modelo Comercial Unificado y Estrategias de Monetización para MochilaLista v9.23.0
 
-**Fecha:** 3 de Octubre de 2026  
-**Versión Base:** 8.5.0+47  
-**Objetivo:** Evaluar modelos de monetización viables para una app offline-first, donde el desarrollador controla directamente la distribución y el acceso.
-
----
-
-## 📋 Contexto del Negocio
-
-Antes de evaluar las propuestas, es fundamental entender las restricciones únicas de MochilaLista:
-
-| Factor | Detalle |
-|--------|---------|
-| **Naturaleza de la app** | 95% offline — solo usa internet para IA (escaneo Gemini) |
-| **Canal de distribución** | Directa (APK compartido), NO Google Play Store (por ahora) |
-| **Base de usuarios** | Pequeña/mediana, relación directa vendedor-cliente |
-| **Actualizaciones** | Manuales — el desarrollador envía APKs nuevos a los clientes |
-| **Infraestructura** | Sin servidor backend — el desarrollador trabaja desde su laptop |
-| **Público objetivo** | Comerciantes minoristas/mayoristas que necesitan gestionar inventario y ventas |
+**Fecha de Actualización:** 14 de Noviembre de 2026  
+**Versión Base:** `v9.23.0+73` (Esquema DB v34)  
+**Autor y Titular Legal:** Julio Angello Vasquez Navarro  
+**Canal Primario de Distribución:** Venta Directa y Distribución por WhatsApp (APK Firmado Oficial)  
+**Público Objetivo:** Comerciantes minoristas, mayoristas, distribuidores de útiles escolares, librerías, bazares y ferreterías en Lima y provincias del Perú.  
+**Infraestructura Requerida:** Cero servidores cloud obligatorios — Gestión total autónoma desde la Laptop del Creador.
 
 ---
 
-## 🏆 PROPUESTA A: Sistema de Códigos de Acceso Offline con Generador Local (⭐ RECOMENDADA)
+## 📋 1. Contexto Estratégico y Realidad Comercial
 
-> Esta propuesta es una evolución de tu idea original, refinada para ser segura, práctica y escalable.
-
-### Concepto General
-
-El sistema funciona 100% offline mediante un **algoritmo criptográfico compartido** entre la app del cliente y una plataforma de gestión en tu laptop. No necesita internet para validar códigos.
-
-### ¿Cómo Funciona?
-
-```mermaid
-sequenceDiagram
-    participant C as 👤 Cliente
-    participant A as 📱 App MochilaLista
-    participant P as 💻 Plataforma Admin
-    participant D as 👨‍💻 Desarrollador (Tú)
-    
-    Note over C,D: REGISTRO INICIAL (Mes Gratis)
-    D->>C: Entrega APK de MochilaLista
-    C->>A: Instala y crea su perfil de negocio
-    A->>A: Genera ID único del dispositivo (DeviceFingerprint)
-    A->>C: Muestra su "Código de Dispositivo" (ej: ML-7K2X)
-    Note over A: ⏰ 30 días de uso gratuito comienzan
-    
-    Note over C,D: RENOVACIÓN MENSUAL
-    A->>C: ⚠️ "Te quedan 7 días de prueba" (notificación)
-    C->>D: "Quiero renovar" + envía Código de Dispositivo (WhatsApp)
-    D->>P: Ingresa Código de Dispositivo en la plataforma
-    P->>P: Genera Código de Acceso único
-    D->>C: Envía Código de Acceso por WhatsApp
-    C->>A: Ingresa Código de Acceso en la app
-    A->>A: Valida código offline (algoritmo compartido)
-    A->>A: ✅ Desbloquea por 30 días más
-```
-
-### Desglose Técnico del Sistema
-
-#### 1. Identificador Único del Dispositivo (Device Fingerprint)
-
-Cada instalación de la app genera un código corto y legible basado en:
-- `androidId` del dispositivo (único por instalación).
-- Un salt fijo embebido en la app.
-- Resultado: Un código de 6-8 caracteres fácil de dictar por teléfono.
+MochilaLista fue concebida para operar en el corazón del comercio tradicional peruano (Gamarra, Mesa Redonda, Unicachi, mercados zonales y comercios de barrio). Estos negocios operan en sótanos, galerías con mala cobertura celular o sin conexión de internet fija. Por tanto, el modelo comercial se cimenta sobre 6 pilares inviolables:
 
 ```
-Ejemplo: ML-7K2X o ML-A9F3P2
+┌────────────────────────────────────────────────────────────────────────┐
+│                   LOS 6 PILARES DEL MODELO COMERCIAL                  │
+├────────────────────────────────────────────────────────────────────────┤
+│ 1. FUNCIONAMIENTO 100% OFFLINE                                        │
+│    La validación de licencias jamás depende de un servidor web.        │
+│ 2. VINCULACIÓN AL DISPOSITIVO (Anti-Piratería Real)                   │
+│    Un código de activación solo sirve en el teléfono del comprador.    │
+│ 3. FLEXIBILIDAD: SUSCRIPCIÓN Y LICENCIA PERPETUA DE ALTO VALOR         │
+│    El cliente elige pagar poco a poco o comprar la app para siempre.   │
+│ 4. RESPETO AL TIEMPO PAGADO (Acumulación Sin Pérdida de Días)         │
+│    Renovar con anticipación jamás recorta los días ya pagados.        │
+│ 5. GESTIÓN DE ACTUALIZACIONES BLINDADA (Cero Pérdida de Datos)        │
+│    Actualizar el APK nunca daña los registros ni anula la licencia.   │
+│ 6. PROTECCIÓN ECONÓMICA DE LA IA (Gemini 3.8 Flash)                   │
+│    Ninguna venta de pago único genera pérdidas por consumo de API.    │
+└────────────────────────────────────────────────────────────────────────┘
 ```
-
-**¿Por qué es importante?** — Vincula el código de acceso a un dispositivo específico. Si alguien comparte el código, **no funcionará** en otro teléfono.
-
-#### 2. Algoritmo de Generación de Códigos de Acceso
-
-El código de acceso se calcula así:
-
-```
-Código = HMAC-SHA256(DeviceFingerprint + PeriodoVálido, ClaveSecreta)
-         → Primeros 12 caracteres → Formato: XXXX-XXXX-XXXX
-```
-
-Donde:
-- **DeviceFingerprint:** El código del dispositivo del cliente (ej: `ML-7K2X`).
-- **PeriodoVálido:** Año-Mes de validez (ej: `2026-11` para noviembre 2026).
-- **ClaveSecreta:** Una clave maestra que solo tú conoces, embebida (ofuscada) tanto en la app como en tu plataforma.
-
-**Propiedades de seguridad:**
-- ✅ El mismo código NO funciona en otro dispositivo.
-- ✅ El mismo código NO funciona en otro mes.
-- ✅ No se necesita internet para validar.
-- ✅ Es computacionalmente imposible adivinar el código sin la clave secreta.
-- ⚠️ Si alguien descompila la app y extrae la clave secreta, puede generar códigos. Pero con ofuscación (CRIT-05), esto es extremadamente difícil.
-
-#### 3. Períodos de Suscripción
-
-| Plan | Códigos a Generar | Precio Sugerido | Descripción |
-|------|-------------------|-----------------|-------------|
-| **Trial** | 0 (automático) | Gratis | 30 días desde la instalación |
-| **Mensual** | 1 código | S/ X | Válido 1 mes calendario |
-| **Trimestral** | 3 códigos | S/ X×2.5 | Se entregan los 3 códigos de una vez |
-| **Semestral** | 6 códigos | S/ X×4.5 | Descuento por adelanto |
-| **Anual** | 12 códigos | S/ X×8 | Mejor precio por mes |
-
-> [!TIP]
-> **Para planes trimestrales, semestrales y anuales:** Generas todos los códigos por adelantado y se los envías al cliente. Cada código solo funciona en su mes correspondiente, por lo que no hay riesgo de mal uso. El cliente los ingresa cuando la app se lo pida (una semana antes de cada vencimiento).
-
-#### 4. Flujo del Usuario en la App
-
-```
-┌─────────────────────────────────────────────┐
-│  📱 PANTALLA DE ESTADO DE LICENCIA          │
-│                                             │
-│  ┌─────────────────────────────────────┐    │
-│  │  ✅ Licencia Activa                 │    │
-│  │  Válida hasta: 31 de Octubre 2026  │    │
-│  │  Dispositivo: ML-7K2X              │    │
-│  └─────────────────────────────────────┘    │
-│                                             │
-│  ⚠️ Tu licencia vence en 7 días.           │
-│  Contacta al soporte para renovar.          │
-│                                             │
-│  ┌─────────────────────────────────────┐    │
-│  │  Código de Acceso:                  │    │
-│  │  [____]-[____]-[____]              │    │
-│  │                                     │    │
-│  │  [     Activar Licencia      ]      │    │
-│  └─────────────────────────────────────┘    │
-│                                             │
-│  📞 Soporte: +51 999 888 777               │
-│  📲 WhatsApp: wa.me/51999888777            │
-└─────────────────────────────────────────────┘
-```
-
-#### 5. Sistema de Avisos Progresivos
-
-| Días restantes | Acción |
-|---------------|--------|
-| 7 días | Banner discreto: "Tu licencia vence pronto. Renueva para uso continuo." |
-| 3 días | Notificación al entrar: "Solo quedan 3 días. Contacta soporte." |
-| 1 día | Modal prominente: "Mañana se bloquearán las funciones. Ingresa tu código." |
-| 0 días (vencido) | **Bloqueo suave**: Se puede consultar datos, pero NO crear ventas/cotizaciones. |
-| -7 días | **Bloqueo total**: Solo se ve la pantalla de activación y opción de backup. |
-
-> [!IMPORTANT]
-> **Nunca borrar los datos del cliente.** Incluso después del bloqueo total, el usuario puede exportar su backup. Esto genera confianza y evita perder clientes enojados.
-
-#### 6. Plataforma de Gestión (Tu Laptop)
-
-Una aplicación web local (ejecutable desde tu laptop) con estas funciones:
-
-```
-┌──────────────────────────────────────────────────┐
-│  🏢 MochilaLista — Panel de Administración       │
-├──────────────────────────────────────────────────┤
-│                                                  │
-│  📊 Dashboard                                    │
-│  ├── Clientes activos: 24                        │
-│  ├── Licencias por vencer (7 días): 5            │
-│  ├── Ingresos del mes: S/ 1,200                  │
-│  └── Tasa de renovación: 87%                     │
-│                                                  │
-│  👥 Gestión de Clientes                          │
-│  ┌──────────────────────────────────────────┐    │
-│  │ Nombre     │ Dispositivo │ Vence    │ Est │    │
-│  │ Alejandrina│ ML-7K2X     │ 31/10/26 │ ✅  │    │
-│  │ Carlos M.  │ ML-A9F3     │ 15/10/26 │ ⚠️  │    │
-│  │ María P.   │ ML-R2D4     │ 02/10/26 │ 🔴  │    │
-│  └──────────────────────────────────────────┘    │
-│                                                  │
-│  🔑 Generador de Códigos                         │
-│  Dispositivo: [ML-7K2X        ]                  │
-│  Período:     [Noviembre 2026  ▼]                │
-│  Plan:        [Mensual ▼]                        │
-│                                                  │
-│  [  Generar Código  ]                            │
-│                                                  │
-│  Código generado: A7K2-X9F3-P2M1                 │
-│  [📋 Copiar] [📱 Enviar por WhatsApp]            │
-│                                                  │
-└──────────────────────────────────────────────────┘
-```
-
-### Ventajas de esta Propuesta
-
-| Ventaja | Descripción |
-|---------|-------------|
-| ✅ 100% Offline | No necesita internet para validar licencias |
-| ✅ Vinculada al dispositivo | Los códigos no se pueden compartir |
-| ✅ Fácil para el usuario | Solo copia y pega un código de 12 caracteres |
-| ✅ Fácil para ti | Generar códigos toma 5 segundos |
-| ✅ Planes flexibles | Mensual, trimestral, semestral, anual |
-| ✅ Sin infraestructura | No necesitas servidor, hosting, ni dominio |
-| ✅ Bloqueo gradual | No agresivo, permite exportar datos |
-| ✅ Escalable a Premium | Se pueden agregar niveles en el futuro |
-
-### Riesgos y Mitigaciones
-
-| Riesgo | Mitigación |
-|--------|------------|
-| Descompilación para extraer clave secreta | Ofuscación + múltiples capas de verificación |
-| Usuario cambia de teléfono | Le generas nuevo código con su nuevo Device ID |
-| Usuario pierde su código | Lo regeneras desde tu plataforma |
-| Manipulación del reloj del sistema | Guardar la última fecha válida y no permitir retroceder |
 
 ---
 
-## 📋 PROPUESTA B: Sistema de Licencia por Archivo (License File)
+## 🏆 2. El Modelo Comercial Unificado
 
-### Concepto
-
-En lugar de un código de texto, generas un **archivo de licencia** (`.mll` — MochilaLista License) que el usuario descarga y abre con la app.
-
-### Flujo
-
-1. El cliente te envía su Device ID.
-2. Tú generas un archivo `.mll` firmado digitalmente desde tu plataforma.
-3. Le envías el archivo por WhatsApp.
-4. El cliente abre el archivo → la app lo detecta automáticamente y activa la licencia.
-
-### Estructura del Archivo
-
-```json
-{
-  "version": 1,
-  "device_id": "ML-7K2X",
-  "valid_from": "2026-10-01",
-  "valid_until": "2026-10-31",
-  "features": ["all"],
-  "signature": "base64_encoded_hmac_signature"
-}
-```
-
-### Comparación con Propuesta A
-
-| Aspecto | Propuesta A (Código) | Propuesta B (Archivo) |
-|---------|---------------------|----------------------|
-| Facilidad de uso | ⭐⭐⭐⭐ Copia/pega | ⭐⭐⭐ Descargar y abrir |
-| Seguridad | ⭐⭐⭐⭐ Buena | ⭐⭐⭐⭐⭐ Más datos firmados |
-| Flexibilidad | ⭐⭐⭐ Limitada | ⭐⭐⭐⭐⭐ Puede incluir features, niveles, etc |
-| Complejidad técnica | ⭐⭐⭐ Moderada | ⭐⭐⭐⭐ Mayor (intent filters, file handling) |
-| Canal WhatsApp | ✅ Funciona bien | ⚠️ WhatsApp a veces bloquea archivos desconocidos |
-| Soporte telefónico | ✅ "Dícame su código" | ❌ No se puede dictar un archivo |
-
-> [!NOTE]
-> **Recomendación:** La Propuesta B es técnicamente superior, pero la Propuesta A es más práctica para tu canal de venta actual (WhatsApp, venta directa). Se recomienda implementar A primero y evolucionar a B cuando se tenga más clientes o se publique en Play Store.
-
----
-
-## 📋 PROPUESTA C: Sistema Híbrido con Validación Online Opcional
-
-### Concepto
-
-La licencia se valida offline por defecto (como Propuesta A), pero SI el dispositivo tiene internet, la app consulta un servidor ligero para:
-- Verificar si la licencia sigue vigente.
-- Desactivar remotamente licencias en caso de fraude.
-- Recopilar estadísticas de uso (anónimas).
-- Enviar notificaciones push sobre actualizaciones.
-
-### Arquitectura
+En lugar de fragmentar la oferta en propuestas desconectadas, MochilaLista adopta un **Modelo Comercial Unificado de 2 Vías** respaldado por el mismo motor criptográfico asimétrico de licencias (`Ed25519`):
 
 ```mermaid
 graph TD
-    A[📱 App Cliente] -->|"Si tiene internet"| B[☁️ Firebase / Supabase]
-    A -->|"Si NO tiene internet"| C[🔐 Validación Offline Local]
-    B --> D[📊 Dashboard Web Admin]
-    D --> E[👨‍💻 Tú]
+    A[📱 Descarga e Instalación del APK Oficial] --> B[🎁 Trial Gratuito Automático: 30 Días Full]
+    B --> C{Fin del Periodo de Prueba}
+    
+    C -->|Opción A: Flujo Recurrente| D[💳 Suscripción Periódica]
+    D --> D1[Mensual: +30 días]
+    D --> D2[Trimestral: +90 días - 1 Solo Código]
+    D --> D3[Semestral: +180 días - 1 Solo Código]
+    D --> D4[Anual: +365 días - 1 Solo Código]
+    
+    C -->|Opción B: Pago Único Definitivo| E[👑 Licencia Liberada Perpetua]
+    E --> E1[App libre para siempre en ese celular]
+    E --> E2[1 Año de actualizaciones de funciones nuevas]
+    E --> E3[Soporte de parches y corrección de bugs de por vida]
+    E --> E4[Protección de Cuota IA: Uso Justo + Clave Propia BYOK]
 ```
 
-### Comparación con las Otras Propuestas
+---
 
-| Aspecto | A (Offline) | B (Archivo) | C (Híbrido) |
-|---------|------------|-------------|-------------|
-| Requiere internet | ❌ Nunca | ❌ Nunca | ⚡ Opcional |
-| Revocación remota | ❌ | ❌ | ✅ |
-| Estadísticas de uso | ❌ | ❌ | ✅ |
-| Push notifications | ❌ | ❌ | ✅ |
-| Costo de infraestructura | S/ 0 | S/ 0 | S/ 0-15/mes (Firebase free tier) |
-| Complejidad | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Tiempo de implementación | 1-2 semanas | 1-2 semanas | 3-4 semanas |
+## 💎 3. Desglose de Planes y Modalidades
 
-> [!NOTE]
-> **Recomendación:** La Propuesta C es la más completa pero requiere más trabajo y una mínima infraestructura online. Recomiendo empezar con A y migrar a C cuando la base de clientes justifique la inversión.
+### 3.1. Periodo de Prueba (Trial Automático de 30 Días)
+* **Activación:** Instantánea al instalar por primera vez la aplicación en el dispositivo.
+* **Requisito:** Cero datos bancarios ni contacto previo requerido.
+* **Alcance:** Acceso completo al 100% de las funciones operativas: Cotizador Universal IA, escaneo inteligente de facturas de proveedores, extracción y corte de variantes con stock compartido dependiente/independiente, créditos de clientes, sistema de fidelización y notificaciones.
+* **Objetivo Comercial:** Que el comerciante cargue su inventario real, emita cotizaciones y compruebe el ahorro masivo de tiempo antes de pagar.
 
 ---
 
-## 📋 PROPUESTA D: One-Time Purchase (Compra Única)
+### 3.2. Planes de Suscripción (Recurrencia Predictiva)
+Ideales para comerciantes que prefieren desembolsos pequeños y acompañamiento técnico continuo:
 
-### Concepto
-
-En vez de suscripción mensual, el usuario paga una sola vez y obtiene acceso permanente a la versión actual. Las actualizaciones mayores (v9, v10) requerirían un nuevo pago.
-
-### Modelo de Precios
-
-| Producto | Precio | Incluye |
-|----------|--------|---------|
-| MochilaLista v8 | S/ X×10 | Acceso permanente a todas las funciones de la v8.x |
-| Actualización v9 | S/ X×5 | Upgrade a la siguiente versión mayor |
-| Pack Vitalicio | S/ X×20 | Acceso a todas las versiones futuras |
-
-### Ventajas y Desventajas
-
-| ✅ Ventajas | ❌ Desventajas |
-|------------|---------------|
-| Más atractivo para clientes conservadores | Ingresos no recurrentes |
-| Menos administración de licencias | Difícil de sostener a largo plazo |
-| Percepción de mayor valor | No genera flujo de caja predecible |
-| Menos fricción (un solo pago) | El costo de la API Key de Gemini sigue siendo tuyo |
-
----
-
-## 🏅 MATRIZ DE DECISIÓN FINAL
-
-| Criterio (Peso) | A: Código Offline | B: Archivo | C: Híbrido | D: Compra Única |
-|-----------------|:-:|:-:|:-:|:-:|
-| Facilidad de implementación (25%) | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ |
-| Seguridad anti-piratería (20%) | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-| Facilidad para el usuario (20%) | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Ingresos recurrentes (15%) | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ |
-| Escalabilidad futura (10%) | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-| Independencia de infra (10%) | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **PUNTUACIÓN TOTAL** | **4.40** | **3.95** | **4.05** | **3.55** |
-
----
-
-## 🎯 RECOMENDACIÓN FINAL
+| Plan | Código Requerido | Días Sumados | Precio Sugerido (PEN) | Equivalente Mensual | Beneficio Comercial |
+|------|:----------------:|:------------:|:--------------------:|:-------------------:|---------------------|
+| **Mensual** | 1 Código / QR | +30 días | **S/ 35.00** | S/ 35.00 | Entrada accesible, bajo compromiso |
+| **Trimestral** | **1 Solo Código** | +90 días | **S/ 90.00** | S/ 30.00 | Ahorro del 14% para el cliente |
+| **Semestral** | **1 Solo Código** | +180 días | **S/ 160.00** | S/ 26.60 | Campaña Escolar / Navideña cubierta |
+| **Anual** | **1 Solo Código** | +365 días | **S/ 280.00** | S/ 23.30 | Máximo ahorro (S/ 140 de descuento) |
 
 > [!IMPORTANT]
-> ### Se recomienda implementar la **PROPUESTA A (Sistema de Códigos de Acceso Offline)** como modelo inicial.
-> 
-> **Razones:**
-> 1. Es la más fácil de implementar y mantener sin infraestructura.
-> 2. Se adapta perfecto a tu canal de venta actual (WhatsApp directo).
-> 3. Genera ingresos recurrentes predecibles.
-> 4. Es fácil de entender para el usuario final (copiar un código).
-> 5. Se puede evolucionar hacia Propuesta C (híbrido) en el futuro sin romper nada.
+> ### 1 Solo Código para Planes Largos
+> A diferencia de sistemas antiguos que obligaban a entregar 3, 6 o 12 códigos mensuales separados, el nuevo formato criptográfico codifica los días exactos (`+90`, `+180` o `+365 días`). Con ingresar o escanear **1 solo código**, la app extiende automáticamente la vigencia por todo el periodo contratado.
 
-### Ruta de Evolución Sugerida
+---
+
+### 3.3. Modalidad "App Liberada para Siempre" (Licencia Perpetua de Alto Valor)
+Diseñada para dueños de negocio consolidados que rechazan los pagos mensuales y exigen comprar la herramienta de forma definitiva:
+
+* **Precio Sugerido:** **S/ 750.00 a S/ 950.00** (Pago Único).
+* **Titularidad:** Licencia de uso no exclusiva e intransferible conforme al D.L. 822 (autoría exclusiva de **Julio Angello Vasquez Navarro**).
+* **Vinculación Criptográfica:** Código Maestro firmado con Ed25519 vinculado al `DeviceFingerprint` del teléfono y a los datos fiscales del negocio (RUC / Nombre Comercial).
+* **Condición de Uso:** La app queda **liberada permanentemente** en ese dispositivo, sin requerir nunca más códigos de renovación ni conexión a internet para trabajar.
+* **Diferenciación de Actualizaciones:**
+  * **Hotfixes y Parches de Estabilidad:** Gratuitos de por vida para su versión autorizada.
+  * **Ventana de Nuevas Funciones:** 12 meses de acceso a todas las nuevas versiones mayores y menores que se liberen.
+  * **Vencido el año de actualizaciones:** La app instalada **sigue funcionando libre para siempre sin bloquearse jamás**. Si desea actualizar a una versión futura con nuevas funciones, puede adquirir un *Pase Anual de Actualización* (S/ 150.00).
+* **Blindaje Económico de la Cuota de IA (Gemini 3.8 Flash):**
+  1. **Cuota de Uso Justo Incluida:** 50 escaneos inteligentes mensuales incluidos mediante la infraestructura del autor.
+  2. **Opción "Mi Propia Clave IA" (BYOK - Bring Your Own Key):** En Ajustes, el comerciante puede pegar su propia clave gratuita de Google AI Studio para escaneos ilimitados sin que el autor asuma un solo centavo de costo.
+  3. **Packs de Recarga de IA:** Venta opcional de bolsas de escaneo (ej. 150 escaneos adicionales por S/ 20.00).
+
+---
+
+## ⚡ 4. Regla de Renovación Anticipada Sin Pérdida de Días
+
+En MochilaLista, el cálculo de extensión aplica la **Regla de Continuidad Garantizada**:
+
+```dart
+DateTime calcularNuevoVencimiento({
+  required DateTime vencimientoActual,
+  required int diasOtorgados,
+}) {
+  final DateTime ahora = DateTime.now();
+
+  // Si la licencia sigue activa y vigente en el futuro:
+  if (vencimientoActual.isAfter(ahora)) {
+    // Se suman los días exactamente a su fecha de expiración vigente
+    return vencimientoActual.add(Duration(days: diasOtorgados));
+  } else {
+    // Si la licencia ya expiró: se suman a partir del momento del canje
+    return ahora.add(Duration(days: diasOtorgados));
+  }
+}
+```
+
+### 📌 Ejemplo Práctico Detallado (Caso de Juan):
+* El comerciante Juan tiene su suscripción mensual activa, con fecha de vencimiento fijada para el **25 de Noviembre**.
+* El día **18 de Noviembre** (faltando 7 días para el vencimiento), Juan decide pagar su siguiente mes por Yape para no preocuparse durante su campaña escolar.
+* Julio Angello le genera un código mensual estándar de `+30 días` (`diasOtorgados = 30`).
+* Al momento en que Juan canjea el código en la app:
+  $$\text{Fecha Base} = 25\text{ de Noviembre (su vencimiento vigente, no la fecha de hoy)}$$
+  $$\text{Nuevo Vencimiento} = 25\text{ de Noviembre} + 30\text{ días} = 25\text{ de Diciembre}$$
+* **Resultado:** Juan tiene **37 días de servicio continuo garantizado** desde el momento del canje.
+* **Beneficio:** Cero fricción, cero reclamos de "me comieron una semana de app" y estímulo comercial directo para que los clientes paguen por anticipado.
+
+---
+
+## 🛡️ 5. Regla Anti-Clonación Inteligente al Restaurar Backups `.mlbg`
+
+Para prevenir que un comerciante o tercero intente comprar una sola Licencia Perpetua y luego clonarla en 10 celulares restaurando un archivo de copia de seguridad (`.mlbg`), el sistema aplica una **validación de huella de hardware condicional**:
+
+```mermaid
+flowchart TD
+    A[📦 Archivo de Respaldo .mlbg Seleccionado] --> B[Descifrado AES-256 con PIN/Contraseña]
+    B --> C{¿backup.deviceFingerprint == currentDeviceFingerprint?}
+    
+    C -->|SÍ: Mismo Teléfono| D[✅ Restauración Completa Transparente]
+    D --> D1[Restaura Catálogo, Ventas, Clientes, Historial]
+    D --> D2[Restaura Licencia Activa - Cero fricción]
+    
+    C -->|NO: Dispositivo Nuevo o Distinto| E[🛡️ Restauración Protegida de Datos]
+    E --> E1[Restaura el 100% de Datos Comerciales]
+    E --> E2[NO activa la licencia del teléfono anterior]
+    E --> E3[Muestra Pantalla: 'Dispositivo Nuevo Detectado']
+    E3 --> E4[Ofrece botón: 'Solicitar Migración de Licencia por WhatsApp']
+```
+
+### Resultados de la Regla:
+1. **En el mismo teléfono (formateo o reinstalación):** La experiencia es 100% automática; el comerciante no tiene que pedir nuevos códigos.
+2. **En un teléfono nuevo:** El comerciante no pierde **ni una sola venta, producto o deuda de cliente**, pero el nuevo dispositivo no queda activado ilegalmente. El comerciante contacta a Julio Angello por WhatsApp, quien gestiona la reasignación de su licencia (o tarifa de reasignación según corresponda).
+
+---
+
+## 📲 6. Experiencia de Canje: Código QR Escaneable + Código de Texto
+
+Para asegurar que cualquier comerciante pueda activar su app sin frustración técnica, el sistema implementa dos métodos de canje simultáneos:
 
 ```
-Ahora              → 6 meses           → 1 año              → 2 años
-┌──────────────┐   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│ Propuesta A  │──▶│ A + Mejoras  │──▶│ Propuesta C  │──▶│ Google Play  │
-│ Códigos      │   │ + Planes     │    │ Híbrido      │    │ + In-App     │
-│ Offline      │   │   Anuales    │    │ + Firebase   │    │   Billing    │
-└──────────────┘   └──────────────┘    └──────────────┘    └──────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│             EXPERIENCIA DE CANJE DIRECTA POR WHATSAPP                 │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│   1. VÍA CÓDIGO QR (Instantáneo en 1 Segundo):                          │
+│      El cliente recibe una imagen QR en su WhatsApp.                   │
+│      - Modo A (Desde otro equipo / PC): Apunta con la cámara de        │
+│        MochilaLista directamente al chat y se activa de inmediato.     │
+│      - Modo B (En el mismo teléfono): El cliente toma captura de       │
+│        pantalla o guarda la foto, abre MochilaLista, presiona          │
+│        [ 🖼️ Escanear desde Galería/Captura ] y la app decodifica el QR  │
+│        automáticamente sin requerir una segunda pantalla.              │
+│                                                                        │
+│   2. VÍA CÓDIGO DE TEXTO CON AUTODETECCIÓN:                            │
+│      El cliente copia el texto recibido por WhatsApp:                  │
+│      "ML9-7K2X-A365-N104-E2611-F9A8B7"                                 │
+│      Al abrir MochilaLista, la app inspecciona el portapapeles,        │
+│      reconoce el prefijo oficial 'ML9-' y muestra un modal automático: │
+│      ┌────────────────────────────────────────────────────────┐        │
+│      │ 🔑 Código de Activación Detectado                      │        │
+│      │ ¿Deseas activar tu licencia para el dispositivo        │        │
+│      │ ML-7K2X por 365 días?                                  │        │
+│      │            [  ✅ Activar Licencia Ahora  ]             │        │
+│      └────────────────────────────────────────────────────────┘        │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📱 Sistema de Actualización de Versiones
+## 🔔 7. Sistema de Alertas Progresivas y Bloqueo Amigable
 
-### Proceso Propuesto para Enviar Actualizaciones
+Para proteger el negocio sin interrumpir la operación del comerciante en plena venta de mostrador, el sistema implementa una escala de 5 estados:
 
-Dado que la distribución es directa (APK), el sistema de actualización debe considerar:
+```mermaid
+stateDiagram-v2
+    [*] --> Activa: Instalación (30 días Trial)
+    Activa --> AlertaPreventiva: Faltan 7 días
+    AlertaPreventiva --> AlertaUrgente: Faltan 3 días
+    AlertaUrgente --> BloqueoSuave: Licencia Vencida (Día 0)
+    BloqueoSuave --> BloqueoEstricto: 7 Días tras Vencimiento
+    
+    BloqueoSuave --> Activa: Ingreso de Código Válido
+    BloqueoEstricto --> Activa: Ingreso de Código Válido
+```
 
-#### 1. Versionado Claro
-- Mantener el esquema actual: `X.Y.Z+build` (ej: `8.5.0+47`)
-- Incluir un **changelog** legible dentro de la app (pantalla "Novedades").
+### Tabla de Comportamiento por Estado:
 
-#### 2. Preservación de Licencia al Actualizar
+| Estado | Tiempo | Experiencia en la App | Operaciones Permitidas |
+|--------|:------:|-----------------------|------------------------|
+| **Verde (Activa)** | > 7 días | Interfaz limpia sin avisos molestos. | 100% de funciones operativas. |
+| **Amarillo (Preventivo)** | 7 a 4 días | Banner discreto superior en el Home: *"Tu licencia vence en X días. Toca aquí para renovar por WhatsApp"*. | 100% de funciones operativas. |
+| **Naranja (Urgente)** | 3 a 1 día | Diálogo informativo al abrir la app con botón directo a WhatsApp. Badge en el perfil. | 100% de funciones operativas. |
+| **Rojo (Bloqueo Suave)** | 0 a 7 días vencida | Pantalla de Licencia Vencida. Permite consultar catálogo, ver historial de clientes y exportar backups, pero **bloquea la creación de nuevas ventas, cotizaciones o escaneo de facturas**. | Solo lectura + Exportación de Backups. |
+| **Bloqueo Estricto** | > 7 días vencida | Solo muestra la pantalla de ingreso de código, el código QR de pago y el botón de **Exportar Copia de Seguridad Inmediata**. | Cero operaciones comerciales. Datos 100% seguros y exportables. |
+
 > [!CAUTION]
-> **CRÍTICO:** Al instalar una nueva versión del APK sobre la existente, la licencia activa del usuario **debe preservarse**. Esto se logra porque:
-> - La base de datos SQLite persiste entre actualizaciones (misma ruta, mismo `applicationId`).
-> - La licencia se almacena en la base de datos local.
-> - Las `SharedPreferences` también persisten.
-
-#### 3. Canales de Distribución de Actualizaciones
-
-| Canal | Método | Ventaja |
-|-------|--------|---------|
-| WhatsApp | Enviar APK directamente | El más simple y usado |
-| Google Drive | Link compartido a carpeta con APK | El cliente siempre tiene acceso a la última versión |
-| Telegram | Canal privado para clientes | Notificaciones automáticas de nuevas versiones |
-| Dentro de la app | Banner "Nueva versión disponible" con link | El más profesional (requiere un JSON en cloud) |
-
-#### 4. Migración de Datos Entre Versiones
-- El sistema `onUpgrade` de SQLite ya maneja migraciones automáticamente.
-- Las actualizaciones NO deben requerir que el usuario pierda datos ni reingrese su licencia.
+> **Retención Garantizada de Datos:** La app **NUNCA** borra los datos del cliente. Incluso tras meses de vencida, el comerciante siempre puede exportar su respaldo `.mlbg`.
 
 ---
 
-### 💰 Métodos de Pago Sugeridos
+## 💳 8. Canales de Recaudación en el Mercado Peruano
 
-Para tu mercado (Perú, comerciantes locales):
+La pantalla de estado de licencia y el mensaje automático de renovación integran los métodos de pago estándar de la economía peruana:
 
-| Método | Descripción | Implementación |
-|--------|-------------|----------------|
-| **Yape** | Pago instantáneo, el más usado en Perú | Muestra tu QR de Yape en la app |
-| **Plin** | Similar a Yape | QR en la app |
-| **Transferencia bancaria** | Para montos mayores | Datos en la app |
-| **Efectivo** | En persona | Para clientes presenciales |
-| **WhatsApp Pay** | Si está disponible en tu zona | Integración futura |
-
-La app mostraría una pantalla de "Cómo Renovar" con instrucciones claras y los datos de pago.
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   MÉTODOS DE PAGO INTEGRADOS EN LA APP                 │
+├────────────────────────────────────────────────────────────────────────┤
+│ 📱 YAPE / PLIN (Instantáneo):                                          │
+│    Número Oficial: +51 999 888 777                                     │
+│    Titular: Julio Angello Vasquez Navarro                              │
+│    Muestra el Código QR de Yape oficial dentro de la misma app.        │
+│                                                                        │
+│ 🏦 TRANSFERENCIA BANCARIA DIRECTA (Cuentas y Códigos Interbancarios):  │
+│    • BCP (Banco de Crédito del Perú):                                  │
+│      Cuenta Corriente / Ahorros: 191-XXXXXXXX-0-XX                     │
+│      CCI: 002-191-XXXXXXXXXXXX-XX                                      │
+│    • BBVA Perú:                                                        │
+│      Cuenta Ahorros: 0011-XXXX-XXXXXXXXXX                              │
+│      CCI: 011-XXX-XXXXXXXXXXXXXXXX-XX                                  │
+│    • Interbank:                                                        │
+│      Cuenta Simple: 200-XXXXXXXXXX                                     │
+│      CCI: 003-200-XXXXXXXXXXXXXX-XX                                    │
+│    • Banco de la Nación (Indispensable para clientes en provincias):   │
+│      Cuenta: 04-XXX-XXXXXX                                             │
+│                                                                        │
+│ 💬 PROCESO DE VALIDACIÓN:                                             │
+│    El cliente envía la captura de su voucher por WhatsApp.             │
+│    En menos de 2 minutos, generas el código o QR desde tu laptop      │
+│    y se lo devuelves por el mismo chat.                                │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
+## 📈 9. Proyección Financiera de Escalamiento Anual
+
+Comparativa de ingresos proyectados para una cartera controlada de **60 comercios activos** durante el primer año:
+
+```
+Escenario: Cartera de 60 Comercios Activos en 12 Meses
+
+A) Distribución Típica de Cartera (75% Suscripción + 25% Licencia Perpetua):
+   ├── 45 Comercios en Suscripción Periódica (Promedio ponderado S/ 25.00/mes):
+   │   └── S/ 1,125.00 mensuales = S/ 13,500.00 al año (Ingreso Recurrente Predecible)
+   └── 15 Comercios en Licencia Perpetua (S/ 850.00 pago único):
+       └── S/ 12,750.00 de inyección inmediata de capital
+   ────────────────────────────────────────────────────────────────────────
+   TOTAL INGRESOS AÑO 1: S/ 26,250.00 PEN
+
+B) Ingresos Recurrentes Año 2 (Crecimiento a 100 Comercios):
+   ├── 75 Comercios en Suscripción (Promedio S/ 25.00/mes):
+   │   └── S/ 1,875.00 mensuales = S/ 22,500.00 al año
+   ├── 15 Clientes Perpetuos del Año 1 renovando Pase de Actualizaciones (S/ 150.00):
+   │   └── S/ 2,250.00 anuales
+   └── 25 Nuevas Licencias Perpetuas vendidas (S/ 850.00):
+       └── S/ 21,250.00
+   ────────────────────────────────────────────────────────────────────────
+   TOTAL INGRESOS AÑO 2: S/ 46,000.00 PEN
+```
+
+---
 *Continúa en → [03_PLAN_IMPLEMENTACION_FASES.md](file:///c:/Users/vjuli/Documents/mochilalista-app/informe_proyecto/03_PLAN_IMPLEMENTACION_FASES.md)*

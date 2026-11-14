@@ -50,6 +50,32 @@ class NotificationModel {
     return false;
   }
 
+  /// Categoría canónica del ítem: 'inventario', 'cobranza', 'cotizacion' o 'general'
+  String get categoria {
+    if (objetoRelacionadoTipo == 'producto') return 'inventario';
+    if (objetoRelacionadoTipo == 'cuota') return 'cobranza';
+    if (objetoRelacionadoTipo == 'cotizacion') return 'cotizacion';
+    if (objetoRelacionadoTipo == 'recompensa') return 'recompensa';
+    return 'general';
+  }
+
+  /// Título limpio sin prefijos de emojis residuales (⚠️, 🚨, 💰, 📦, etc.)
+  String get cleanTitle {
+    return title.replaceAll(RegExp(r'^(💰|⚠️|🚨|📋|✅|📦)\s*'), '').trim();
+  }
+
+  /// Fecha hasta la cual la alerta fue pospuesta (Snooze)
+  DateTime? get snoozedUntil {
+    final s = metadata['snoozed_until']?.toString();
+    return s != null ? DateTime.tryParse(s)?.toLocal() : null;
+  }
+
+  /// Indica si la notificación está actualmente en periodo de posposición
+  bool get isSnoozed {
+    final su = snoozedUntil;
+    return su != null && su.isAfter(DateTime.now());
+  }
+
   /// Clave canónica de silenciamiento para bloquear futuras alertas del mismo ítem
   String get effectiveMuteKey {
     if (muteKey != null && muteKey!.isNotEmpty) return muteKey!;

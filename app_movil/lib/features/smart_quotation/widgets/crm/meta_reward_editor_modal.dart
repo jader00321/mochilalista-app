@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
-import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/loyalty_toast_feedback.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 
 class MetaRewardEditorModal extends StatefulWidget {
@@ -159,7 +159,7 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
     final value = double.tryParse(_valueCtrl.text.trim().replaceAll(',', '.')) ?? 0.0;
 
     if (points <= 0) {
-      CustomSnackBar.show(context, message: 'Los puntos requeridos deben ser mayores a 0');
+      LoyaltyToastFeedback.showWarning(context, 'Los puntos requeridos deben ser mayores a 0');
       return;
     }
 
@@ -184,12 +184,12 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
         final unlocked = await _clientService.evaluateAllClientsForActiveGoals(widget.negocioId);
         if (mounted) {
           if (unlocked.isNotEmpty) {
-            CustomSnackBar.show(
+            LoyaltyToastFeedback.showSuccess(
               context,
-              message: 'Meta creada. ${unlocked.length} cliente(s) ya cumplen y sus premios están listos para revisar',
+              'Meta creada. ${unlocked.length} cliente(s) ya cumplen y sus premios están listos para revisar',
             );
           } else {
-            CustomSnackBar.show(context, message: 'Meta de recompensa creada');
+            LoyaltyToastFeedback.showSuccess(context, 'Meta de recompensa creada');
           }
           Navigator.pop(context, created);
         }
@@ -198,19 +198,19 @@ class _MetaRewardEditorModalState extends State<MetaRewardEditorModal> {
         final unlocked = await _clientService.evaluateAllClientsForActiveGoals(widget.negocioId);
         if (mounted) {
           if (unlocked.isNotEmpty) {
-            CustomSnackBar.show(
+            LoyaltyToastFeedback.showSuccess(
               context,
-              message: 'Meta actualizada. ${unlocked.length} cliente(s) ya cumplen y sus premios están listos para revisar',
+              'Meta actualizada. ${unlocked.length} cliente(s) ya cumplen y sus premios están listos para revisar',
             );
           } else {
-            CustomSnackBar.show(context, message: 'Meta actualizada');
+            LoyaltyToastFeedback.showSuccess(context, 'Meta actualizada');
           }
           Navigator.pop(context, model);
         }
       }
     } catch (e) {
       if (mounted) {
-        CustomSnackBar.show(context, message: 'Error al guardar la meta: $e');
+        LoyaltyToastFeedback.showWarning(context, 'Error al guardar la meta: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

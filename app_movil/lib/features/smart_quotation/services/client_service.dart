@@ -2164,13 +2164,17 @@ class ClientService {
           );
         }
 
-        int newPts = currentPts - reqPts;
-        await txn.update(
-          'clientes',
-          {'puntos_actuales': newPts},
-          where: 'id = ?',
-          whereArgs: [clientId],
+        // Blindaje atómico en SQLite: garantiza saldo suficiente en concurrencia (WHERE puntos_actuales >= ?)
+        final updatedRows = await txn.rawUpdate(
+          'UPDATE clientes SET puntos_actuales = puntos_actuales - ? WHERE id = ? AND puntos_actuales >= ?',
+          [reqPts, clientId, reqPts],
         );
+        if (updatedRows == 0) {
+          throw Exception(
+            "Saldo insuficiente o reclamo concurrente: el cliente no dispone de $reqPts pts.",
+          );
+        }
+        final int newPts = currentPts - reqPts;
 
         final now = DateTime.now().toIso8601String();
         final String benefitType =

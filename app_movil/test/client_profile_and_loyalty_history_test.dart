@@ -318,6 +318,7 @@ void main() {
             client: client,
             autoLoadHistory: false,
             initialMovements: const [],
+            initialTabIndex: 1, // Pestaña 2: Historial de Puntos
           ),
         ),
         trackingProv: trackingProv,
@@ -327,7 +328,7 @@ void main() {
       await tester.pump();
 
       // Abrir Bono Manual
-      final bonoBtn = find.text('Bono Manual');
+      final bonoBtn = find.text('+ Bono Manual');
       expect(bonoBtn, findsOneWidget);
       await tester.tap(bonoBtn);
       await tester.pump();
@@ -421,6 +422,7 @@ void main() {
             client: client,
             autoLoadHistory: false,
             initialMovements: movements,
+            initialTabIndex: 1, // Pestaña 2: Historial de Puntos
           ),
         ),
         trackingProv: trackingProv,
@@ -438,8 +440,10 @@ void main() {
       expect(find.text('Canje de descuento'), findsOneWidget);
 
       // Filtrar por + Ganados
+      await tester.ensureVisible(find.text('+ Ganados'));
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.text('+ Ganados'));
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('Compra escolar'), findsOneWidget);
       expect(find.text('Canje de descuento'), findsNothing);
 

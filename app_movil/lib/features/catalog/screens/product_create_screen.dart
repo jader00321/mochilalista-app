@@ -50,6 +50,7 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
   final Map<String, GlobalKey> _presentationKeys = {};
   bool _allExpanded = true;
   bool _isSaving = false;
+  bool _isHydrating = false;
 
   @override
   void initState() {
@@ -64,6 +65,7 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
     _baseCostCtrl.addListener(_onBaseCostChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isHydrating = true;
       final invProv = Provider.of<InventoryProvider>(context, listen: false);
       invProv.loadMasterData();
 
@@ -118,10 +120,12 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
           (_controllers.first['barcode'] as TextEditingController).text = widget.initialBarcode!.trim();
         }
       }
+      _isHydrating = false;
     });
   }
 
   void _onBaseCostChanged() {
+    if (_isHydrating) return;
     final baseCost = double.tryParse(_baseCostCtrl.text) ?? 0.0;
     for (var c in _controllers) {
       c['costoBaseUnitario'] = baseCost;
@@ -422,8 +426,14 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
               bundle.detailData.includeBarcode ? bundle.detailData.barcode : null,
           transferredStock: (bundle.detailData.includeStock &&
                   bundle.detailData.transferFullStock)
-              ? bundle.detailData.stockUnits
+              ? bundle.detailData.packageUnits
               : 0,
+          transferredBaseUnits: (bundle.detailData.includeStock &&
+                  bundle.detailData.transferFullStock)
+              ? bundle.detailData.baseUnits
+              : 0,
+          isSharedOrigin: bundle.detailData.isSharedOrigin,
+          shouldDeductSharedPool: bundle.detailData.deductStockFromOrigin,
         );
         Navigator.pop(context, result);
       } else {

@@ -230,7 +230,7 @@ void main() {
         deliverImmediately: true,
       ))!;
 
-      expect(reward.estado, equals('ENTREGADA'));
+      expect(reward.estado, equals('CANJEADA'));
       expect(reward.puntosConsumidos, equals(50));
 
       final cAfter = await clientService.getClientById(client.id);
@@ -295,8 +295,8 @@ void main() {
       expect(cAfter!.puntosActuales, equals(110));
 
       final ledger = await clientService.getClientLoyaltyLedger(client.id);
-      expect(ledger.any((l) => l.tipoMovimiento == 'COMPRA_CONTADO' && l.puntosDelta == 80), isTrue);
-      expect(ledger.any((l) => l.tipoMovimiento == 'COTIZACION_CONCRETADA_BONO' && l.puntosDelta == 30), isTrue);
+      expect(ledger.any((l) => l.tipoMovimiento == 'GANANCIA_COMPRA' && l.puntosDelta == 80), isTrue);
+      expect(ledger.any((l) => l.tipoMovimiento == 'BONO_COTIZACION_CONCRETADA' && l.puntosDelta == 30), isTrue);
 
       // Reversión Atómica en voidSale
       await salesService.voidSale(sale.id, testNegocioId, 'Error en caja');
@@ -305,7 +305,7 @@ void main() {
       expect(cAfterVoid!.puntosActuales, equals(0)); // Reversión de los 110 puntos
 
       final ledgerAfter = await clientService.getClientLoyaltyLedger(client.id);
-      expect(ledgerAfter.any((l) => l.tipoMovimiento == 'ANULACION_VENTA_REVERSA'), isTrue);
+      expect(ledgerAfter.any((l) => l.tipoMovimiento == 'REVERSION_ANULACION'), isTrue);
     });
 
     test('Reglas de Pagos: Abono inicial crédito, Pago puntual, Bono de Racha y Liquidación total', () async {
@@ -396,7 +396,7 @@ void main() {
       expect(c.rachaPagosPuntuales, equals(2));
 
       final ledger = await clientService.getClientLoyaltyLedger(client.id);
-      expect(ledger.any((l) => l.tipoMovimiento == 'PAGO_PUNTUAL_BONO' && l.puntosDelta == 15), isTrue);
+      expect(ledger.any((l) => l.tipoMovimiento == 'BONO_PAGO_PUNTUAL' && l.puntosDelta == 15), isTrue);
       expect(ledger.any((l) => l.tipoMovimiento == 'BONO_RACHA_PAGOS' && l.puntosDelta == 25), isTrue);
       expect(ledger.any((l) => l.tipoMovimiento == 'BONO_LIQUIDACION_SIN_MORA' && l.puntosDelta == 50), isTrue);
     });
@@ -445,7 +445,7 @@ void main() {
         puntosActuales: 100,
       );
 
-      expect(msg, contains('GUÍA OFICIAL DE PUNTOS Y PREMIOS • Librería Central'));
+      expect(msg.toUpperCase(), contains('GUÍA OFICIAL DE PUNTOS Y PREMIOS • LIBRERÍA CENTRAL'));
       expect(msg, contains('Juan Pérez'));
       expect(msg, contains('Compras al Contado'));
       expect(msg, contains('+20 pts extra'));
@@ -464,13 +464,20 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(
-        const MaterialApp(
+        MaterialApp(
           home: Scaffold(
-            body: LoyaltyRulesConfigModal(negocioId: testNegocioId),
+            body: LoyaltyRulesConfigModal(
+              negocioId: testNegocioId,
+              initialRules: LoyaltyRulesModel(
+                negocioId: testNegocioId,
+                updatedAt: DateTime.now().toIso8601String(),
+              ),
+            ),
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text("Configurar Reglas de Puntos"), findsOneWidget);
       expect(find.byType(SingleChildScrollView), findsWidgets);
@@ -478,7 +485,8 @@ void main() {
 
       // Cambio a 360dp
       tester.view.physicalSize = const Size(360, 750);
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
       expect(tester.takeException(), isNull);
     });
 
@@ -505,13 +513,13 @@ void main() {
           id: 1,
           negocioId: testNegocioId,
           clienteId: 1,
-          tipoMovimiento: 'RESTAURACION_MIGRACION',
+          tipoMovimiento: 'AJUSTE_MANUAL',
           puntosDelta: 50,
           puntosSaldoResultante: 50,
           scoreDelta: 0,
           scoreResultante: 500,
-          motivo: 'Restauración por actualización: Puntos devueltos de meta ganador',
-          referenciaTipo: 'recompensa',
+          motivo: 'Bono de fidelización otorgado',
+          referenciaTipo: 'manual',
           fechaRegistro: DateTime.now().toIso8601String(),
         ),
       ];
@@ -523,15 +531,17 @@ void main() {
               client: client,
               autoLoadHistory: false,
               initialMovements: movements,
+              initialTabIndex: 1, // Pestaña 2: Historial de Puntos
             ),
           ),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.text('Jj'), findsOneWidget);
       expect(find.text('50 pts'), findsWidgets);
-      expect(find.textContaining('Restauración por actualización'), findsOneWidget);
+      expect(find.textContaining('Bono de fidelización otorgado'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

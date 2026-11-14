@@ -129,7 +129,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
       // 4. Cargar recompensas pendientes
       final pending = await _clientService.getPendingReviewRewards(negocioId);
 
-      // 5. Cargar recompensas pasadas
+      // 5. Cargar recompensas pasadas (excluyendo registros técnicos de migración)
       final db = await _clientService.dbHelper.database;
       final pastRows = await db.rawQuery('''
         SELECT rc.*, c.nombre_completo AS cliente_nombre, c.telefono AS cliente_telefono,
@@ -138,7 +138,9 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         FROM recompensas_cliente rc
         JOIN clientes c ON rc.cliente_id = c.id
         JOIN metas_recompensas mr ON rc.meta_id = mr.id
-        WHERE mr.negocio_id = ? AND rc.estado != 'PENDIENTE_REVISION'
+        WHERE mr.negocio_id = ? 
+          AND rc.estado != 'PENDIENTE_REVISION'
+          AND rc.estado != 'MIGRADA_A_SALDO_LIBRE'
         ORDER BY rc.fecha_canje DESC, rc.fecha_aprobacion DESC, rc.fecha_desbloqueo DESC
         LIMIT 40
       ''', [negocioId]);
@@ -238,6 +240,10 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         title: "Cartilla de Puntos y Premios",
         phone: "",
         initialMessage: msg,
+        rules: rules,
+        activeGoals: _goals.where((g) => g.activo).toList(),
+        businessName: auth.activeBusinessName,
+        availableClients: _allClients,
       );
     }
   }
@@ -245,7 +251,12 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
   // --- FILTROS TAB 1 (Reputación) ---
   List<ClientModel> get _filteredReputationClients {
     return _allClients.where((c) {
-      if (_selectedTierFilter == 'CASI_EN_LA_META') {
+      if (_selectedTierFilter == 'CON_PREMIO_LISTO') {
+        if (!_clientsClaimableMap.containsKey(c.id) ||
+            (_clientsClaimableMap[c.id]?.isEmpty ?? true)) {
+          return false;
+        }
+      } else if (_selectedTierFilter == 'CASI_EN_LA_META') {
         if (!_almostAtGoalMap.containsKey(c.id)) {
           return false;
         }
@@ -351,12 +362,6 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            icon: const Icon(Icons.tune_rounded),
-            tooltip: "Reglas de Puntos",
-            onPressed: _openRulesConfig,
-          ),
           IconButton(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             icon: const Icon(Icons.refresh_rounded),
@@ -502,6 +507,12 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
   // CABECERA EJECUTIVA SUPERIOR ANTI-COLISIÓN (3 COLUMNAS PROPORCIONALES)
   // =========================================================================
   Widget _buildExecutiveHeader(bool isDark, Color cardColor, Color textColor) {
+    final int premiosListosTotal = _clientsWithClaimableRewards.fold<int>(
+      0,
+      (sum, item) => sum + ((item['claimable_goals'] as List?)?.length ?? 0),
+    );
+    final bool hasPremiosListos = premiosListosTotal > 0 || _pendingRewards.isNotEmpty;
+
     return Container(
       height: 58,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -528,10 +539,14 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
           Container(height: 28, width: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
           Expanded(
             child: _buildExecutiveMetric(
-              "Por Revisar",
-              "${_pendingRewards.length} pendientes",
+              "Premios Listos",
+              premiosListosTotal > 0
+                  ? "$premiosListosTotal disponible${premiosListosTotal > 1 ? 's' : ''}"
+                  : (_pendingRewards.isNotEmpty
+                      ? "${_pendingRewards.length} pendientes"
+                      : "0 pendientes"),
               Icons.notifications_active_rounded,
-              _pendingRewards.isNotEmpty ? Colors.redAccent : Colors.green,
+              hasPremiosListos ? Colors.green[700]! : Colors.grey,
               textColor,
               isDark,
             ),
@@ -653,6 +668,15 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                       Icons.people_outline_rounded,
                       Colors.grey,
                     ),
+                    if (_clientsWithClaimableRewards.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      _buildTierFilterChip(
+                        'CON_PREMIO_LISTO',
+                        'Con Premio Listo (${_clientsWithClaimableRewards.length})',
+                        Icons.card_giftcard_rounded,
+                        Colors.amber[800]!,
+                      ),
+                    ],
                     const SizedBox(width: 6),
                     _buildTierFilterChip(
                       'CASI_EN_LA_META',
@@ -778,6 +802,25 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     final clientPendingRewards = _pendingRewards.where((rw) => rw.clienteId == client.id).toList();
     final clientClaimable = _clientsClaimableMap[client.id];
 
+    // Cálculo de Próxima Meta para micro-barra de progreso
+    RewardGoalModel? nextGoal;
+    final activeGoals = _goals.where((g) => g.activo).toList();
+    if (activeGoals.isNotEmpty) {
+      activeGoals.sort((a, b) => a.puntosRequeridos.compareTo(b.puntosRequeridos));
+      for (final g in activeGoals) {
+        if (g.puntosRequeridos > client.puntosActuales) {
+          nextGoal = g;
+          break;
+        }
+      }
+      nextGoal ??= activeGoals.last;
+    }
+    final int nextGoalTarget = nextGoal?.puntosRequeridos ?? 1;
+    final double nextGoalProgress = nextGoalTarget > 0
+        ? (client.puntosActuales / nextGoalTarget).clamp(0.0, 1.0)
+        : 1.0;
+    final int nextGoalPercent = (nextGoalProgress * 100).toInt();
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: cardColor,
@@ -872,7 +915,9 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                                 Icon(Icons.phone_rounded, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
                                 const SizedBox(width: 4),
                                 Text(
-                                  client.phone.isNotEmpty ? client.phone : "Sin teléfono",
+                                  (client.phone.isNotEmpty && client.phone != '000000000')
+                                      ? client.phone
+                                      : "Sin teléfono",
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -1029,68 +1074,120 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                     ],
                   ),
                 ),
-              ] else if (almostAtGoal != null) ...[
+              ] else if (nextGoal != null) ...[
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.12),
+                    color: isDark ? const Color(0xFF232333) : Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : Colors.grey.shade200,
+                    ),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.track_changes_rounded, size: 14, color: Colors.amber[800]),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          "A ${almostAtGoal['puntos_faltantes']} pts de: ${(almostAtGoal['goal'] as RewardGoalModel).nombre}",
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? Colors.amber[300] : Colors.amber[900],
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.track_changes_rounded,
+                            size: 13,
+                            color: Colors.amber[800],
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      InkWell(
-                        onTap: () {
-                          final auth = Provider.of<AuthProvider>(context, listen: false);
-                          LoyaltyWhatsAppService.sendAlmostAtGoalNotification(
-                            context: context,
-                            phone: client.phone,
-                            clientName: client.fullName.split(' ').first,
-                            businessName: auth.businessName,
-                            goal: almostAtGoal['goal'] as RewardGoalModel,
-                            puntosFaltantes: almostAtGoal['puntos_faltantes'] as int,
-                            puntosActuales: client.puntosActuales,
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF25D366),
-                            borderRadius: BorderRadius.circular(6),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              "Próxima meta: ${nextGoal.nombre}",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.grey[300] : Colors.grey[800],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.send_rounded, size: 10, color: Colors.white),
-                              SizedBox(width: 3),
-                              Text(
-                                "Impulso",
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                          const SizedBox(width: 6),
+                          if (almostAtGoal != null) ...[
+                            InkWell(
+                              onTap: () {
+                                final auth = Provider.of<AuthProvider>(context, listen: false);
+                                LoyaltyWhatsAppService.sendAlmostAtGoalNotification(
+                                  context: context,
+                                  phone: client.phone,
+                                  clientName: client.fullName.split(' ').first,
+                                  businessName: auth.businessName,
+                                  goal: almostAtGoal['goal'] as RewardGoalModel,
+                                  puntosFaltantes: almostAtGoal['puntos_faltantes'] as int,
+                                  puntosActuales: client.puntosActuales,
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF25D366),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.send_rounded, size: 9, color: Colors.white),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      "Impulso",
+                                      style: TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
+                            ),
+                          ] else ...[
+                            Text(
+                              "${client.puntosActuales}/$nextGoalTarget pts ($nextGoalPercent%)",
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.amber[800],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: nextGoalProgress,
+                                minHeight: 4,
+                                backgroundColor: isDark ? Colors.white12 : Colors.grey.shade200,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  nextGoalProgress >= 1.0 ? Colors.green : Colors.amber[700]!,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                          if (almostAtGoal != null) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              "${client.puntosActuales}/$nextGoalTarget pts ($nextGoalPercent%)",
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.amber[800],
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -1156,24 +1253,38 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                           color: tier.limiteCreditoSugerido > 0 ? Colors.green[600] : Colors.red,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      InkWell(
-                        onTap: () => ClientLoyaltyHistoryModal.show(
-                          context,
-                          client: client,
-                          onPointsChanged: _loadData,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white10 : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(Icons.history_rounded, size: 15, color: textColor),
-                        ),
-                      ),
                     ],
+                  ),
+                  InkWell(
+                    onTap: () => ClientLoyaltyHistoryModal.show(
+                      context,
+                      client: client,
+                      onPointsChanged: _loadData,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.stars_rounded, size: 12, color: Colors.amber[800]),
+                          const SizedBox(width: 3),
+                          Text(
+                            "Ver Puntos >",
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.amber[300] : Colors.amber[900],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1266,25 +1377,24 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
               const SizedBox(height: 20),
             ],
 
-            // --- SECCIÓN 2: RECOMPENSAS PENDIENTES DE REVISIÓN ---
-            Row(
-              children: [
-                Icon(Icons.pending_actions_rounded, color: Colors.orange[700], size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "Premios Desbloqueados por Revisar",
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (_pendingRewards.isNotEmpty) ...[
+            // --- SECCIÓN 2: RECOMPENSAS PENDIENTES DE REVISIÓN (Solo si existen) ---
+            if (_pendingRewards.isNotEmpty) ...[
+              Row(
+                children: [
+                  Icon(Icons.pending_actions_rounded, color: Colors.orange[700], size: 20),
                   const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "Premios Desbloqueados por Revisar",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
@@ -1297,14 +1407,17 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                     ),
                   ),
                 ],
-              ],
-            ),
-            const SizedBox(height: 10),
+              ),
+              const SizedBox(height: 10),
+              ..._pendingRewards.map((rw) => _buildPendingRewardCard(rw, isDark, cardColor, textColor)),
+              const SizedBox(height: 20),
+            ],
 
             if (_pendingRewards.isEmpty && _clientsWithClaimableRewards.isEmpty)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF1B2A1E) : Colors.green.shade50,
                   borderRadius: BorderRadius.circular(16),
@@ -1318,7 +1431,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        "¡Todo al día! No hay recompensas pendientes de confirmación.",
+                        "¡Todo al día! No hay recompensas pendientes ni premios listos para reclamar.",
                         style: TextStyle(
                           fontSize: 12.5,
                           color: isDark ? Colors.green[200] : Colors.green[900],
@@ -1328,9 +1441,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                     ),
                   ],
                 ),
-              )
-            else
-              ..._pendingRewards.map((rw) => _buildPendingRewardCard(rw, isDark, cardColor, textColor)),
+              ),
 
             const SizedBox(height: 22),
 
@@ -1513,30 +1624,62 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
             ],
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
+          Column(
             children: goals.map((g) {
-              return ActionChip(
-                avatar: Icon(Icons.card_giftcard_rounded, size: 14, color: Colors.amber[800]),
-                label: Text(
-                  "${g.nombre} (${g.puntosRequeridos} pts)",
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              return Container(
+                margin: const EdgeInsets.only(top: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF28221D) : Colors.amber.shade50.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
                 ),
-                backgroundColor: isDark ? const Color(0xFF2E2419) : Colors.amber.shade50,
-                side: BorderSide(color: Colors.amber.withValues(alpha: 0.4)),
-                onPressed: () async {
-                  await showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (ctx) => RewardReviewModal(
-                      goal: g,
-                      client: client,
-                      onActionCompleted: _loadData,
+                child: Row(
+                  children: [
+                    Icon(Icons.card_giftcard_rounded, size: 14, color: Colors.amber[800]),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        "${g.nombre} (${g.puntosRequeridos} pts)",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  );
-                },
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        await showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (ctx) => RewardReviewModal(
+                            goal: g,
+                            client: client,
+                            onActionCompleted: _loadData,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.touch_app_rounded, size: 12),
+                      label: const Text(
+                        "Reclamar",
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber[700],
+                        foregroundColor: Colors.white,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ],
+                ),
               );
             }).toList(),
           ),
@@ -1813,8 +1956,25 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     Color cardColor,
     Color textColor,
   ) {
-    final bool isRedeemed = rw.estado == 'CANJEADA';
-    final Color badgeColor = isRedeemed ? Colors.green : Colors.grey;
+    final bool isDelivered = rw.estado == 'CANJEADA' || rw.estado == 'ENTREGADA';
+    final bool isApproved = rw.estado == 'APROBADA_NOTIFICADA';
+
+    final Color badgeColor = isDelivered
+        ? Colors.green
+        : (isApproved ? Colors.blue : Colors.grey);
+    final IconData badgeIcon = isDelivered
+        ? Icons.check_circle_rounded
+        : (isApproved ? Icons.verified_rounded : Icons.cancel_outlined);
+
+    final String displayStatus = isDelivered
+        ? 'Premio Entregado'
+        : (isApproved ? 'Listo para Canje' : 'Descartado');
+
+    final String dateStr = rw.fechaCanje != null
+        ? 'Entregado: ${rw.fechaCanje!.split('T').first}'
+        : (rw.fechaAprobacion != null
+            ? 'Aprobado: ${rw.fechaAprobacion!.split('T').first}'
+            : rw.fechaDesbloqueo.split('T').first);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1828,11 +1988,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
       ),
       child: Row(
         children: [
-          Icon(
-            isRedeemed ? Icons.check_circle_outline_rounded : Icons.cancel_outlined,
-            color: badgeColor,
-            size: 19,
-          ),
+          Icon(badgeIcon, color: badgeColor, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1848,23 +2004,27 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  "Estado: ${rw.estado} • ${rw.fechaCanje != null ? 'Canjeado: ${rw.fechaCanje!.split('T').first}' : rw.fechaDesbloqueo.split('T').first}",
+                  "$displayStatus • $dateStr",
                   style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: badgeColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              rw.estado,
+              displayStatus,
               style: TextStyle(
-                fontSize: 9.5,
+                fontSize: 10,
                 fontWeight: FontWeight.bold,
                 color: badgeColor,
               ),

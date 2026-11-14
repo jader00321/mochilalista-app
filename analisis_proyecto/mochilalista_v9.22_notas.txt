@@ -131,3 +131,4 @@ CERTIFICACION DE CALIDAD Y PRUEBAS ADVERSARIALES
 - Verificacion en Dispositivos Compactos:
   Sin desbordes (overflow) en resoluciones de 320x568dp y 360x640dp.
 ===============================================================================
+
