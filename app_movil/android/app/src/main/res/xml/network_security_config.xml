@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Tráfico HTTP en texto plano bloqueado globalmente (ALTA-02) -->
+    <!-- Permite cualquier conexión HTTPS legítima (Gemini API, WhatsApp, Google Drive, etc.) con certificados del sistema -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

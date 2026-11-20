@@ -11,6 +11,7 @@ import 'package:app_movil/features/smart_quotation/providers/matching_provider.d
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
+import 'package:app_movil/core/providers/license_provider.dart';
 
 class SmartQuotationState {
   File? currentImage;
@@ -203,6 +204,26 @@ class SmartQuotationProvider with ChangeNotifier {
   Future<bool> analyzeImage(BuildContext context, File image) async {
     final activeState = _currentState;
     Provider.of<MatchingProvider>(context, listen: false).clearState();
+
+    LicenseProvider? licenseProv;
+    try {
+      licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
+    } catch (_) {}
+
+    if (licenseProv != null) {
+      final canScan = await licenseProv.canPerformAiScan();
+      if (!canScan) {
+        _isLoading = false;
+        if (licenseProv.isUsingByokMode) {
+          _errorMessage = "Tienes seleccionado el modo Clave Propia (BYOK), pero aún no has registrado una API Key válida en Perfil > Cotizador Universal IA.";
+        } else {
+          _errorMessage = "Has agotado tu bolsa de escaneos IA disponibles. Puedes ingresar tu propia API Key gratis en Perfil > Cotizador Universal IA o renovar tu plan.";
+        }
+        notifyListeners();
+        return false;
+      }
+    }
+
     _isLoading = true;
     _errorMessage = '';
     activeState.currentImage = image;
@@ -219,6 +240,9 @@ class SmartQuotationProvider with ChangeNotifier {
       );
       activeState.metadata = response.metadata;
       activeState.items = response.items;
+      if (licenseProv != null) {
+        await licenseProv.consumeAiScan();
+      }
       return true;
     } catch (e) {
       _errorMessage = e.toString().replaceAll("Exception:", "").trim();

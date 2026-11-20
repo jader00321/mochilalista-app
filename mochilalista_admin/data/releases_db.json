@@ -1,0 +1,26 @@
+[
+  {
+    "version_name": "9.23.0",
+    "version_code": 73,
+    "db_schema_version": 35,
+    "release_date": "2026-11-14T10:00:00.000Z",
+    "type": "FEATURE_RELEASE",
+    "apk_file_path": "releases/mochilalista-9.23.0.apk",
+    "apk_download_url": "https://drive.google.com/file/d/mochilalista-v9.23.0/view",
+    "apk_sha256": "4a5b6c7d8e9f0123456789abcdef0123456789abcdef0123456789abcdef0123",
+    "changelog": "• Motor Asimétrico Ed25519 con Esquema SQLite v35 y migración transparente.\n• Cotizador Universal IA con variantes y stock compartido en tiempo real.\n• Centro de Notificaciones Inteligente y Respaldo Defensivo AES-256-GCM.\n• Nueva pantalla de Monitoreo de Cuota IA y soporte para clave propia BYOK.",
+    "min_required_version": "9.0.0"
+  },
+  {
+    "version_name": "9.22.1",
+    "version_code": 72,
+    "db_schema_version": 34,
+    "release_date": "2026-11-01T15:00:00.000Z",
+    "type": "HOTFIX",
+    "apk_file_path": "releases/mochilalista-9.22.1.apk",
+    "apk_download_url": "https://drive.google.com/file/d/mochilalista-v9.22.1/view",
+    "apk_sha256": "1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
+    "changelog": "• Parche correctivo: Optimización de impresión Bluetooth térmica de 80mm.\n• Corrección menor en cálculo de vuelto en ventas mixtas.",
+    "min_required_version": "9.0.0"
+  }
+]

@@ -1,16 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/core/services/auth_service.dart';
 import 'package:app_movil/core/services/pin_reminder_service.dart';
+import 'package:app_movil/core/services/security_service.dart';
 import 'package:app_movil/core/models/user_model.dart';
 
 enum AuthStatus { checking, authenticated, profileSelection }
 
 class AuthProvider with ChangeNotifier {
-  final _secureStorage = const FlutterSecureStorage();
+  final SecurityService _securityService = SecurityService();
   final AuthService _authService = AuthService();
 
   AuthStatus _status = AuthStatus.checking;
@@ -144,7 +144,7 @@ class AuthProvider with ChangeNotifier {
       );
 
       if (pin != null && pin.isNotEmpty) {
-        await _secureStorage.write(key: 'pin_${newUser.id}', value: pin);
+        await _securityService.setPin(newUser.id, pin);
       }
 
       await loginWithProfile(newUser.id);
@@ -171,16 +171,26 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<bool> profileHasPin(int userId) async {
-    final pin = await _secureStorage.read(key: 'pin_$userId');
-    return pin != null && pin.isNotEmpty;
+    return await _securityService.hasPin(userId);
   }
 
   Future<bool> verifyPin(int userId, String enteredPin) async {
-    final correctPin = await _secureStorage.read(key: 'pin_$userId');
-    if (correctPin == null || correctPin.isEmpty) {
-      return enteredPin.isEmpty;
-    }
-    return correctPin == enteredPin;
+    return await _securityService.verifyPin(userId, enteredPin);
+  }
+
+  /// Retorna si el usuario está actualmente bloqueado por intentos erróneos
+  Future<bool> isPinLockedOut(int userId) async {
+    return await _securityService.isLockedOut(userId);
+  }
+
+  /// Retorna los segundos restantes de bloqueo de PIN
+  Future<int> getPinLockoutRemainingSeconds(int userId) async {
+    return await _securityService.getRemainingLockoutSeconds(userId);
+  }
+
+  /// Retorna la cantidad de intentos fallidos consecutivos de PIN
+  Future<int> getPinFailedAttempts(int userId) async {
+    return await _securityService.getFailedAttempts(userId);
   }
 
   Future<void> snoozePinReminder({int days = 7}) async {
@@ -210,7 +220,7 @@ class AuthProvider with ChangeNotifier {
 
       bool deleted = await _authService.deleteLocalProfileWithProgress(userId, onProgress);
       if (deleted) {
-        await _secureStorage.delete(key: 'pin_$userId');
+        await _securityService.removePin(userId);
         _hasPinCache = false;
         if (_activeUser?.id == userId) {
           await logout();
@@ -248,10 +258,10 @@ class AuthProvider with ChangeNotifier {
       if (!isCorrect) throw Exception("El PIN actual es incorrecto.");
       
       if (newPin.isEmpty) {
-        await _secureStorage.delete(key: 'pin_${_activeUser!.id}');
+        await _securityService.removePin(_activeUser!.id);
         _hasPinCache = false;
       } else {
-        await _secureStorage.write(key: 'pin_${_activeUser!.id}', value: newPin);
+        await _securityService.setPin(_activeUser!.id, newPin);
         _hasPinCache = true;
         await PinReminderService.clearSnooze(_activeUser!.id);
         _isPinReminderSnoozed = false;
@@ -277,10 +287,10 @@ class AuthProvider with ChangeNotifier {
     _setLoading(true);
     try {
       if (newPin.isEmpty) {
-        await _secureStorage.delete(key: 'pin_$userId');
+        await _securityService.removePin(userId);
         if (_activeUser?.id == userId) _hasPinCache = false;
       } else {
-        await _secureStorage.write(key: 'pin_$userId', value: newPin);
+        await _securityService.setPin(userId, newPin);
         if (_activeUser?.id == userId) _hasPinCache = true;
       }
       await PinReminderService.clearSnooze(userId);

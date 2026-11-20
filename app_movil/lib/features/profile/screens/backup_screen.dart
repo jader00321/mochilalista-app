@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:app_movil/core/utils/backup_manager.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/services/backup/i_google_drive_backup_service.dart';
+import 'package:app_movil/features/profile/widgets/google_drive_backup_sheet.dart';
 
 class AutoBackupTimerWidget extends StatefulWidget {
   final BackupProvider provider;
@@ -467,7 +469,8 @@ class _SmartBackupSectionState extends State<SmartBackupSection> {
 }
 
 class BackupScreen extends StatelessWidget {
-  const BackupScreen({super.key});
+  final IGoogleDriveBackupService? driveBackupService;
+  const BackupScreen({super.key, this.driveBackupService});
 
   void _confirmRestore(BuildContext context, BackupProvider backupProvider) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -655,6 +658,13 @@ class BackupScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 40),
+
+              // 2.1 COPIA DE SEGURIDAD EN GOOGLE DRIVE (OPCIONAL)
+              GoogleDriveBackupSheet(
+                backupService: driveBackupService,
+                isDark: isDark,
               ),
               const SizedBox(height: 40),
 

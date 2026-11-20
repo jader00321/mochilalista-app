@@ -10,6 +10,7 @@ import 'package:app_movil/features/smart_quotation/models/pdf_config_model.dart'
 import 'package:app_movil/features/smart_quotation/utils/pdf_image_helper.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/utils/cuota_date_helper.dart';
+import 'package:app_movil/core/config/owner_legal_identity.dart';
 import 'package:printing/printing.dart';
 
 /// 🖨️ MOTOR GENERADOR DE DOCUMENTOS PDF (MULTI-SITUACIÓN Y DUAL-FORMAT A4/TICKET 80mm)
@@ -1203,8 +1204,11 @@ class PdfGenerator {
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
-            pw.Text("Generado por MochilaLista", style: pw.TextStyle(fontSize: isTicket ? 7 : 8.5, color: PdfColors.grey600)),
-            pw.Text("Gracias por su preferencia", style: pw.TextStyle(fontSize: isTicket ? 8 : 9.5, fontWeight: pw.FontWeight.bold)),
+            pw.Text(
+              "${OwnerLegalIdentity.appCommercialName} • Desarrollado por ${OwnerLegalIdentity.authorFullName}",
+              style: pw.TextStyle(fontSize: isTicket ? 6.5 : 8, color: PdfColors.grey600),
+            ),
+            pw.Text("Gracias por su preferencia", style: pw.TextStyle(fontSize: isTicket ? 7.5 : 9.5, fontWeight: pw.FontWeight.bold)),
           ],
         ),
       ],

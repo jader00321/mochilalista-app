@@ -141,11 +141,15 @@ void handleUnifiedProfileRestore(BuildContext context, {String? type}) async {
       type: FileType.any,
     );
   } catch (e) {
-    if (context.mounted) CustomSnackBar.show(context, message: "Error al abrir archivos: $e", isError: true);
+    if (context.mounted) {
+      CustomSnackBar.show(context, message: "Error al abrir archivos: $e", isError: true);
+    }
     return;
   }
 
-  if (result == null || result.files.single.path == null) return;
+  if (result == null || result.files.single.path == null) {
+    return;
+  }
   
   final path = result.files.single.path!;
   final lowerPath = path.toLowerCase();
@@ -153,17 +157,23 @@ void handleUnifiedProfileRestore(BuildContext context, {String? type}) async {
   // Validación estricta de la extensión según el botón presionado
   if (type != null) {
     if (type == 'mlb' && !lowerPath.endsWith('.mlb') && !lowerPath.endsWith('.json')) {
-      if (context.mounted) CustomSnackBar.show(context, message: "Formato incorrecto. Debes elegir un archivo de negocio (.mlb o .json).", isError: true);
+      if (context.mounted) {
+        CustomSnackBar.show(context, message: "Formato incorrecto. Debes elegir un archivo de negocio (.mlb o .json).", isError: true);
+      }
       return;
     } else if (type == 'db' && !lowerPath.endsWith('.db') && !lowerPath.endsWith('.mlbg')) {
-      if (context.mounted) CustomSnackBar.show(context, message: "Formato incorrecto. Debes elegir un archivo de sistema (.mlbg o .db).", isError: true);
+      if (context.mounted) {
+        CustomSnackBar.show(context, message: "Formato incorrecto. Debes elegir un archivo de sistema (.mlbg o .db).", isError: true);
+      }
       return;
     }
   }
 
   if (lowerPath.endsWith('.mlb') || lowerPath.endsWith('.json')) {
     // Flujo de importar Negocio (.mlb)
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
     final auth = Provider.of<AuthProvider>(context, listen: false);
     if (auth.localProfiles.isEmpty) {
       CustomSnackBar.show(context, message: "Debes tener al menos una cuenta para importar un negocio.", isError: true);
@@ -175,11 +185,15 @@ void handleUnifiedProfileRestore(BuildContext context, {String? type}) async {
     try {
       backupData = await BusinessBackupService.readBackupFile(path);
     } catch (e) {
-      if (context.mounted) CustomSnackBar.show(context, message: e.toString(), isError: true);
+      if (context.mounted) {
+        CustomSnackBar.show(context, message: e.toString(), isError: true);
+      }
       return;
     }
 
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
     bool applyPin = false;
     if (backupData['has_security_pin'] == true) {
         bool? confirmPin = await showDialog<bool>(
@@ -209,11 +223,15 @@ void handleUnifiedProfileRestore(BuildContext context, {String? type}) async {
             ],
           )
         );
-        if (confirmPin == null) return;
+        if (confirmPin == null) {
+          return;
+        }
         applyPin = confirmPin;
     }
 
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
     CustomSnackBar.show(context, message: "Importando negocio...", isError: false);
     
     // Usamos el ID del primer usuario local como dueño provisional
@@ -230,7 +248,9 @@ void handleUnifiedProfileRestore(BuildContext context, {String? type}) async {
 
   } else if (lowerPath.endsWith('.db') || lowerPath.endsWith('.mlbg')) {
     // Flujo de restaurar Sistema completo (.db o .mlbg)
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
     bool? confirmDb = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -259,20 +279,36 @@ void handleUnifiedProfileRestore(BuildContext context, {String? type}) async {
       )
     );
 
-    if (confirmDb != true) return;
+    if (confirmDb != true) {
+      return;
+    }
     
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
     CustomSnackBar.show(context, message: "Restaurando sistema...", isError: false);
     final backupProvider = Provider.of<BackupProvider>(context, listen: false);
     
     try {
-      bool success = await BackupManager.restoreBackupFromFilePath(path);
+      final result = await BackupManager.restoreBackupFromFilePath(path);
       if (context.mounted) {
-        if (success) {
-          CustomSnackBar.show(context, message: "Base de datos restaurada. Reiniciando...", isError: false);
+        if (result.isSuccess) {
+          if (result.requiresLicenseMigration) {
+            CustomSnackBar.show(
+              context,
+              message: "Datos restaurados al 100%. Detectamos cambio de teléfono; contacta a soporte para transferir tu licencia.",
+              isError: false,
+            );
+          } else {
+            CustomSnackBar.show(context, message: "Base de datos restaurada. Reiniciando...", isError: false);
+          }
           Provider.of<AuthProvider>(context, listen: false).checkInitialState();
         } else {
-          CustomSnackBar.show(context, message: backupProvider.errorMessage.isNotEmpty ? backupProvider.errorMessage : "Error al restaurar la base de datos.", isError: true);
+          CustomSnackBar.show(
+            context,
+            message: result.message.isNotEmpty ? result.message : (backupProvider.errorMessage.isNotEmpty ? backupProvider.errorMessage : "Error al restaurar la base de datos."),
+            isError: true,
+          );
         }
       }
     } catch (e) {
@@ -281,6 +317,8 @@ void handleUnifiedProfileRestore(BuildContext context, {String? type}) async {
       }
     }
   } else {
-    if (context.mounted) CustomSnackBar.show(context, message: "Formato de archivo no soportado (.db, .mlbg o .mlb)", isError: true);
+    if (context.mounted) {
+      CustomSnackBar.show(context, message: "Formato de archivo no soportado (.db, .mlbg o .mlb)", isError: true);
+    }
   }
 }

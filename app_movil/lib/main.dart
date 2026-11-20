@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // Utilidades y Seguridad
 import 'package:app_movil/core/utils/backup_manager.dart';
+import 'package:app_movil/core/config/api_constants.dart';
+import 'package:app_movil/core/providers/license_provider.dart';
 
 // Providers Principales
 import 'package:app_movil/core/providers/auth_provider.dart';
@@ -95,8 +97,13 @@ void callbackDispatcher() {
 
 void main() async { 
   WidgetsFlutterBinding.ensureInitialized(); 
-  await dotenv.load(fileName: ".env"); 
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (_) {
+    // Modo producción: .env ya no se empaqueta en assets por seguridad.
+  } 
   await initializeDateFormatting('es', null);
+  await ApiConstants.initializeCustomKey();
 
   // 🔥 INICIALIZAR WORKMANAGER
   // La tarea solo se registra mediante el BackupProvider cuando el usuario activa la opción
@@ -114,6 +121,7 @@ class MochilaListaApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => LicenseProvider()..checkLicense()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => PrinterProvider()),

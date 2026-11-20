@@ -1,0 +1,28 @@
+[
+  {
+    "version_name": "9.30.0",
+    "version_code": 74,
+    "db_schema_version": 36,
+    "release_date": "2026-11-19T10:00:00.000Z",
+    "type": "FEATURE_RELEASE",
+    "apk_file_path": "",
+    "apk_download_url": "https://drive.google.com/file/d/mochilalista-v9.30.0/view",
+    "apk_sha256": "4a5b6c7d8e9f0123456789abcdef0123456789abcdef0123456789abcdef0123",
+    "file_size_mb": "28.40 MB",
+    "changelog": "• Activación 100% Offline con Hardware ID (Settings.Secure.ANDROID_ID) y EULA oficial.\n• Cuota IA 100% Acumulativa sin reseteo mensual y arquitectura Multi-Perfil con bolsa compartida.\n• Bóveda de Claves BYOK (Google Gemini) y Respaldo Blindado en Google Drive (.mlbg).\n• Esquema SQLite v36 con sincronización de perfiles y trazabilidad de inventario.",
+    "min_required_version": "9.0.0"
+  },
+  {
+    "version_name": "9.29.0",
+    "version_code": 73,
+    "db_schema_version": 35,
+    "release_date": "2026-11-01T15:00:00.000Z",
+    "type": "HOTFIX",
+    "apk_file_path": "",
+    "apk_download_url": "https://drive.google.com/file/d/mochilalista-v9.29.0/view",
+    "apk_sha256": "1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
+    "file_size_mb": "26.85 MB",
+    "changelog": "• Parche correctivo: Optimización de impresión Bluetooth térmica de 80mm.\n• Corrección menor en cálculo de vuelto en ventas mixtas.",
+    "min_required_version": "9.0.0"
+  }
+]

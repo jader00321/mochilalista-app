@@ -16,6 +16,8 @@ import 'package:app_movil/features/scanner/screens/invoice_review_screen.dart';
 // 🔥 IMPORT DE SEGURIDAD Y HARDWARE
 import 'package:app_movil/core/utils/hardware_validator.dart';
 import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
+import 'package:app_movil/core/providers/license_provider.dart';
+import 'package:app_movil/features/profile/screens/ai_settings_screen.dart';
 
 class ScanScreen extends StatefulWidget {
   final ScanMode mode;
@@ -143,6 +145,53 @@ class _ScanScreenState extends State<ScanScreen>
 
     if (!mounted) return;
 
+    // 🛡️ Verificación defensiva de cuota IA
+    final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
+    if (licenseProv != null) {
+      final canScan = await licenseProv.canPerformAiScan();
+      if (!canScan) {
+        if (mounted) {
+          final isByokSelected = licenseProv.isUsingByokMode;
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                  SizedBox(width: 8),
+                  Text("Límite de Cuota IA"),
+                ],
+              ),
+              content: Text(
+                isByokSelected
+                    ? "Tienes seleccionado el modo Clave Propia (BYOK), pero aún no has registrado una API Key válida de Google AI Studio. Ingresa tu clave para continuar o cambia a Cuota Incluida en ajustes."
+                    : "Has agotado tu bolsa de escaneos IA disponibles (${licenseProv.remainingAiScans} restantes). Puedes ingresar tu propia clave gratuita de Google AI Studio (BYOK) para seguir escaneando sin límites o recargar tu bolsa.",
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cerrar"),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AiSettingsScreen()),
+                    );
+                  },
+                  child: Text(isByokSelected ? "Configurar Clave" : "Configurar Clave Propia"),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
+    }
+
     final ValueNotifier<String> statusNotifier = ValueNotifier<String>(
       widget.mode == ScanMode.quotation
           ? "Preparando imagen..."
@@ -255,6 +304,10 @@ class _ScanScreenState extends State<ScanScreen>
     }
 
     if (success && mounted) {
+      if (licenseProv != null) {
+        await licenseProv.consumeAiScan();
+      }
+      if (!mounted) return;
       if (widget.mode == ScanMode.quotation) {
         Navigator.pushReplacement(
           context,

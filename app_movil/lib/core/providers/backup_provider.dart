@@ -149,13 +149,19 @@ class BackupProvider with ChangeNotifier {
     _statusMessage = "Inyectando datos en la base de datos...";
     _setLoading(true);
     try {
-      bool success = await BackupManager.restoreBackup();
-      if (success) {
-        _statusMessage = "¡Datos Restaurados con Éxito!";
+      final result = await BackupManager.restoreBackup();
+      if (result.isSuccess) {
+        if (result.requiresLicenseMigration) {
+          _statusMessage = "¡Datos Restaurados! (Requiere activación de licencia en este equipo)";
+        } else {
+          _statusMessage = "¡Datos Restaurados con Éxito!";
+        }
         notifyListeners();
         await Future.delayed(const Duration(seconds: 2)); // UX Delay for animation to be seen
+      } else {
+        _errorMessage = result.message;
       }
-      return success;
+      return result.isSuccess;
     } catch (e) {
       _errorMessage = e.toString();
       return false;

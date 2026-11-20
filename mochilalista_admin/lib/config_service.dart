@@ -1,0 +1,427 @@
+import 'dart:convert';
+import 'dart:io';
+
+/// Servicio de Configuración Desacoplada del Propietario (Plan 09 - Pilar 3)
+/// Administra `data/owner_config.json`, plantillas oficiales de WhatsApp,
+/// tarifario de licencias, cuentas de pago y generación de respaldos automáticos.
+class ConfigService {
+  final Directory dataDirectory;
+  final Directory backupsDirectory;
+
+  Map<String, dynamic> _config = {};
+
+  /// Callback opcional disparado tras saveConfig o resetToDefaults
+  Future<void> Function()? onConfigChanged;
+
+  ConfigService({
+    Directory? dataDirectory,
+    Directory? backupsDirectory,
+  })  : dataDirectory = dataDirectory ?? Directory('data'),
+        backupsDirectory = backupsDirectory ?? Directory('backups');
+
+  File get configFile => File('${dataDirectory.path}/owner_config.json');
+
+  Map<String, dynamic> get config => _config;
+  Map<String, dynamic> get system => (_config['system'] as Map<String, dynamic>?) ?? {};
+  Map<String, dynamic> get legalIdentity => (_config['legal_identity'] as Map<String, dynamic>?) ?? {};
+  Map<String, dynamic> get paymentMethods => (_config['payment_methods'] as Map<String, dynamic>?) ?? {};
+  Map<String, dynamic> get catalog => (_config['catalog'] as Map<String, dynamic>?) ?? {};
+  Map<String, dynamic> get templates => (_config['templates'] as Map<String, dynamic>?) ?? {};
+
+  /// Tarifa técnica oficial de migración de hardware
+  double get migrationFee =>
+      (catalog['HARDWARE_MIGRATION_FEE']?['price'] as num?)?.toDouble() ?? 40.0;
+
+  /// Inicializa el servicio: crea directorios si no existen y carga o crea la configuración de fábrica
+  Future<void> init() async {
+    if (!await dataDirectory.exists()) {
+      await dataDirectory.create(recursive: true);
+    }
+    if (!await backupsDirectory.exists()) {
+      await backupsDirectory.create(recursive: true);
+    }
+
+    if (await configFile.exists()) {
+      try {
+        final content = await configFile.readAsString();
+        final parsed = jsonDecode(content) as Map<String, dynamic>;
+        _config = _deepMerge(getDefaultConfig(), parsed);
+      } catch (e) {
+        // En caso de corrupción, respaldar y restaurar de fábrica
+        await _createBackupSnapshot('corrupted_recovery');
+        _config = getDefaultConfig();
+        await _persistConfig();
+      }
+    } else {
+      _config = getDefaultConfig();
+      await _persistConfig();
+    }
+  }
+
+  /// Retorna la configuración oficial de fábrica completa
+  static Map<String, dynamic> getDefaultConfig() {
+    return {
+      'system': {
+        'default_mode': 'sandbox',
+        'theme': 'dark',
+        'table_density': 'comfortable',
+        'version': '1.0.0',
+      },
+      'legal_identity': {
+        'author_full_name': 'Julio Angello Vasquez Navarro',
+        'commercial_name': 'MochilaLista',
+        'support_phone': '+51 922 836 879',
+        'support_whatsapp_url': 'https://wa.me/51922836879',
+        'official_website': 'https://mochilalista.com',
+        'legal_framework': 'Protegido por el D.L. 822 (Ley de Derecho de Autor) e INDECOPI Perú',
+        'personal_data_law': 'Ley N° 29733 (Ley de Protección de Datos Personales)',
+      },
+      'payment_methods': {
+        'yape_plin_holder': 'Julio Angello Vasquez Navarro',
+        'yape_plin_phone': '922836879',
+        'bcp_account_holder': '',
+        'bcp_account_number': '',
+        'bcp_cci': '',
+        'bbva_account_holder': '',
+        'bbva_account_number': '',
+        'bbva_cci': '',
+      },
+      'catalog': {
+        'TRIAL': {
+          'price': 0.0,
+          'days': 30,
+          'ai_credits': 50,
+          'label': 'Prueba Gratuita',
+        },
+        'MENSUAL': {
+          'price': 35.0,
+          'days': 30,
+          'ai_credits': 50,
+          'label': 'Plan Mensual',
+        },
+        'TRIMESTRAL': {
+          'price': 90.0,
+          'days': 90,
+          'ai_credits': 180,
+          'label': 'Plan Trimestral',
+        },
+        'SEMESTRAL': {
+          'price': 160.0,
+          'days': 180,
+          'ai_credits': 450,
+          'label': 'Plan Semestral',
+        },
+        'ANUAL': {
+          'price': 280.0,
+          'days': 365,
+          'ai_credits': 1200,
+          'label': 'Plan Anual',
+        },
+        'PERPETUO_LIBERADO': {
+          'price': 850.0,
+          'days': 99999,
+          'ai_credits': 200,
+          'updates_months': 12,
+          'label': 'Perpetuo Liberado',
+        },
+        'PASE_ACTUALIZACION_ANUAL': {
+          'price': 150.0,
+          'days': 0,
+          'updates_months': 12,
+          'ai_credits': 100,
+          'label': 'Pase Anual de Updates',
+        },
+        'RECARGA_IA_150': {
+          'price': 20.0,
+          'days': 0,
+          'ai_credits': 150,
+          'label': 'Recarga Extra IA (+150)',
+        },
+        'EXTENSION_CORTESIA': {
+          'price': 0.0,
+          'days': 7,
+          'ai_credits': 0,
+          'label': 'Extensión de Cortesía',
+        },
+        'HARDWARE_MIGRATION_FEE': {
+          'price': 40.0,
+          'label': 'Tarifa Técnica de Migración',
+        },
+      },
+      'templates': {
+        'license_issued':
+            'Hola {titular}, te saluda {autor} de MochilaLista.\n\n'
+            '¡Tu licencia para *{negocio}* ha sido emitida exitosamente!\n\n'
+            '⭐ *Plan:* {plan} ({dias} días)\n'
+            '📱 *Dispositivo Vinculado:* {device_id}\n'
+            '📅 *Vigencia hasta:* {vencimiento}\n'
+            '⚡ *Escáner IA:* +{creditos_ia} escaneos acumulados acreditados\n\n'
+            '🔑 *Tu Código de Activación Oficial:*\n'
+            '{codigo}\n\n'
+            'Para activarlo en tu app:\n'
+            '1. Abre MochilaLista en tu teléfono.\n'
+            '2. Ve a Menú > Licencia y Activación.\n'
+            '3. Pega el código de arriba o escanea la credencial oficial adjunta.\n\n'
+            '¡Gracias por tu confianza y éxito en tus ventas!',
+        'expiring_reminder':
+            'Hola {titular}, te saluda {autor} de MochilaLista.\n\n'
+            'Te recordamos que la licencia de tu negocio *{negocio}* vence en *{dias_restantes} días* ({vencimiento}).\n\n'
+            'Para renovar tu servicio sin interrupciones en tus ventas:\n'
+            '💳 Yape / Plin: {yape_phone} ({yape_titular}){bloque_banco_bcp}{bloque_banco_bbva}\n\n'
+            'Quedo a tu disposición para emitir tu renovación inmediata.',
+        'trial_welcome':
+            '¡Bienvenido a MochilaLista, {titular}!\n\n'
+            'Hemos activado tu periodo de prueba gratuita de 30 días para *{negocio}* con 50 escaneos inteligentes de IA incluidos.\n\n'
+            '📱 *Dispositivo:* {device_id}\n'
+            '📅 *Vence el:* {vencimiento}\n\n'
+            '🔑 *Tu Código de Activación:*\n'
+            '{codigo}\n\n'
+            '¡Comienza a registrar tus ventas e inventario hoy mismo!',
+        'apk_update_eligible':
+            'Hola {titular}, te saluda {autor} de MochilaLista.\n\n'
+            '¡Tenemos lista una nueva actualización oficial para *{negocio}*!\n\n'
+            '📦 *Versión:* MochilaLista v{version}\n'
+            '✨ *Novedades:*\n'
+            '{changelog}\n\n'
+            '📥 *Enlace de Descarga Directa:*\n'
+            '{link_descarga}\n\n'
+            '🛡️ *Garantía Cero Pérdida:* Al instalar este APK sobre el actual, tu base de datos y productos se mantienen 100% intactos.',
+        'apk_update_quote':
+            'Hola {titular}, te saluda {autor} de MochilaLista.\n\n'
+            'Acabamos de lanzar la versión oficial *v{version}* con mejoras avanzadas.\n'
+            'Tu negocio *{negocio}* cuenta con la versión v{version_actual}.\n\n'
+            'Para acceder a este paquete de nuevas funciones, puedes adquirir tu *Pase Anual de Actualizaciones* por solo S/ {precio_pase}.\n'
+            '¿Deseas que te emita el pase hoy mismo?',
+        'device_migration':
+            'Hola {titular}, te saluda {autor} de MochilaLista.\n\n'
+            'Hemos completado la migración de tu licencia al nuevo teléfono para *{negocio}*.\n\n'
+            '📱 *Nuevo Dispositivo:* {device_id}\n'
+            '📅 *Vencimiento Preservado:* {vencimiento}\n'
+            '⚡ *Saldo IA Preservado:* +{creditos_ia} escaneos disponibles\n\n'
+            '🔑 *Tu Nuevo Código de Activación:*\n'
+            '{codigo}\n\n'
+            'Actívalo en tu nuevo teléfono para continuar operando sin contratiempos.',
+      },
+    };
+  }
+
+  /// Consulta la configuración de un plan específico del catálogo
+  Map<String, dynamic>? getPlanConfig(String planSlug) {
+    final norm = planSlug.toUpperCase().trim();
+    if (catalog.containsKey(norm)) {
+      return catalog[norm] as Map<String, dynamic>;
+    }
+    // Alias tolerantes
+    if (norm == 'PASE_UPDATES_12M' || norm == 'PASE_ANUAL_UPDATES') {
+      return catalog['PASE_ACTUALIZACION_ANUAL'] as Map<String, dynamic>?;
+    }
+    if (norm == 'PERPETUO' || norm == 'PERPETUA') {
+      return catalog['PERPETUO_LIBERADO'] as Map<String, dynamic>?;
+    }
+    return null;
+  }
+
+  /// Retorna el precio oficial configurado para un plan
+  double getPlanPrice(String planSlug, {double fallback = 35.0}) {
+    final conf = getPlanConfig(planSlug);
+    if (conf != null && conf['price'] is num) {
+      return (conf['price'] as num).toDouble();
+    }
+    return fallback;
+  }
+
+  /// Retorna los días de vigencia oficiales configurados para un plan
+  int getPlanDays(String planSlug, {int fallback = 30}) {
+    final conf = getPlanConfig(planSlug);
+    if (conf != null && conf['days'] is num) {
+      return (conf['days'] as num).toInt();
+    }
+    return fallback;
+  }
+
+  /// Retorna los créditos IA acumulativos oficiales configurados para un plan
+  int getPlanAiCredits(String planSlug, {int fallback = 50}) {
+    final conf = getPlanConfig(planSlug);
+    if (conf != null && conf['ai_credits'] is num) {
+      return (conf['ai_credits'] as num).toInt();
+    }
+    return fallback;
+  }
+
+  /// Recarga en memoria la configuración desde el archivo en disco
+  Future<void> reloadFromDisk() async {
+    await init();
+  }
+
+  /// Valida, respalda automáticamente en `backups/` y persiste los cambios de configuración
+  Future<Map<String, dynamic>> saveConfig(Map<String, dynamic> rawNewConfig) async {
+    final sanitized = _sanitizeConfig(rawNewConfig);
+
+    // Crear respaldo automático del estado actual previo a la modificación
+    await _createBackupSnapshot('pre_save');
+
+    _config = sanitized;
+    await _persistConfig();
+
+    if (onConfigChanged != null) {
+      try {
+        await onConfigChanged!();
+      } catch (e) {
+        stderr.writeln('Warning: Error al ejecutar onConfigChanged tras saveConfig: $e');
+      }
+    }
+    return _config;
+  }
+
+  /// Restaura la configuración a los valores de fábrica de MochilaLista
+  /// creando un snapshot de respaldo del estado previo.
+  Future<Map<String, dynamic>> resetToDefaults() async {
+    await _createBackupSnapshot('pre_reset');
+    _config = getDefaultConfig();
+    await _persistConfig();
+
+    if (onConfigChanged != null) {
+      try {
+        await onConfigChanged!();
+      } catch (e) {
+        stderr.writeln('Warning: Error al ejecutar onConfigChanged tras resetToDefaults: $e');
+      }
+    }
+    return _config;
+  }
+
+  /// Motor de Renderizado de Plantillas de WhatsApp (Plan 09 - Sección 5.3)
+  /// Aplica supresión inteligente de cuentas bancarias vacías y variables dinámicas.
+  String renderTemplate(String templateKeyOrRaw, Map<String, dynamic> context) {
+    String template = templateKeyOrRaw;
+    if (templates.containsKey(templateKeyOrRaw)) {
+      template = templates[templateKeyOrRaw] as String;
+    }
+
+    final pm = paymentMethods;
+    final li = legalIdentity;
+
+    // 1. Supresión Inteligente de Cuentas Bancarias Vacías
+    final bcpAccount = (pm['bcp_account_number'] as String? ?? '').trim();
+    final bcpHolder = (pm['bcp_account_holder'] as String? ?? '').trim();
+    final bcpCci = (pm['bcp_cci'] as String? ?? '').trim();
+
+    String bcpBlock = '';
+    if (bcpAccount.isNotEmpty) {
+      final cciPart = bcpCci.isNotEmpty ? ' (CCI: $bcpCci)' : '';
+      final holderPart = bcpHolder.isNotEmpty ? ' - $bcpHolder' : '';
+      bcpBlock = '\n🏦 BCP: $bcpAccount$cciPart$holderPart';
+    }
+
+    final bbvaAccount = (pm['bbva_account_number'] as String? ?? '').trim();
+    final bbvaHolder = (pm['bbva_account_holder'] as String? ?? '').trim();
+    final bbvaCci = (pm['bbva_cci'] as String? ?? '').trim();
+
+    String bbvaBlock = '';
+    if (bbvaAccount.isNotEmpty) {
+      final cciPart = bbvaCci.isNotEmpty ? ' (CCI: $bbvaCci)' : '';
+      final holderPart = bbvaHolder.isNotEmpty ? ' - $bbvaHolder' : '';
+      bbvaBlock = '\n🏦 BBVA: $bbvaAccount$cciPart$holderPart';
+    }
+
+    // 2. Diccionario consolidado de variables
+    final Map<String, String> vars = {
+      '{autor}': li['author_full_name'] as String? ?? 'Julio Angello Vasquez Navarro',
+      '{yape_phone}': pm['yape_plin_phone'] as String? ?? '922836879',
+      '{yape_titular}': pm['yape_plin_holder'] as String? ?? 'Julio Angello Vasquez Navarro',
+      '{bloque_banco_bcp}': bcpBlock,
+      '{bloque_banco_bbva}': bbvaBlock,
+      '{commercial_name}': li['commercial_name'] as String? ?? 'MochilaLista',
+      '{support_phone}': li['support_phone'] as String? ?? '+51 922 836 879',
+    };
+
+    // Añadir contexto específico provisto en la invocación
+    context.forEach((key, val) {
+      final cleanKey = key.startsWith('{') && key.endsWith('}') ? key : '{$key}';
+      vars[cleanKey] = val?.toString() ?? '';
+    });
+
+    // 3. Sustitución secuencial
+    String result = template;
+    vars.forEach((pattern, replacement) {
+      result = result.replaceAll(pattern, replacement);
+    });
+
+    return result;
+  }
+
+  /// Crea un snapshot de respaldo en disco dentro de `backups/`
+  Future<File> _createBackupSnapshot(String reason) async {
+    if (!await backupsDirectory.exists()) {
+      await backupsDirectory.create(recursive: true);
+    }
+    final now = DateTime.now();
+    final y = now.year.toString().padLeft(4, '0');
+    final m = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    final h = now.hour.toString().padLeft(2, '0');
+    final min = now.minute.toString().padLeft(2, '0');
+    final s = now.second.toString().padLeft(2, '0');
+    final filename = 'owner_config_backup_${y}${m}${d}_${h}${min}${s}_$reason.json';
+
+    final backupFile = File('${backupsDirectory.path}/$filename');
+    final dataToSave = _config.isNotEmpty ? _config : getDefaultConfig();
+    await backupFile.writeAsString(const JsonEncoder.withIndent('  ').convert(dataToSave));
+    return backupFile;
+  }
+
+  /// Escribe el archivo físico `owner_config.json` con formato legible
+  Future<void> _persistConfig() async {
+    await configFile.writeAsString(const JsonEncoder.withIndent('  ').convert(_config));
+  }
+
+  /// Sanitiza y valida la configuración entrante
+  Map<String, dynamic> _sanitizeConfig(Map<String, dynamic> raw) {
+    final merged = _deepMerge(getDefaultConfig(), raw);
+
+    // Sanitizar catálogo
+    final catalogMap = (merged['catalog'] as Map<String, dynamic>?) ?? {};
+    catalogMap.forEach((k, v) {
+      if (v is Map) {
+        final vMap = Map<String, dynamic>.from(v);
+        if (vMap.containsKey('price')) {
+          final p = (vMap['price'] as num?)?.toDouble() ?? 0.0;
+          vMap['price'] = p < 0 ? 0.0 : p;
+        }
+        if (vMap.containsKey('days')) {
+          final d = (vMap['days'] as num?)?.toInt() ?? 0;
+          vMap['days'] = d < 0 ? 0 : d;
+        }
+        if (vMap.containsKey('ai_credits')) {
+          final c = (vMap['ai_credits'] as num?)?.toInt() ?? 0;
+          vMap['ai_credits'] = c < 0 ? 0 : c;
+        }
+        catalogMap[k] = vMap;
+      }
+    });
+    merged['catalog'] = catalogMap;
+
+    return merged;
+  }
+
+  /// Helper de fusión profunda recursiva (preserva subclaves por defecto si faltan en el input)
+  static Map<String, dynamic> _deepMerge(
+    Map<String, dynamic> base,
+    Map<String, dynamic> overrides,
+  ) {
+    final result = Map<String, dynamic>.from(base);
+    overrides.forEach((key, value) {
+      if (value is Map<String, dynamic> && result[key] is Map<String, dynamic>) {
+        result[key] = _deepMerge(result[key] as Map<String, dynamic>, value);
+      } else if (value is Map && result[key] is Map) {
+        result[key] = _deepMerge(
+          (result[key] as Map).cast<String, dynamic>(),
+          value.cast<String, dynamic>(),
+        );
+      } else {
+        result[key] = value;
+      }
+    });
+    return result;
+  }
+}

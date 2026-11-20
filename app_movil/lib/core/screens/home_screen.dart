@@ -28,6 +28,11 @@ import 'package:app_movil/core/widgets/omni_search_bar.dart';
 import 'package:app_movil/core/widgets/explorer_conversion_dock.dart';
 
 import 'package:app_movil/core/services/lifecycle_resume_coordinator.dart';
+import 'package:app_movil/core/services/startup_flow_coordinator.dart';
+import 'package:app_movil/core/providers/license_provider.dart';
+import 'package:app_movil/features/auth/screens/license/license_status_and_activation_screen.dart';
+import 'package:app_movil/features/auth/screens/license/license_locked_screen.dart';
+import 'package:app_movil/features/auth/screens/license/clock_desynced_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -45,6 +50,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     // 🛡️ Precargar configuración de PIN en RAM para 0ms de latencia en resumed
     LifecycleResumeCoordinator.instance.prefetchPinConfig();
+
+    // 🛡️ Orquestador inteligente de arranque (EULA, migración, actualizaciones y licenciamiento)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await StartupFlowCoordinator.coordinateStartup(context);
+    });
   }
 
   @override
@@ -74,14 +85,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           }
         },
       );
+      // Evaluación no bloqueante de respaldos periódicos en Google Drive
+      StartupFlowCoordinator.triggerScheduledDriveBackupSilently();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final licenseProv = Provider.of<LicenseProvider?>(context);
     final theme = Theme.of(context); 
     final isDark = theme.brightness == Brightness.dark;
+
+    // 🛡️ Bloqueo amigable estricto o reloj desincronizado
+    if (licenseProv != null) {
+      if (licenseProv.isClockDesynced) {
+        return const ClockDesyncedScreen();
+      }
+      if (licenseProv.isStrictLock || licenseProv.isPendingMigration) {
+        return LicenseLockedScreen(
+          isPendingMigration: licenseProv.isPendingMigration,
+        );
+      }
+    }
 
     final bool isGuest = !auth.hasActiveContext;
     final bool isCommunityClient = auth.isCommunityClient;
@@ -233,7 +259,9 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                       );
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  _buildLicenseBanner(context, isDark),
+                  const SizedBox(height: 4),
                   if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                     const RepaintBoundary(child: RestockSmartBanner()),
                     // 🔧 Recordatorio amigable de PIN de seguridad con snooze inteligente de 7 días
@@ -395,6 +423,142 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
         ),
       ),
     );
+  }
+
+  // 🛡️ Banners Proactivos de Licencia (POR_VENCER y BLOQUEO_SUAVE)
+  Widget _buildLicenseBanner(BuildContext context, bool isDark) {
+    final licenseProv = Provider.of<LicenseProvider?>(context);
+    if (licenseProv == null || licenseProv.license == null) return const SizedBox.shrink();
+
+    if (licenseProv.isSoftLock) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF2A1C14) : const Color(0xFFFFF3E0),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.45)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_clock_rounded, color: Colors.orange, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Modo Lectura / Cobranza Activo",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                      color: isDark ? Colors.orange[200] : Colors.orange[900],
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Periodo culminado. Renueva tu suscripción para registrar nuevas operaciones.",
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.grey[300] : Colors.grey[800],
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LicenseStatusAndActivationScreen()),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange[800],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+              child: const Text("Renovar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (licenseProv.isExpiringSoon) {
+      final days = licenseProv.daysRemaining;
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF242014) : const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.access_time_rounded, color: Colors.amber, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Suscripción por Vencer ($days ${days == 1 ? 'día' : 'días'})",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                      color: isDark ? Colors.amber[200] : Colors.amber[900],
+                    ),
+                  ),
+                  Text(
+                    "Renueva a tiempo para mantener todas tus funciones activas.",
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.grey[400] : Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LicenseStatusAndActivationScreen()),
+                );
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.amber[800],
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              ),
+              child: const Text("Renovar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   // 🔧 Recordatorio amigable de PIN de seguridad con snooze de 7 días

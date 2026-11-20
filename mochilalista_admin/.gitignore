@@ -1,0 +1,12 @@
+# Secretos, claves privadas y configuración del propietario
+private_keys/
+*.key
+data/owner_config.json
+data/prod_clients_db.json
+data/vault_keyring.json
+data/vault_settings.json
+*.mlvault
+*.mlkey
+backups/
+releases_apks/
+.dart_tool/

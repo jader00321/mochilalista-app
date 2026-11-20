@@ -31,6 +31,11 @@ import 'package:latlong2/latlong.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/profile/widgets/profile_completion_indicator.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/config/owner_legal_identity.dart';
+import 'package:app_movil/core/providers/license_provider.dart';
+import 'package:app_movil/features/auth/screens/license/license_status_and_activation_screen.dart';
+import 'package:app_movil/features/auth/widgets/eula_acceptance_modal.dart';
+import 'package:app_movil/features/profile/screens/ai_settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -77,6 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final themeProv = Provider.of<ThemeProvider>(context);
+    final licenseProv = Provider.of<LicenseProvider?>(context);
     final user = auth.user;
 
     if (user == null || !auth.isAuthenticated) {
@@ -143,6 +149,28 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         ProfileMenuItem(title: "Editar Datos Personales", icon: Icons.person_outline, isDark: isDark, onTap: () => _showEditProfile(context)),
                         _buildDivider(isDark),
                         
+                        ProfileMenuItem(
+                          title: "Estado y Activación de Licencia",
+                          icon: Icons.verified_outlined,
+                          isDark: isDark,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LicenseStatusAndActivationScreen()),
+                          ),
+                        ),
+                        _buildDivider(isDark),
+
+                        ProfileMenuItem(
+                          title: "Cotizador Universal IA y API Key",
+                          icon: Icons.auto_awesome_outlined,
+                          isDark: isDark,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const AiSettingsScreen()),
+                          ),
+                        ),
+                        _buildDivider(isDark),
+
                         ProfileMenuItem(
                           title: "Respaldos y Seguridad", 
                           icon: Icons.security_rounded, 
@@ -346,6 +374,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           ],
                         ),
                       ),
+                      const SizedBox(height: 30),
+
+                      // 🏛️ Sello Legal de Derechos de Autor y Titularidad Intelectual
+                      _buildLegalCopyrightCard(context, isDark, licenseProv),
                       const SizedBox(height: 40),
                     ],
                   ),
@@ -354,6 +386,108 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLegalCopyrightCard(BuildContext context, bool isDark, LicenseProvider? licenseProv) {
+    final planName = licenseProv?.currentPlanName ?? 'TRIAL';
+    final statusName = licenseProv?.license?.estadoActual ?? 'ACTIVA';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A24) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.black12,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.shield_outlined, size: 16, color: Colors.blue),
+              const SizedBox(width: 6),
+              Text(
+                "${OwnerLegalIdentity.appCommercialName} v${OwnerLegalIdentity.currentAppVersion}",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  "$planName ($statusName)",
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Desarrollado y Distribuido por ${OwnerLegalIdentity.authorFullName}",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.grey[300] : Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            "Todos los derechos reservados © 2026. ${OwnerLegalIdentity.legalFrameworkNotice}.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 10,
+              color: isDark ? Colors.grey[500] : Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              TextButton.icon(
+                onPressed: () => EulaAcceptanceModal.show(context, isReadOnly: true),
+                icon: const Icon(Icons.description_outlined, size: 15),
+                label: const Text("Ver Contrato EULA", style: TextStyle(fontSize: 11.5)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LicenseStatusAndActivationScreen()),
+                ),
+                icon: const Icon(Icons.verified_outlined, size: 15),
+                label: const Text("Gestionar Licencia", style: TextStyle(fontSize: 11.5)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

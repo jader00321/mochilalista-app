@@ -1,0 +1,2474 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MochilaLista Admin — Centro Ejecutivo de Control, Licencias y Versiones</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/qrcode.min.js"></script>
+  <script src="js/jsqr.min.js"></script>
+</head>
+<body>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- CONTENEDOR PRINCIPAL DE APLICACIÓN CON SIDEBAR EJECUTIVO (FASE 4A) -->
+  <div class="app-layout">
+
+    <!-- SIDEBAR LATERAL EJECUTIVO COLAPSABLE -->
+    <aside class="app-sidebar" id="appSidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand">
+          <div class="brand-logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M4 7V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3"/>
+              <rect x="2" y="7" width="20" height="14" rx="2"/>
+              <path d="M12 11v4"/>
+              <path d="M10 13h4"/>
+            </svg>
+          </div>
+          <div class="sidebar-brand-text">
+            <span class="brand-title">MochilaLista</span>
+            <span class="brand-subtitle">Admin POS</span>
+          </div>
+        </div>
+        <button class="btn-toggle-sidebar" id="btnToggleSidebar" title="Colapsar / Expandir Barra Lateral">
+          <svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+      </div>
+
+      <div class="sidebar-body">
+        <!-- GRUPO 1: OPERACIONES -->
+        <div class="sidebar-group">
+          <div class="sidebar-group-label">Operaciones</div>
+          <button class="nav-tab active" data-tab="tabDashboard" title="Dashboard">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+            <span class="nav-label">Dashboard</span>
+          </button>
+          <button class="nav-tab" data-tab="tabClients" title="Cartera CRM">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span class="nav-label">Cartera CRM</span>
+          </button>
+          <button class="nav-tab" data-tab="tabLicenseStudio" title="Generador de Licencias">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m21 2-2 2m-6 6 7 7-4 4-7-7m2-2L9 14l-5 5L2 17l5-5-2-2 7-7Z"/></svg>
+            <span class="nav-label">Generar Licencia</span>
+          </button>
+          <button class="nav-tab" data-tab="tabReleaseManager" title="Gestor de Versiones APK">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+            <span class="nav-label">Versiones APK</span>
+          </button>
+        </div>
+
+        <!-- GRUPO 2: AUDITORÍA -->
+        <div class="sidebar-group">
+          <div class="sidebar-group-label">Auditoría</div>
+          <button class="nav-tab" data-tab="tabInspector" title="Inspector Forense de Tokens ML9">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+            <span class="nav-label">Inspector Forense</span>
+          </button>
+          <button class="nav-tab" data-tab="tabFinancesAndBackups" title="Finanzas y Respaldos">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+            <span class="nav-label">Finanzas & Respaldos</span>
+          </button>
+        </div>
+
+        <!-- GRUPO 3: SISTEMA -->
+        <div class="sidebar-group">
+          <div class="sidebar-group-label">Sistema</div>
+          <button class="nav-tab" data-tab="tabSettings" title="Configuración y Personalización">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span class="nav-label">Configuración</span>
+          </button>
+          <button class="nav-tab" data-tab="tabSecurityVault" title="Seguridad, Bóveda Cifrada y Portabilidad">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <rect x="9" y="11" width="6" height="5" rx="1"/>
+              <path d="M10 11V9a2 2 0 1 1 4 0v2"/>
+            </svg>
+            <span class="nav-label">Seguridad y Portabilidad</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="engine-badge">
+          <span class="engine-dot"></span>
+          <span class="engine-text">Ed25519 Offline v36</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CUERPO PRINCIPAL CON HEADER SUPERIOR Y VISTAS -->
+    <div class="app-main-content">
+
+      <!-- HEADER EJECUTIVO SUPERIOR -->
+      <header class="app-header">
+        <div class="header-left">
+          <button class="mobile-sidebar-toggle" id="btnMobileSidebarToggle" title="Abrir Menú">☰</button>
+          <div class="breadcrumb">
+            <span class="breadcrumb-root">MochilaLista</span>
+            <span class="breadcrumb-separator">/</span>
+            <span class="breadcrumb-active" id="currentViewName">Dashboard Financiero</span>
+          </div>
+        </div>
+
+        <!-- SELECTOR DE ENTORNO: SANDBOX VS PRODUCCIÓN -->
+        <div class="mode-switcher-container">
+          <div class="mode-switcher">
+            <button class="mode-btn active" id="btnModeSandbox" title="Entorno de Pruebas Seguro">
+              <span class="mode-dot amber"></span>
+              <span>Modo Pruebas</span>
+            </button>
+            <button class="mode-btn" id="btnModeProd" title="Entorno Real de Producción">
+              <span class="mode-dot emerald"></span>
+              <span>Modo Real</span>
+            </button>
+          </div>
+          <button class="btn btn-outline btn-sm" id="btnResetSandbox" title="Restaurar cartera y releases de prueba a valores iniciales">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            Restaurar Pruebas
+          </button>
+        </div>
+
+        <div class="header-right">
+          <button class="btn btn-outline btn-sm" id="btnHeaderExportExcel" title="Exportar Libro Maestro Excel (.xlsx)">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+            Excel (.xlsx)
+          </button>
+          <div class="author-seal">
+            <span class="author-label">Titular:</span>
+            <strong class="author-name">Julio Angello Vasquez Navarro</strong>
+          </div>
+          <button class="btn btn-outline btn-sm" id="btnThemeToggle" title="Alternar Modo Oscuro / Claro">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            Tema
+          </button>
+        </div>
+      </header>
+
+      <!-- BANNER INDICADOR DE SANDBOX -->
+      <div id="sandboxBanner" class="sandbox-banner">
+        <strong>MODO PRUEBAS / SANDBOX:</strong> Los cambios, clientes y licencias generados aquí son de prueba y no alteran tu cartera real. Haz clic en <strong>Modo Real</strong> en la barra superior para gestionar tu producción real.
+      </div>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main>
+
+    <!-- TAB 1: DASHBOARD FINANCIERO & SEMÁFORO -->
+    <section id="tabDashboard" class="tab-pane active">
+      <div class="kpi-grid">
+        <div class="kpi-card green">
+          <span class="kpi-title">Ingresos del Mes</span>
+          <span class="kpi-value" id="kpiRevenueMonth">S/ 0.00</span>
+          <span class="kpi-subtitle">Mes en curso</span>
+        </div>
+        <div class="kpi-card green">
+          <span class="kpi-title">Ingresos Totales</span>
+          <span class="kpi-value" id="kpiRevenueTotal">S/ 0.00</span>
+          <span class="kpi-subtitle">Histórico cobrado</span>
+        </div>
+        <div class="kpi-card interactive" data-kpi-filter="active" title="Clic para filtrar clientes activos en el CRM">
+          <span class="kpi-title">Clientes Activos</span>
+          <span class="kpi-value" id="kpiActiveClients">0</span>
+          <span class="kpi-subtitle">En producción</span>
+        </div>
+        <div class="kpi-card yellow interactive" data-kpi-filter="expiring" title="Clic para filtrar licencias por vencer en el CRM">
+          <span class="kpi-title">Por Vencer (≤ 7 días)</span>
+          <span class="kpi-value" id="kpiExpiringSoon">0</span>
+          <span class="kpi-subtitle">Alerta de renovación</span>
+        </div>
+        <div class="kpi-card red interactive" data-kpi-filter="expired" title="Clic para filtrar licencias vencidas en el CRM">
+          <span class="kpi-title">Licencias Vencidas</span>
+          <span class="kpi-value" id="kpiExpired">0</span>
+          <span class="kpi-subtitle">Bloqueo activo</span>
+        </div>
+        <div class="kpi-card purple interactive" data-kpi-filter="perpetual" title="Clic para filtrar licencias perpetuas en el CRM">
+          <span class="kpi-title">Licencias Perpetuas</span>
+          <span class="kpi-value" id="kpiPerpetual">0</span>
+          <span class="kpi-subtitle">Uso liberado</span>
+        </div>
+        <div class="kpi-card yellow interactive" data-kpi-filter="outdated" title="Clic para filtrar clientes con APK desactualizado">
+          <span class="kpi-title">APK Desactualizado</span>
+          <span class="kpi-value" id="kpiOutdated">0</span>
+          <span class="kpi-subtitle">Versión anterior</span>
+        </div>
+      </div>
+
+      <!-- MICRO-GRÁFICOS SVG NATIVOS (FASE 4A) -->
+      <div class="dashboard-charts-grid">
+        <div class="content-card chart-card">
+          <div class="card-header">
+            <h2>
+              <svg class="icon-svg" style="color:var(--success);" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <line x1="18" y1="20" x2="18" y2="10"/>
+                <line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+              Evolución de Ingresos Mensuales (S/)
+            </h2>
+            <span class="chart-badge">Últimos 6 meses</span>
+          </div>
+          <div id="chartMonthlyRevenue" class="chart-container">
+            <!-- Renderizado dinámico con SVG puro -->
+          </div>
+        </div>
+
+        <div class="content-card chart-card">
+          <div class="card-header">
+            <h2>
+              <svg class="icon-svg" style="color:var(--purple);" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2a10 10 0 0 1 10 10h-10z"/>
+              </svg>
+              Distribución de Cartera por Plan
+            </h2>
+            <span class="chart-badge">Cartera Activa</span>
+          </div>
+          <div id="chartPlanDistribution" class="chart-container">
+            <!-- Renderizado dinámico con SVG puro -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ACCIONES URGENTES (SEMÁFORO) -->
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--danger);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Acciones Urgentes — Vencimientos Próximos (≤ 7 días)
+          </h2>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table" id="urgentTable">
+            <thead>
+              <tr>
+                <th>Cliente / Negocio</th>
+                <th>Propietario</th>
+                <th>Hardware ID (ANDROID_ID)</th>
+                <th>Días Restantes</th>
+                <th>Vence El</th>
+                <th>Acción Rápida</th>
+              </tr>
+            </thead>
+            <tbody id="urgentTableBody">
+              <tr><td colspan="6" style="text-align:center;">Cargando acciones...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: CRM DE CLIENTES -->
+    <section id="tabClients" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Cartera de Clientes & Dispositivos Vinculados
+          </h2>
+        </div>
+
+        <!-- BARRA OMNICANAL DE BÚSQUEDA Y CREACIÓN -->
+        <div class="crm-toolbar">
+          <div class="search-input-wrap">
+            <input type="text" id="inputClientSearch" class="search-input" placeholder="Buscar por Negocio, Titular, RUC/DNI, WhatsApp, Hardware ID o Versión...">
+            <button class="btn-clear-search" id="btnClearClientSearch" title="Limpiar búsqueda">✕</button>
+          </div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-outline" id="btnCrmExportExcel" title="Exportar Cartera Completa a Microsoft Excel (.xlsx)">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+              Exportar Excel (.xlsx)
+            </button>
+            <button class="btn btn-primary" id="btnOpenCreateClient">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Registrar Nuevo Cliente
+            </button>
+          </div>
+        </div>
+
+        <!-- FILTROS DE ESTADO CRM -->
+        <div class="client-filters-bar" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; align-items:center;">
+          <span style="font-size:0.85rem; color:var(--text-secondary); font-weight:600; margin-right:0.25rem;">Filtrar:</span>
+          <button class="filter-chip active" data-filter="all">Todos (<span id="countAll">0</span>)</button>
+          <button class="filter-chip" data-filter="active">Activos (<span id="countActive">0</span>)</button>
+          <button class="filter-chip" data-filter="expiring">Por Vencer (<span id="countExpiring">0</span>)</button>
+          <button class="filter-chip" data-filter="expired">Vencidos (<span id="countExpired">0</span>)</button>
+          <button class="filter-chip" data-filter="perpetual">Perpetuos (<span id="countPerpetual">0</span>)</button>
+          <button class="filter-chip" data-filter="outdated">APK Desactualizado (<span id="countOutdated">0</span>)</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="clientsTable">
+            <thead>
+              <tr>
+                <th style="width: 75px;">ID</th>
+                <th>Negocio & Titular</th>
+                <th>Plan & Vigencia</th>
+                <th>Hardware ID (ANDROID_ID)</th>
+                <th style="width: 125px;">Versión APK</th>
+                <th style="width: 110px;">Créditos IA</th>
+                <th style="width: 175px; text-align: center;">Acciones Clave</th>
+              </tr>
+            </thead>
+            <tbody id="clientsTableBody">
+              <tr><td colspan="7" style="text-align:center;">Cargando cartera de clientes...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: GENERADOR DE LICENCIAS ED25519 CON AJUSTES PERSONALIZADOS -->
+    <section id="tabLicenseStudio" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m21 2-2 2m-6 6 7 7-4 4-7-7m2-2L9 14l-5 5L2 17l5-5-2-2 7-7Z"/></svg>
+            Estudio Generador de Licencias Asimétricas Ed25519
+          </h2>
+        </div>
+
+        <div class="form-grid">
+          <!-- Columna Formulario -->
+          <div style="display:flex; flex-direction:column; gap:1.25rem;">
+            <div class="form-group">
+              <label for="licClientSelect">Seleccionar Cliente Registrado:</label>
+              <select id="licClientSelect">
+                <option value="">-- Elige un cliente --</option>
+              </select>
+            </div>
+
+            <!-- TARJETA EJECUTIVA DE RESUMEN DEL CLIENTE SELECCIONADO -->
+            <div id="licClientSummaryCard" class="client-summary-card" style="display:none;">
+              <div class="client-summary-header">
+                <div>
+                  <strong id="sumBizName" style="color:var(--text-primary); font-size:0.95rem;">-</strong>
+                  <span id="sumOwnerName" style="color:var(--text-secondary); font-size:0.8rem; margin-left:0.4rem;">-</span>
+                </div>
+                <span id="sumStatusBadge" class="badge badge-green">ACTIVA</span>
+              </div>
+              <div class="client-summary-grid">
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Device ID Vinculado</span>
+                  <span class="client-summary-val" id="sumDeviceId" style="font-family:var(--font-mono); color:var(--primary);">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Plan & Siguiente Nonce</span>
+                  <span class="client-summary-val" id="sumPlanNonce">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Vencimiento Actual</span>
+                  <span class="client-summary-val" id="sumExpiresDate">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Créditos IA Extra</span>
+                  <span class="client-summary-val" id="sumAiCredits">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Versión de App Instalada</span>
+                  <span class="client-summary-val" id="sumInstalledVersion">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Ventana de Updates</span>
+                  <span class="client-summary-val" id="sumUpdatesUntil">-</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="licPlanSelect">Plan de Licencia Oficial (Precios Perú):</label>
+              <select id="licPlanSelect">
+                <option value="MENSUAL" data-days="30" data-price="35.00">MENSUAL (+30 días) — S/ 35.00</option>
+                <option value="TRIMESTRAL" data-days="90" data-price="90.00">TRIMESTRAL (+90 días) — S/ 90.00 (1 solo código)</option>
+                <option value="SEMESTRAL" data-days="180" data-price="160.00">SEMESTRAL (+180 días) — S/ 160.00 (1 solo código)</option>
+                <option value="ANUAL" data-days="365" data-price="280.00">ANUAL (+365 días) — S/ 280.00 (1 solo código)</option>
+                <option value="PERPETUO_LIBERADO" data-days="99999" data-price="850.00">PERPETUO LIBERADO (De por Vida + 12m Updates) — S/ 850.00</option>
+                <option value="PASE_ACTUALIZACION_ANUAL" data-days="0" data-price="150.00">PASE ANUAL DE UPDATES (Clientes Perpetuos) — S/ 150.00</option>
+                <option value="RECARGA_IA_150" data-days="0" data-price="20.00">BOLSA EXTRA IA (+150 escaneos sin vencimiento) — S/ 20.00</option>
+                <option value="EXTENSION_CORTESIA" data-days="7" data-price="0.00">EXTENSIÓN CORTESÍA (+7 días gracia) — S/ 0.00</option>
+              </select>
+              <div id="licPlanImpactBadge" class="plan-impact-badge" style="display:none; margin-top:0.5rem; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.82rem; font-weight:600; line-height:1.4;"></div>
+              <div id="licPlanProjection" class="plan-projection-text" style="display:none; font-size:0.8rem; color:var(--text-secondary); margin-top:0.35rem; font-family:var(--font-mono);"></div>
+            </div>
+
+            <!-- ACORDEÓN: AJUSTES COMERCIALES PERSONALIZADOS -->
+            <div class="accordion-box">
+              <div class="accordion-header" id="btnToggleCustomSettings">
+                <span style="display:flex; align-items:center; gap:0.4rem;">
+                  <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  Habilitar Ajustes Comerciales Personalizados
+                </span>
+                <span id="accordionArrow">▼</span>
+              </div>
+              <div class="accordion-content" id="licCustomContent">
+                <div class="form-group">
+                  <label for="licCustomDays">Días a Otorgar Personalizados (dejar vacío para usar los del plan):</label>
+                  <input type="number" id="licCustomDays" placeholder="Ej: 15, 45, 60...">
+                </div>
+                <div class="form-group">
+                  <label for="licCustomAiBonus">Bono de Créditos IA de Regalo (+X escaneos sin vencimiento):</label>
+                  <input type="number" id="licCustomAiBonus" value="0" min="0" placeholder="0">
+                </div>
+                <div class="form-group">
+                  <label for="licCustomComputationMode">Modo de Cómputo de Caducidad:</label>
+                  <select id="licCustomComputationMode">
+                    <option value="cumulative">Regla Acumulativa (Sumar a la fecha de vencimiento vigente)</option>
+                    <option value="from_today">Reiniciar Vigencia (Comenzar a contar desde hoy)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="licCustomExactDate">Sobrescribir Fecha de Expiración Exacta (Opcional):</label>
+                  <input type="date" id="licCustomExactDate">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="licPaymentAmount">Monto Cobrado (S/):</label>
+              <input type="number" id="licPaymentAmount" step="0.5" value="35.00">
+            </div>
+
+            <div class="form-group">
+              <label for="licPaymentMethod">Medio de Pago:</label>
+              <select id="licPaymentMethod">
+                <option value="Yape">Yape</option>
+                <option value="Plin">Plin</option>
+                <option value="Transferencia BCP">Transferencia BCP</option>
+                <option value="Transferencia BBVA / Interbank">Transferencia BBVA / Interbank</option>
+                <option value="Efectivo">Efectivo en Tienda</option>
+                <option value="Cortesia / Promocion">Cortesía / Promoción</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="licPaymentRef">N° de Operación / Referencia:</label>
+              <input type="text" id="licPaymentRef" placeholder="Ej: Op. 849201">
+            </div>
+
+            <button class="btn btn-primary" id="btnGenerateLicense" style="margin-top:0.5rem; justify-content:center; padding:0.8rem;">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Firmar Criptográficamente y Emitir Licencia
+            </button>
+          </div>
+
+          <!-- Columna Resultado de Código & QR -->
+          <div class="license-result-box" id="licenseResultContainer">
+            <h3 style="font-size:1.1rem; color:var(--text-primary); border-bottom:1px solid var(--border-color); padding-bottom:0.6rem;">
+              Licencia Emitida & Credencial Oficial
+            </h3>
+            <p style="font-size:0.85rem; color:var(--text-secondary);">
+              El código y QR generado se firman con tu clave privada maestra Ed25519 y son válidos exclusivamente para el teléfono del cliente.
+            </p>
+
+            <div id="resultContent" style="display:none; flex-direction:column; gap:1rem;">
+              <div class="code-display" id="generatedCodeDisplay">ML9-...</div>
+
+              <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button class="btn btn-outline btn-sm" id="btnCopyCode">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copiar Código
+                </button>
+                <button class="btn btn-outline btn-sm" id="btnDownloadQr">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Descargar Imagen QR
+                </button>
+                <a class="btn btn-wa btn-sm" id="btnSendWa" target="_blank" href="#">
+                  <span>📲 Enviar por WhatsApp</span>
+                </a>
+                <button class="btn btn-outline btn-sm" id="btnAuditInInspector" title="Auditar en el Inspector Forense en 1 clic">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  Auditar en Inspector
+                </button>
+              </div>
+
+              <div class="qr-container" id="qrContainer"></div>
+
+              <!-- CREDENCIAL OFICIAL EN CANVAS PNG DE ALTA RESOLUCIÓN (@2x / 900x520) -->
+              <div class="credential-box" style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
+                  <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:0.4rem;">
+                    Credencial Oficial de Licencia (Alta Resolución @2x)
+                  </h4>
+                  <div style="display:flex; gap:0.5rem;">
+                    <button class="btn btn-outline btn-sm" id="btnCopyCredentialImage" title="Copiar imagen para pegar directamente con Ctrl+V en WhatsApp">
+                      <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      Copiar Credencial
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="btnDownloadCredential" title="Descargar archivo PNG">
+                      <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Descargar PNG
+                    </button>
+                  </div>
+                </div>
+                <div style="display:flex; justify-content:center; background:rgba(0,0,0,0.25); border-radius:12px; padding:0.75rem; overflow-x:auto;">
+                  <canvas id="credentialCanvas" width="900" height="520" style="width:100%; max-width:540px; border-radius:8px; display:block; box-shadow:0 6px 18px rgba(0,0,0,0.3);"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <div id="resultPlaceholder" style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">
+              Selecciona un cliente y presiona <strong>Firmar y Emitir Licencia</strong> para generar el código, el QR y la credencial oficial.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: RELEASE MANAGER (GESTOR DE VERSIONES) -->
+    <section id="tabReleaseManager" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+            Gestor de Versiones & Matriz Inteligente de Distribución
+          </h2>
+          <button class="btn btn-primary" id="btnOpenCreateRelease">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Subir / Registrar Nueva Versión del APK
+          </button>
+        </div>
+
+        <p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1.25rem;">
+          Compara en tiempo real la versión instalada de cada cliente contra el último APK lanzado. Los <strong>HOTFIX</strong> son gratuitos vitalicios para todos los clientes; los <strong>FEATURE RELEASE</strong> aplican a suscripciones activas o licencias perpetuas con pase de actualización vigente.
+        </p>
+
+        <div class="table-responsive">
+          <table class="data-table" id="matrixTable">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>WhatsApp</th>
+                <th>Versión Actual</th>
+                <th>Última Disponible</th>
+                <th>Tipo de Versión</th>
+                <th>Derecho a Update</th>
+                <th>Acción Comercial</th>
+              </tr>
+            </thead>
+            <tbody id="matrixTableBody">
+              <tr><td colspan="7" style="text-align:center;">Cargando matriz de versiones...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- HISTORIAL DE VERSIONES REGISTRADAS -->
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            Catálogo de Versiones Publicadas
+          </h2>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table" id="releasesTable">
+            <thead>
+              <tr>
+                <th>Versión</th>
+                <th>Build Code</th>
+                <th>Esquema DB</th>
+                <th>Tipo</th>
+                <th>Fecha</th>
+                <th>Tamaño / SHA-256</th>
+                <th>Acciones APK</th>
+              </tr>
+            </thead>
+            <tbody id="releasesTableBody">
+              <tr><td colspan="7" style="text-align:center;">Cargando catálogo...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: INSPECTOR FORENSE DE TOKENS ML9 CON LECTOR ÓPTICO QR -->
+    <section id="tabInspector" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+            Inspector & Auditor Criptográfico de Licencias Ed25519
+          </h2>
+        </div>
+        <p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1.25rem;">
+          Pega cualquier código de acceso o arrastra una imagen de código QR / Credencial PNG para auditar matemáticamente su firma digital, verificar la clave privada maestra e inspeccionar todas sus directivas.
+        </p>
+
+        <!-- LECTOR ÓPTICO DE IMAGEN QR / CREDENCIAL PNG -->
+        <div class="qr-optical-drop-zone" id="qrOpticalDropZone">
+          <svg style="width:36px; height:36px; color:var(--primary); margin-bottom:0.35rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <div style="font-weight:700; color:var(--text-primary); font-size:0.92rem;">Arrastra aquí la imagen del Código QR o la Credencial PNG (o haz clic para subir)</div>
+          <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.25rem;">Decodificación óptica instantánea offline mediante jsQR local</div>
+          <input type="file" id="qrOpticalFileInput" accept="image/*" style="display:none;">
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:1rem;">
+          <div class="form-group">
+            <label for="inspectTokenInput">Código o Token a Inspeccionar:</label>
+            <textarea id="inspectTokenInput" rows="3" placeholder="Pega aquí el código ML9-... o suelta una imagen arriba" style="font-family:var(--font-mono); font-size:0.85rem;"></textarea>
+          </div>
+          <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+            <button class="btn btn-primary" id="btnInspectToken">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Auditar y Decodificar Token
+            </button>
+            <button class="btn btn-outline" id="btnClearInspectToken">
+              Limpiar
+            </button>
+          </div>
+        </div>
+
+        <!-- RESULTADO DE INSPECCIÓN -->
+        <div id="inspectResultContainer" style="display:none; margin-top:1.5rem; border-top:1px solid var(--border-color); padding-top:1.25rem;">
+          <div id="inspectStatusBadge" style="padding:0.75rem 1rem; border-radius:10px; font-weight:700; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"></div>
+
+          <!-- TABLA UNIFICADA DE CLAIMS -->
+          <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.5rem;">
+            Directivas Criptográficas Decodificadas (Claims Ed25519)
+          </h4>
+          <div class="table-responsive">
+            <table class="claims-table" id="inspectClaimsTable">
+              <thead>
+                <tr>
+                  <th style="width:100px;">Clave</th>
+                  <th style="width:160px;">Nombre Técnico</th>
+                  <th>Descripción del Claim</th>
+                  <th style="width:240px;">Valor Decodificado</th>
+                </tr>
+              </thead>
+              <tbody id="inspectClaimsTableBody">
+                <!-- Rellenado dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+
+          <div id="inspectMatchingClientBox" style="display:none; margin-top:1rem; padding:1rem; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.25); border-radius:10px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: FINANZAS, AUDITORÍA Y RESPALDOS EN DISCO (NUEVA PESTAÑA OFICIAL) -->
+    <section id="tabFinancesAndBackups" class="tab-pane">
+      
+      <!-- SUBMÓDULO 1: LIBRO CONTABLE DE INGRESOS Y COBRANZAS -->
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--success);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+            Libro Contable de Ingresos y Cobranzas
+          </h2>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-primary btn-sm" id="btnExportFinancesExcel" title="Exportar Libro Contable a Microsoft Excel (.xlsx)">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+              Exportar Excel Contable (.xlsx)
+            </button>
+            <button class="btn btn-outline btn-sm" id="btnExportFinancesCsv" title="Exportar Libro Contable a CSV con BOM UTF-8">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Exportar CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- FILTROS CONTABLES EN VIVO -->
+        <div class="finance-filters-bar">
+          <div class="finance-filter-group">
+            <label for="finFilterFrom">Desde:</label>
+            <input type="date" id="finFilterFrom">
+          </div>
+          <div class="finance-filter-group">
+            <label for="finFilterTo">Hasta:</label>
+            <input type="date" id="finFilterTo">
+          </div>
+          <div class="finance-filter-group">
+            <label for="finFilterPlan">Plan:</label>
+            <select id="finFilterPlan">
+              <option value="all">Todos los planes</option>
+              <option value="MENSUAL">MENSUAL</option>
+              <option value="TRIMESTRAL">TRIMESTRAL</option>
+              <option value="SEMESTRAL">SEMESTRAL</option>
+              <option value="ANUAL">ANUAL</option>
+              <option value="PERPETUO">PERPETUO LIBERADO</option>
+              <option value="PASE">PASE UPDATES</option>
+              <option value="RECARGA">BOLSA EXTRA IA</option>
+            </select>
+          </div>
+          <div class="finance-filter-group">
+            <label for="finFilterMethod">Medio de Pago:</label>
+            <select id="finFilterMethod">
+              <option value="all">Todos los medios</option>
+              <option value="Yape">Yape</option>
+              <option value="Plin">Plin</option>
+              <option value="BCP">BCP</option>
+              <option value="BBVA">BBVA / Interbank</option>
+              <option value="Efectivo">Efectivo</option>
+            </select>
+          </div>
+          <button class="btn btn-outline btn-sm" id="btnFinFilterClear" style="margin-left:auto;">
+            Limpiar Filtros
+          </button>
+        </div>
+
+        <!-- KPIS CONTABLES DINÁMICOS -->
+        <div class="kpi-grid" style="margin-bottom:1.25rem;">
+          <div class="kpi-card green">
+            <span class="kpi-title">Total Recaudado</span>
+            <span class="kpi-value" id="finKpiTotalRevenue">S/ 0.00</span>
+            <span class="kpi-subtitle">Periodo seleccionado</span>
+          </div>
+          <div class="kpi-card green">
+            <span class="kpi-title">Ticket Promedio</span>
+            <span class="kpi-value" id="finKpiAverageTicket">S/ 0.00</span>
+            <span class="kpi-subtitle">Por transacción</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-title">N.° Transacciones</span>
+            <span class="kpi-value" id="finKpiCount">0</span>
+            <span class="kpi-subtitle">Cobros registrados</span>
+          </div>
+          <div class="kpi-card purple">
+            <span class="kpi-title">Canal Principal</span>
+            <span class="kpi-value" id="finKpiTopMethod" style="font-size:1.3rem;">-</span>
+            <span class="kpi-subtitle">Mayor volumen</span>
+          </div>
+        </div>
+
+        <!-- TABLA CONTABLE COMPLETA -->
+        <div class="table-responsive">
+          <table class="data-table" id="financesTable">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>ID Cliente</th>
+                <th>Negocio</th>
+                <th>Titular</th>
+                <th>Plan</th>
+                <th>Medio</th>
+                <th>Referencia</th>
+                <th>Monto</th>
+              </tr>
+            </thead>
+            <tbody id="financesTableBody">
+              <tr><td colspan="8" style="text-align:center;">Cargando transacciones contables...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUBMÓDULO 2: CENTRO DE GESTIÓN DE RESPALDOS EN DISCO DURO (backups/) -->
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Centro de Gestión de Respaldos en Disco Duro (backups/)
+          </h2>
+        </div>
+
+        <div class="backups-toolbar">
+          <button class="btn btn-primary" id="btnCreateBackupNow">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Crear Snapshot Manual Ahora
+          </button>
+          <button class="btn btn-outline" id="btnOpenBackupsFolder" title="Abrir carpeta en el Explorador de Windows">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Abrir Carpeta backups/ en Windows
+          </button>
+        </div>
+
+        <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1rem;">
+          Cada vez que emites una licencia, modificas un cliente o creas un lanzamiento, el motor crea un snapshot atómico en la carpeta <code>backups/</code>. Puedes descargar copias a tu memoria USB o restaurar el sistema con 1 clic.
+        </p>
+
+        <div class="table-responsive">
+          <table class="data-table" id="backupsTable">
+            <thead>
+              <tr>
+                <th>Archivo</th>
+                <th>Fecha y Hora</th>
+                <th>Tamaño</th>
+                <th>Entorno</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="backupsTableBody">
+              <tr><td colspan="5" style="text-align:center;">Cargando lista de respaldos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 7: CONFIGURACIÓN Y PERSONALIZACIÓN (CENTRO TOTAL DEL PROPIETARIO — FASE 4B) -->
+    <section id="tabSettings" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+          <div>
+            <h2>
+              <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Centro de Personalización Total del Propietario
+            </h2>
+            <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.25rem;">
+              Personaliza tarifas en Soles, bolsas IA, plantillas de WhatsApp y medios de pago con persistencia directa en disco y respaldos automáticos.
+            </p>
+          </div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button type="button" class="btn btn-outline" id="btnResetSettings" title="Restablecer configuración a valores oficiales de fábrica">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              Valores de Fábrica
+            </button>
+            <button type="button" class="btn btn-primary" id="btnSaveSettings" title="Guardar todos los cambios de configuración">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              Guardar Configuración
+            </button>
+          </div>
+        </div>
+
+        <!-- BARRA DE PESTAÑAS INTERNAS DE CONFIGURACIÓN -->
+        <div class="settings-tab-bar">
+          <button type="button" class="settings-tab-btn active" data-stab="stabPricing">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            1. Tarifario & Bolsas IA
+          </button>
+          <button type="button" class="settings-tab-btn" data-stab="stabTemplates">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            2. Plantillas WhatsApp & Chat en Vivo
+          </button>
+          <button type="button" class="settings-tab-btn" data-stab="stabPayment">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            3. Medios de Pago & Legal (Perú)
+          </button>
+          <button type="button" class="settings-tab-btn" data-stab="stabPreferences">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            4. Preferencias del Sistema
+          </button>
+        </div>
+
+        <!-- CONTENEDOR DE PANELES DE CONFIGURACIÓN -->
+        <div class="settings-tab-content">
+
+          <!-- PANE 1: TARIFARIO & BOLSAS IA -->
+          <div class="settings-pane active" id="stabPricing">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+              <div>
+                <h3 style="font-size:1.05rem; font-weight:700; color:var(--text-primary); margin:0;">Catálogo Oficial de Productos y Cuotas IA Acumulativas</h3>
+                <span style="font-size:0.8rem; color:var(--text-secondary);">Ajusta los precios comerciales en Soles (PEN), los días otorgados y los créditos IA transferidos.</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:0.5rem; background:rgba(37,99,235,0.08); padding:0.4rem 0.8rem; border-radius:8px; border:1px solid rgba(37,99,235,0.2);">
+                <label for="cfgMigrationFee" style="font-size:0.85rem; font-weight:600; color:var(--primary); margin:0;">Tarifa Cambio de Celular (S/):</label>
+                <input type="number" id="cfgMigrationFee" step="0.5" min="0" style="width:90px; padding:0.25rem 0.5rem; font-weight:700; text-align:right;" value="40.00">
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table" id="tableConfigCatalog">
+                <thead>
+                  <tr>
+                    <th>Slug Producto</th>
+                    <th>Nombre Comercial</th>
+                    <th style="width:120px;">Precio (S/)</th>
+                    <th style="width:100px;">Días Base</th>
+                    <th style="width:120px;">Bolsa IA (Vitalicia)</th>
+                    <th style="width:110px;">Updates (Meses)</th>
+                    <th>Descripción Comercial</th>
+                  </tr>
+                </thead>
+                <tbody id="catalogConfigTableBody">
+                  <!-- Llenado dinámico por JS desde owner_config.json -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- PANE 2: PLANTILLAS WHATSAPP CON VISTA PREVIA CHAT EN VIVO -->
+          <div class="settings-pane" id="stabTemplates">
+            <div class="templates-editor-layout">
+              <div class="template-editor-form">
+                <div class="form-group" style="margin-bottom:0.75rem;">
+                  <label for="cfgTemplateSelect" style="font-weight:700;">Seleccionar Plantilla Oficial de Mensaje:</label>
+                  <select id="cfgTemplateSelect">
+                    <option value="license_issued">1. Emisión / Renovación de Licencia (license_issued)</option>
+                    <option value="expiring_reminder">2. Recordatorio de Vencimiento Próximo (expiring_reminder)</option>
+                    <option value="trial_welcome">3. Bienvenida Trial 30 Días (trial_welcome)</option>
+                    <option value="apk_update_eligible">4. Nueva Versión Disponible - Elegible Gratis (apk_update_eligible)</option>
+                    <option value="apk_update_quote">5. Cotización de Nueva Versión / Pase Anual (apk_update_quote)</option>
+                    <option value="device_migration">6. Migración de Celular / Nuevo Hardware ID (device_migration)</option>
+                  </select>
+                </div>
+
+                <!-- CHIPS DE VARIABLES DISPONIBLES -->
+                <div class="template-vars-toolbar">
+                  <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Insertar Variable:</span>
+                  <div class="template-chips-grid">
+                    <button type="button" class="var-chip" data-var="{titular}">{titular}</button>
+                    <button type="button" class="var-chip" data-var="{negocio}">{negocio}</button>
+                    <button type="button" class="var-chip" data-var="{plan}">{plan}</button>
+                    <button type="button" class="var-chip" data-var="{dias}">{dias}</button>
+                    <button type="button" class="var-chip" data-var="{vencimiento}">{vencimiento}</button>
+                    <button type="button" class="var-chip" data-var="{creditos_ia}">{creditos_ia}</button>
+                    <button type="button" class="var-chip" data-var="{codigo}">{codigo}</button>
+                    <button type="button" class="var-chip" data-var="{version}">{version}</button>
+                    <button type="button" class="var-chip" data-var="{device_id}">{device_id}</button>
+                    <button type="button" class="var-chip" data-var="{autor}">{autor}</button>
+                    <button type="button" class="var-chip" data-var="{yape_phone}">{yape_phone}</button>
+                    <button type="button" class="var-chip" data-var="{yape_titular}">{yape_titular}</button>
+                    <button type="button" class="var-chip" data-var="{bloque_banco_bcp}">{bloque_banco_bcp}</button>
+                    <button type="button" class="var-chip" data-var="{bloque_banco_bbva}">{bloque_banco_bbva}</button>
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-top:0.75rem;">
+                  <label for="cfgTemplateContent">Contenido del Mensaje (Markdown WhatsApp compatible: *negrita*, _cursiva_):</label>
+                  <textarea id="cfgTemplateContent" rows="11" style="font-family:var(--font-mono); font-size:0.85rem; line-height:1.5;"></textarea>
+                </div>
+              </div>
+
+              <!-- BURBUJA DE VISTA PREVIA CHAT WHATSAPP EN VIVO -->
+              <div class="wa-preview-container">
+                <div class="wa-preview-header">
+                  <div class="wa-avatar">ML</div>
+                  <div>
+                    <div class="wa-header-name">MochilaLista Oficial</div>
+                    <div class="wa-header-status">en línea (Vista previa en vivo)</div>
+                  </div>
+                </div>
+                <div class="wa-preview-body" id="waPreviewBody">
+                  <div class="wa-bubble" id="waBubbleContent">
+                    Cargando vista previa interactiva...
+                  </div>
+                </div>
+                <div class="wa-preview-footer">
+                  <span>⚡ Renderizado reactivo mediante API con supresión de cuentas vacías</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANE 3: MEDIOS DE PAGO & IDENTIDAD LEGAL -->
+          <div class="settings-pane" id="stabPayment">
+            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
+              
+              <!-- BLOQUE 1: IDENTIDAD LEGAL Y MARCA -->
+              <div class="settings-subcard">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:1rem; display:flex; align-items:center; gap:0.4rem;">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Identidad Legal & Marca Comercial
+                </h4>
+                <div class="form-group">
+                  <label for="cfgLegalOwner">Nombre del Titular Legal / Autor (D.L. 822):</label>
+                  <input type="text" id="cfgLegalOwner" value="Julio Angello Vasquez Navarro">
+                </div>
+                <div class="form-group">
+                  <label for="cfgBrandName">Marca Comercial:</label>
+                  <input type="text" id="cfgBrandName" value="MochilaLista">
+                </div>
+                <div class="form-group">
+                  <label for="cfgSupportPhone">Teléfono de Soporte Oficial (+51):</label>
+                  <input type="text" id="cfgSupportPhone" value="+51 922 836 879">
+                </div>
+              </div>
+
+              <!-- BLOQUE 2: BILLETERAS DIGITALES (YAPE / PLIN) -->
+              <div class="settings-subcard">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:1rem; display:flex; align-items:center; gap:0.4rem;">
+                  <svg class="btn-icon" style="color:var(--purple);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                  Billetera Digital Yape / Plin
+                </h4>
+                <div class="form-group">
+                  <label for="cfgYapePhone">Número Yape / Plin:</label>
+                  <input type="text" id="cfgYapePhone" value="922836879">
+                </div>
+                <div class="form-group">
+                  <label for="cfgYapeHolder">Titular de la Cuenta Yape / Plin:</label>
+                  <input type="text" id="cfgYapeHolder" value="Julio Angello Vasquez Navarro">
+                </div>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">
+                  Aparece automáticamente en el token <code>{yape_phone}</code> y <code>{yape_titular}</code> de WhatsApp.
+                </p>
+              </div>
+
+              <!-- BLOQUE 3: CUENTA BANCARIA BCP (OPCIONAL) -->
+              <div class="settings-subcard">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:1rem; display:flex; align-items:center; gap:0.4rem;">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 2 2 7h20L12 2z"/></svg>
+                  Banco de Crédito BCP (Opcional)
+                </h4>
+                <div class="form-group">
+                  <label for="cfgBcpHolder">Titular Cuenta BCP:</label>
+                  <input type="text" id="cfgBcpHolder" placeholder="Opcional">
+                </div>
+                <div class="form-group">
+                  <label for="cfgBcpAccount">Número de Cuenta Corriente / Ahorros BCP:</label>
+                  <input type="text" id="cfgBcpAccount" placeholder="Dejar vacío para omitir">
+                </div>
+                <div class="form-group">
+                  <label for="cfgBcpCci">Código Interbancario (CCI) BCP:</label>
+                  <input type="text" id="cfgBcpCci" placeholder="Dejar vacío para omitir">
+                </div>
+              </div>
+
+              <!-- BLOQUE 4: CUENTA BANCARIA BBVA (OPCIONAL) -->
+              <div class="settings-subcard">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:1rem; display:flex; align-items:center; gap:0.4rem;">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 2 2 7h20L12 2z"/></svg>
+                  Banco BBVA Perú (Opcional)
+                </h4>
+                <div class="form-group">
+                  <label for="cfgBbvaHolder">Titular Cuenta BBVA:</label>
+                  <input type="text" id="cfgBbvaHolder" placeholder="Opcional">
+                </div>
+                <div class="form-group">
+                  <label for="cfgBbvaAccount">Número de Cuenta BBVA:</label>
+                  <input type="text" id="cfgBbvaAccount" placeholder="Dejar vacío para omitir">
+                </div>
+                <div class="form-group">
+                  <label for="cfgBbvaCci">Código Interbancario (CCI) BBVA:</label>
+                  <input type="text" id="cfgBbvaCci" placeholder="Dejar vacío para omitir">
+                </div>
+              </div>
+
+            </div>
+            <div style="margin-top:1rem; padding:0.75rem 1rem; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:8px; font-size:0.84rem; color:var(--text-secondary);">
+              💡 <strong>Regla de Supresión Automática:</strong> Si las cuentas de BCP o BBVA se dejan vacías, los bloques bancarios correspondientes no ocuparán espacio en tus mensajes de WhatsApp y no confundirán al cliente.
+            </div>
+          </div>
+
+          <!-- PANE 4: PREFERENCIAS DEL SISTEMA -->
+          <div class="settings-pane" id="stabPreferences">
+            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1.5rem;">
+              <div class="form-group">
+                <label for="cfgDefaultEnv">Entorno Inicial al Abrir la Plataforma:</label>
+                <select id="cfgDefaultEnv">
+                  <option value="sandbox">Modo Pruebas (Sandbox con datos demo)</option>
+                  <option value="prod">Modo Real (Base de Clientes Producción)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="cfgDefaultTheme">Tema Visual Predeterminado:</label>
+                <select id="cfgDefaultTheme">
+                  <option value="dark">Deep Obsidian (Oscuro Ejecutivo)</option>
+                  <option value="light">Executive Slate (Claro Nítido)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="cfgTableDensity">Densidad Visual de Tablas:</label>
+                <select id="cfgTableDensity">
+                  <option value="comfortable">Cómoda (Espaciado estándar - Recomendado)</option>
+                  <option value="compact">Compacta (Mayor cantidad de filas por pantalla)</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="margin-top:2rem; padding:1.25rem; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.25); border-radius:10px;">
+              <h4 style="font-size:0.95rem; font-weight:700; color:var(--danger); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.4rem;">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Zona de Restauración de Fábrica
+              </h4>
+              <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1rem;">
+                Si realizaste modificaciones no deseadas en las tarifas, mensajes o datos bancarios, puedes restablecer todos los valores al estándar de fábrica. Se creará automáticamente un snapshot de respaldo antes de aplicar la restauración.
+              </p>
+              <button type="button" class="btn btn-outline" id="btnTriggerResetSettings" style="color:var(--danger); border-color:var(--danger);">
+                Restablecer Todo a Valores de Fábrica
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 8: SEGURIDAD, BÓVEDA CIFRADA Y PORTABILIDAD (PLAN 10) -->
+    <section id="tabSecurityVault" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+          <div>
+            <h2>
+              <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <rect x="9" y="11" width="6" height="5" rx="1"/>
+                <path d="M10 11V9a2 2 0 1 1 4 0v2"/>
+              </svg>
+              Centro de Seguridad, Bóveda Cifrada y Portabilidad
+            </h2>
+            <p class="subtitle" style="margin-top:0.25rem;">
+              Persistencia blindada fuera del repositorio, espejo atómico en <code>%APPDATA%</code>, portabilidad en 1 clic y recuperación multi-llave a prueba de olvidos.
+            </p>
+          </div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button type="button" class="btn btn-outline" id="btnRefreshVaultHealth" title="Recargar estado y auditoría de salud">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              Auditar Estado
+            </button>
+            <button type="button" class="btn btn-primary" id="btnForceSyncMirrorTop" title="Forzar sincronización inmediata del espejo cifrado">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+              Sincronizar Espejo
+            </button>
+          </div>
+        </div>
+
+        <!-- 1. BANNER DE SALUD DE SEGURIDAD Y BARRA DE PROGRESO -->
+        <div class="vault-health-banner" style="margin-top:1.25rem; padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+            <div>
+              <div style="display:flex; align-items:center; gap:0.75rem;">
+                <span class="badge" id="vaultHealthBadge" style="font-size:0.9rem; padding:0.35rem 0.85rem; border-radius:8px; font-weight:700;">CALCULANDO...</span>
+                <span style="font-size:1.4rem; font-weight:800;" id="vaultHealthScore">0%</span>
+                <span style="color:var(--text-muted); font-size:0.9rem;">Índice de Resguardo y Recuperabilidad</span>
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem;" id="vaultHealthStatusText">
+                Evaluación integral de factores criptográficos activos, espejo local en <code>%APPDATA%</code> y replicación en nube.
+              </p>
+            </div>
+            <div id="vaultRecoveryWarning" style="display:none; padding:0.5rem 0.85rem; background:rgba(239, 68, 68, 0.15); border:1px solid var(--danger); border-radius:8px; color:var(--danger); font-size:0.85rem; font-weight:600;">
+              ⚠️ Recuperación disponible desde el espejo local
+            </div>
+          </div>
+
+          <div class="vault-progress-track" style="margin-top:1rem; height:10px; background:var(--bg-card); border-radius:5px; overflow:hidden; border:1px solid var(--border-color);">
+            <div class="vault-progress-fill" id="vaultProgressBar" style="width:0%; height:100%; background:linear-gradient(90deg, var(--warning), var(--primary), var(--success)); transition:width 0.4s ease;"></div>
+          </div>
+
+          <!-- REJILLA DE 4 FACTORES CRIPTOGRÁFICOS -->
+          <div class="vault-factors-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:0.75rem; margin-top:1.25rem;">
+            <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 1 (Hardware)</div>
+              <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">Windows DPAPI</div>
+              <div style="margin-top:0.4rem;" id="badgeFactorDpapi"><span class="badge badge-info" id="factorMirrorStatus">Verificando...</span></div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Cifrado nativo del usuario de Windows</div>
+            </div>
+
+            <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 2 (Archivo Físico)</div>
+              <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">Llave Maestra .mlkey</div>
+              <div style="margin-top:0.4rem;" id="badgeFactorMlKey"><span class="badge badge-warning" id="factorKeyStatus">Pendiente</span></div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Para portabilidad a otra laptop</div>
+            </div>
+
+            <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 3 (Rescate Frío)</div>
+              <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">Kit 8 Códigos + QR</div>
+              <div style="margin-top:0.4rem;" id="badgeFactorRescueKit"><span class="badge badge-warning" id="factorRescueStatus">Pendiente</span></div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Papel impreso anti-desastres</div>
+            </div>
+
+            <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 4 (Bloqueo Local)</div>
+              <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">PIN de Consola</div>
+              <div style="margin-top:0.4rem;" id="badgeFactorPin"><span class="badge badge-secondary" id="factorPinStatus">Desactivado</span></div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Protección contra accesos físicos</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. PANEL DE TRANSPARENCIA FÍSICA DE ALMACENAMIENTO (CERO MITO DE CACHÉ) -->
+        <div class="vault-section" style="margin-top:1.5rem;">
+          <h3 style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+            <svg class="btn-icon" style="color:var(--cyan);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Transparencia Física de Almacenamiento (Cero Mito de Caché)
+          </h3>
+
+          <div style="padding:0.85rem 1rem; margin-top:0.75rem; background:rgba(37, 99, 235, 0.08); border-left:4px solid var(--primary); border-radius:4px; font-size:0.85rem; line-height:1.5;">
+            <strong>Seguridad Verificable:</strong> Toda tu información vive 100% en archivos físicos de tu disco duro (<code>.json</code>, <code>.key</code> y <code>.mlvault</code>). <strong>Jamás depende de cookies, LocalStorage ni de la caché del navegador</strong>. Limpiar el historial o usar otra ventana de incógnito jamás afectará tus licencias, clientes ni balances.
+          </div>
+
+          <!-- TARJETAS DE RUTAS FÍSICAS COPIABLES -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:0.75rem; margin-top:1rem;">
+            <div style="padding:0.75rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">CARPETA DEL PROYECTO (LOCAL)</div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.3rem;">
+                <input type="text" id="txtLocalPath" readonly value="data/ y private_keys/" style="font-size:0.8rem; background:transparent; border:none; color:var(--text-primary); font-family:var(--font-mono); width:100%;">
+                <button type="button" class="btn btn-outline btn-sm" id="btnCopyLocalPath" title="Copiar ruta">Copiar</button>
+              </div>
+            </div>
+
+            <div style="padding:0.75rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">BÓVEDA ESPEJO CIFRADA (%APPDATA%)</div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.3rem;">
+                <input type="text" id="txtMirrorPath" readonly value="%APPDATA%\MochilaListaAdminVault" style="font-size:0.8rem; background:transparent; border:none; color:var(--text-primary); font-family:var(--font-mono); width:100%;">
+                <button type="button" class="btn btn-outline btn-sm" id="btnCopyMirrorPath" title="Copiar ruta">Copiar</button>
+              </div>
+            </div>
+
+            <div style="padding:0.75rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">ESPEJO DE NUBE LOCAL</div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.3rem;">
+                <code id="pathCloudDir" style="font-size:0.8rem; word-break:break-all; color:var(--text-muted);">No configurada</code>
+                <button type="button" class="btn btn-outline btn-sm" id="btnCopyCloudPath" title="Copiar ruta">Copiar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- TABLA DE ARCHIVOS FÍSICOS REALES -->
+          <div class="table-responsive" style="margin-top:1rem; border:1px solid var(--border-color); border-radius:8px; overflow:hidden;">
+            <table class="data-table" style="width:100%; font-size:0.83rem;">
+              <thead>
+                <tr>
+                  <th>Archivo Físico</th>
+                  <th>Propósito Crítico</th>
+                  <th>Estado</th>
+                  <th>Tamaño</th>
+                  <th>Última Modificación</th>
+                  <th>Huella SHA-256</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyVaultFiles">
+                <tr><td colspan="6" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Cargando estado de archivos físicos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 3. ASISTENTE VISUAL DE BLINDAJE EN 3 PASOS -->
+        <div class="vault-section" style="margin-top:2rem;">
+          <h3 style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+            <svg class="btn-icon" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Asistente Visual de Blindaje en 3 Pasos
+          </h3>
+          <p class="subtitle" style="margin-top:0.25rem;">
+            Completa estos 3 pasos recomendados para alcanzar el 100% de protección y asegurar recuperación ante cualquier eventualidad.
+          </p>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1rem; margin-top:1rem;">
+            <!-- PASO 1 -->
+            <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px; display:flex; flex-direction:column; justify-content:space-between;">
+              <div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="badge badge-primary" style="font-weight:700;">PASO 1</span>
+                  <span class="badge badge-success" id="badgeStep1Status">Bóveda Espejo Activa</span>
+                </div>
+                <h4 style="margin-top:0.75rem; font-size:1rem;">Bóveda Externa & Espejo Automático</h4>
+                <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
+                  Resguardo cifrado automático en <code>%APPDATA%</code> cada vez que emites o modificas datos. Configura opcionalmente una carpeta de nube local (Dropbox, GDrive, OneDrive) para replicación simultánea.
+                </p>
+                <div style="margin-top:0.75rem;">
+                  <label for="inputCloudSyncPath" style="font-size:0.78rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Ruta Local de Nube (Opcional):</label>
+                  <div style="display:flex; gap:0.5rem;">
+                    <input type="text" id="inputCloudSyncPath" placeholder="C:\Users\...\Dropbox" style="flex:1; font-size:0.8rem; padding:0.4rem 0.6rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary);">
+                    <button type="button" class="btn btn-outline btn-sm" id="btnSaveCloudSyncPath">Guardar</button>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center;">
+                <span id="mirrorLastSyncLabel" style="font-size:0.75rem; color:var(--text-muted);">Última sinc: Verificando...</span>
+                <button type="button" class="btn btn-primary btn-sm" id="btnSyncMirrorNow">Forzar Sincronización</button>
+              </div>
+            </div>
+
+            <!-- PASO 2 -->
+            <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px; display:flex; flex-direction:column; justify-content:space-between;">
+              <div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="badge badge-primary" style="font-weight:700;">PASO 2</span>
+                  <span class="badge" id="badgeStep2Status">Pendiente</span>
+                </div>
+                <h4 style="margin-top:0.75rem; font-size:1rem;">Archivo Llave Física (.mlkey)</h4>
+                <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
+                  Descarga el archivo <code>llave_maestra_mochilalista.mlkey</code> para llevarlo en un USB o en tu celular. Es <strong>invariante</strong> y te permite abrir tu bóveda en cualquier laptop nueva sin recordar contraseñas.
+                </p>
+                <div style="padding:0.6rem 0.8rem; margin-top:0.75rem; background:var(--bg-card); border:1px dashed var(--border-color); border-radius:6px; font-size:0.78rem; color:var(--text-muted);">
+                  🔐 Permite mudanza completa o desbloqueo de emergencia en 1 clic.
+                </div>
+              </div>
+              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.75rem; color:var(--text-muted);">Formato MLKEY v1.0.0</span>
+                <button type="button" class="btn btn-success btn-sm" id="btnDownloadMlKey">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Descargar .mlkey
+                </button>
+              </div>
+            </div>
+
+            <!-- PASO 3 -->
+            <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px; display:flex; flex-direction:column; justify-content:space-between;">
+              <div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="badge badge-primary" style="font-weight:700;">PASO 3</span>
+                  <span class="badge" id="badgeStep3Status">Pendiente</span>
+                </div>
+                <h4 style="margin-top:0.75rem; font-size:1rem;">Kit de Rescate Imprimible / PDF</h4>
+                <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
+                  Genera una hoja con <strong>8 Códigos Cortos de Rescate</strong> (ej. <code>ML-7492-XKPQ-3815</code>) y Código QR. Imprímela o guárdala en PDF. Cada código es de un solo uso para recuperar acceso si pierdes tu laptop y tu USB.
+                </p>
+                <div style="padding:0.6rem 0.8rem; margin-top:0.75rem; background:var(--bg-card); border:1px dashed var(--border-color); border-radius:6px; font-size:0.78rem; color:var(--text-muted);">
+                  📄 Custodia fría desconectada de internet (D.L. 822 / INDECOPI).
+                </div>
+              </div>
+              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.75rem; color:var(--text-muted);">8 Códigos + QR Vectorial</span>
+                <button type="button" class="btn btn-outline btn-sm" id="btnOpenRescueKitModal" style="color:var(--primary); border-color:var(--primary);">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  Ver Kit Imprimible
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. TARJETA DE MUDANZA Y PORTABILIDAD MULTI-PC (.mlvault) -->
+        <div class="vault-section" style="margin-top:2rem;">
+          <h3 style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+            <svg class="btn-icon" style="color:var(--purple);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Mudanza Rápida y Portabilidad Multi-PC (.mlvault)
+          </h3>
+          <p class="subtitle" style="margin-top:0.25rem;">
+            Empaqueta o restaura la plataforma completa en otra PC/laptop en 5 segundos. Tus archivos .mlkey y códigos impresos permanecen invariantes.
+          </p>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1rem; margin-top:1rem;">
+            <!-- EXPORTAR BÓVEDA -->
+            <div style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
+              <h4 style="font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
+                <svg class="btn-icon" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Exportar Bóveda Portable
+              </h4>
+              <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
+                Genera un archivo cifrado <code>.mlvault</code> que contiene clientes, historial de pagos, versiones y configuraciones.
+              </p>
+              <div style="margin-top:0.75rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.83rem; cursor:pointer;">
+                  <input type="checkbox" id="chkExportIncludeKey" checked>
+                  <span>Incluir Clave Maestra Privada Ed25519 (Recomendado para mudanza)</span>
+                </label>
+              </div>
+              <button type="button" class="btn btn-primary" id="btnExportVault" style="margin-top:1rem; width:100%; justify-content:center;">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Descargar Bóveda Portable (.mlvault)
+              </button>
+            </div>
+
+            <!-- IMPORTAR BÓVEDA -->
+            <div style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
+              <h4 style="font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
+                <svg class="btn-icon" style="color:var(--success);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Importar Bóveda Portable
+              </h4>
+              <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
+                ¿Estás en una PC nueva? Carga un archivo <code>.mlvault</code> para restaurar clientes, firmas y configuraciones en caliente sin reiniciar el servidor.
+              </p>
+              <div style="padding:0.75rem; margin-top:0.75rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; font-size:0.8rem; color:var(--text-muted);">
+                Acepta desbloqueo vía archivo <code>.mlkey</code>, 1 Código de Rescate o PIN personal.
+              </div>
+              <button type="button" class="btn btn-success" id="btnOpenImportVaultModal" style="margin-top:1rem; width:100%; justify-content:center;">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Importar Bóveda Portable (Mudanza en 5s)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. TARJETA DE BLOQUEO LOCAL CON PIN OPCIONAL (HTTP 423 LOCKED) -->
+        <div class="vault-section" style="margin-top:2rem; margin-bottom:1rem;">
+          <h3 style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+            <svg class="btn-icon" style="color:var(--warning);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Bloqueo Local de Consola con PIN Opcional
+          </h3>
+          <p class="subtitle" style="margin-top:0.25rem;">
+            Impide que personas no autorizadas miren tu CRM si dejas tu laptop encendida. Protegido por backoff exponencial anti-fuerza bruta y desbloqueable con tu archivo .mlkey o Códigos de Rescate si lo olvidas.
+          </p>
+
+          <div style="padding:1.25rem; margin-top:1rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+              <div>
+                <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-weight:700; font-size:0.95rem;">
+                  <input type="checkbox" id="chkEnablePin" style="width:18px; height:18px;">
+                  <span>Activar Bloqueo por PIN de Consola en este equipo</span>
+                </label>
+                <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem; margin-left:1.75rem;">
+                  Al activar, cualquier pestaña requerirá el PIN para acceder a los datos.
+                </div>
+              </div>
+              <div id="pinLockActionsContainer">
+                <button type="button" class="btn btn-outline" id="btnLockConsoleNow" style="display:none; color:var(--warning); border-color:var(--warning);">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  Bloquear Consola Ahora
+                </button>
+              </div>
+            </div>
+
+            <div id="pinSetupContainer" style="display:none; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border-color);">
+              <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+                <div>
+                  <label for="inputVaultPin" style="font-size:0.8rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Nuevo PIN (mínimo 4 caracteres):</label>
+                  <input type="password" id="inputVaultPin" maxlength="12" placeholder="****" style="font-family:var(--font-mono); font-size:1.1rem; width:160px; padding:0.4rem 0.6rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); text-align:center;">
+                </div>
+                <div>
+                  <label for="inputVaultPinConfirm" style="font-size:0.8rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Confirmar PIN:</label>
+                  <input type="password" id="inputVaultPinConfirm" maxlength="12" placeholder="****" style="font-family:var(--font-mono); font-size:1.1rem; width:160px; padding:0.4rem 0.6rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); text-align:center;">
+                </div>
+                <button type="button" class="btn btn-primary" id="btnSavePinConfig">
+                  Guardar Configuración de PIN
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- CANVAS OCULTO PARA RE-DESCARGAS DE CREDENCIALES HISTÓRICAS -->
+  <canvas id="historyCredentialCanvas" width="900" height="520" style="display:none;"></canvas>
+
+  <!-- MODAL: REGISTRAR CLIENTE -->
+  <div class="modal-overlay" id="modalCreateClient">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Registrar Nuevo Cliente</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalCreateClient')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="formCreateClient" class="form-grid">
+          <div class="form-group">
+            <label for="newBizName">Nombre Comercial / Librería:</label>
+            <input type="text" id="newBizName" required placeholder="Ej: Librería & Bazar Central">
+          </div>
+          <div class="form-group">
+            <label for="newOwnerName">Nombre del Propietario:</label>
+            <input type="text" id="newOwnerName" required placeholder="Ej: Juan Pérez">
+          </div>
+          <div class="form-group">
+            <label for="newDocId">RUC o DNI:</label>
+            <input type="text" id="newDocId" placeholder="Ej: 10458796321">
+          </div>
+          <div class="form-group">
+            <label for="newPhone">Teléfono WhatsApp (+51):</label>
+            <input type="text" id="newPhone" required placeholder="Ej: +51987654321">
+          </div>
+          <div class="form-group">
+            <label for="newDeviceId">Hardware ID del Teléfono (ML-XXXX — ANDROID_ID):</label>
+            <input type="text" id="newDeviceId" required placeholder="Ej: ML-9K4B" style="font-family:var(--font-mono); text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label for="newPlan">Plan Inicial:</label>
+            <select id="newPlan">
+              <option value="TRIAL" selected>TRIAL GRATUITO (30 días — S/ 0.00)</option>
+              <option value="MENSUAL">MENSUAL (S/ 35.00)</option>
+              <option value="TRIMESTRAL">TRIMESTRAL (S/ 90.00)</option>
+              <option value="SEMESTRAL">SEMESTRAL (S/ 160.00)</option>
+              <option value="ANUAL">ANUAL (S/ 280.00)</option>
+              <option value="PERPETUO_LIBERADO">PERPETUO LIBERADO (S/ 850.00)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="newInstalledVersion">Versión de App Instalada:</label>
+            <input type="text" id="newInstalledVersion" value="9.30.0" placeholder="9.30.0">
+          </div>
+          <div class="form-group">
+            <label for="newAiExtraCredits">Créditos IA Extra Iniciales:</label>
+            <input type="number" id="newAiExtraCredits" value="0" min="0">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="newNotes">Notas del Cliente:</label>
+            <textarea id="newNotes" rows="2" placeholder="Observaciones, acuerdos de pago, etc."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; width:100%;">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modalCreateClient')">Cancelar</button>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn btn-primary" id="btnSubmitCreateClient">Guardar Cliente</button>
+          <button type="button" class="btn btn-success" id="btnSubmitAndEmit" title="Guardar cliente y emitir su primera licencia de inmediato">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Guardar y Emitir Licencia
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR CLIENTE (CONTROL TOTAL) -->
+  <div class="modal-overlay" id="modalEditClient">
+    <div class="modal-dialog" style="max-width:760px;">
+      <div class="modal-header">
+        <h3>Editar Cliente (Control Total & Configuración Criptográfica)</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalEditClient')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="formEditClient" class="form-grid">
+          <input type="hidden" id="editClientId">
+          <div class="form-group">
+            <label for="editBizName">Nombre Comercial / Negocio:</label>
+            <input type="text" id="editBizName" required>
+          </div>
+          <div class="form-group">
+            <label for="editOwnerName">Nombre del Propietario:</label>
+            <input type="text" id="editOwnerName" required>
+          </div>
+          <div class="form-group">
+            <label for="editDocId">RUC o DNI:</label>
+            <input type="text" id="editDocId">
+          </div>
+          <div class="form-group">
+            <label for="editPhone">Teléfono WhatsApp (+51):</label>
+            <input type="text" id="editPhone" required>
+          </div>
+          <div class="form-group">
+            <label for="editDeviceId">Hardware ID del Teléfono (ANDROID_ID):</label>
+            <input type="text" id="editDeviceId" required style="font-family:var(--font-mono); text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label for="editInstalledVersion">Versión Instalada:</label>
+            <input type="text" id="editInstalledVersion" placeholder="Ej: 9.24.0">
+          </div>
+          <div class="form-group">
+            <label for="editLicenseType">Plan de Licencia:</label>
+            <select id="editLicenseType">
+              <option value="TRIAL">TRIAL (30 días)</option>
+              <option value="MENSUAL">MENSUAL</option>
+              <option value="TRIMESTRAL">TRIMESTRAL</option>
+              <option value="SEMESTRAL">SEMESTRAL</option>
+              <option value="ANUAL">ANUAL</option>
+              <option value="PERPETUO_LIBERADO">PERPETUO LIBERADO</option>
+              <option value="PASE_ACTUALIZACION_ANUAL">PASE ACTUALIZACIÓN ANUAL</option>
+              <option value="EXTENSION_CORTESIA">EXTENSIÓN CORTESÍA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editLicenseStatus">Estado de Licencia:</label>
+            <select id="editLicenseStatus">
+              <option value="ACTIVE">ACTIVE (Activa)</option>
+              <option value="EXPIRING_SOON">EXPIRING_SOON (Por Vencer ≤ 7 días)</option>
+              <option value="EXPIRED">EXPIRED (Vencida)</option>
+              <option value="PERPETUAL">PERPETUAL (Perpetua)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editLicenseExpires">Fecha Exacta de Expiración:</label>
+            <input type="date" id="editLicenseExpires">
+          </div>
+          <div class="form-group">
+            <label for="editUpdatesUntil">Ventana de Actualizaciones (Updates):</label>
+            <input type="date" id="editUpdatesUntil">
+          </div>
+          <div class="form-group">
+            <label for="editAiExtraCredits">Bolsa de Créditos IA Extra (+150):</label>
+            <input type="number" id="editAiExtraCredits" min="0">
+          </div>
+          <div class="form-group">
+            <label for="editNextNonce">Contador Nonce Anti-Replay:</label>
+            <input type="number" id="editNextNonce" min="1">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="editNotes">Notas y Acuerdos:</label>
+            <textarea id="editNotes" rows="2"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; width:100%;">
+        <button type="button" class="btn btn-outline" style="color:var(--danger); border-color:var(--danger);" id="btnDeleteClient">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Eliminar Cliente
+        </button>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-outline" onclick="closeModal('modalEditClient')">Cancelar</button>
+          <button class="btn btn-primary" id="btnSubmitEditClient">Guardar Cambios</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: HISTORIAL DETALLADO MULTI-PESTAÑA (PAGOS & HARDWARE) -->
+  <div class="modal-overlay" id="modalClientHistory">
+    <div class="modal-dialog" style="max-width:880px;">
+      <div class="modal-header">
+        <h3 id="historyModalTitle">Historial Comercial del Cliente</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalClientHistory')">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:1.25rem;">
+        <div id="historyClientSummary" style="padding:0.75rem 1rem; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.2); border-radius:10px; font-size:0.88rem;"></div>
+
+        <!-- TABS INTERNAS DEL HISTORIAL -->
+        <div class="modal-tab-bar">
+          <button class="modal-tab-btn active" id="tabBtnHistoryPayments" onclick="switchHistoryTab('payments')">
+            Pagos y Licencias Emitidas
+          </button>
+          <button class="modal-tab-btn" id="tabBtnHistoryHardware" onclick="switchHistoryTab('hardware')">
+            Historial de Hardware y Migraciones
+          </button>
+        </div>
+
+        <!-- TAB INTERNA 1: PAGOS Y LICENCIAS -->
+        <div id="historyViewPayments" style="display:flex; flex-direction:column; gap:1.25rem;">
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+              <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary);">Pagos Registrados</h4>
+              <button class="btn btn-outline btn-sm" id="btnOpenManualPayment">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Registrar Pago Manual
+              </button>
+            </div>
+            <div class="table-responsive" style="max-height:180px; overflow-y:auto;">
+              <table class="data-table" style="font-size:0.82rem;">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Monto</th>
+                    <th>Plan</th>
+                    <th>Medio</th>
+                    <th>Referencia</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="historyPaymentsBody">
+                  <tr><td colspan="6" style="text-align:center;">Sin pagos registrados</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h4 style="font-size:0.95rem; font-weight:700; margin-bottom:0.5rem; color:var(--text-primary);">Códigos Ed25519 Emitidos</h4>
+            <div class="table-responsive" style="max-height:180px; overflow-y:auto;">
+              <table class="data-table" style="font-size:0.82rem;">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Plan</th>
+                    <th>Días</th>
+                    <th>Device ID</th>
+                    <th>Token Generado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="historyCodesBody">
+                  <tr><td colspan="6" style="text-align:center;">Sin códigos emitidos</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB INTERNA 2: HARDWARE Y MIGRACIONES -->
+        <div id="historyViewHardware" style="display:none; flex-direction:column; gap:1rem;">
+          <div id="historyCurrentDeviceBox" style="padding:0.75rem 1rem; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:10px;"></div>
+          <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary);">Registro Histórico de Teléfonos Vinculados</h4>
+          <div class="table-responsive" style="max-height:220px; overflow-y:auto;">
+            <table class="data-table" style="font-size:0.82rem;">
+              <thead>
+                <tr>
+                  <th>Fecha de Migración</th>
+                  <th>Device ID Anterior</th>
+                  <th>Nuevo Device ID</th>
+                  <th>Tarifa</th>
+                  <th>Medio</th>
+                  <th>Motivo de Cambio</th>
+                </tr>
+              </thead>
+              <tbody id="historyHardwareBody">
+                <tr><td colspan="6" style="text-align:center;">Sin migraciones registradas para este cliente.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeModal('modalClientHistory')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REGISTRAR PAGO MANUAL -->
+  <div class="modal-overlay" id="modalManualPayment">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Registrar Pago Manual</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalManualPayment')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="formManualPayment" class="form-grid">
+          <input type="hidden" id="manualPayClientId">
+          <div class="form-group">
+            <label for="manualPayAmount">Monto Cobrado (S/):</label>
+            <input type="number" id="manualPayAmount" step="0.5" required placeholder="35.00">
+          </div>
+          <div class="form-group">
+            <label for="manualPayPlan">Concepto / Plan:</label>
+            <input type="text" id="manualPayPlan" required placeholder="Ej: Renovación Mensual, Pase Anual">
+          </div>
+          <div class="form-group">
+            <label for="manualPayMethod">Medio de Pago:</label>
+            <select id="manualPayMethod">
+              <option value="Yape">Yape</option>
+              <option value="Plin">Plin</option>
+              <option value="Transferencia BCP">Transferencia BCP</option>
+              <option value="Transferencia BBVA / Interbank">Transferencia BBVA / Interbank</option>
+              <option value="Efectivo">Efectivo en Tienda</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="manualPayRef">N° de Operación / Referencia:</label>
+            <input type="text" id="manualPayRef" placeholder="Ej: Op. 849201">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="manualPayNotes">Notas Adicionales:</label>
+            <textarea id="manualPayNotes" rows="2" placeholder="Detalle contable o acuerdo..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modalManualPayment')">Cancelar</button>
+        <button class="btn btn-primary" id="btnSubmitManualPayment">Guardar Pago</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MIGRAR DISPOSITIVO POR CAMBIO DE TELÉFONO -->
+  <div class="modal-overlay" id="modalMigrateDevice">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Migrar Dispositivo / Cambio de Celular</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalMigrateDevice')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1rem;">
+          Esta función vincula la licencia del cliente a su nuevo teléfono y archiva el identificador anterior en su historial de equipos para prevenir clonaciones no autorizadas.
+        </p>
+        <form id="formMigrateDevice" style="display:flex; flex-direction:column; gap:1rem;">
+          <input type="hidden" id="migClientId">
+          <div class="form-group">
+            <label>Cliente:</label>
+            <input type="text" id="migClientName" readonly style="opacity:0.8;">
+          </div>
+          <div class="form-group">
+            <label>Hardware ID Anterior (ANDROID_ID — se archivará):</label>
+            <input type="text" id="migOldDeviceId" readonly style="font-family:var(--font-mono); opacity:0.8;">
+          </div>
+          <div class="form-group">
+            <label for="migNewDeviceId">Nuevo Hardware ID del Teléfono (ML-YYYY — ANDROID_ID):</label>
+            <input type="text" id="migNewDeviceId" required placeholder="Ej: ML-7H2R" style="font-family:var(--font-mono); text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label for="migFee">Tarifa de Reasignación de Licencia (S/):</label>
+            <input type="number" id="migFee" value="40.00" step="1.0">
+          </div>
+          <div class="form-group">
+            <label for="migPaymentMethod">Medio de Pago:</label>
+            <select id="migPaymentMethod">
+              <option value="Yape">Yape</option>
+              <option value="Plin">Plin</option>
+              <option value="Transferencia BCP">Transferencia BCP</option>
+              <option value="Efectivo">Efectivo</option>
+              <option value="Cortesia (Garantia)">Cortesía (Garantía de equipo)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="migReason">Motivo de la Migración:</label>
+            <input type="text" id="migReason" placeholder="Ej: Renovó equipo a Xiaomi Redmi Note 13">
+          </div>
+          <div class="form-group" style="display:flex; flex-direction:row; align-items:center; gap:0.6rem; margin-top:0.25rem;">
+            <input type="checkbox" id="migEmitImmediately" checked style="width:18px; height:18px; cursor:pointer;">
+            <label for="migEmitImmediately" style="cursor:pointer; font-weight:600; margin:0; color:var(--primary); font-size:0.88rem;">
+              Emitir licencia para el nuevo teléfono de inmediato (1 solo paso)
+            </label>
+          </div>
+        </form>
+
+        <!-- RESULTADO DE EMISIÓN INMEDIATA EN 1 PASO -->
+        <div id="migSuccessInline" class="migration-success-box" style="display:none; margin-top:1rem;">
+          <div style="font-weight:700; color:var(--success); font-size:0.95rem; display:flex; align-items:center; gap:0.4rem;">
+            <svg style="width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            ¡Migración Completada y Licencia Emitida!
+          </div>
+          <p style="font-size:0.84rem; color:var(--text-secondary); margin:0;">
+            La licencia ha sido transferida exitosamente al nuevo teléfono (<span id="migSuccessNewDev" style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary);">-</span>).
+          </p>
+          <div class="code-display" id="migSuccessCode" style="font-size:0.85rem; padding:0.6rem;">ML9-...</div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:center;">
+            <button type="button" class="btn btn-outline btn-sm" id="btnMigCopyCode">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copiar Código
+            </button>
+            <a class="btn btn-wa btn-sm" id="btnMigSendWa" target="_blank" href="#">
+              <span>📲 Enviar por WhatsApp</span>
+            </a>
+          </div>
+          <div id="migSuccessQrContainer" style="display:flex; justify-content:center; background:#ffffff; padding:10px; border-radius:10px; width:190px; height:190px; margin:0 auto; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
+        </div>
+      </div>
+      <div class="modal-footer" id="migModalFooter">
+        <button class="btn btn-outline" onclick="closeModal('modalMigrateDevice')">Cancelar</button>
+        <button class="btn btn-primary" id="btnSubmitMigrateDevice">Confirmar Migración</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REGISTRAR / SUBIR NUEVA VERSIÓN DEL APK -->
+  <div class="modal-overlay" id="modalCreateRelease">
+    <div class="modal-dialog" style="max-width:740px;">
+      <div class="modal-header">
+        <h3>Subir y Registrar Nueva Versión del APK</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalCreateRelease')">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- ZONA DRAG & DROP DE APK DIRECTO -->
+        <div class="apk-drop-zone" id="apkDropZone">
+          <div class="drop-icon">
+            <svg style="width:40px; height:40px; color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          </div>
+          <div class="drop-title">Arrastra tu archivo .APK aquí o haz clic para seleccionarlo</div>
+          <div class="drop-subtitle">Sube directamente tu compilación (15-40 MB) a la carpeta de releases del servidor</div>
+          <input type="file" id="apkFileInput" accept=".apk" style="display:none;">
+          <div id="apkUploadProgress" style="display:none; width:100%; margin-top:0.5rem;">
+            <div style="background:rgba(255,255,255,0.1); border-radius:4px; height:8px; overflow:hidden;">
+              <div id="apkProgressBar" style="width:0%; background:var(--primary); height:100%; transition:width 0.2s;"></div>
+            </div>
+            <span id="apkUploadStatusText" style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem; display:block;">Subiendo archivo...</span>
+          </div>
+        </div>
+
+        <!-- AUTODETECCIÓN INTELIGENTE DESDE APP_MOVIL -->
+        <div style="margin: 1rem 0; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.25); border-radius:10px; padding:0.75rem 1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+          <div>
+            <strong style="color:var(--primary); font-size:0.88rem;">Autodetección de Build Local (ARM64 / Universal):</strong>
+            <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;" id="detectApkStatus">Lee app_movil/build/... detectando app-arm64-v8a-release.apk o app-release.apk con SHA-256 real.</p>
+            <div id="detectApkButtonsContainer" style="display:none; gap:0.4rem; margin-top:0.4rem; flex-wrap:wrap;"></div>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="btnDetectLocalBuild">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            Autodetectar APK de app_movil
+          </button>
+        </div>
+
+        <form id="formCreateRelease" class="form-grid">
+          <div class="form-group">
+            <label for="relVersionName">Versión (Version Name):</label>
+            <input type="text" id="relVersionName" required placeholder="Ej: 9.30.0">
+          </div>
+          <div class="form-group">
+            <label for="relVersionCode">Código de Build (Version Code):</label>
+            <input type="number" id="relVersionCode" required placeholder="Ej: 74">
+          </div>
+          <div class="form-group">
+            <label for="relMinRequiredVersion">Versión Mínima Requerida:</label>
+            <input type="text" id="relMinRequiredVersion" value="9.0.0" placeholder="9.0.0">
+          </div>
+          <div class="form-group">
+            <label for="relDbSchema">Esquema SQLite Requerido:</label>
+            <input type="number" id="relDbSchema" required value="36">
+          </div>
+          <div class="form-group">
+            <label for="relType">Tipo de Lanzamiento:</label>
+            <select id="relType">
+              <option value="FEATURE_RELEASE">FEATURE_RELEASE (Nuevas Funciones Comerciales)</option>
+              <option value="HOTFIX">HOTFIX (Parche de Corrección Gratuito Vitalicio)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="relSizeMb">Tamaño del APK (MB):</label>
+            <input type="text" id="relSizeMb" placeholder="Ej: 32.4 MB">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="relSha256">Hash Criptográfico SHA-256 del APK:</label>
+            <input type="text" id="relSha256" placeholder="Ej: 4a5b6c7d... (64 caracteres hex)" style="font-family:var(--font-mono);">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="relDownloadUrl">Enlace de Descarga Externo (Opcional - Google Drive / Web):</label>
+            <input type="url" id="relDownloadUrl" placeholder="https://drive.google.com/file/d/.../view">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="relChangelog">Novedades y Mejoras (Changelog):</label>
+            <textarea id="relChangelog" rows="3" placeholder="Detalla los puntos nuevos que recibirá el usuario..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modalCreateRelease')">Cancelar</button>
+        <button class="btn btn-primary" id="btnSubmitCreateRelease">Publicar Versión</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR VERSIÓN / CHANGELOG -->
+  <div class="modal-overlay" id="modalEditRelease">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Editar Versión & Changelog</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalEditRelease')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="formEditRelease" class="form-grid">
+          <input type="hidden" id="editRelVersionName">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label>Versión:</label>
+            <input type="text" id="editRelVersionDisplay" readonly style="opacity:0.8; font-weight:700;">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="editRelType">Tipo de Lanzamiento:</label>
+            <select id="editRelType">
+              <option value="FEATURE_RELEASE">FEATURE_RELEASE (Nuevas Funciones Comerciales)</option>
+              <option value="HOTFIX">HOTFIX (Parche Gratuito Vitalicio)</option>
+            </select>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="editRelDownloadUrl">Enlace de Descarga Externo (Opcional):</label>
+            <input type="url" id="editRelDownloadUrl">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="editRelChangelog">Changelog / Novedades:</label>
+            <textarea id="editRelChangelog" rows="4"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modalEditRelease')">Cancelar</button>
+        <button class="btn btn-primary" id="btnSubmitEditRelease">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIRMACIÓN PROFESIONAL (REEMPLAZO TOTAL DE WINDOW.CONFIRM) -->
+  <div class="modal-overlay" id="modalConfirm">
+    <div class="modal-dialog" style="max-width:440px;">
+      <div class="modal-header">
+        <h3 id="confirmModalTitle">Confirmar Acción</h3>
+        <button class="btn btn-outline btn-sm" id="btnConfirmClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmModalMessage" style="font-size:0.92rem; color:var(--text-secondary); line-height:1.5;">¿Estás seguro de continuar?</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="btnConfirmCancel">Cancelar</button>
+        <button class="btn btn-primary" id="btnConfirmOk">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL RÁPIDO: VER QR / CREDENCIAL OFICIAL (FASE 4A: ACCESO DIRECTO DESDE CRM) -->
+  <div class="modal-overlay" id="modalQuickQr">
+    <div class="modal-dialog" style="max-width:680px;">
+      <div class="modal-header">
+        <div>
+          <h3 id="quickQrTitle">Credencial & Código QR Oficial</h3>
+          <div id="quickQrSubtitle" style="font-size:0.82rem; color:var(--text-secondary); margin-top:2px;">-</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalQuickQr')">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:1.25rem;">
+        <!-- Tarjeta QR Centrada sobre fondo blanco de alto contraste -->
+        <div style="display:flex; flex-direction:column; align-items:center; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem;">
+          <div class="quick-qr-white-box" id="quickQrContainer">
+            <!-- Renderizado dinámico a 236x236 px -->
+          </div>
+          <div class="code-display" id="quickQrCodeDisplay" style="margin-top:1rem; width:100%; max-width:520px; text-align:center; font-size:0.88rem;">ML9-...</div>
+        </div>
+
+        <!-- Barra de Acciones de 1 Clic -->
+        <div style="display:flex; gap:0.5rem; justify-content:center; flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" id="btnQuickCopyCode" title="Copiar código al portapapeles">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar Código
+          </button>
+          <button class="btn btn-outline btn-sm" id="btnQuickDownloadQr" title="Descargar imagen PNG del QR">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar QR
+          </button>
+          <button class="btn btn-outline btn-sm" id="btnQuickCopyCredential" title="Copiar credencial para pegar con Ctrl+V en WhatsApp">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar Credencial
+          </button>
+          <button class="btn btn-primary btn-sm" id="btnQuickDownloadCredential" title="Descargar credencial oficial en alta resolución @2x">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar Credencial (@2x)
+          </button>
+          <a class="btn btn-wa btn-sm" id="btnQuickSendWa" target="_blank" href="#" title="Enviar por WhatsApp">
+            <span>📲 WhatsApp</span>
+          </a>
+        </div>
+
+        <!-- Preview de Credencial Canvas Oficial @2x -->
+        <div style="background:rgba(0,0,0,0.25); border-radius:12px; padding:0.75rem; overflow-x:auto; display:flex; justify-content:center;">
+          <canvas id="quickCredentialCanvas" width="900" height="520" style="width:100%; max-width:540px; border-radius:8px; display:block; box-shadow:0 6px 18px rgba(0,0,0,0.3);"></canvas>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; width:100%;">
+        <button class="btn btn-outline" id="btnQuickAuditInInspector">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Auditar en Inspector Forense
+        </button>
+        <button class="btn btn-primary" onclick="closeModal('modalQuickQr')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: IMPORTAR BÓVEDA PORTABLE (.mlvault) -->
+  <div class="modal-overlay" id="modalImportVault">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg class="btn-icon" style="color:var(--success); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <h3>Importar Bóveda Portable (.mlvault)</h3>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalImportVault')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1rem;">
+          Restaura clientes, claves maestras y configuraciones desde otra máquina o copia de seguridad sin necesidad de reiniciar el servidor.
+        </p>
+
+        <!-- ZONA DRAG AND DROP -->
+        <div id="vaultDropZone" class="vault-drop-zone">
+          <input type="file" id="vaultFileInput" accept=".mlvault" style="display:none;">
+          <svg style="width:40px; height:40px; color:var(--primary); margin-bottom:0.5rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div style="font-weight:600; font-size:0.95rem; color:var(--text-primary);">Arrastra y suelta tu archivo <code>.mlvault</code> aquí</div>
+          <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">o haz clic para explorar tus archivos</div>
+          <button type="button" class="btn btn-outline btn-sm" style="margin-top:0.75rem;" onclick="document.getElementById('vaultFileInput').click()">
+            Examinar Bóveda...
+          </button>
+          <div id="vaultFileNameDisplay" style="margin-top:0.5rem; font-family:var(--font-mono); font-size:0.82rem; color:var(--cyan); font-weight:700;"></div>
+        </div>
+
+        <!-- INSPECCIÓN PREVIA -->
+        <div id="vaultInspectSummary" style="display:none; margin-top:1.25rem; padding:1rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px;">
+          <div style="font-weight:700; font-size:0.9rem; margin-bottom:0.5rem; color:var(--text-primary); display:flex; align-items:center; gap:0.4rem;">
+            <svg class="btn-icon" style="color:var(--cyan);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Metadatos de la Bóveda Detectada
+          </div>
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:0.5rem; font-size:0.8rem;">
+            <div><span style="color:var(--text-muted);">Versión:</span> <strong id="metaVaultVersion">-</strong></div>
+            <div><span style="color:var(--text-muted);">Creado:</span> <strong id="metaVaultCreated">-</strong></div>
+            <div><span style="color:var(--text-muted);">Clientes:</span> <strong id="metaVaultClients">-</strong></div>
+            <div><span style="color:var(--text-muted);">Clave Ed25519:</span> <strong id="metaVaultHasKey">-</strong></div>
+          </div>
+          <div style="margin-top:0.6rem; font-size:0.8rem; color:var(--text-secondary);">
+            <span style="color:var(--text-muted);">Slots de Desbloqueo:</span> <span id="metaVaultSlots" style="font-family:var(--font-mono);">-</span>
+          </div>
+        </div>
+
+        <!-- SELECTOR DE FACTOR DE DESBLOQUEO -->
+        <div id="vaultUnlockFactorSection" style="display:none; margin-top:1.25rem;">
+          <label style="font-weight:700; font-size:0.88rem; color:var(--text-primary); display:block; margin-bottom:0.5rem;">
+            Selecciona el factor para desencriptar esta bóveda:
+          </label>
+          <div style="display:flex; flex-direction:column; gap:0.6rem;">
+            <label class="factor-choice-row" id="rowFactorMlKey">
+              <input type="radio" name="importFactorType" value="mlkey" checked>
+              <div style="flex:1;">
+                <div style="font-weight:600; font-size:0.85rem;">Archivo de Llave Offline (.mlkey)</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">Sube el archivo .mlkey descargado previamente</div>
+              </div>
+            </label>
+            <div id="factorMlKeyInputContainer" style="margin-left:1.75rem; margin-top:-0.25rem;">
+              <input type="file" id="importKeyFileInput" accept=".mlkey,.txt" style="display:none;">
+              <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('importKeyFileInput').click()">
+                Seleccionar archivo .mlkey
+              </button>
+              <span id="importKeyFileNameDisplay" style="margin-left:0.5rem; font-family:var(--font-mono); font-size:0.8rem; color:var(--cyan);"></span>
+            </div>
+
+            <label class="factor-choice-row" id="rowFactorRescue">
+              <input type="radio" name="importFactorType" value="rescue_code">
+              <div style="flex:1;">
+                <div style="font-weight:600; font-size:0.85rem;">1 Código de Rescate de Emergencia</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">Uno de los 8 códigos oficiales (ML-XXXX-YYYY-ZZZZ)</div>
+              </div>
+            </label>
+            <div id="factorRescueInputContainer" style="display:none; margin-left:1.75rem; margin-top:-0.25rem;">
+              <input type="text" id="importRescueCodeInput" placeholder="Ej: ML-A1B2-C3D4-E5F6" maxlength="24" style="font-family:var(--font-mono); text-transform:uppercase; padding:0.4rem 0.6rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); width:220px;">
+            </div>
+
+            <label class="factor-choice-row" id="rowFactorPin">
+              <input type="radio" name="importFactorType" value="pin">
+              <div style="flex:1;">
+                <div style="font-weight:600; font-size:0.85rem;">PIN Personal</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">Si configuraste un PIN en la máquina de origen</div>
+              </div>
+            </label>
+            <div id="factorPinInputContainer" style="display:none; margin-left:1.75rem; margin-top:-0.25rem;">
+              <input type="password" id="importPinInput" placeholder="****" maxlength="12" style="font-family:var(--font-mono); padding:0.4rem 0.6rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); width:140px;">
+            </div>
+
+            <label class="factor-choice-row" id="rowFactorDpapi" style="display:none;">
+              <input type="radio" name="importFactorType" value="dpapi">
+              <div style="flex:1;">
+                <div style="font-weight:600; font-size:0.85rem;">Protección DPAPI Windows (Mismo Equipo)</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">Desencriptado transparente sin ingresar claves</div>
+              </div>
+            </label>
+          </div>
+
+          <div style="margin-top:1.25rem; padding-top:0.75rem; border-top:1px solid var(--border-color);">
+            <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.83rem; cursor:pointer;">
+              <input type="checkbox" id="chkImportRewrap" checked>
+              <span>Re-encriptar y registrar automáticamente la bóveda en este nuevo equipo</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; width:100%;">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modalImportVault')">Cancelar</button>
+        <button type="button" class="btn btn-success" id="btnSubmitImportVault" disabled>
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          Restaurar Base de Datos y Claves en Caliente
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AUTO-RECUPERACIÓN DESDE %APPDATA% EN 1 CLIC -->
+  <div class="modal-overlay" id="modalAutoRecovery">
+    <div class="modal-dialog" style="max-width: 600px; border-color:var(--success);">
+      <div class="modal-header" style="background:rgba(16, 185, 129, 0.1);">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg class="btn-icon" style="color:var(--success); width:24px; height:24px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <h3 style="color:var(--success);">Bóveda Espejo Detectada en Windows</h3>
+        </div>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.9rem; line-height:1.5; margin-bottom:1rem; color:var(--text-primary);">
+          Se detectó que el directorio local de datos está vacío o recién instalado, pero existe una <strong>Bóveda Espejo Íntegra y Cifrada</strong> en:
+        </p>
+        <div style="background:var(--bg-secondary); padding:0.75rem; border-radius:6px; font-family:var(--font-mono); font-size:0.8rem; color:var(--cyan); margin-bottom:1rem; word-break:break-all;">
+          %APPDATA%\MochilaListaAdminVault
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.45;">
+          Puedes restaurar de inmediato todos tus clientes, licencias, versiones, configuración de propietario y la clave privada Ed25519 con DPAPI nativo de Windows sin escribir contraseñas.
+        </p>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; width:100%;">
+        <button type="button" class="btn btn-outline" id="btnDismissAutoRecover" onclick="closeModal('modalAutoRecovery')">
+          Iniciar desde Cero (Descartar)
+        </button>
+        <button type="button" class="btn btn-success" id="btnAutoRecoverNow">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          Restaurar Todo en 1 Clic (Sin Contraseñas)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OVERLAY COMPLETO DE BLOQUEO DE CONSOLA POR PIN (HTTP 423 LOCKED) -->
+  <div id="vaultPinLockOverlay" class="vault-lock-overlay" style="display:none;">
+    <div class="vault-lock-card">
+      <div class="vault-lock-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h2 style="font-size:1.4rem; font-weight:800; margin-top:0.75rem; color:var(--text-primary);">Consola Protegida</h2>
+      <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.25rem;">
+        Esta sesión está bloqueada localmente. Ingresa tu PIN de consola para continuar.
+      </p>
+
+      <form id="formUnlockPin" style="margin-top:1.5rem;" onsubmit="return false;">
+        <div style="display:flex; justify-content:center; gap:0.5rem;">
+          <input type="password" id="vaultPinInput" maxlength="12" placeholder="••••" autocomplete="off" autofocus style="font-family:var(--font-mono); font-size:1.4rem; letter-spacing:0.35rem; width:180px; padding:0.6rem; background:var(--bg-secondary); border:2px solid var(--border-color); border-radius:8px; color:var(--text-primary); text-align:center;">
+          <button type="submit" class="btn btn-primary" id="btnSubmitUnlockPin" style="padding:0.6rem 1.25rem;">
+            Desbloquear
+          </button>
+        </div>
+        <div id="vaultPinBackoffNotice" style="display:none; margin-top:0.75rem; font-size:0.8rem; color:var(--danger); font-weight:600;"></div>
+      </form>
+
+      <div style="margin-top:1.25rem; font-size:0.82rem;">
+        <a href="javascript:void(0)" id="linkForgotPin" style="color:var(--text-muted); text-decoration:underline;">¿Olvidaste tu PIN? Desbloquea con llave o rescate</a>
+      </div>
+
+      <!-- PANEL DE RECUPERACIÓN EXPANDIBLE -->
+      <div id="vaultPinRecoveryPanel" style="display:none; margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid var(--border-color); text-align:left;">
+        <h4 style="font-size:0.9rem; font-weight:700; color:var(--text-primary); margin-bottom:0.75rem;">Opciones de Recuperación de Emergencia:</h4>
+        
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+          <div>
+            <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Opción A: Archivo de Llave (.mlkey)</label>
+            <input type="file" id="recoveryKeyFileInput" accept=".mlkey,.txt" style="display:none;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('recoveryKeyFileInput').click()">
+              Cargar archivo .mlkey
+            </button>
+            <span id="recoveryKeyFileName" style="margin-left:0.5rem; font-family:var(--font-mono); font-size:0.8rem; color:var(--cyan);"></span>
+          </div>
+
+          <div>
+            <label for="recoveryCodeInput" style="font-size:0.8rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Opción B: Código de Rescate (ML-XXXX-YYYY-ZZZZ)</label>
+            <input type="text" id="recoveryCodeInput" placeholder="Ej: ML-A1B2-C3D4-E5F6" maxlength="24" style="font-family:var(--font-mono); text-transform:uppercase; padding:0.35rem 0.6rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); width:200px;">
+          </div>
+
+          <div>
+            <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Opción C: Credencial Windows (DPAPI)</label>
+            <button type="button" class="btn btn-outline btn-sm" id="btnRecoveryDpapi">
+              Restablecer usando sesión Windows
+            </button>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-warning" id="btnSubmitRecovery" style="margin-top:1rem; width:100%; justify-content:center;">
+          Recuperar Acceso y Desbloquear Consola
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL / CONTENEDOR: KIT DE EMERGENCIA IMPRIMIBLE / PDF -->
+  <div class="modal-overlay" id="printableEmergencyKit">
+    <div class="modal-dialog" style="max-width: 820px;">
+      <div class="modal-header no-print">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg class="btn-icon" style="color:var(--danger); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <h3>Kit Criptográfico de Rescate de Emergencia</h3>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('printableEmergencyKit')">✕</button>
+      </div>
+      <div class="modal-body" style="padding:1.5rem;">
+
+        <!-- ÁREA IMPRIMIBLE EXCLUSIVA -->
+        <div id="emergencyKitPrintArea" class="emergency-kit-document">
+          <div class="kit-header">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #2563eb; padding-bottom:0.75rem;">
+              <div>
+                <h2 style="font-size:1.35rem; font-weight:900; color:#1e3a8a; margin:0; letter-spacing:0.5px;">MOCHILALISTA ADMIN</h2>
+                <div style="font-size:0.85rem; font-weight:700; color:#475569; text-transform:uppercase; margin-top:2px;">Kit de Emergencia & Hoja de Rescate Físico</div>
+              </div>
+              <div style="text-align:right; font-size:0.75rem; color:#64748b;">
+                <div>Emisión: <span id="kitGeneratedDate" style="font-weight:600;">-</span></div>
+                <div>ID Bóveda: <code id="kitVaultId" style="font-family:monospace; font-weight:700; color:#1e293b;">-</code></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:1rem; font-size:0.82rem; color:#334155; line-height:1.5;">
+            <p><strong>IMPORTANTE:</strong> Esta hoja contiene las claves de recuperación para desbloquear la base de datos de clientes, firmas digitales Ed25519 y configuraciones en caso de extravío de contraseña, fallo total de hardware o mudanza de computadora. Guárdela impresa en un lugar físico seguro o caja fuerte.</p>
+          </div>
+
+          <div style="margin-top:1.25rem; display:grid; grid-template-columns: 1fr 220px; gap:1.5rem; align-items:start;">
+            <div>
+              <div style="font-weight:800; font-size:0.9rem; text-transform:uppercase; color:#1e293b; margin-bottom:0.5rem; letter-spacing:0.5px;">
+                8 Códigos de Rescate de Un Solo Uso:
+              </div>
+              <p style="font-size:0.75rem; color:#64748b; margin-bottom:0.75rem;">
+                Cualquiera de estos 8 códigos puede desencriptar la base de datos completa de forma independiente en una máquina nueva.
+              </p>
+              <div id="rescueCodesGrid" class="rescue-codes-grid">
+                <!-- Se inyectan dinámicamente 8 códigos con formato XXXX-XXXX-XXXX -->
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; align-items:center; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:0.75rem; text-align:center;">
+              <div style="font-size:0.72rem; font-weight:700; color:#475569; margin-bottom:0.5rem; text-transform:uppercase;">QR Offline Bóveda</div>
+              <div id="rescueQrContainer" style="background:#ffffff; padding:8px; border-radius:6px; display:inline-block; border:1px solid #e2e8f0;"></div>
+              <div style="font-size:0.68rem; color:#64748b; margin-top:0.5rem;">Escaneable para verificación física</div>
+            </div>
+          </div>
+
+          <div class="kit-footer" style="margin-top:1.5rem; padding-top:0.75rem; border-top:1px dashed #cbd5e1; font-size:0.72rem; color:#64748b; display:flex; justify-content:space-between;">
+            <div>MochilaLista &copy; 2026 • Julio Angello Vasquez Navarro • D.L. 822 / INDECOPI Perú</div>
+            <div>Confidencial • Solo para el Propietario</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer no-print" style="display:flex; justify-content:space-between; width:100%;">
+        <button type="button" class="btn btn-outline" onclick="closeModal('printableEmergencyKit')">Cerrar</button>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn btn-outline" id="btnCopyRescueCodes">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar 8 Códigos
+          </button>
+          <button type="button" class="btn btn-primary" id="btnEmergencyPrint">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Imprimir Kit / Guardar PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DRAWER LATERAL DESLIZABLE: FICHA 360° DEL CLIENTE (FASE 4A: 5 PESTAÑAS) -->
+  <div class="drawer-backdrop" id="drawerClient360Backdrop" onclick="closeClient360Drawer()"></div>
+  <aside class="drawer-panel" id="drawerClient360">
+    <div class="drawer-header">
+      <div class="drawer-header-info">
+        <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+          <h3 id="drawerBizName" style="font-size:1.15rem; font-weight:800; color:var(--text-primary); margin:0;">-</h3>
+          <span id="drawerStatusBadge" class="badge badge-green">Activa</span>
+        </div>
+        <div style="font-size:0.82rem; color:var(--text-secondary); margin-top:3px;">
+          <span id="drawerOwnerName">-</span> • <span id="drawerDeviceId" style="font-family:var(--font-mono); color:var(--primary); font-weight:700;">-</span>
+        </div>
+      </div>
+      <button class="btn-drawer-close" onclick="closeClient360Drawer()" title="Cerrar Ficha 360°">✕</button>
+    </div>
+
+    <!-- TABS DE NAVEGACIÓN DENTRO DEL DRAWER -->
+    <div class="drawer-tabs-bar">
+      <button class="drawer-tab-btn active" data-dtab="drawerTabOverview">Resumen</button>
+      <button class="drawer-tab-btn" data-dtab="drawerTabQr">QR & Credencial</button>
+      <button class="drawer-tab-btn" data-dtab="drawerTabFinances">Pagos</button>
+      <button class="drawer-tab-btn" data-dtab="drawerTabHardware">Hardware</button>
+      <button class="drawer-tab-btn" data-dtab="drawerTabEdit">Edición Rápida</button>
+    </div>
+
+    <div class="drawer-body">
+      <!-- PESTAÑA 1: RESUMEN Y LICENCIA -->
+      <div class="drawer-tab-pane active" id="drawerTabOverview">
+        <div class="drawer-kpi-grid">
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Plan Actual</span>
+            <span class="drawer-kpi-val" id="drawerKpiPlan">-</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Vencimiento</span>
+            <span class="drawer-kpi-val" id="drawerKpiExpires">-</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Créditos IA Acumulados</span>
+            <span class="drawer-kpi-val" id="drawerKpiAiCredits" style="color:var(--purple);">-</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Versión APK Instalada</span>
+            <span class="drawer-kpi-val" id="drawerKpiVersion">-</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Ventana Updates</span>
+            <span class="drawer-kpi-val" id="drawerKpiUpdates">-</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Total Recaudado</span>
+            <span class="drawer-kpi-val" id="drawerKpiTotalPaid" style="color:var(--success);">-</span>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px; padding:1rem; display:flex; flex-direction:column; gap:0.5rem;">
+          <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Datos de Contacto</span>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">WhatsApp:</strong> <span id="drawerPhone">-</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">RUC / DNI:</strong> <span id="drawerDocId">-</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Notas:</strong> <span id="drawerNotes" style="color:var(--text-secondary);">-</span></div>
+        </div>
+
+        <button class="btn btn-primary" id="btnDrawerEmitLicense" style="justify-content:center; padding:0.75rem;">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Emitir Renovación / Nueva Licencia
+        </button>
+      </div>
+
+      <!-- PESTAÑA 2: QR Y CREDENCIAL -->
+      <div class="drawer-tab-pane" id="drawerTabQr">
+        <div style="display:flex; flex-direction:column; align-items:center; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; gap:0.75rem;">
+          <div class="quick-qr-white-box" id="drawerQrContainer" style="width:220px; height:220px;"></div>
+          <div class="code-display" id="drawerCodeDisplay" style="font-size:0.85rem; width:100%; text-align:center;">ML9-...</div>
+        </div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:center;">
+          <button class="btn btn-outline btn-sm" id="btnDrawerCopyCode">Copiar Código</button>
+          <button class="btn btn-outline btn-sm" id="btnDrawerDownloadQr">Descargar QR</button>
+          <a class="btn btn-wa btn-sm" id="btnDrawerSendWa" target="_blank" href="#">📲 WhatsApp</a>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 3: PAGOS Y FINANZAS -->
+      <div class="drawer-tab-pane" id="drawerTabFinances">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin:0;">Historial de Pagos</h4>
+          <button class="btn btn-outline btn-sm" id="btnDrawerAddPayment">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Registrar Pago
+          </button>
+        </div>
+        <div class="table-responsive" style="max-height:280px; overflow-y:auto;">
+          <table class="data-table" style="font-size:0.82rem;">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Monto</th>
+                <th>Plan</th>
+                <th>Medio</th>
+                <th>Referencia</th>
+              </tr>
+            </thead>
+            <tbody id="drawerPaymentsBody">
+              <tr><td colspan="5" style="text-align:center;">Sin pagos registrados</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 4: HARDWARE Y MIGRACIONES -->
+      <div class="drawer-tab-pane" id="drawerTabHardware">
+        <div id="drawerHardwareCurrentBox" style="padding:0.75rem 1rem; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.25); border-radius:10px;">
+          <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Hardware ID Actual (ANDROID_ID)</div>
+          <div id="drawerCurrentDevIdDisplay" style="font-family:var(--font-mono); font-size:1.1rem; font-weight:800; color:var(--primary); margin-top:2px;">-</div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin:0;">Historial de Migraciones</h4>
+          <button class="btn btn-outline btn-sm" id="btnDrawerMigrateDev">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            Migrar Teléfono
+          </button>
+        </div>
+        <div class="table-responsive" style="max-height:260px; overflow-y:auto;">
+          <table class="data-table" style="font-size:0.82rem;">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Anterior</th>
+                <th>Nuevo</th>
+                <th>Tarifa</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody id="drawerHardwareBody">
+              <tr><td colspan="5" style="text-align:center;">Sin migraciones registradas.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 5: EDICIÓN RÁPIDA -->
+      <div class="drawer-tab-pane" id="drawerTabEdit">
+        <form id="formDrawerEditClient" style="display:flex; flex-direction:column; gap:1rem;">
+          <input type="hidden" id="drawerEditClientId">
+          <div class="form-group">
+            <label for="drawerEditBizName">Nombre Comercial:</label>
+            <input type="text" id="drawerEditBizName" required>
+          </div>
+          <div class="form-group">
+            <label for="drawerEditOwnerName">Propietario:</label>
+            <input type="text" id="drawerEditOwnerName" required>
+          </div>
+          <div class="form-group">
+            <label for="drawerEditDocId">RUC o DNI:</label>
+            <input type="text" id="drawerEditDocId">
+          </div>
+          <div class="form-group">
+            <label for="drawerEditPhone">WhatsApp (+51):</label>
+            <input type="text" id="drawerEditPhone" required>
+          </div>
+          <div class="form-group">
+            <label for="drawerEditDeviceId">Hardware ID (ANDROID_ID):</label>
+            <input type="text" id="drawerEditDeviceId" required style="font-family:var(--font-mono); text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label for="drawerEditInstalledVersion">Versión Instalada:</label>
+            <input type="text" id="drawerEditInstalledVersion">
+          </div>
+          <div class="form-group">
+            <label for="drawerEditNotes">Notas y Acuerdos:</label>
+            <textarea id="drawerEditNotes" rows="3"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" id="btnDrawerSaveEdit" style="justify-content:center; padding:0.75rem; margin-top:0.5rem;">
+            Guardar Cambios Inmediatos
+          </button>
+        </form>
+      </div>
+    </div>
+  </aside>
+
+  <!-- FOOTER Y CIERRE DE LAYOUT -->
+      <footer>
+        <div>
+          <strong>MochilaLista &copy; 2026</strong> — Todos los derechos reservados.
+          Desarrollado y Distribuido por <strong>Julio Angello Vasquez Navarro</strong> (D.L. 822 / INDECOPI Perú).
+        </div>
+        <div>
+          Persistencia local directa en disco duro • Servidor: <code style="color:var(--primary);">http://localhost:8080</code>
+        </div>
+      </footer>
+    </div> <!-- .app-main-content -->
+  </div> <!-- .app-layout -->
+
+  <script src="js/admin_app.js"></script>
+</body>
+</html>

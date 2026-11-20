@@ -30,6 +30,8 @@ import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
 import 'package:app_movil/core/screens/db_inspector_screen.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/providers/license_provider.dart';
+import 'package:app_movil/features/auth/widgets/soft_lock_renewal_modal.dart';
 
 /// Definición de metadatos estáticos y callbacks de una tarjeta de acción
 class _ActionCardDef {
@@ -256,7 +258,14 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
         badgeBuilder: (ctx, isDark) => quickSaleProv.cartItems.isNotEmpty
             ? _buildBadge("${quickSaleProv.cartItems.length}", Colors.red)
             : null,
-        onTapBuilder: (ctx, isDark) => () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => const QuickSaleScreen())),
+        onTapBuilder: (ctx, isDark) => () {
+          final licenseProv = Provider.of<LicenseProvider?>(ctx, listen: false);
+          if (licenseProv != null && !licenseProv.canCreateSales) {
+            SoftLockRenewalModal.show(ctx);
+            return;
+          }
+          Navigator.push(ctx, MaterialPageRoute(builder: (_) => const QuickSaleScreen()));
+        },
         onLongPressBuilder: (ctx, isDark) => () => _showQuickSalePowerShortcut(ctx, quickSaleProv, isDark),
       ),
       'create_product': _ActionCardDef(
@@ -282,6 +291,11 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
             ? _buildBadge("${quotationScanner.items.length}", Colors.orange)
             : null,
         onTapBuilder: (ctx, isDark) => () {
+          final licenseProv = Provider.of<LicenseProvider?>(ctx, listen: false);
+          if (licenseProv != null && !licenseProv.canCreateSales) {
+            SoftLockRenewalModal.show(ctx);
+            return;
+          }
           if (quotationScanner.items.isNotEmpty) {
             _showResumeDialog(
               ctx,
@@ -316,7 +330,14 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
         badgeBuilder: (ctx, isDark) => quotationScanner.hasManualDraft
             ? _buildBadge("${quotationScanner.draftManualItems!.length}", Colors.blue)
             : null,
-        onTapBuilder: (ctx, isDark) => () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => const ManualQuotationScreen())),
+        onTapBuilder: (ctx, isDark) => () {
+          final licenseProv = Provider.of<LicenseProvider?>(ctx, listen: false);
+          if (licenseProv != null && !licenseProv.canCreateSales) {
+            SoftLockRenewalModal.show(ctx);
+            return;
+          }
+          Navigator.push(ctx, MaterialPageRoute(builder: (_) => const ManualQuotationScreen()));
+        },
       ),
       'load_invoice': _ActionCardDef(
         id: 'load_invoice',

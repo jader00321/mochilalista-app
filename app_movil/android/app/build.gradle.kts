@@ -1,3 +1,7 @@
+import java.util.Properties
+import java.io.FileInputStream
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.app_movil"
+    namespace = "com.mochilalista.app"
     // 🔥 ACTUALIZADO: Cambiado de 35 a 36 como exigen los plugins
     compileSdk = 36 
     ndkVersion = flutter.ndkVersion
@@ -23,18 +27,52 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.app_movil"
+        applicationId = "com.mochilalista.app"
         minSdk = 24 
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    val keystorePropertiesFile = rootProject.file("key.properties").takeIf { it.exists() }
+        ?: rootProject.file("android/key.properties").takeIf { it.exists() }
+
+    val keystoreProperties = Properties()
+    val hasReleaseKey = if (keystorePropertiesFile != null && keystorePropertiesFile.exists()) {
+        keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+        keystoreProperties.getProperty("storeFile") != null
+    } else {
+        false
+    }
+
+    signingConfigs {
+        create("release") {
+            if (hasReleaseKey) {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                val storeFilePath = keystoreProperties.getProperty("storeFile")
+                storeFile = if (File(storeFilePath).isAbsolute) File(storeFilePath) else rootProject.file(storeFilePath)
+                storePassword = keystoreProperties.getProperty("storePassword")
+            } else {
+                // Fallback limpio a configuración de debug para desarrollo local sin key.properties
+                val debugConfig = signingConfigs.getByName("debug")
+                keyAlias = debugConfig.keyAlias
+                keyPassword = debugConfig.keyPassword
+                storeFile = debugConfig.storeFile
+                storePassword = debugConfig.storePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = false
-            isShrinkResources = false
+            signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }

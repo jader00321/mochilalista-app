@@ -1,0 +1,122 @@
+[
+  {
+    "id": "CLI-001",
+    "business_name": "Comercial & Librería El Estudiante",
+    "owner_name": "Carlos Mendoza Quispe",
+    "document_id": "10458796321",
+    "phone": "+51987654321",
+    "current_device_id": "ML-9K4B",
+    "device_history": [],
+    "installed_version": "9.30.0",
+    "license_type": "MENSUAL",
+    "license_status": "ACTIVA",
+    "license_expires": "2027-01-13T23:59:59.000Z",
+    "next_nonce": 2,
+    "updates_until": "2026-12-14T23:59:59.000Z",
+    "ai_extra_credits": 50,
+    "ai_accumulated_credits": 50,
+    "notes": "Cliente puntual en Piura. Usa Yape.",
+    "created_at": "2026-11-01T10:00:00.000Z",
+    "payment_history": [
+      {
+        "id": "PAY-101",
+        "date": "2026-11-14T10:00:00.000Z",
+        "amount": 35.0,
+        "plan": "MENSUAL",
+        "method": "Yape",
+        "reference": "Op. 948102"
+      }
+    ],
+    "generated_codes_history": []
+  },
+  {
+    "id": "CLI-002",
+    "business_name": "Bazar Escolar Las Palmeras",
+    "owner_name": "Rosa María Benites",
+    "document_id": "20601234567",
+    "phone": "+51976543210",
+    "current_device_id": "ML-3X8P",
+    "device_history": [],
+    "installed_version": "9.30.0",
+    "license_type": "TRIMESTRAL",
+    "license_status": "POR_VENCER",
+    "license_expires": "2026-11-23T20:18:00.943281Z",
+    "next_nonce": 2,
+    "updates_until": "2027-02-14T23:59:59.000Z",
+    "ai_extra_credits": 230,
+    "ai_accumulated_credits": 230,
+    "notes": "Recordar cobranza preventiva antes del vencimiento.",
+    "created_at": "2026-10-15T09:30:00.000Z",
+    "payment_history": [
+      {
+        "id": "PAY-102",
+        "date": "2026-10-15T09:30:00.000Z",
+        "amount": 90.0,
+        "plan": "TRIMESTRAL",
+        "method": "Plin",
+        "reference": "Op. 551294"
+      }
+    ],
+    "generated_codes_history": []
+  },
+  {
+    "id": "CLI-003",
+    "business_name": "Distribuidora & Útiles San Martín",
+    "owner_name": "Jorge Luis Ramos",
+    "document_id": "10789456123",
+    "phone": "+51954321098",
+    "current_device_id": "ML-7W2R",
+    "device_history": [],
+    "installed_version": "9.30.0",
+    "license_type": "PERPETUO_LIBERADO",
+    "license_status": "PERPETUA",
+    "license_expires": "2299-12-31T23:59:59.000Z",
+    "next_nonce": 2,
+    "updates_until": "2027-08-26T20:18:00.943281Z",
+    "ai_extra_credits": 350,
+    "ai_accumulated_credits": 350,
+    "notes": "Licencia Perpetua de por vida con updates vigentes.",
+    "created_at": "2026-09-01T11:00:00.000Z",
+    "payment_history": [
+      {
+        "id": "PAY-103",
+        "date": "2026-09-01T11:00:00.000Z",
+        "amount": 850.0,
+        "plan": "PERPETUO_LIBERADO",
+        "method": "BCP",
+        "reference": "Op. 112233"
+      }
+    ],
+    "generated_codes_history": []
+  },
+  {
+    "id": "CLI-004",
+    "business_name": "Papelería & Novedades Huascarán",
+    "owner_name": "Carmen Luz Huamán",
+    "document_id": "10321654987",
+    "phone": "+51965432187",
+    "current_device_id": "ML-2V5M",
+    "device_history": [],
+    "installed_version": "9.29.0",
+    "license_type": "MENSUAL",
+    "license_status": "BLOQUEO_ESTRICTO",
+    "license_expires": "2026-11-07T20:18:00.943281Z",
+    "next_nonce": 2,
+    "updates_until": "2026-10-01T23:59:59.000Z",
+    "ai_extra_credits": 50,
+    "ai_accumulated_credits": 50,
+    "notes": "Licencia vencida hace 12 días. Enviar oferta de reactivación.",
+    "created_at": "2026-08-10T14:00:00.000Z",
+    "payment_history": [
+      {
+        "id": "PAY-104",
+        "date": "2026-08-10T14:00:00.000Z",
+        "amount": 35.0,
+        "plan": "MENSUAL",
+        "method": "Yape",
+        "reference": "Op. 887766"
+      }
+    ],
+    "generated_codes_history": []
+  }
+]

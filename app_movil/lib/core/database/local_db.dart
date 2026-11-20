@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:app_movil/core/database/database_connection_factory.dart';
 
 class LocalDatabase {
   static final LocalDatabase instance = LocalDatabase._init();
@@ -15,10 +18,103 @@ class LocalDatabase {
 
   @visibleForTesting
   static Future<void> createDBForTesting(Database db) async {
-    await instance._createDB(db, 34);
+    await instance._createDB(db, 36);
     await ensureEventosFinancierosTable(db);
     await ensureLoyaltyRulesAndRestoration(db);
     await ensureNotificationPreferencesAndSilenced(db);
+    await ensureLicenciaAppTable(db);
+  }
+
+  /// Genera o recupera la clave de cifrado local para Android
+  static Future<String> getOrGenerateDbKey() async {
+    const storage = FlutterSecureStorage();
+    try {
+      String? key = await storage.read(key: DatabaseConnectionFactory.secureStorageKey);
+      if (key == null || key.isEmpty) {
+        final random = DateTime.now().microsecondsSinceEpoch.toString();
+        key = 'ml_sec_${random}_master_key';
+        await storage.write(key: DatabaseConnectionFactory.secureStorageKey, value: key);
+      }
+      return key;
+    } catch (e) {
+      return 'mochilalista_default_secure_vault_key';
+    }
+  }
+
+  /// Migración segura de base de datos SQLite no cifrada a SQLCipher (si corresponde)
+  static Future<void> ensureDatabaseEncrypted(String dbPath, String password) async {
+    if (DatabaseConnectionFactory.shouldUseFfi) return;
+
+    final file = File(dbPath);
+    if (!await file.exists()) return;
+
+    try {
+      final bytes = await file.openRead(0, 16).first;
+      final header = String.fromCharCodes(bytes);
+
+      if (header.startsWith('SQLite format 3')) {
+        debugPrint("🔒 Detectada base de datos previa sin cifrar. Iniciando migración segura...");
+        final tempEncryptedPath = '${dbPath}_encrypted_temp.db';
+
+        final plainDb = await openDatabase(dbPath);
+        await plainDb.execute("ATTACH DATABASE '$tempEncryptedPath' AS encrypted KEY '$password';");
+        await plainDb.execute("SELECT sqlcipher_export('encrypted');");
+        await plainDb.execute("DETACH DATABASE encrypted;");
+        await plainDb.close();
+
+        final backupPlain = File('${dbPath}_legacy.bak');
+        if (await backupPlain.exists()) await backupPlain.delete();
+        await file.rename(backupPlain.path);
+        await File(tempEncryptedPath).rename(dbPath);
+        debugPrint("✅ Base de datos migrada exitosamente a AES-256 sin pérdida de datos.");
+      }
+    } catch (e) {
+      debugPrint("⚠️ Advertencia en verificación/migración de cifrado: $e");
+    }
+  }
+
+  /// Ejecuta la migración de versión asegurando un snapshot físico previo (.bak).
+  /// Si ocurre cualquier excepción, realiza rollback automático restaurando el archivo intacto.
+  static Future<void> safeUpgradeWithSnapshot(
+    Database db,
+    int oldVersion,
+    int newVersion,
+    String dbFilePath,
+    Future<void> Function(Database db, int oldVersion, int newVersion) runMigrations,
+  ) async {
+    final dbFile = File(dbFilePath);
+    final snapshotFile = File('${dbFilePath}_pre_upgrade_v$oldVersion.bak');
+
+    // 1. Snapshot Físico Instantáneo ANTES de tocar el esquema
+    try {
+      if (await dbFile.exists()) {
+        await dbFile.copy(snapshotFile.path);
+        debugPrint("📸 Snapshot de seguridad creado: ${snapshotFile.path}");
+      }
+    } catch (e) {
+      debugPrint("⚠️ Advertencia: no se pudo crear snapshot pre-upgrade: $e");
+    }
+
+    // 2. Ejecutar la migración
+    try {
+      await runMigrations(db, oldVersion, newVersion);
+      debugPrint("✅ Migración exitosa de v$oldVersion a v$newVersion.");
+    } catch (e) {
+      debugPrint("🔴 ERROR CRÍTICO EN MIGRACIÓN: $e. Iniciando Rollback automático...");
+      // 3. Rollback de Emergencia: Restaurar copia física intacta
+      if (await snapshotFile.exists()) {
+        try {
+          if (await dbFile.exists()) {
+            await dbFile.delete();
+          }
+          await snapshotFile.copy(dbFilePath);
+          debugPrint("🛡️ Base de datos restaurada intacta a su estado v$oldVersion.");
+        } catch (copyErr) {
+          debugPrint("Error restaurando snapshot en rollback: $copyErr");
+        }
+      }
+      rethrow;
+    }
   }
 
   Future<Database> get database async {
@@ -30,23 +126,43 @@ class LocalDatabase {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
+    final password = await getOrGenerateDbKey();
 
-    final db = await openDatabase(
-      path,
-      version: 34, // Upgrade to v34: Bandejas de Archivadas, No Deseadas (Silenciadas), Preferencias y Saneamiento
+    // 1. Migración transparente de base de datos sin cifrar si corresponde
+    await ensureDatabaseEncrypted(path, password);
+
+    // 2. Apertura protegida con DatabaseConnectionFactory y protección de snapshot
+    final db = await DatabaseConnectionFactory.openSecureDatabase(
+      path: path,
+      version: 36, // Upgrade to v36: Motor de Cuotas IA Acumulativas Multi-Perfil y Bóveda BYOK
+      encryptionPassword: password,
       onCreate: _createDB,
       onConfigure: _onConfigure,
-      onUpgrade: _onUpgrade,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        await safeUpgradeWithSnapshot(
+          db,
+          oldVersion,
+          newVersion,
+          path,
+          (d, o, n) => _onUpgrade(d, o, n),
+        );
+      },
     );
     // Verificación defensiva idempotente para cualquier base de datos existente
     await ensureEventosFinancierosTable(db);
     await ensureLoyaltyRulesAndRestoration(db);
     await ensureNotificationPreferencesAndSilenced(db);
+    await ensureLicenciaAppTable(db);
     return db;
   }
 
   Future _onConfigure(Database db) async {
     await db.execute('PRAGMA foreign_keys = ON');
+  }
+
+  @visibleForTesting
+  Future<void> onUpgradeForTesting(Database db, int oldVersion, int newVersion) async {
+    await _onUpgrade(db, oldVersion, newVersion);
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -431,6 +547,72 @@ class LocalDatabase {
         debugPrint("✅ Migración V34 completada con éxito: notificaciones_silenciadas, preferencias_notificaciones y saneamiento de textos.");
       } catch (e) {
         debugPrint("Error en migración V34: $e");
+      }
+    }
+
+    // Migración V34 -> V35: Motor de Licenciamiento Asimétrico Ed25519 y Cuotas IA
+    if (oldVersion < 35) {
+      try {
+        await ensureLicenciaAppTable(db);
+        debugPrint("✅ Migración V35 completada con éxito: Tabla licencia_app creada exitosamente.");
+      } catch (e) {
+        debugPrint("Error en migración V35: $e");
+      }
+    }
+
+    // Migración V35 -> V36: Motor de Cuotas IA Acumulativas Multi-Perfil y Modo Seleccionado
+    if (oldVersion < 36) {
+      try {
+        await ensureColumnExists(db, 'licencia_app', 'ai_accumulated_scans', 'INTEGER NOT NULL DEFAULT 50');
+        await ensureColumnExists(db, 'licencia_app', 'ai_selected_mode', "TEXT NOT NULL DEFAULT 'INCLUDED'");
+
+        // Migración cero pérdida de cuota:
+        // Si ya existía un registro en licencia_app, calculamos su bolsa acumulativa inicial
+        final rows = await db.query('licencia_app', limit: 1);
+        if (rows.isNotEmpty) {
+          final row = rows.first;
+          final plan = (row['tipo_plan'] as String? ?? 'TRIAL').toUpperCase();
+          final extraCredits = (row['ai_extra_credits'] as int? ?? 0);
+          final usedMonth = (row['ai_scans_used_month'] as int? ?? 0);
+          final customKey = row['custom_gemini_api_key'] as String?;
+
+          int baseScans = 50;
+          switch (plan) {
+            case 'MENSUAL':
+              baseScans = 50;
+              break;
+            case 'TRIMESTRAL':
+              baseScans = 180;
+              break;
+            case 'SEMESTRAL':
+              baseScans = 450;
+              break;
+            case 'ANUAL':
+              baseScans = 1200;
+              break;
+            case 'PERPETUO_LIBERADO':
+            case 'PERPETUO':
+            case 'PERPETUA':
+              baseScans = 200;
+              break;
+            case 'TRIAL':
+            default:
+              baseScans = 50;
+              break;
+          }
+
+          final calculatedAccumulated = (baseScans + extraCredits - usedMonth).clamp(0, 999999);
+          final selectedMode = (customKey != null && customKey.trim().isNotEmpty) ? 'BYOK' : 'INCLUDED';
+
+          await db.update('licencia_app', {
+            'ai_accumulated_scans': calculatedAccumulated,
+            'ai_selected_mode': selectedMode,
+          });
+          debugPrint("✅ Migración V36: Cuota acumulativa inicial calculada: $calculatedAccumulated, modo: $selectedMode");
+        }
+        debugPrint("✅ Migración V36 completada con éxito: ai_accumulated_scans y ai_selected_mode listos.");
+      } catch (e) {
+        debugPrint("Error en migración V36: $e");
       }
     }
   }
@@ -1210,6 +1392,43 @@ class LocalDatabase {
 
     // 13. Notificaciones Silenciadas y Preferencias (V34)
     await ensureNotificationPreferencesAndSilenced(db);
+
+    // 14. Motor de Licenciamiento Asimétrico Ed25519 y Cuotas IA (V35)
+    await ensureLicenciaAppTable(db);
+  }
+
+  /// 🛡️ V36: Creación idempotente de la tabla de licencia y antifraude de la app con Cuota Acumulativa y Modo IA
+  static Future<void> ensureLicenciaAppTable(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS licencia_app (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_fingerprint TEXT NOT NULL,
+        tipo_plan TEXT NOT NULL DEFAULT 'TRIAL',
+        estado_actual TEXT NOT NULL DEFAULT 'ACTIVA',
+        fecha_inicio TEXT NOT NULL,
+        fecha_expiracion TEXT NOT NULL,
+        ultimo_nonce INTEGER NOT NULL DEFAULT 0,
+        ultimo_codigo_usado TEXT,
+        updates_until TEXT,
+        max_major_version INTEGER DEFAULT 9,
+        business_owner_tag TEXT,
+        fecha_ultimo_check TEXT NOT NULL,
+        ai_scans_used_month INTEGER NOT NULL DEFAULT 0,
+        ai_scans_month_key TEXT NOT NULL DEFAULT '',
+        ai_extra_credits INTEGER NOT NULL DEFAULT 0,
+        custom_gemini_api_key TEXT,
+        eula_accepted_version TEXT,
+        eula_accepted_timestamp TEXT,
+        migrated_from_device_id TEXT,
+        last_executed_app_version TEXT,
+        ai_accumulated_scans INTEGER NOT NULL DEFAULT 50,
+        ai_selected_mode TEXT NOT NULL DEFAULT 'INCLUDED'
+      )
+    ''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_licencia_device ON licencia_app(device_fingerprint)');
+    await ensureColumnExists(db, 'licencia_app', 'last_executed_app_version', 'TEXT');
+    await ensureColumnExists(db, 'licencia_app', 'ai_accumulated_scans', 'INTEGER NOT NULL DEFAULT 50');
+    await ensureColumnExists(db, 'licencia_app', 'ai_selected_mode', "TEXT NOT NULL DEFAULT 'INCLUDED'");
   }
 
   Future<void> closeConnection() async {

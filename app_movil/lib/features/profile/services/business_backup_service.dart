@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/services/security_service.dart';
 import 'package:app_movil/core/utils/app_logger.dart';
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
@@ -169,9 +170,13 @@ class BusinessBackupService {
            if (includeSecurityPin) {
               final storage = FlutterSecureStorage();
               String? pin = await storage.read(key: 'pin_$idDueno');
-              u['password_hash'] = pin; // Usamos este campo en el JSON para transportarlo
+              String? pinHash = await storage.read(key: 'pin_hash_$idDueno');
+              String? pinSalt = await storage.read(key: 'pin_salt_$idDueno');
+              u['password_hash'] = pinHash ?? pin;
+              u['password_salt'] = pinSalt;
            } else {
               u['password_hash'] = null; 
+              u['password_salt'] = null;
            }
            backupData['data']['usuarios'] = [u];
         }
@@ -785,9 +790,17 @@ class BusinessBackupService {
              final usuariosList = data['usuarios'] as List?;
              if (usuariosList != null && usuariosList.isNotEmpty) {
                 String? backupPin = usuariosList.first['password_hash'];
+                String? backupSalt = usuariosList.first['password_salt'];
                 if (backupPin != null && backupPin.isNotEmpty) {
-                    final storage = FlutterSecureStorage();
-                    await storage.write(key: 'pin_$currentUserId', value: backupPin);
+                    final storage = const FlutterSecureStorage();
+                    if (backupSalt != null && backupSalt.isNotEmpty) {
+                      await storage.write(key: 'pin_hash_$currentUserId', value: backupPin);
+                      await storage.write(key: 'pin_salt_$currentUserId', value: backupSalt);
+                      await storage.delete(key: 'pin_$currentUserId');
+                    } else {
+                      final securityService = SecurityService();
+                      await securityService.setPin(currentUserId, backupPin);
+                    }
                 }
              }
           }

@@ -1,0 +1,135 @@
+[
+  {
+    "id": "CLI-001",
+    "business_name": "Comercial & Librería El Estudiante",
+    "owner_name": "Carlos Mendoza Quispe",
+    "document_id": "10458796321",
+    "phone": "+51987654321",
+    "current_device_id": "ML-9K4B",
+    "device_history": [],
+    "installed_version": "9.23.0",
+    "license_type": "MENSUAL",
+    "license_status": "ACTIVA",
+    "license_expires": "2027-01-13T23:59:59.000Z",
+    "next_nonce": 2,
+    "updates_until": "2026-12-14T23:59:59.000Z",
+    "ai_extra_credits": 0,
+    "notes": "Cliente puntual en Piura. Usa Yape.",
+    "created_at": "2026-11-01T10:00:00.000Z",
+    "payment_history": [
+      {
+        "id": "PAY-101",
+        "date": "2026-11-14T10:00:00.000Z",
+        "amount": 35.0,
+        "plan": "MENSUAL",
+        "method": "Yape",
+        "reference": "Op. 948102"
+      },
+      {
+        "id": "PAY-1794669972062",
+        "date": "2026-11-14T15:26:12.062258Z",
+        "amount": 35.0,
+        "plan": "MENSUAL",
+        "method": "Yape",
+        "reference": "Op. 123456"
+      }
+    ],
+    "generated_codes_history": [
+      {
+        "token": "ML9-eyJkIjoiTUwtOUs0QiIsInAiOiJNRU5TVUFMIiwieSI6MzAsIm4iOjEsInYiOjksImlhdCI6IjIwMjYtMTEtMTRUMTU6MjY6MTIuMDUzMDgyWiIsImIiOiJDb21lcmNpYWwgJiBMaWJyZXLDrWEgRWwgRXN0dWRpYW50ZSJ9.eUr0_nC3dDDuCciimJN4UV7lQgUXdd945jvX-W5LZqPvwZqKPc0tflc07c0Rt1uQZu0saMUxw43sGWs6kD-eCQ",
+        "plan": "MENSUAL",
+        "days_added": 30,
+        "emitted_at": "2026-11-14T15:26:12.062258Z",
+        "device_id": "ML-9K4B",
+        "expires_result": "2027-01-13T23:59:59.000Z"
+      }
+    ]
+  },
+  {
+    "id": "CLI-002",
+    "business_name": "Bazar Escolar Las Palmeras",
+    "owner_name": "Rosa María Benites",
+    "document_id": "20601234567",
+    "phone": "+51976543210",
+    "current_device_id": "ML-3X8P",
+    "device_history": [],
+    "installed_version": "9.23.0",
+    "license_type": "TRIMESTRAL",
+    "license_status": "POR_VENCER",
+    "license_expires": "2026-11-18T23:59:59.000Z",
+    "next_nonce": 2,
+    "updates_until": "2026-11-18T23:59:59.000Z",
+    "ai_extra_credits": 0,
+    "notes": "Vence en 4 días. Enviar recordatorio por WhatsApp.",
+    "created_at": "2026-08-18T10:00:00.000Z",
+    "payment_history": [
+      {
+        "id": "PAY-102",
+        "date": "2026-08-18T10:00:00.000Z",
+        "amount": 90.0,
+        "plan": "TRIMESTRAL",
+        "method": "Plin",
+        "reference": "Op. 339102"
+      }
+    ],
+    "generated_codes_history": []
+  },
+  {
+    "id": "CLI-003",
+    "business_name": "Distribuidora San Jerónimo",
+    "owner_name": "Víctor Hugo Castro",
+    "document_id": "10098765432",
+    "phone": "+51965432109",
+    "current_device_id": "ML-7T2W",
+    "device_history": [],
+    "installed_version": "9.23.0",
+    "license_type": "PERPETUO_LIBERADO",
+    "license_status": "PERPETUA",
+    "license_expires": "2299-12-31T23:59:59.000Z",
+    "next_nonce": 3,
+    "updates_until": "2027-11-14T23:59:59.000Z",
+    "ai_extra_credits": 100,
+    "notes": "Licencia Perpetua adquirida en preventa con 1 año de updates de nuevas funciones.",
+    "created_at": "2026-11-14T10:00:00.000Z",
+    "payment_history": [
+      {
+        "id": "PAY-103",
+        "date": "2026-11-14T10:00:00.000Z",
+        "amount": 850.0,
+        "plan": "PERPETUO_LIBERADO",
+        "method": "Transferencia BCP",
+        "reference": "BCP-77291038"
+      }
+    ],
+    "generated_codes_history": []
+  },
+  {
+    "id": "CLI-004",
+    "business_name": "Librería & Papelería Central",
+    "owner_name": "Ana Lucía Ramos",
+    "document_id": "10321654987",
+    "phone": "+51954321098",
+    "current_device_id": "ML-5K1L",
+    "device_history": [],
+    "installed_version": "9.20.0",
+    "license_type": "MENSUAL",
+    "license_status": "VENCIDA",
+    "license_expires": "2026-11-05T23:59:59.000Z",
+    "next_nonce": 4,
+    "updates_until": "2026-11-05T23:59:59.000Z",
+    "ai_extra_credits": 0,
+    "notes": "Licencia vencida hace 9 días (Bloqueo Estricto). Contactar para renovación.",
+    "created_at": "2026-10-05T10:00:00.000Z",
+    "payment_history": [
+      {
+        "id": "PAY-104",
+        "date": "2026-10-05T10:00:00.000Z",
+        "amount": 35.0,
+        "plan": "MENSUAL",
+        "method": "Efectivo",
+        "reference": "Recibo 0041"
+      }
+    ],
+    "generated_codes_history": []
+  }
+]

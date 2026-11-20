@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/core/config/owner_legal_identity.dart';
 
 enum ExportScope { currentView, pendingOnly, soldOnly, full }
 
@@ -100,6 +101,21 @@ class ExportReportService {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        footer: (pw.Context context) {
+          return pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                "${OwnerLegalIdentity.appCommercialName} • Desarrollado por ${OwnerLegalIdentity.authorFullName}",
+                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+              ),
+              pw.Text(
+                "Página ${context.pageNumber} de ${context.pagesCount}",
+                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+              ),
+            ],
+          );
+        },
         build: (pw.Context context) {
           return [
             // Cabecera

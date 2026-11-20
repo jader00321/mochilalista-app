@@ -1,6 +1,9 @@
 # Variables de entorno generales
 .env
 .env.*
+key.properties
+*.jks
+*.keystore
 
 # Configuraciones de IDE y Editores
 .vscode/
@@ -12,10 +15,27 @@
 .DS_Store
 Thumbs.db
 
-# Bases de datos locales (pruebas)
+# Claves criptográficas maestras y secretos
+private_keys/
+mochilalista_admin/private_keys/
+*.key
+owner_config.json
+data/owner_config.json
+mochilalista_admin/data/owner_config.json
+data/vault_keyring.json
+mochilalista_admin/data/vault_keyring.json
+data/vault_settings.json
+mochilalista_admin/data/vault_settings.json
+*.mlvault
+*.mlkey
+
+# Bases de datos locales (pruebas) y copias de seguridad
 *.db
 *.sqlite
 *.sqlite3
+*.bak
+*.mlbg
+backups/
 
 # Compilación y caché
 build/

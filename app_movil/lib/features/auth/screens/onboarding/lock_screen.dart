@@ -23,7 +23,6 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   bool _isError = false;
 
   // Protección anti fuerza bruta
-  int _failedAttempts = 0;
   DateTime? _lockoutUntil;
   Timer? _lockoutTimer;
   int _lockoutSecondsRemaining = 0;
@@ -47,9 +46,15 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     
     _fadeController.forward();
 
-    // Lanzar biometría automáticamente apenas cargue la pantalla
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _authenticateWithBiometrics();
+    // Verificar bloqueo persistente por rate limiting antes de biometría
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final remaining = await auth.getPinLockoutRemainingSeconds(widget.userId);
+      if (remaining > 0 && mounted) {
+        _startLockout(remaining);
+      } else if (mounted) {
+        _authenticateWithBiometrics();
+      }
     });
   }
 
@@ -124,7 +129,6 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
         setState(() {
           _lockoutUntil = null;
           _lockoutSecondsRemaining = 0;
-          _failedAttempts = 0;
         });
       } else {
         setState(() {
@@ -139,20 +143,21 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     bool isCorrect = await auth.verifyPin(widget.userId, _enteredPin);
     
     if (isCorrect) {
-      _failedAttempts = 0;
       await _unlockApp();
     } else {
       HapticFeedback.vibrate(); // Vibración fuerte por error
-      _failedAttempts++;
-      if (_failedAttempts >= 5) {
-        _startLockout(30);
+      final remaining = await auth.getPinLockoutRemainingSeconds(widget.userId);
+      if (remaining > 0) {
+        _startLockout(remaining);
       }
       setState(() => _isError = true);
       _shakeController.forward(from: 0.0).then((_) {
-        setState(() {
-          _enteredPin = '';
-          _isError = false;
-        });
+        if (mounted) {
+          setState(() {
+            _enteredPin = '';
+            _isError = false;
+          });
+        }
       });
     }
   }

@@ -13,6 +13,15 @@
 migrate_working_dir/
 
 .env
+.env.*
+key.properties
+*.jks
+*.keystore
+private_keys/
+*.key
+*.bak
+*.mlbg
+backups/
 
 # IntelliJ related
 *.iml

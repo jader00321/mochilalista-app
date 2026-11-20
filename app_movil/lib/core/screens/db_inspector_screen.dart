@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:app_movil/core/database/local_db.dart';
 
@@ -85,6 +86,17 @@ class _DbInspectorScreenState extends State<DbInspectorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!kDebugMode) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            "Acceso deshabilitado en compilaciones de producción.",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(

@@ -1,7 +1,7 @@
 name: app_movil
 description: "MochilaLista Mobile Application"
 publish_to: 'none'
-version: 9.23.0+73
+version: 9.31.0+75
 
 environment:
   sdk: ^3.9.0
@@ -39,6 +39,7 @@ dependencies:
   # 🔥 DEPENDENCIAS MODO OFFLINE EXTREMO
   # ==========================================
   sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.0
   path: ^1.8.3
   local_auth: ^2.1.8
   connectivity_plus: ^5.0.2
@@ -60,13 +61,16 @@ dependencies:
   device_info_plus: ^12.4.0
   fl_chart: ^1.2.0
   archive: ^4.0.9
+  crypto: ^3.0.3
+  cryptography: ^2.7.0
+  google_sign_in: ^6.2.2
+  googleapis: ^13.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.13.1
-  sqflite_common_ffi: ^2.3.0
 
 flutter_icons:
   android: true
@@ -76,6 +80,5 @@ flutter_icons:
 flutter:
   uses-material-design: true
   assets:
-    - .env
     - assets/logo.png
     - assets/logo1.png
