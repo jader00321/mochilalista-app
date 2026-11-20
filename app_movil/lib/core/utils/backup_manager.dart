@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:app_movil/core/database/local_db.dart'; 
 import 'package:app_movil/core/utils/app_logger.dart';
 import 'package:archive/archive_io.dart';
+import 'package:app_movil/core/config/owner_legal_identity.dart';
 import 'package:app_movil/core/utils/backup_path_migrator.dart';
 import 'package:app_movil/core/utils/backup_crypto_helper.dart';
 import 'package:app_movil/core/services/device_fingerprint.dart';
@@ -95,7 +96,7 @@ class BackupManager {
     // 1. Manifiesto criptográfico con DeviceFingerprint y versión
     final manifestData = {
       'device_fingerprint': await DeviceFingerprint.generate(),
-      'app_version': '9.30.0+74',
+      'app_version': OwnerLegalIdentity.currentAppVersionWithBuild,
       'schema_version': 36,
       'created_at': DateTime.now().toIso8601String(),
     };

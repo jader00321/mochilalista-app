@@ -119,14 +119,16 @@ class LicenseProvider extends ChangeNotifier {
   Future<bool> consumeAiScan({DateTime? overrideNow}) async {
     final success = await _repository.consumeAiScan(overrideNow: overrideNow);
     if (success) {
+      _license = await _repository.getOrCreateLicense(overrideNow: overrideNow);
       _remainingAiScans = await _repository.getRemainingAiScans(overrideNow: overrideNow);
       notifyListeners();
     }
     return success;
   }
 
-  /// Refresca los escaneos restantes
+  /// Refresca los escaneos restantes y el modelo de licencia completo
   Future<void> refreshAiScans({DateTime? overrideNow}) async {
+    _license = await _repository.getOrCreateLicense(overrideNow: overrideNow);
     _remainingAiScans = await _repository.getRemainingAiScans(overrideNow: overrideNow);
     notifyListeners();
   }
@@ -135,6 +137,7 @@ class LicenseProvider extends ChangeNotifier {
   Future<void> recordEulaAcceptance(String version) async {
     await _repository.recordEulaAcceptance(version);
     _license = await _repository.getOrCreateLicense();
+    _remainingAiScans = await _repository.getRemainingAiScans();
     notifyListeners();
   }
 
@@ -142,12 +145,14 @@ class LicenseProvider extends ChangeNotifier {
   Future<void> updateLastExecutedVersion(String version) async {
     await _repository.updateLastExecutedAppVersion(version);
     _license = await _repository.getOrCreateLicense();
+    _remainingAiScans = await _repository.getRemainingAiScans();
     notifyListeners();
   }
 
   /// Registra la clave propia BYOK
   Future<void> setCustomApiKey(String key) async {
     await ApiConstants.persistUserCustomApiKey(key);
+    _license = await _repository.getOrCreateLicense();
     _remainingAiScans = await _repository.getRemainingAiScans();
     notifyListeners();
   }
@@ -155,6 +160,7 @@ class LicenseProvider extends ChangeNotifier {
   /// Elimina la clave propia BYOK
   Future<void> removeCustomApiKey() async {
     await ApiConstants.clearUserCustomApiKey();
+    _license = await _repository.getOrCreateLicense();
     _remainingAiScans = await _repository.getRemainingAiScans();
     notifyListeners();
   }

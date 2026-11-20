@@ -16,6 +16,7 @@ class DeviceFingerprint {
 
   static String? _overrideFingerprintForTesting;
   static String? _overrideLegacyFingerprintForTesting;
+  static String? _overrideAppSigningSha1ForTesting;
 
   /// Permite establecer una huella simulada para pruebas unitarias
   @visibleForTesting
@@ -27,6 +28,12 @@ class DeviceFingerprint {
   @visibleForTesting
   static void setMockLegacyFingerprint(String? mock) {
     _overrideLegacyFingerprintForTesting = mock;
+  }
+
+  /// Permite establecer una huella SHA-1 de firma simulada para pruebas unitarias
+  @visibleForTesting
+  static void setMockAppSigningSha1(String? mock) {
+    _overrideAppSigningSha1ForTesting = mock;
   }
 
   /// Deriva el formato oficial ML-XXXX a partir de un rawId usando la sal propietaria
@@ -131,6 +138,23 @@ class DeviceFingerprint {
       return isValid ?? true;
     } catch (_) {
       return true;
+    }
+  }
+
+  /// Lee la huella SHA-1 activa del certificado del APK instalado (formato con dos puntos AA:BB:...)
+  static Future<String?> getAppSigningSha1() async {
+    if (_overrideAppSigningSha1ForTesting != null) {
+      return _overrideAppSigningSha1ForTesting;
+    }
+    if (kIsWeb || !Platform.isAndroid) {
+      return null;
+    }
+
+    try {
+      final sha1 = await _securityChannel.invokeMethod<String>('getAppSigningSha1');
+      return sha1?.trim();
+    } catch (_) {
+      return null;
     }
   }
 }

@@ -210,24 +210,82 @@ class Ed25519LicenseValidator {
       extraCredits = 150;
     }
 
-    DateTime baseDate;
-    final isExpiredOrLocked = currentLicense.estadoActual == 'BLOQUEO_ESTRICTO' ||
-        currentLicense.estadoActual == 'PENDIENTE_MIGRACION' ||
-        currentLicense.fechaExpiracion.isBefore(now);
-
-    if (!isExpiredOrLocked && currentLicense.tipoPlan != 'TRIAL_VENCIDO') {
-      baseDate = currentLicense.fechaExpiracion;
-    } else {
-      baseDate = now;
+    // 5. Extracción y validación temporal de emisión ('iat' o alias 'e')
+    DateTime? iat;
+    if (payload['iat'] != null) {
+      if (payload['iat'] is int) {
+        final val = payload['iat'] as int;
+        iat = val > 10000000000
+            ? DateTime.fromMillisecondsSinceEpoch(val, isUtc: true)
+            : DateTime.fromMillisecondsSinceEpoch(val * 1000, isUtc: true);
+      } else {
+        iat = DateTime.tryParse(payload['iat'].toString());
+      }
+    } else if (payload['e'] != null) {
+      if (payload['e'] is int) {
+        final val = payload['e'] as int;
+        iat = val > 10000000000
+            ? DateTime.fromMillisecondsSinceEpoch(val, isUtc: true)
+            : DateTime.fromMillisecondsSinceEpoch(val * 1000, isUtc: true);
+      } else {
+        iat = DateTime.tryParse(payload['e'].toString());
+      }
     }
 
+    // 6. Cálculo de Expiración con Protección Anti-Replay y Renovación Anticipada
     DateTime newExpiration;
     if (plan == 'RECARGA_IA_150') {
       newExpiration = currentLicense.fechaExpiracion;
     } else if (plan == 'PERPETUO_LIBERADO' || plan == 'PERPETUO') {
       newExpiration = now.add(const Duration(days: 99999));
-    } else {
+    } else if (plan == 'PASE_ACTUALIZACION_ANUAL' || plan == 'EXTENSION_CORTESIA') {
+      final isExpiredOrLocked = currentLicense.estadoActual == 'BLOQUEO_ESTRICTO' ||
+          currentLicense.estadoActual == 'PENDIENTE_MIGRACION' ||
+          currentLicense.fechaExpiracion.isBefore(now);
+      final baseDate = (!isExpiredOrLocked && currentLicense.tipoPlan != 'TRIAL_VENCIDO')
+          ? currentLicense.fechaExpiracion
+          : now;
       newExpiration = baseDate.add(Duration(days: daysToAdd));
+    } else {
+      // Planes de suscripción temporal (MENSUAL, TRIMESTRAL, SEMESTRAL, ANUAL)
+      final isCommercialActive = currentLicense.isActive && !currentLicense.isTrial;
+      if (isCommercialActive) {
+        // Regla Acumulativa: Si el usuario ya cuenta con suscripción comercial activa,
+        // sus días vigentes NO se pierden, se suman a partir de la fecha de expiración actual.
+        final baseDate = currentLicense.fechaExpiracion.isAfter(now)
+            ? currentLicense.fechaExpiracion
+            : now;
+        newExpiration = baseDate.add(Duration(days: daysToAdd));
+      } else {
+        // Usuario en TRIAL o TRIAL_VENCIDO (instalación limpia tras desinstalar) o licencia expirada
+        if (iat != null) {
+          final maxExpirationFromIat = iat.add(Duration(days: daysToAdd));
+          if (now.isAfter(maxExpirationFromIat)) {
+            throw Exception(
+              "Este código de licencia ya ha cumplido su periodo de vigencia contratado.",
+            );
+          }
+
+          if (now.difference(iat) > const Duration(hours: 24)) {
+            // Reinstalación / Recuperación de token de suscripción previa
+            // La expiración se ancla estrictamente a la fecha de emisión original (iat + daysToAdd)
+            newExpiration = maxExpirationFromIat;
+          } else {
+            // Compra recién emitida (<= 24h) canjeada en período de prueba:
+            // Regla Acumulativa Comercial: los días restantes del trial se respetan y suman
+            final baseDate = currentLicense.fechaExpiracion.isAfter(now)
+                ? currentLicense.fechaExpiracion
+                : now;
+            newExpiration = baseDate.add(Duration(days: daysToAdd));
+          }
+        } else {
+          // Retrocompatibilidad segura con tokens de prueba legacy sin claim 'iat'
+          final baseDate = currentLicense.fechaExpiracion.isAfter(now)
+              ? currentLicense.fechaExpiracion
+              : now;
+          newExpiration = baseDate.add(Duration(days: daysToAdd));
+        }
+      }
     }
 
     DateTime? updatesUntil;

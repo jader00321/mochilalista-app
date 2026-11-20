@@ -28,6 +28,17 @@ class MockGoogleDriveBackupService implements IGoogleDriveBackupService {
   bool mockWifiConnected = true;
   String? mockBackupDeviceFingerprint;
   String? mockTargetDeviceFingerprint;
+  final Set<String> mockTrialClaimMarkers = {};
+
+  @override
+  Future<void> registerTrialMarker(String hardwareId) async {
+    mockTrialClaimMarkers.add(hardwareId);
+  }
+
+  @override
+  Future<bool> checkTrialMarkerExists(String hardwareId) async {
+    return mockTrialClaimMarkers.contains(hardwareId);
+  }
 
   @override
   Future<GoogleDriveUser?> signIn() async {
@@ -447,7 +458,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text("Copia de Seguridad en Google Drive (Opcional)"), findsOneWidget);
+      expect(find.text("Copia de Seguridad en Google Drive"), findsOneWidget);
+      expect(find.text("Nube"), findsOneWidget);
       expect(find.text("Vincular Cuenta de Google"), findsOneWidget);
       expect(find.textContaining("Tus copias viajan cifradas"), findsOneWidget);
     });
@@ -511,7 +523,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text("Copia de Seguridad en Google Drive (Opcional)"), findsOneWidget);
+      expect(find.text("Copia de Seguridad en Google Drive"), findsOneWidget);
+      expect(find.text("Nube"), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -529,7 +542,8 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text("Copia de Seguridad en Google Drive (Opcional)"), findsOneWidget);
+      expect(find.text("Copia de Seguridad en Google Drive"), findsOneWidget);
+      expect(find.text("Nube"), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

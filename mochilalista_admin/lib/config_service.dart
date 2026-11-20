@@ -7,6 +7,7 @@ import 'dart:io';
 class ConfigService {
   final Directory dataDirectory;
   final Directory backupsDirectory;
+  final int maxAutoSnapshots;
 
   Map<String, dynamic> _config = {};
 
@@ -16,6 +17,7 @@ class ConfigService {
   ConfigService({
     Directory? dataDirectory,
     Directory? backupsDirectory,
+    this.maxAutoSnapshots = 30,
   })  : dataDirectory = dataDirectory ?? Directory('data'),
         backupsDirectory = backupsDirectory ?? Directory('backups');
 
@@ -362,13 +364,73 @@ class ConfigService {
     final h = now.hour.toString().padLeft(2, '0');
     final min = now.minute.toString().padLeft(2, '0');
     final s = now.second.toString().padLeft(2, '0');
-    final filename = 'owner_config_backup_${y}${m}${d}_${h}${min}${s}_$reason.json';
+    final ms = now.millisecond.toString().padLeft(3, '0');
+    final us = now.microsecond.toString().padLeft(3, '0');
+    final filename = 'owner_config_backup_${y}${m}${d}_${h}${min}${s}_${ms}${us}_$reason.json';
 
     final backupFile = File('${backupsDirectory.path}/$filename');
     final dataToSave = _config.isNotEmpty ? _config : getDefaultConfig();
     await backupFile.writeAsString(const JsonEncoder.withIndent('  ').convert(dataToSave));
+    await _cleanOldSnapshots();
     return backupFile;
   }
+
+  /// Limpia los respaldos automáticos antiguos de configuración, conservando los últimos [maxAutoSnapshots] (default: 30).
+  /// Excluye explícitamente cualquier respaldo manual, de bóveda o de pre-restauración/importación.
+  Future<void> _cleanOldSnapshots({int? maxAutoSnapshots}) async {
+    final limit = maxAutoSnapshots ?? this.maxAutoSnapshots;
+    if (!await backupsDirectory.exists()) return;
+
+    final List<File> autoSnapshots = [];
+    final entities = await backupsDirectory.list().toList();
+
+    for (final entity in entities) {
+      if (entity is File && entity.path.endsWith('.json')) {
+        final filename = entity.uri.pathSegments.last;
+        final lower = filename.toLowerCase();
+
+        // Prefijo oficial de snapshot automático de configuración
+        if (!filename.startsWith('owner_config_backup_')) continue;
+
+        // Excluir respaldos protegidos (manuales, bóveda, pre_restore, pre_import)
+        final isProtected = lower.contains('manual') ||
+            lower.contains('vault') ||
+            lower.contains('pre_restore') ||
+            lower.contains('pre_import');
+        if (isProtected) continue;
+
+        autoSnapshots.add(entity);
+      }
+    }
+
+    if (autoSnapshots.length <= limit) return;
+
+    final fileStats = <String, FileStat>{};
+    for (final file in autoSnapshots) {
+      fileStats[file.path] = await file.stat();
+    }
+
+    autoSnapshots.sort((a, b) {
+      final statA = fileStats[a.path]!;
+      final statB = fileStats[b.path]!;
+      final cmp = statB.modified.compareTo(statA.modified);
+      if (cmp != 0) return cmp;
+      return b.path.compareTo(a.path);
+    });
+
+    final toDelete = autoSnapshots.sublist(limit);
+    for (final file in toDelete) {
+      try {
+        await file.delete();
+      } catch (e) {
+        stderr.writeln('Warning: Error eliminando snapshot de configuración antiguo ${file.path}: $e');
+      }
+    }
+  }
+
+  /// Método público para forzar o parametrizar la limpieza de snapshots de configuración
+  Future<void> cleanOldSnapshots({int? maxAutoSnapshots}) =>
+      _cleanOldSnapshots(maxAutoSnapshots: maxAutoSnapshots);
 
   /// Escribe el archivo físico `owner_config.json` con formato legible
   Future<void> _persistConfig() async {
@@ -380,7 +442,8 @@ class ConfigService {
     final merged = _deepMerge(getDefaultConfig(), raw);
 
     // Sanitizar catálogo
-    final catalogMap = (merged['catalog'] as Map<String, dynamic>?) ?? {};
+    final rawCatalog = merged['catalog'];
+    final catalogMap = rawCatalog is Map ? Map<String, dynamic>.from(rawCatalog) : <String, dynamic>{};
     catalogMap.forEach((k, v) {
       if (v is Map) {
         final vMap = Map<String, dynamic>.from(v);
@@ -409,14 +472,19 @@ class ConfigService {
     Map<String, dynamic> base,
     Map<String, dynamic> overrides,
   ) {
-    final result = Map<String, dynamic>.from(base);
+    final result = <String, dynamic>{};
+    base.forEach((key, value) {
+      if (value is Map) {
+        result[key] = _deepMerge(Map<String, dynamic>.from(value), {});
+      } else {
+        result[key] = value;
+      }
+    });
     overrides.forEach((key, value) {
-      if (value is Map<String, dynamic> && result[key] is Map<String, dynamic>) {
-        result[key] = _deepMerge(result[key] as Map<String, dynamic>, value);
-      } else if (value is Map && result[key] is Map) {
+      if (value is Map && result[key] is Map) {
         result[key] = _deepMerge(
-          (result[key] as Map).cast<String, dynamic>(),
-          value.cast<String, dynamic>(),
+          Map<String, dynamic>.from(result[key] as Map),
+          Map<String, dynamic>.from(value),
         );
       } else {
         result[key] = value;

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -471,6 +472,71 @@ class GoogleDriveBackupService implements IGoogleDriveBackupService {
       return true;
     } catch (e) {
       debugPrint('⚠️ [GoogleDriveBackupService] Error en respaldo periódico silencioso: $e');
+      return false;
+    }
+  }
+
+  @override
+  Future<void> registerTrialMarker(String hardwareId) async {
+    try {
+      final driveApi = await _getDriveApi();
+      final hash = sha256.convert(utf8.encode(hardwareId.trim())).toString();
+      final markerFileName = 'ml_trial_claim_$hash.dat';
+
+      final existing = await driveApi.files.list(
+        spaces: 'appDataFolder',
+        q: "trashed = false and name = '$markerFileName'",
+        $fields: 'files(id, name)',
+      );
+      if (existing.files != null && existing.files!.isNotEmpty) {
+        return;
+      }
+
+      final contentBytes = utf8.encode(jsonEncode({
+        'hardware_id_hash': hash,
+        'claimed_at': DateTime.now().toUtc().toIso8601String(),
+        'app_version': '9.31.0',
+      }));
+
+      final driveFile = drive.File()
+        ..name = markerFileName
+        ..parents = ['appDataFolder']
+        ..description = 'MochilaLista trial claim marker';
+
+      final media = drive.Media(
+        Stream.value(contentBytes),
+        contentBytes.length,
+      );
+
+      await driveApi.files.create(
+        driveFile,
+        uploadMedia: media,
+      );
+      AppLogger.info('GoogleDriveBackupService', 'Marcador de trial registrado en drive.appdata');
+    } catch (e) {
+      // Fail-safe silencioso: jamás interrumpe la ejecución si no hay conexión o no está autenticado
+      AppLogger.w('GoogleDriveBackupService', 'Registro de marcador de trial omitido: $e');
+    }
+  }
+
+  @override
+  Future<bool> checkTrialMarkerExists(String hardwareId) async {
+    try {
+      final driveApi = await _getDriveApi();
+      final hash = sha256.convert(utf8.encode(hardwareId.trim())).toString();
+      final markerFileName = 'ml_trial_claim_$hash.dat';
+
+      final result = await driveApi.files.list(
+        spaces: 'appDataFolder',
+        q: "trashed = false and name = '$markerFileName'",
+        $fields: 'files(id, name)',
+      );
+
+      final files = result.files ?? [];
+      return files.isNotEmpty;
+    } catch (e) {
+      // Fail-safe silencioso: en caso de error o sin conexión, retornar false
+      AppLogger.w('GoogleDriveBackupService', 'Consulta de marcador de trial en nube no disponible: $e');
       return false;
     }
   }

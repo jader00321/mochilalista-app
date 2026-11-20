@@ -29,18 +29,18 @@ void main() {
   });
 
   group('1. Inicialización y Semillas Sandbox Sincronizadas v36', () {
-    test('Sandbox se inicializa con esquema v36 y versión 9.31.0', () async {
+    test('Sandbox se inicializa con esquema v36 y versión 9.32.0', () async {
       final releases = await dbService.getReleases();
       expect(releases.isNotEmpty, isTrue);
       final latest = releases.first;
-      expect(latest['version_name'], equals('9.31.0'));
-      expect(latest['version_code'], equals(75));
+      expect(latest['version_name'], equals('9.32.0'));
+      expect(latest['version_code'], equals(76));
       expect(latest['db_schema_version'], equals(36));
 
       final clients = await dbService.getClients();
       expect(clients.isNotEmpty, isTrue);
       final c1 = clients.first;
-      expect(c1['installed_version'], equals('9.31.0'));
+      expect(c1['installed_version'], equals('9.32.0'));
       expect(c1['current_device_id'], equals('ML-9K4B'));
     });
   });
@@ -58,7 +58,7 @@ void main() {
       expect(newClient['id'], isNotNull);
       expect(newClient['ai_extra_credits'], equals(50));
       expect(newClient['ai_accumulated_credits'], equals(50));
-      expect(newClient['installed_version'], equals('9.31.0'));
+      expect(newClient['installed_version'], equals('9.32.0'));
     });
   });
 

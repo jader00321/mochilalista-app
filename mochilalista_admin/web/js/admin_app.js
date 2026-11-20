@@ -732,7 +732,7 @@ function renderClientsTable() {
   tbody.innerHTML = '';
 
   const now = new Date();
-  const latestVer = (globalReleases.length > 0) ? globalReleases[0].version_name : '9.31.0';
+  const latestVer = (globalReleases.length > 0) ? globalReleases[0].version_name : '9.32.0';
 
   const filtered = globalClients.filter(c => {
     // 1. Filtro por chip de estado
@@ -822,7 +822,7 @@ function renderClientsTable() {
         </span>
       </td>
       <td>
-        <div style="font-weight:600;">v${escapeHtml(c.installed_version || '9.31.0')}</div>
+        <div style="font-weight:600;">v${escapeHtml(c.installed_version || '9.32.0')}</div>
         ${isOutdated
           ? '<span class="badge badge-yellow" style="font-size:0.68rem; padding:1px 6px; margin-top:2px;">Update pend.</span>'
           : '<span class="badge badge-green" style="font-size:0.68rem; padding:1px 6px; margin-top:2px;">Al día</span>'}
@@ -1008,7 +1008,7 @@ function updateClientSummaryCard() {
 
   const aiExtra = client.ai_extra_credits || 0;
   document.getElementById('sumAiCredits').textContent = `+${aiExtra} escaneos IA vitalicios`;
-  document.getElementById('sumInstalledVersion').textContent = `v${client.installed_version || '9.31.0'}`;
+  document.getElementById('sumInstalledVersion').textContent = `v${client.installed_version || '9.32.0'}`;
   document.getElementById('sumUpdatesUntil').textContent = client.updates_until ? client.updates_until.substring(0, 10) : 'No configurada';
 }
 
@@ -1674,7 +1674,7 @@ async function openClient360Drawer(clientId) {
   document.getElementById('drawerKpiPlan').textContent = plan.replace(/_/g, ' ');
   document.getElementById('drawerKpiExpires').textContent = isPerp ? 'De por Vida' : (client.license_expires ? client.license_expires.substring(0, 10) : 'Sin fecha');
   document.getElementById('drawerKpiAiCredits').textContent = `+${client.ai_extra_credits || 0} IA`;
-  document.getElementById('drawerKpiVersion').textContent = `v${client.installed_version || '9.31.0'}`;
+  document.getElementById('drawerKpiVersion').textContent = `v${client.installed_version || '9.32.0'}`;
   document.getElementById('drawerKpiUpdates').textContent = client.updates_until ? client.updates_until.substring(0, 10) : '-';
   document.getElementById('drawerPhone').textContent = client.phone || '-';
   document.getElementById('drawerDocId').textContent = client.document_id || '-';
@@ -1686,7 +1686,7 @@ async function openClient360Drawer(clientId) {
   document.getElementById('drawerEditDocId').value = client.document_id || '';
   document.getElementById('drawerEditPhone').value = client.phone || '';
   document.getElementById('drawerEditDeviceId').value = client.current_device_id || '';
-  document.getElementById('drawerEditInstalledVersion').value = client.installed_version || '9.31.0';
+  document.getElementById('drawerEditInstalledVersion').value = client.installed_version || '9.32.0';
   document.getElementById('drawerEditNotes').value = client.notes || '';
 
   document.getElementById('drawerCurrentDevIdDisplay').textContent = client.current_device_id;
@@ -3048,7 +3048,7 @@ async function handleCreateClient(andEmit = false) {
   const phone = document.getElementById('newPhone').value.trim();
   const device = document.getElementById('newDeviceId').value.trim().toUpperCase();
   const plan = document.getElementById('newPlan').value;
-  const installedVer = document.getElementById('newInstalledVersion').value.trim() || '9.31.0';
+  const installedVer = document.getElementById('newInstalledVersion').value.trim() || '9.32.0';
   const aiExtra = parseInt(document.getElementById('newAiExtraCredits').value) || 0;
   const notes = document.getElementById('newNotes').value.trim();
 
@@ -3381,11 +3381,11 @@ async function renderTemplatePreview() {
           vencimiento: '2026-12-31',
           creditos_ia: '100',
           codigo: 'ML9-DEMO-ACTIVATION-TOKEN-XXXXX',
-          version: '9.31.0',
-          version_actual: '9.30.0',
+          version: '9.32.0',
+          version_actual: '9.31.0',
           device_id: 'ML-9K4B',
           changelog: 'Mejoras en el escáner IA y velocidad.',
-          link_descarga: 'http://localhost:8080/api/releases/download/9.31.0',
+          link_descarga: 'http://localhost:8080/api/releases/download/9.32.0',
           precio_pase: '150.00',
         },
       }),

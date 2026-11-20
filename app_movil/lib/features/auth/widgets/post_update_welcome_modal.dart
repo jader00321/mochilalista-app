@@ -33,11 +33,12 @@ class PostUpdateWelcomeModal extends StatelessWidget {
     PostUpdateMode mode = PostUpdateMode.activeCommercialOrPerpetual,
     VoidCallback? onActivatePlanPressed,
     VoidCallback? onContinueTrialPressed,
+    bool barrierDismissible = false,
   }) async {
     final version = appVersion ?? AppChangelogRegistry.currentVersion;
     await showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: barrierDismissible,
       builder: (_) => PostUpdateWelcomeModal(
         appVersion: version,
         mode: mode,
@@ -101,6 +102,17 @@ class PostUpdateWelcomeModal extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                      tooltip: "Cerrar",
+                      onPressed: () => Navigator.of(context).pop(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
                   ],
                 ),

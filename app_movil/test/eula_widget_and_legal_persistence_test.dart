@@ -267,7 +267,7 @@ void main() {
   });
 
   group('4. Persistencia Global del EULA, Anclaje de Primer Trial y Anti-Tampering', () {
-    test('Persistencia global: aceptar EULA en SQLite lo respalda en FlutterSecureStorage y lo transfiere a nuevas DBs', () async {
+    test('Persistencia global: aceptar EULA en SQLite lo persiste, y una instalación limpia resetea el EULA obligatoriamente', () async {
       const storage = FlutterSecureStorage();
       final repo = LicenseRepository(secureStorage: storage);
 
@@ -278,21 +278,22 @@ void main() {
       // Acepta EULA
       await repo.recordEulaAcceptance('1.0');
 
-      // Verifica que se guardó en almacenamiento seguro a nivel de hardware
-      final storedEulaVersion = await storage.read(key: LicenseRepository.deviceEulaVersionKey);
-      final storedEulaTs = await storage.read(key: LicenseRepository.deviceEulaTimestampKey);
-      expect(storedEulaVersion, equals('1.0'));
-      expect(storedEulaTs, isNotNull);
+      // Verifica que se guardó en SQLite y en almacenamiento
+      final licAccepted = await repo.getOrCreateLicense();
+      expect(licAccepted.eulaAcceptedVersion, equals('1.0'));
+      expect(licAccepted.eulaAcceptedTimestamp, isNotNull);
 
-      // Simular creación de un nuevo perfil de negocio o borrado de base de datos SQLite
+      // Simular desinstalación y reinstalación limpia (base de datos SQLite eliminada de cero)
       await testDb.delete('licencia_app');
       final rowsEmpty = await testDb.query('licencia_app');
       expect(rowsEmpty, isEmpty);
 
-      // Al volver a inicializar la licencia en una nueva BD, hereda el EULA ya aceptado globalmente
-      final lic2 = await repo.getOrCreateLicense();
-      expect(lic2.eulaAcceptedVersion, equals('1.0'));
-      expect(lic2.eulaAcceptedTimestamp, isNotNull);
+      // Al volver a inicializar la licencia en una instalación limpia, el EULA debe ser estrictamente null
+      // y limpiar cualquier clave residual de Keystore
+      final licClean = await repo.getOrCreateLicense();
+      expect(licClean.eulaAcceptedVersion, isNull,
+          reason: 'En instalación limpia no debe heredar EULA de Keystore');
+      expect(licClean.eulaAcceptedTimestamp, isNull);
     });
 
     test('Anclaje de first_trial_timestamp: borrado de SQLite respeta la fecha de inicio del trial original', () async {

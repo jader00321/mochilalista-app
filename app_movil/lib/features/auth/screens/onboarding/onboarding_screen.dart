@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/widgets/custom_text_field.dart';
 import 'package:app_movil/core/widgets/primary_button.dart';
 import 'package:app_movil/core/widgets/theme_toggle_button.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/features/auth/widgets/eula_acceptance_modal.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -116,6 +118,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
     }
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
+    if (licenseProv?.license?.eulaAcceptedVersion == null) {
+      final accepted = await EulaAcceptanceModal.show(context);
+      if (accepted != true) return;
+    }
     
     bool success = await auth.createProfileAndLogin(
       nombreDueno: _nombreDuenoCtrl.text.trim(),

@@ -268,4 +268,10 @@ abstract class IGoogleDriveBackupService {
 
   /// Evalúa el intervalo y Wi-Fi para disparar respaldo periódico si corresponde
   Future<bool> checkAndTriggerScheduledBackup({bool? isWifiConnected});
+
+  /// Registra un marcador de trial consumido en appDataFolder de Google Drive (no invasivo y fail-safe)
+  Future<void> registerTrialMarker(String hardwareId);
+
+  /// Consulta si existe un marcador de trial consumido para el hardwareId en appDataFolder
+  Future<bool> checkTrialMarkerExists(String hardwareId);
 }

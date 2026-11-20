@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/models/user_model.dart';
 import 'package:app_movil/core/widgets/primary_button.dart';
 import 'package:app_movil/core/widgets/auth_background.dart';
@@ -12,6 +13,7 @@ import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/auth/screens/onboarding/onboarding_screen.dart';
 import 'package:app_movil/core/screens/home_screen.dart';
 import 'package:app_movil/features/auth/screens/onboarding/lock_screen.dart';
+import 'package:app_movil/features/auth/widgets/eula_acceptance_modal.dart';
 import 'package:app_movil/core/utils/backup_manager.dart';
 import 'package:app_movil/features/profile/services/business_backup_service.dart';
 import 'package:app_movil/features/profile/widgets/delete_business_modal.dart';
@@ -70,6 +72,21 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     _animController.forward();
     _loadProfileOrder();
     _loadProfileMetadata();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
+      if (licenseProv?.license?.eulaAcceptedVersion == null) {
+        await EulaAcceptanceModal.show(context);
+      }
+    });
+  }
+
+  Future<bool> _ensureEulaAccepted() async {
+    final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
+    if (licenseProv?.license?.eulaAcceptedVersion != null) return true;
+    final accepted = await EulaAcceptanceModal.show(context);
+    return accepted == true;
   }
 
   @override
@@ -164,6 +181,8 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   // ============================================================
 
   Future<void> _handleProfileSelection(int userId, AuthProvider auth) async {
+    if (!await _ensureEulaAccepted()) return;
+    if (!mounted) return;
     bool hasPin = await auth.profileHasPin(userId);
 
     if (!mounted) return;
@@ -549,7 +568,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
               PrimaryButton(
                 text: "CREAR NUEVO NEGOCIO",
                 icon: Icons.add_business_rounded,
-                onPressed: () {
+                onPressed: () async {
+                  if (!await _ensureEulaAccepted()) return;
+                  if (!mounted) return;
                   Navigator.push(context, PageRouteBuilder(
                     pageBuilder: (context, animation, secondaryAnimation) => const OnboardingScreen(),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) => FadeTransition(opacity: animation, child: child),
@@ -572,7 +593,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                     fontSize: 13,
                   ),
                 ),
-                onPressed: () {
+                onPressed: () async {
+                  if (!await _ensureEulaAccepted()) return;
+                  if (!mounted) return;
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -750,7 +773,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
           PrimaryButton(
             text: "CREAR NUEVO NEGOCIO",
             icon: Icons.add_business_rounded,
-            onPressed: () {
+            onPressed: () async {
+              if (!await _ensureEulaAccepted()) return;
+              if (!mounted) return;
               Navigator.push(context, PageRouteBuilder(
                 pageBuilder: (context, animation, secondaryAnimation) => const OnboardingScreen(),
                 transitionsBuilder: (context, animation, secondaryAnimation, child) => FadeTransition(opacity: animation, child: child),

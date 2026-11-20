@@ -27,6 +27,11 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   void initState() {
     super.initState();
     _loadVaultData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<LicenseProvider?>()?.refreshAiScans();
+      }
+    });
   }
 
   Future<void> _loadVaultData() async {
@@ -601,32 +606,39 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(Icons.auto_awesome_rounded, color: Colors.blue, size: 22),
                 const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    "Bolsa Acumulativa de IA",
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isByokMode
-                        ? Colors.purple.withValues(alpha: 0.15)
-                        : Colors.blue.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    isByokMode ? "Bolsa Congelada (BYOK)" : "Bolsa Activa",
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: isByokMode ? Colors.purple : Colors.blue[800],
-                    ),
+                Expanded(
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      const Text(
+                        "Bolsa Acumulativa de IA",
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isByokMode
+                              ? Colors.purple.withValues(alpha: 0.15)
+                              : Colors.blue.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          isByokMode ? "Bolsa Congelada (BYOK)" : "Bolsa Activa",
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isByokMode ? Colors.purple : Colors.blue[800],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -719,26 +731,33 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(Icons.lock_outline_rounded, color: Colors.purple, size: 20),
                 const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    "Bóveda Segura Multi-Clave",
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: _showAddKeyDialog,
-                  icon: const Icon(Icons.add_rounded, size: 16),
-                  label: const Text("Agregar Clave", style: TextStyle(fontSize: 11.5)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple[700],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                Expanded(
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      const Text(
+                        "Bóveda Segura Multi-Clave",
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _showAddKeyDialog,
+                        icon: const Icon(Icons.add_rounded, size: 16),
+                        label: const Text("Agregar Clave", style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple[700],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

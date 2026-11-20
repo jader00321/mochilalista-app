@@ -9,6 +9,7 @@ class DatabaseService {
   final String dataDir;
   final String backupDir;
   final String releasesDir;
+  final int maxAutoSnapshots;
 
   String _mode = 'sandbox';
 
@@ -19,6 +20,7 @@ class DatabaseService {
     this.dataDir = 'data',
     this.backupDir = 'backups',
     this.releasesDir = 'releases_apks',
+    this.maxAutoSnapshots = 30,
   });
 
   String get currentMode => _mode;
@@ -110,7 +112,68 @@ class DatabaseService {
     if (await _releasesFile.exists()) {
       await _releasesFile.copy(releaseSnapshot.path);
     }
+    await _cleanOldSnapshots();
   }
+
+  /// Limpia los snapshots automáticos antiguos en `backups/`, conservando los últimos [maxAutoSnapshots] (default: 30).
+  /// Excluye explícitamente cualquier respaldo manual, de bóveda o de pre-restauración/importación.
+  Future<void> _cleanOldSnapshots({int? maxAutoSnapshots}) async {
+    final limit = maxAutoSnapshots ?? this.maxAutoSnapshots;
+    final dir = Directory(backupDir);
+    if (!await dir.exists()) return;
+
+    final List<File> autoSnapshots = [];
+    final entities = await dir.list().toList();
+
+    for (final entity in entities) {
+      if (entity is File && entity.path.endsWith('.json')) {
+        final filename = entity.uri.pathSegments.last;
+        final lower = filename.toLowerCase();
+
+        // Prefijos automáticos válidos: sandbox_ o prod_
+        final isDbSnapshot = filename.startsWith('sandbox_') || filename.startsWith('prod_');
+        if (!isDbSnapshot) continue;
+
+        // Excluir respaldos protegidos (manuales, bóveda, pre_restore, pre_import)
+        final isProtected = lower.contains('manual') ||
+            lower.contains('vault') ||
+            lower.contains('pre_restore') ||
+            lower.contains('pre_import');
+        if (isProtected) continue;
+
+        autoSnapshots.add(entity);
+      }
+    }
+
+    if (autoSnapshots.length <= limit) return;
+
+    // Obtener stats para ordenar de más reciente a más antiguo
+    final fileStats = <String, FileStat>{};
+    for (final file in autoSnapshots) {
+      fileStats[file.path] = await file.stat();
+    }
+
+    autoSnapshots.sort((a, b) {
+      final statA = fileStats[a.path]!;
+      final statB = fileStats[b.path]!;
+      final cmp = statB.modified.compareTo(statA.modified);
+      if (cmp != 0) return cmp;
+      return b.path.compareTo(a.path);
+    });
+
+    final toDelete = autoSnapshots.sublist(limit);
+    for (final file in toDelete) {
+      try {
+        await file.delete();
+      } catch (e) {
+        stderr.writeln('Warning: Error eliminando snapshot antiguo ${file.path}: $e');
+      }
+    }
+  }
+
+  /// Método público para forzar o parametrizar la limpieza de snapshots automáticos
+  Future<void> cleanOldSnapshots({int? maxAutoSnapshots}) =>
+      _cleanOldSnapshots(maxAutoSnapshots: maxAutoSnapshots);
 
   /// Refresca en memoria los registros de producción y releases desde disco
   Future<void> reloadFromDisk() async {
@@ -185,7 +248,7 @@ class DatabaseService {
       'phone': clientData['phone'] ?? '',
       'current_device_id': (clientData['current_device_id'] ?? 'ML-0000').toString().toUpperCase().trim(),
       'device_history': [],
-      'installed_version': clientData['installed_version'] ?? '9.31.0',
+      'installed_version': clientData['installed_version'] ?? '9.32.0',
       'license_type': plan,
       'license_status': plan.contains('PERPETU') ? 'PERPETUA' : 'ACTIVA',
       'license_expires': expiresAt,
@@ -866,7 +929,7 @@ class DatabaseService {
         'phone': '+51987654321',
         'current_device_id': 'ML-9K4B',
         'device_history': [],
-        'installed_version': '9.31.0',
+        'installed_version': '9.32.0',
         'license_type': 'MENSUAL',
         'license_status': 'ACTIVA',
         'license_expires': '2027-01-13T23:59:59.000Z',
@@ -896,7 +959,7 @@ class DatabaseService {
         'phone': '+51976543210',
         'current_device_id': 'ML-3X8P',
         'device_history': [],
-        'installed_version': '9.31.0',
+        'installed_version': '9.32.0',
         'license_type': 'TRIMESTRAL',
         'license_status': 'POR_VENCER',
         'license_expires': DateTime.now().add(const Duration(days: 4)).toUtc().toIso8601String(),
@@ -926,7 +989,7 @@ class DatabaseService {
         'phone': '+51954321098',
         'current_device_id': 'ML-7W2R',
         'device_history': [],
-        'installed_version': '9.31.0',
+        'installed_version': '9.32.0',
         'license_type': 'PERPETUO_LIBERADO',
         'license_status': 'PERPETUA',
         'license_expires': '2299-12-31T23:59:59.000Z',
@@ -984,13 +1047,13 @@ class DatabaseService {
   List<Map<String, dynamic>> _getInitialSandboxReleases() {
     return [
       {
-        'version_name': '9.31.0',
-        'version_code': 75,
+        'version_name': '9.32.0',
+        'version_code': 76,
         'db_schema_version': 36,
-        'release_date': '2026-11-19T10:00:00.000Z',
+        'release_date': '2026-11-20T10:00:00.000Z',
         'type': 'FEATURE_RELEASE',
         'apk_file_path': '',
-        'apk_download_url': 'https://drive.google.com/file/d/mochilalista-v9.31.0/view',
+        'apk_download_url': 'https://drive.google.com/file/d/mochilalista-v9.32.0/view',
         'apk_sha256': '4a5b6c7d8e9f0123456789abcdef0123456789abcdef0123456789abcdef0123',
         'file_size_mb': '28.40 MB',
         'changelog': '• Activación 100% Offline con Hardware ID (Settings.Secure.ANDROID_ID) y EULA oficial.\n• Cuota IA 100% Acumulativa sin reseteo mensual y arquitectura Multi-Perfil con bolsa compartida.\n• Bóveda de Claves BYOK (Google Gemini) y Respaldo Blindado en Google Drive (.mlbg).\n• Esquema SQLite v36 con sincronización de perfiles y trazabilidad de inventario.',

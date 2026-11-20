@@ -68,12 +68,11 @@ class LicenseRepository {
 
       final expiration = trialStartDate.add(const Duration(days: 30));
 
-      // 🛡️ Persistencia global de EULA a nivel de dispositivo
-      String? deviceEulaVersion;
-      String? deviceEulaTimestamp;
+      // 🛡️ Limpieza proactiva de claves residuales de Keystore/Knox en instalaciones limpias
+      // Garantiza que tras desinstalar y reinstalar, el EULA sea obligatorio
       try {
-        deviceEulaVersion = await _secureStorage.read(key: deviceEulaVersionKey);
-        deviceEulaTimestamp = await _secureStorage.read(key: deviceEulaTimestampKey);
+        await _secureStorage.delete(key: deviceEulaVersionKey);
+        await _secureStorage.delete(key: deviceEulaTimestampKey);
       } catch (_) {}
 
       final initialMap = {
@@ -92,8 +91,8 @@ class LicenseRepository {
         'ai_scans_month_key': monthKey,
         'ai_extra_credits': 0,
         'custom_gemini_api_key': null,
-        'eula_accepted_version': deviceEulaVersion,
-        'eula_accepted_timestamp': deviceEulaTimestamp,
+        'eula_accepted_version': null,
+        'eula_accepted_timestamp': null,
         'migrated_from_device_id': null,
         'ai_accumulated_scans': 50,
         'ai_selected_mode': 'INCLUDED',
@@ -183,30 +182,6 @@ class LicenseRepository {
         whereArgs: [model.id ?? 1],
       );
       return updated;
-    }
-
-    // 3. Si la fila actual no tiene el EULA registrado, verificar si el dispositivo ya lo aceptó previamente
-    if (model.eulaAcceptedVersion == null) {
-      try {
-        final deviceEulaVersion = await _secureStorage.read(key: deviceEulaVersionKey);
-        if (deviceEulaVersion != null) {
-          final deviceEulaTimestamp =
-              await _secureStorage.read(key: deviceEulaTimestampKey) ?? now.toIso8601String();
-          await db.update(
-            'licencia_app',
-            {
-              'eula_accepted_version': deviceEulaVersion,
-              'eula_accepted_timestamp': deviceEulaTimestamp,
-            },
-            where: 'id = ?',
-            whereArgs: [model.id ?? 1],
-          );
-          model = model.copyWith(
-            eulaAcceptedVersion: deviceEulaVersion,
-            eulaAcceptedTimestamp: DateTime.tryParse(deviceEulaTimestamp),
-          );
-        }
-      } catch (_) {}
     }
 
     // 4. Si estaba desajustado o pendiente de migración y ya no lo está

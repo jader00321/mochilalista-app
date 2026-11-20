@@ -30,8 +30,42 @@ class MainActivity: FlutterFragmentActivity() {
                     val isValid = verifyCertificateSignature()
                     result.success(isValid)
                 }
+                "getAppSigningSha1" -> {
+                    val sha1 = getAppSigningCertificateSha1()
+                    result.success(sha1)
+                }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun getAppSigningCertificateSha1(): String? {
+        return try {
+            val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val packageInfo = packageManager.getPackageInfo(
+                    packageName,
+                    PackageManager.GET_SIGNING_CERTIFICATES
+                )
+                packageInfo.signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                val packageInfo = packageManager.getPackageInfo(
+                    packageName,
+                    PackageManager.GET_SIGNATURES
+                )
+                @Suppress("DEPRECATION")
+                packageInfo.signatures
+            }
+
+            if (signatures == null || signatures.isEmpty()) {
+                return null
+            }
+
+            val md = MessageDigest.getInstance("SHA-1")
+            val digest = md.digest(signatures[0].toByteArray())
+            digest.joinToString(":") { "%02X".format(it) }
+        } catch (e: Exception) {
+            null
         }
     }
 

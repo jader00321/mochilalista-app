@@ -32,9 +32,11 @@ import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/profile/widgets/profile_completion_indicator.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/config/owner_legal_identity.dart';
+import 'package:app_movil/core/config/app_changelog_registry.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/features/auth/screens/license/license_status_and_activation_screen.dart';
 import 'package:app_movil/features/auth/widgets/eula_acceptance_modal.dart';
+import 'package:app_movil/features/auth/widgets/post_update_welcome_modal.dart';
 import 'package:app_movil/features/profile/screens/ai_settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -194,6 +196,24 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         ProfileMenuItem(title: "Notificaciones", icon: Icons.notifications_none, isDark: isDark, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
                         _buildDivider(isDark),
                         ProfileMenuItem(title: "Impresora Térmica", icon: Icons.print_outlined, isDark: isDark, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrinterConfigScreen())), trailing: const Icon(Icons.bluetooth, size: 22, color: Colors.blue)),
+                        _buildDivider(isDark),
+                        ProfileMenuItem(
+                          title: "Novedades de esta Versión (${OwnerLegalIdentity.currentAppVersion})",
+                          icon: Icons.rocket_launch_rounded,
+                          isDark: isDark,
+                          onTap: () => PostUpdateWelcomeModal.show(
+                            context,
+                            appVersion: AppChangelogRegistry.currentVersion,
+                            mode: (licenseProv?.isPerpetual == true || (licenseProv?.isActive == true && licenseProv?.isTrial == false))
+                                ? PostUpdateMode.activeCommercialOrPerpetual
+                                : PostUpdateMode.trialOrGrace,
+                            onActivatePlanPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const LicenseStatusAndActivationScreen()),
+                            ),
+                            barrierDismissible: true,
+                          ),
+                        ),
                       ]),
 
                       const SizedBox(height: 35),
@@ -479,6 +499,27 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 ),
                 icon: const Icon(Icons.verified_outlined, size: 15),
                 label: const Text("Gestionar Licencia", style: TextStyle(fontSize: 11.5)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => PostUpdateWelcomeModal.show(
+                  context,
+                  appVersion: AppChangelogRegistry.currentVersion,
+                  mode: (licenseProv?.isPerpetual == true || (licenseProv?.isActive == true && licenseProv?.isTrial == false))
+                      ? PostUpdateMode.activeCommercialOrPerpetual
+                      : PostUpdateMode.trialOrGrace,
+                  onActivatePlanPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LicenseStatusAndActivationScreen()),
+                  ),
+                  barrierDismissible: true,
+                ),
+                icon: const Icon(Icons.rocket_launch_rounded, size: 15),
+                label: Text("Novedades v${OwnerLegalIdentity.currentAppVersion}", style: const TextStyle(fontSize: 11.5)),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   minimumSize: Size.zero,

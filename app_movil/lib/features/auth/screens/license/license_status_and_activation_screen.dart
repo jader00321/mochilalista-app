@@ -7,11 +7,13 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:app_movil/core/config/owner_legal_identity.dart';
+import 'package:app_movil/core/config/app_changelog_registry.dart';
 import 'package:app_movil/core/models/license_model.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/services/license/ed25519_license_validator.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/auth/widgets/eula_acceptance_modal.dart';
+import 'package:app_movil/features/auth/widgets/post_update_welcome_modal.dart';
 import 'package:app_movil/features/profile/screens/ai_settings_screen.dart';
 
 /// Pantalla de Estado de Licencia, Activación Dual (QR / Portapapeles) y Catálogo Comercial
@@ -19,6 +21,11 @@ class LicenseStatusAndActivationScreen extends StatefulWidget {
   final String? welcomeTrialNotice;
 
   const LicenseStatusAndActivationScreen({super.key, this.welcomeTrialNotice});
+
+  /// Helper puro para construir la URI oficial de WhatsApp a partir de un mensaje personalizado
+  static Uri buildCustomWhatsAppOrderUri(String customMessage) {
+    return OwnerLegalIdentity.buildCustomWhatsAppOrderUri(customMessage);
+  }
 
   @override
   State<LicenseStatusAndActivationScreen> createState() =>
@@ -230,6 +237,18 @@ class _LicenseStatusAndActivationScreenState
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_outlined),
+            tooltip: "Novedades de la Versión",
+            onPressed: () => PostUpdateWelcomeModal.show(
+              context,
+              appVersion: AppChangelogRegistry.currentVersion,
+              mode: (license?.isPerpetual == true || (license?.isActive == true && license?.isTrial == false))
+                  ? PostUpdateMode.activeCommercialOrPerpetual
+                  : PostUpdateMode.trialOrGrace,
+              barrierDismissible: true,
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.description_outlined),
             tooltip: "Ver Contrato EULA",
@@ -560,7 +579,7 @@ class _LicenseStatusAndActivationScreenState
                           Text(
                             isUsingByok
                                 ? "Escaneos Ilimitados (BYOK) • Saldo guardado: $accumulatedScans usos"
-                                : "$remainingAiScans escaneos acumulados disponibles",
+                                : "$accumulatedScans escaneos acumulados disponibles",
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.bold,
@@ -757,7 +776,7 @@ class _LicenseStatusAndActivationScreenState
             ),
             const SizedBox(height: 10),
 
-            // Fila Secundaria Balanceada y Responsiva
+            // Fila Secundaria de Botones QR con Simetría Geométrica y Misma Altura
             LayoutBuilder(
               builder: (context, constraints) {
                 final isNarrow = constraints.maxWidth < 300;
@@ -769,6 +788,7 @@ class _LicenseStatusAndActivationScreenState
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                   style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 48),
                     foregroundColor: Colors.blue[700],
                     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -783,6 +803,7 @@ class _LicenseStatusAndActivationScreenState
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                   style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 48),
                     foregroundColor: Colors.teal[800],
                     side: BorderSide(color: Colors.teal.withValues(alpha: 0.4)),
                     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
@@ -801,12 +822,15 @@ class _LicenseStatusAndActivationScreenState
                   );
                 }
 
-                return Row(
-                  children: [
-                    Expanded(child: btnCamera),
-                    const SizedBox(width: 8),
-                    Expanded(child: btnGallery),
-                  ],
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: btnCamera),
+                      const SizedBox(width: 8),
+                      Expanded(child: btnGallery),
+                    ],
+                  ),
                 );
               },
             ),
@@ -824,42 +848,49 @@ class _LicenseStatusAndActivationScreenState
         "price": "S/ 35.00",
         "desc": "Ideal para probar el sistema mes a mes",
         "badge": "Flexible",
+        "aiBadge": "+50 IA",
       },
       {
         "name": "Trimestral",
         "price": "S/ 90.00",
         "desc": "Ahorro de S/ 15 vs mensual (S/ 30/mes)",
         "badge": "Popular",
+        "aiBadge": "+180 IA",
       },
       {
         "name": "Semestral",
         "price": "S/ 160.00",
         "desc": "Ahorro de S/ 50 (S/ 26.60/mes)",
         "badge": "Recomendado",
+        "aiBadge": "+450 IA",
       },
       {
         "name": "Anual",
         "price": "S/ 280.00",
         "desc": "Mayor ahorro comercial (S/ 23.30/mes)",
         "badge": "Mejor Precio",
+        "aiBadge": "+1,200 IA",
       },
       {
         "name": "Perpetua",
         "price": "S/ 850.00",
         "desc": "Pago único de por vida + 12 meses de updates",
         "badge": "Liberada",
+        "aiBadge": "+200 IA",
       },
       {
         "name": "Bolsa Extra IA",
         "price": "S/ 20.00",
         "desc": "+150 escaneos acumulativos sin vencimiento para cualquier plan",
-        "badge": "+150 IA",
+        "badge": "Bolsa IA",
+        "aiBadge": "+150 IA",
       },
       {
         "name": "Pase Anual de Updates",
         "price": "S/ 150.00",
         "desc": "12 meses extra de nuevas funciones para Licencias Perpetuas",
         "badge": "Updates",
+        "aiBadge": "+100 IA",
       },
     ];
 
@@ -1204,6 +1235,7 @@ class _LicenseStatusAndActivationScreenState
         border: Border.all(color: cardBorderColor),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Column(
@@ -1211,7 +1243,7 @@ class _LicenseStatusAndActivationScreenState
               children: [
                 Wrap(
                   spacing: 6,
-                  runSpacing: 2,
+                  runSpacing: 4,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
@@ -1233,9 +1265,25 @@ class _LicenseStatusAndActivationScreenState
                         ),
                       ),
                     ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(
+                        plan['aiBadge']!,
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   plan['desc']!,
                   style: TextStyle(
@@ -1249,6 +1297,7 @@ class _LicenseStatusAndActivationScreenState
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 plan['price']!,
@@ -1260,30 +1309,403 @@ class _LicenseStatusAndActivationScreenState
                       : (isDark ? Colors.lightBlue[200] : Colors.blue[900]),
                 ),
               ),
+              const SizedBox(height: 4),
               InkWell(
                 onTap: () {
-                  final uri = OwnerLegalIdentity.buildPlanWhatsAppUri(
+                  _showOrderPlanModal(
                     planName: plan['name']!,
                     price: plan['price']!,
-                    hardwareId: fingerprint,
+                    desc: plan['desc']!,
+                    aiScansBadge: plan['aiBadge']!,
+                    fingerprint: fingerprint,
+                    isDark: isDark,
                   );
-                  _launchRawWhatsAppUrl(uri);
                 },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                  child: Text(
-                    "Pedir",
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green[700],
-                    ),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.shopping_bag_outlined, size: 13, color: Colors.green[700]),
+                      const SizedBox(width: 4),
+                      Text(
+                        "Pedir",
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showOrderPlanModal({
+    required String planName,
+    required String price,
+    required String desc,
+    required String aiScansBadge,
+    required String fingerprint,
+    required bool isDark,
+  }) {
+    final defaultMessage = OwnerLegalIdentity.buildPlanOrderMessage(
+      planName: planName,
+      price: price,
+      hardwareId: fingerprint,
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => OrderPlanBottomSheet(
+        planName: planName,
+        price: price,
+        desc: desc,
+        aiScansBadge: aiScansBadge,
+        hardwareId: fingerprint,
+        defaultMessage: defaultMessage,
+        isDark: isDark,
+        onSendWhatsApp: (msg) {
+          Navigator.of(ctx).pop();
+          final uri = LicenseStatusAndActivationScreen.buildCustomWhatsAppOrderUri(msg);
+          _launchRawWhatsAppUrl(uri.toString());
+        },
+      ),
+    );
+  }
+}
+
+/// Modal Bottom Sheet interactivo y editable al pulsar "Pedir"
+class OrderPlanBottomSheet extends StatefulWidget {
+  final String planName;
+  final String price;
+  final String desc;
+  final String aiScansBadge;
+  final String hardwareId;
+  final String defaultMessage;
+  final bool isDark;
+  final ValueChanged<String> onSendWhatsApp;
+
+  const OrderPlanBottomSheet({
+    super.key,
+    required this.planName,
+    required this.price,
+    required this.desc,
+    required this.aiScansBadge,
+    required this.hardwareId,
+    required this.defaultMessage,
+    required this.isDark,
+    required this.onSendWhatsApp,
+  });
+
+  @override
+  State<OrderPlanBottomSheet> createState() => _OrderPlanBottomSheetState();
+}
+
+class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
+  late final TextEditingController _msgController;
+
+  @override
+  void initState() {
+    super.initState();
+    _msgController = TextEditingController(text: widget.defaultMessage);
+  }
+
+  @override
+  void dispose() {
+    _msgController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 14,
+        bottom: bottomInset + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Pill indicador superior
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Encabezado del Modal
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.shopping_bag_outlined, color: Colors.green, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Solicitar ${widget.planName}",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      Text(
+                        "Personaliza tu solicitud antes de enviarla",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  onPressed: () => Navigator.of(context).pop(),
+                  tooltip: "Cerrar",
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Tarjeta de Resumen del Pedido
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF14141C) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            Text(
+                              widget.planName,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                widget.aiScansBadge,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        widget.price,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.desc,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Divider(height: 1),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.phonelink_setup_rounded, size: 16, color: Colors.blue),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          "Hardware ID: ${widget.hardwareId}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'monospace',
+                            color: isDark ? Colors.grey[300] : Colors.grey[800],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Título de la Caja de Texto
+            Text(
+              "Mensaje para Soporte Oficial (Editable):",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.grey[300] : Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // Caja de Texto Multilínea Editable
+            TextField(
+              controller: _msgController,
+              minLines: 3,
+              maxLines: 5,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.35,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: isDark ? const Color(0xFF14141C) : const Color(0xFFF8FAFC),
+                contentPadding: const EdgeInsets.all(12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Botones Secundarios: Copiar y Restablecer
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    label: const Text(
+                      "Copiar Mensaje",
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: _msgController.text));
+                      CustomSnackBar.show(
+                        context,
+                        message: "Mensaje copiado al portapapeles",
+                        isError: false,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text(
+                      "Restablecer Texto",
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange[800],
+                      side: BorderSide(color: Colors.orange.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _msgController.text = widget.defaultMessage;
+                      });
+                      CustomSnackBar.show(
+                        context,
+                        message: "Texto restablecido al formato oficial",
+                        isError: false,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Botón Primario: Enviar por WhatsApp
+            ElevatedButton.icon(
+              icon: const Icon(Icons.chat_rounded, size: 18),
+              label: const Text(
+                "Enviar por WhatsApp",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF25D366),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => widget.onSendWhatsApp(_msgController.text),
+            ),
+          ],
+        ),
       ),
     );
   }

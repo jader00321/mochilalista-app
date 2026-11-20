@@ -47,7 +47,7 @@ Aquí se detallan todos los procedimientos paso a paso, comandos de terminal, pr
 4. [GUÍA 4: Protocolo de Respuesta ante Incidentes y Seguridad Adversarial](#guía-4-protocolo-de-respuesta-ante-incidentes-y-seguridad-adversarial)
    - 4.1. Incidente: Pantalla de "Reloj Desajustado / Manipulación Temporal"
    - 4.2. Incidente: Pantalla de "Licencia Pendiente de Migración" (Doble Candado Anti-Clonación)
-   - 4.3. Incidente: Agotamiento de la Cuota Mensual de Escaneos con IA
+   - 4.3. Incidente: Agotamiento de la Bolsa de Escaneos con IA
    - 4.4. Custodia y Respaldo Frío de la Clave Privada Maestra (`ed25519_master.key`)
    - 4.5. Tabla de Políticas y Tarifario Oficial de Soporte Perú
 5. [CAPÍTULO 8: Manual de Persistencia Blindada, Portabilidad Multi-PC (`.mlvault`) y Recuperación Multi-Llave ("A Prueba de Olvidos")](#capítulo-8-manual-de-persistencia-blindada-portabilidad-multi-pc-mlvault-y-recuperación-multi-llave-a-prueba-de-olvidos)
@@ -77,8 +77,20 @@ El cambio entre ambos estados se realiza al instante desde el interruptor lumino
 ---
 
 ### 1.2. Métodos de Inicio del Servidor Local
-Para encender el servidor administrativo en tu laptop:
 
+Dispones de dos métodos para encender el servidor administrativo en tu laptop o PC con Windows:
+
+#### Método 1 (Recomendado — 1 Clic): `Iniciar_MochilaLista_Admin.bat`
+Para iniciar la plataforma con un solo clic o desde un acceso directo en tu Escritorio:
+1. **Acceso Directo en el Escritorio (Opcional):** Haz clic derecho sobre `Iniciar_MochilaLista_Admin.bat` (ubicado en la raíz del proyecto) > **Enviar a > Escritorio (crear acceso directo)**.
+2. **Doble Clic:** Ejecuta el archivo `.bat`. El script inteligente realiza automáticamente:
+   - Posicionamiento absoluto seguro en `mochilalista_admin/` (`%~dp0mochilalista_admin`).
+   - Validación de la disponibilidad de Dart SDK en el sistema.
+   - Verificación precisa de socket en puerto 8080 (`netstat -ano | findstr ":8080 " | findstr "LISTENING"`). Si ya estaba corriendo, evita lanzar procesos duplicados.
+   - Si no estaba encendido, levanta `server.dart` en una ventana minimizada dedicada con título `MochilaLista Admin Server` (pudiendo restaurarla y cerrarla con `Ctrl+C` en cualquier momento).
+   - Abre de inmediato tu navegador predeterminado en **`http://localhost:8080`**.
+
+#### Método 2: Inicio Manual por Terminal (PowerShell / CMD)
 ```powershell
 cd C:\Users\vjuli\Documents\mochilalista-app\mochilalista_admin
 dart run server.dart
@@ -130,7 +142,7 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
    * **Teléfono WhatsApp:** (ej. `+51987654321`)
    * **Device ID del Teléfono:** (ej. `ML-9K4B` — 7 caracteres en mayúsculas)
    * **Plan Inicial:** Selecciona `TRIAL GRATUITO (30 días — S/ 0.00)` (opción por defecto) o el plan contratado.
-   * **Versión de App Instalada:** (por defecto: `9.31.0` — Esquema SQLite `v36`)
+   * **Versión de App Instalada:** (por defecto: `9.32.0` — Esquema SQLite `v36`)
    * **Créditos IA Extra Iniciales:** (por defecto: `0`)
 3. Presiona **"Guardar Cliente"**.
 
@@ -196,6 +208,8 @@ En la pestaña **Inspector de Tokens ML9**:
 
 #### Submódulo 2: Centro de Gestión de Respaldos en Disco (`backups/`)
 - Muestra la lista física de copias de seguridad generadas en `mochilalista_admin/backups/`.
+- **Política de Retención Automática (Últimos 30 Snapshots):** El motor (`DatabaseService` y `ConfigService`) aplica una política automática de retención que mantiene estrictamente los **30 snapshots automáticos más recientes** (`maxAutoSnapshots = 30`), purgando los excedentes más antiguos de forma desatendida tras cada modificación para evitar la saturación de disco.
+- **Preservación Indefinida de Backups Manuales y Bóveda:** Cualquier archivo de respaldo que contenga `manual`, `vault`, `pre_restore` o `pre_import` está explícitamente blindado y **jamás es eliminado automáticamente**.
 - **`[📸 Crear Snapshot Manual Ahora]`:** Guarda una copia atómica instantánea con marca de tiempo.
 - **`[📂 Abrir Carpeta backups/ en Windows]`:** Abre la carpeta en el Explorador de Windows con 1 clic.
 - **`[⬇️ Descargar]`:** Descarga el archivo JSON para resguardo en memoria USB.
@@ -240,10 +254,10 @@ En el Sidebar, accede a la pestaña **Ajustes / Personalización (`#tabSettings`
    - Dispones de dos botones ejecutivos: **`[📥 Descargar Libro Excel Maestro (Completo)]`** y **`[📥 Descargar Libro Contable (Finanzas)]`**.
    - Los libros se generan con el formato profesional corporativo (`.xlsx` nativo):
      - **Hoja 1 (`Resumen Ejecutivo`):** Tarjetas de métricas, distribución de cartera e ingresos totales calculados con fórmulas reales de Excel (`SUM`).
-     - **Hoja 2 (`Cartera de Clientes`):** Directorio exhaustivo con filtros automáticos, formato moneda (`S/ #,##0.00`) y fechas ISO legibles.
-     - **Hoja 3 (`Libro de Cobranzas`):** Historial contable de transacciones, referencias de pago y totales computados en tiempo real.
-     - **Hoja 4 (`Auditoría de Licencias`):** Registro de firmas asimétricas Ed25519, nonces, días agregados y dispositivo destino.
-     - **Hoja 5 (`Catálogo de Versiones`):** Registro de binarios APK publicados, hashes SHA-256 de integridad y changelog técnico.
+     - **Hoja 2 (`Cartera CRM`):** Directorio exhaustivo con filtros automáticos, formato moneda (`S/ #,##0.00`) y fechas ISO legibles.
+     - **Hoja 3 (`Libro de Pagos`):** Historial contable de transacciones, referencias de pago y totales computados en tiempo real.
+     - **Hoja 4 (`Equipos y Licencias`):** Registro de firmas asimétricas Ed25519, nonces, días agregados y dispositivo destino.
+     - **Hoja 5 (`Guia y Glosario`):** Guía de uso contable, glosario técnico de métricas y estados comerciales.
 
 ---
 

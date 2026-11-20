@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:app_movil/core/config/owner_legal_identity.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/services/backup/google_drive_backup_service.dart';
 import 'package:app_movil/core/services/backup/i_google_drive_backup_service.dart';
+import 'package:app_movil/core/services/device_fingerprint.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 /// Componente modular y hoja de gestión para Copias de Seguridad en Google Drive
@@ -168,6 +172,7 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
   }
 
   Future<void> _handleSignIn() async {
+    final licenseHardwareId = Provider.of<LicenseProvider?>(context, listen: false)?.deviceFingerprint;
     setState(() => _isLoading = true);
     try {
       final user = await _service.signIn();
@@ -185,6 +190,11 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
             context,
             message: "Conectado a Google Drive como ${user.email}",
           );
+
+          // Conexión silenciosa y no bloqueante del Marcador de Trial (Fase 2)
+          if (licenseHardwareId != null && licenseHardwareId.isNotEmpty) {
+            unawaited(_service.registerTrialMarker(licenseHardwareId));
+          }
         }
       } else {
         if (mounted) setState(() => _isLoading = false);
@@ -192,14 +202,149 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        final cleanMsg = e.toString().replaceFirst('Exception: ', '');
-        CustomSnackBar.show(
-          context,
-          message: cleanMsg,
-          isError: true,
-        );
+        await _showOAuthErrorDialog(e, passedHardwareId: licenseHardwareId);
       }
     }
+  }
+
+  Future<void> _showOAuthErrorDialog(dynamic error, {String? passedHardwareId}) async {
+    final isDark = widget.isDark;
+    final hardwareId = passedHardwareId ?? await DeviceFingerprint.generate();
+    final sha1 = await DeviceFingerprint.getAppSigningSha1();
+    final appVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
+    const packageName = 'com.mochilalista.app';
+    final errorStr = error.toString().replaceFirst('Exception: ', '');
+
+    final isOAuthOrDevError = errorStr.contains('10') ||
+        errorStr.toLowerCase().contains('developer_error') ||
+        errorStr.toLowerCase().contains('oauth') ||
+        errorStr.toLowerCase().contains('sha-1') ||
+        errorStr.toLowerCase().contains('huella');
+
+    final String userExplanation = isOAuthOrDevError
+        ? "Google requiere que la huella digital (SHA-1) de esta compilación del APK esté registrada en Google Cloud Console para autorizar el acceso seguro a Google Drive."
+        : "No fue posible conectar con tu cuenta de Google Drive en este momento. Revisa tu conexión a internet o intenta nuevamente.";
+
+    final technicalReport = """
+=== REPORTE TÉCNICO GOOGLE DRIVE / OAUTH ===
+Aplicación: ${OwnerLegalIdentity.appCommercialName}
+Paquete: $packageName
+Versión: $appVersion
+Hardware ID: $hardwareId
+Huella SHA-1 Activa: ${sha1 ?? 'No disponible (requiere Android físico)'}
+Detalle del Error: $errorStr
+Fecha: ${DateTime.now().toIso8601String()}
+============================================
+""".trim();
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E1E28) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.cloud_off_rounded, color: Colors.amber, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                "Configuración de Acceso a Google Drive",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                userExplanation,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: isDark ? Colors.grey[300] : Colors.grey[800],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF12121A) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? Colors.white12 : Colors.black12,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Datos Técnicos para Soporte:",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Colors.blue),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "• Paquete: $packageName\n"
+                      "• Versión: $appVersion\n"
+                      "• Hardware ID: $hardwareId\n"
+                      "• Huella SHA-1: ${sha1 ?? 'No disponible'}\n"
+                      "• Error: $errorStr",
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.35,
+                        fontFamily: 'monospace',
+                        color: isDark ? Colors.grey[400] : Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          OutlinedButton.icon(
+            icon: const Icon(Icons.copy_rounded, size: 16),
+            label: const Text("Copiar Datos de Soporte", style: TextStyle(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: technicalReport));
+              Navigator.pop(ctx);
+              CustomSnackBar.show(
+                context,
+                message: "Datos técnicos copiados al portapapeles para soporte.",
+              );
+            },
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.check_rounded, size: 16),
+            label: const Text("Entendido", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleSignOut() async {
@@ -416,6 +561,7 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
         children: [
           // Encabezado de la Sección
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
@@ -430,34 +576,40 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
-                        const Expanded(
-                          child: Text(
-                            "Copia de Seguridad en Google Drive (Opcional)",
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            overflow: TextOverflow.ellipsis,
+                        Text(
+                          "Copia de Seguridad en Google Drive",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: isDark ? Colors.white : Colors.black87,
                           ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.blue.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Text(
                             "Nube",
-                            style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.w600),
+                            style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
                       "Respaldo automático con cifrado AES-256-GCM atado a tu cuenta de Google.",
-                      style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 2,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
                     ),
                   ],
                 ),
@@ -488,12 +640,71 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
                       Expanded(
                         child: Text(
                           "Tus copias viajan cifradas con tu cuenta de Google. Si compras un teléfono nuevo o pierdes este equipo, bastará con iniciar sesión para recuperar el 100% de tus ventas, clientes y catálogo.",
-                          style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[300] : Colors.grey[700]),
+                          style: TextStyle(fontSize: 13, height: 1.35, color: isDark ? Colors.grey[300] : Colors.grey[700]),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
+
+                  // Tarjeta destacada de cobertura total multi-perfil
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.shield_outlined, size: 18, color: Colors.blue),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Respaldo integral: guarda toda tu base de datos (todos tus perfiles, negocios, ventas, productos y clientes).",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFF90CAF9) : const Color(0xFF1565C0),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Lista de Vista Previa de Funcionalidades al Conectar
+                  Text(
+                    "Al vincular tu cuenta podrás configurar:",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildPreviewFeatureItem(
+                    icon: Icons.sync_rounded,
+                    title: "Respaldo Manual o Automático",
+                    description: "Programa copias automáticas con frecuencia Diario (24h), Semanal (7 días) o Mensual (30 días).",
+                    isDark: isDark,
+                  ),
+                  _buildPreviewFeatureItem(
+                    icon: Icons.wifi_rounded,
+                    title: "Ahorro de Datos con Solo Wi-Fi",
+                    description: "Restringe la subida automática únicamente a redes inalámbricas seguras.",
+                    isDark: isDark,
+                  ),
+                  _buildPreviewFeatureItem(
+                    icon: Icons.history_rounded,
+                    title: "Bóveda de Últimas 5 Copias",
+                    description: "Historial de las últimas 5 versiones fechadas con restauración en 1 toque.",
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 16),
+
                   ElevatedButton.icon(
                     icon: const Icon(Icons.account_circle_outlined, size: 20),
                     label: const Text("Vincular Cuenta de Google"),
@@ -597,50 +808,81 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
                   ],
                   const SizedBox(height: 16),
 
-                  // Selector de Frecuencia
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.schedule_rounded, size: 18, color: Colors.blue),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              "Frecuencia de Respaldo",
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                              overflow: TextOverflow.ellipsis,
+                  // Modo de Operación: Automático vs Manual
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      "Respaldo Automático en Google Drive",
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      _config.isEnabled
+                          ? "Sincronización en segundo plano con tu cuenta de Google."
+                          : "Modo manual (se respaldará únicamente al presionar 'Respaldar Ahora').",
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    value: _config.isEnabled,
+                    activeThumbColor: Colors.blue,
+                    activeTrackColor: Colors.blue.withValues(alpha: 0.4),
+                    onChanged: (val) async {
+                      final updated = _config.copyWith(isEnabled: val);
+                      await _service.saveConfig(updated);
+                      if (mounted) setState(() => _config = updated);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Selector de Frecuencia (visible solo si automático está activado)
+                  if (_config.isEnabled) ...[
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.schedule_rounded, size: 18, color: Colors.blue),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                "Frecuencia de Respaldo Automático",
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF2A2A3A) : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<BackupFrequency>(
+                              value: _config.frequency == BackupFrequency.manual ? BackupFrequency.daily : _config.frequency,
+                              isExpanded: true,
+                              dropdownColor: cardColor,
+                              items: [
+                                BackupFrequency.daily,
+                                BackupFrequency.weekly,
+                                BackupFrequency.monthly,
+                              ].map((f) {
+                                return DropdownMenuItem(
+                                  value: f,
+                                  child: Text(f.label, style: const TextStyle(fontSize: 13)),
+                                );
+                              }).toList(),
+                              onChanged: (f) {
+                                if (f != null) _updateFrequency(f);
+                              },
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF2A2A3A) : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<BackupFrequency>(
-                            value: _config.frequency,
-                            isExpanded: true,
-                            dropdownColor: cardColor,
-                            items: BackupFrequency.values.map((f) {
-                              return DropdownMenuItem(
-                                value: f,
-                                child: Text(f.label, style: const TextStyle(fontSize: 13)),
-                              );
-                            }).toList(),
-                            onChanged: (f) {
-                              if (f != null) _updateFrequency(f);
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
 
                   // Interruptor Solo con Wi-Fi
                   SwitchListTile(
@@ -784,6 +1026,55 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
                 );
               }),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewFeatureItem({
+    required IconData icon,
+    required String title,
+    required String description,
+    required bool isDark,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 16, color: Colors.blue),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    height: 1.3,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

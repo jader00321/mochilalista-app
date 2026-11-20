@@ -1,5 +1,31 @@
 [
   {
+    "version_name": "9.32.0",
+    "version_code": 76,
+    "db_schema_version": 36,
+    "release_date": "2026-11-20T07:05:00.000000Z",
+    "type": "FEATURE_RELEASE",
+    "apk_file_path": "C:\\Users\\vjuli\\Documents\\v-app-offline apks\\mochilalista_v9.32_atp.apk",
+    "apk_download_url": "",
+    "apk_sha256": "1603edc4118f6a2642d54e5b76603403bee77b1b380f664b02c07628adff8243",
+    "file_size_mb": 108.86,
+    "changelog": "Versión Oficial v9.32 (v9.32.0+76) - Plan Maestro 11: Corrección de desincronización IA 1:1, EULA limpio en primer arranque, Google Drive multi-perfil (.mlbg) con selector de modo, bottom sheet editable para pedidos de licencia por WhatsApp, lanzador Iniciar_MochilaLista_Admin.bat y rotación de 30 snapshots automáticos.",
+    "min_required_version": "9.0.0"
+  },
+  {
+    "version_name": "9.31.0",
+    "version_code": 75,
+    "db_schema_version": 36,
+    "release_date": "2026-11-20T04:12:58.164044Z",
+    "type": "FEATURE_RELEASE",
+    "apk_file_path": "",
+    "apk_download_url": "",
+    "apk_sha256": "4a5fc10fcefbc69517bba7cc8f0576fd98622696108dca2da9b7e27e3b1c7502",
+    "file_size_mb": 108.83,
+    "changelog": "",
+    "min_required_version": "9.0.0"
+  },
+  {
     "version_name": "9.30.0",
     "version_code": 74,
     "db_schema_version": 35,
