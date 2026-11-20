@@ -17,6 +17,7 @@ class PostUpdateWelcomeModal extends StatelessWidget {
   final PostUpdateMode mode;
   final VoidCallback? onActivatePlanPressed;
   final VoidCallback? onContinueTrialPressed;
+  final bool isManualPreview;
 
   const PostUpdateWelcomeModal({
     super.key,
@@ -24,6 +25,7 @@ class PostUpdateWelcomeModal extends StatelessWidget {
     this.mode = PostUpdateMode.activeCommercialOrPerpetual,
     this.onActivatePlanPressed,
     this.onContinueTrialPressed,
+    this.isManualPreview = false,
   });
 
   /// Método estático de conveniencia para despliegue manual
@@ -34,8 +36,10 @@ class PostUpdateWelcomeModal extends StatelessWidget {
     VoidCallback? onActivatePlanPressed,
     VoidCallback? onContinueTrialPressed,
     bool barrierDismissible = false,
+    bool isManualPreview = false,
   }) async {
     final version = appVersion ?? AppChangelogRegistry.currentVersion;
+    final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
     await showDialog(
       context: context,
       barrierDismissible: barrierDismissible,
@@ -44,8 +48,13 @@ class PostUpdateWelcomeModal extends StatelessWidget {
         mode: mode,
         onActivatePlanPressed: onActivatePlanPressed,
         onContinueTrialPressed: onContinueTrialPressed,
+        isManualPreview: isManualPreview,
       ),
     );
+    // 🛡️ Garantizar persistencia de la versión canónica vista al cerrarse el modal por cualquier vía (solo si no es preview manual)
+    if (!isManualPreview && licenseProv != null) {
+      await licenseProv.updateLastExecutedVersion(OwnerLegalIdentity.currentAppVersionWithBuild);
+    }
   }
 
   @override
@@ -110,7 +119,11 @@ class PostUpdateWelcomeModal extends StatelessWidget {
                         color: isDark ? Colors.grey[400] : Colors.grey[600],
                       ),
                       tooltip: "Cerrar",
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () {
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                        }
+                      },
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
@@ -228,10 +241,7 @@ class PostUpdateWelcomeModal extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ElevatedButton.icon(
-            onPressed: () async {
-              if (licenseProv != null) {
-                await licenseProv.updateLastExecutedVersion(appVersion);
-              }
+            onPressed: () {
               if (context.mounted) {
                 Navigator.of(context).pop();
                 onActivatePlanPressed?.call();
@@ -251,10 +261,7 @@ class PostUpdateWelcomeModal extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           TextButton(
-            onPressed: () async {
-              if (licenseProv != null) {
-                await licenseProv.updateLastExecutedVersion(appVersion);
-              }
+            onPressed: () {
               if (context.mounted) {
                 Navigator.of(context).pop();
                 onContinueTrialPressed?.call();
@@ -273,10 +280,7 @@ class PostUpdateWelcomeModal extends StatelessWidget {
     }
 
     return ElevatedButton(
-      onPressed: () async {
-        if (licenseProv != null) {
-          await licenseProv.updateLastExecutedVersion(appVersion);
-        }
+      onPressed: () {
         if (context.mounted) {
           Navigator.of(context).pop();
         }

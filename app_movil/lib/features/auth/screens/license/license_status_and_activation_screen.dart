@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:math' as math;
 
 import 'package:app_movil/core/config/owner_legal_identity.dart';
 import 'package:app_movil/core/config/app_changelog_registry.dart';
@@ -52,7 +53,7 @@ class _LicenseStatusAndActivationScreenState
     super.dispose();
   }
 
-  /// Revisa si el portapapeles contiene un código válido (formato ML9- o token Ed25519)
+  /// Revisa si el portapapeles contiene un código válido (formato ML9- con estructura Ed25519)
   Future<void> _checkClipboardForCode() async {
     if (!mounted || _isCheckingClipboard) return;
     _isCheckingClipboard = true;
@@ -60,9 +61,16 @@ class _LicenseStatusAndActivationScreenState
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       final text = data?.text?.trim() ?? '';
       if (_isValidCandidateCode(text)) {
+        final extracted = Ed25519LicenseValidator.extractClipboardLicenseToken(text);
         if (mounted) {
           setState(() {
-            _detectedClipboardCode = text;
+            _detectedClipboardCode = extracted;
+          });
+        }
+      } else {
+        if (mounted && _detectedClipboardCode != null) {
+          setState(() {
+            _detectedClipboardCode = null;
           });
         }
       }
@@ -74,10 +82,7 @@ class _LicenseStatusAndActivationScreenState
 
   bool _isValidCandidateCode(String text) {
     if (text.isEmpty) return false;
-    final extracted = Ed25519LicenseValidator.extractLicenseToken(text);
-    if (extracted.contains('.') && extracted.length > 40) return true;
-    if (text.startsWith('ML9-')) return true;
-    return false;
+    return Ed25519LicenseValidator.extractClipboardLicenseToken(text).isNotEmpty;
   }
 
   Future<void> _activateCode(String code) async {
@@ -124,7 +129,8 @@ class _LicenseStatusAndActivationScreenState
         if (mounted) {
           CustomSnackBar.show(
             context,
-            message: "No se pudo abrir WhatsApp. Contacta al ${OwnerLegalIdentity.supportPhone}",
+            message:
+                "No se pudo abrir WhatsApp. Contacta al ${OwnerLegalIdentity.supportPhone}",
             isError: true,
           );
         }
@@ -141,7 +147,10 @@ class _LicenseStatusAndActivationScreenState
   }
 
   Future<void> _launchWhatsAppMessage(String message) async {
-    final cleanDigits = OwnerLegalIdentity.supportPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final cleanDigits = OwnerLegalIdentity.supportPhone.replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
     final baseUri = cleanDigits.length >= 8
         ? "https://wa.me/$cleanDigits"
         : OwnerLegalIdentity.supportWhatsAppUrl;
@@ -153,7 +162,8 @@ class _LicenseStatusAndActivationScreenState
         if (mounted) {
           CustomSnackBar.show(
             context,
-            message: "No se pudo abrir WhatsApp. Contacta al ${OwnerLegalIdentity.supportPhone}",
+            message:
+                "No se pudo abrir WhatsApp. Contacta al ${OwnerLegalIdentity.supportPhone}",
             isError: true,
           );
         }
@@ -204,7 +214,8 @@ class _LicenseStatusAndActivationScreenState
         if (mounted) {
           CustomSnackBar.show(
             context,
-            message: "No se detectó ningún código QR en la imagen seleccionada.",
+            message:
+                "No se detectó ningún código QR en la imagen seleccionada.",
             isError: true,
           );
         }
@@ -243,16 +254,20 @@ class _LicenseStatusAndActivationScreenState
             onPressed: () => PostUpdateWelcomeModal.show(
               context,
               appVersion: AppChangelogRegistry.currentVersion,
-              mode: (license?.isPerpetual == true || (license?.isActive == true && license?.isTrial == false))
+              mode:
+                  (license?.isPerpetual == true ||
+                      (license?.isActive == true && license?.isTrial == false))
                   ? PostUpdateMode.activeCommercialOrPerpetual
                   : PostUpdateMode.trialOrGrace,
               barrierDismissible: true,
+              isManualPreview: true,
             ),
           ),
           IconButton(
             icon: const Icon(Icons.description_outlined),
             tooltip: "Ver Contrato EULA",
-            onPressed: () => EulaAcceptanceModal.show(context, isReadOnly: true),
+            onPressed: () =>
+                EulaAcceptanceModal.show(context, isReadOnly: true),
           ),
         ],
       ),
@@ -276,7 +291,12 @@ class _LicenseStatusAndActivationScreenState
               ],
 
               // Tarjeta Ejecutiva de Estado de Licencia
-              _buildExecutiveStatusCard(licenseProv, license, fingerprint, isDark),
+              _buildExecutiveStatusCard(
+                licenseProv,
+                license,
+                fingerprint,
+                isDark,
+              ),
               const SizedBox(height: 16),
 
               // Área de Activación Rápida
@@ -303,7 +323,11 @@ class _LicenseStatusAndActivationScreenState
       ),
       child: Row(
         children: [
-          const Icon(Icons.content_paste_go_rounded, color: Colors.green, size: 22),
+          const Icon(
+            Icons.content_paste_go_rounded,
+            color: Colors.green,
+            size: 22,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -329,9 +353,7 @@ class _LicenseStatusAndActivationScreenState
           const SizedBox(width: 8),
           ElevatedButton(
             onPressed: () {
-              final raw = _detectedClipboardCode!;
-              final extracted = Ed25519LicenseValidator.extractLicenseToken(raw);
-              final codeToUse = extracted.isNotEmpty ? 'ML9-$extracted' : raw;
+              final codeToUse = _detectedClipboardCode!;
               _codeController.text = codeToUse;
               _activateCode(codeToUse);
             },
@@ -340,9 +362,14 @@ class _LicenseStatusAndActivationScreenState
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: const Text("Pegar y Activar", style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+            child: const Text(
+              "Pegar y Activar",
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -389,18 +416,22 @@ class _LicenseStatusAndActivationScreenState
     final dateFormat = DateFormat('dd/MM/yyyy');
 
     // Propiedades dinámicas exactas desde LicenseModel
-    final badgeLabel = license?.dynamicPlanBadgeLabel ?? "Prueba Gratuita (Trial)";
-    final badgeColor = license?.dynamicPlanBadgeColor ?? const Color(0xFF00695C);
+    final badgeLabel =
+        license?.dynamicPlanBadgeLabel ?? "Prueba Gratuita (Trial)";
+    final badgeColor =
+        license?.dynamicPlanBadgeColor ?? const Color(0xFF00695C);
     final badgeIcon = license?.dynamicPlanBadgeIcon ?? Icons.verified_rounded;
 
     // Cálculo proporcional de la barra de progreso preservando suma acumulativa
-    final progress = license?.progressRatio ?? (daysRemaining / 30.0).clamp(0.0, 1.0);
+    final progress =
+        license?.progressRatio ?? (daysRemaining / 30.0).clamp(0.0, 1.0);
     final hasAccumulatedDays = license?.hasAccumulatedBonusDays ?? false;
 
     // Cuotas IA y BYOK
     final remainingAiScans = licenseProv?.remainingAiScans ?? 50;
     final isUsingByok = licenseProv?.isUsingByokMode ?? false;
-    final accumulatedScans = licenseProv?.aiAccumulatedScans ?? remainingAiScans;
+    final accumulatedScans =
+        licenseProv?.aiAccumulatedScans ?? remainingAiScans;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -427,11 +458,16 @@ class _LicenseStatusAndActivationScreenState
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: badgeColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: badgeColor.withValues(alpha: 0.5)),
+                    border: Border.all(
+                      color: badgeColor.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -465,11 +501,17 @@ class _LicenseStatusAndActivationScreenState
                 decoration: BoxDecoration(
                   color: Colors.purple.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: Colors.purple.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.all_inclusive_rounded, color: Colors.purple, size: 28),
+                    const Icon(
+                      Icons.all_inclusive_rounded,
+                      color: Colors.purple,
+                      size: 28,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -477,7 +519,10 @@ class _LicenseStatusAndActivationScreenState
                         children: [
                           const Text(
                             "Acceso de por vida habilitado",
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
                           ),
                           Text(
                             license?.updatesUntil != null
@@ -485,7 +530,9 @@ class _LicenseStatusAndActivationScreenState
                                 : "Actualizaciones de estabilidad de por vida",
                             style: TextStyle(
                               fontSize: 11.5,
-                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
                             ),
                           ),
                         ],
@@ -504,13 +551,17 @@ class _LicenseStatusAndActivationScreenState
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: daysRemaining <= 5 ? Colors.amber[800] : (isDark ? Colors.white : Colors.black87),
+                        color: daysRemaining <= 5
+                            ? Colors.amber[800]
+                            : (isDark ? Colors.white : Colors.black87),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    license != null ? "Vence: ${dateFormat.format(license.fechaExpiracion)}" : "Calculando...",
+                    license != null
+                        ? "Vence: ${dateFormat.format(license.fechaExpiracion)}"
+                        : "Calculando...",
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -554,7 +605,10 @@ class _LicenseStatusAndActivationScreenState
               },
               borderRadius: BorderRadius.circular(10),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.blue.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
@@ -562,7 +616,11 @@ class _LicenseStatusAndActivationScreenState
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.auto_awesome_rounded, size: 18, color: Colors.blue),
+                    const Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 18,
+                      color: Colors.blue,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
@@ -573,7 +631,9 @@ class _LicenseStatusAndActivationScreenState
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.lightBlue[200] : Colors.blue[900],
+                              color: isDark
+                                  ? Colors.lightBlue[200]
+                                  : Colors.blue[900],
                             ),
                           ),
                           Text(
@@ -615,13 +675,21 @@ class _LicenseStatusAndActivationScreenState
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF14141C) : const Color(0xFFF1F5F9),
+                color: isDark
+                    ? const Color(0xFF14141C)
+                    : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                border: Border.all(
+                  color: isDark ? Colors.white12 : Colors.black12,
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.phonelink_setup_rounded, size: 20, color: Colors.blue),
+                  const Icon(
+                    Icons.phonelink_setup_rounded,
+                    size: 20,
+                    color: Colors.blue,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -638,21 +706,32 @@ class _LicenseStatusAndActivationScreenState
                     icon: const Icon(Icons.copy_rounded, size: 18),
                     tooltip: "Copiar ID",
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: fingerprint));
                       CustomSnackBar.show(
                         context,
-                        message: "Hardware ID $fingerprint copiado al portapapeles",
+                        message:
+                            "Hardware ID $fingerprint copiado al portapapeles",
                         isError: false,
                       );
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.share_rounded, size: 18, color: Colors.green),
+                    icon: const Icon(
+                      Icons.share_rounded,
+                      size: 18,
+                      color: Colors.green,
+                    ),
                     tooltip: "Enviar por WhatsApp",
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
                     onPressed: () {
                       final msg =
                           "Hola Julio Angello, solicito activación/renovación para MochilaLista. Mi ID de equipo es: $fingerprint";
@@ -733,17 +812,27 @@ class _LicenseStatusAndActivationScreenState
                     final data = await Clipboard.getData(Clipboard.kTextPlain);
                     if (data?.text != null) {
                       final raw = data!.text!.trim();
-                      final extracted = Ed25519LicenseValidator.extractLicenseToken(raw);
-                      _codeController.text = extracted.isNotEmpty ? 'ML9-$extracted' : raw;
+                      final extracted =
+                          Ed25519LicenseValidator.extractLicenseToken(raw);
+                      _codeController.text = extracted.isNotEmpty
+                          ? 'ML9-$extracted'
+                          : raw;
                     }
                   },
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 filled: true,
-                fillColor: isDark ? const Color(0xFF14141C) : const Color(0xFFF8FAFC),
+                fillColor: isDark
+                    ? const Color(0xFF14141C)
+                    : const Color(0xFFF8FAFC),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
+                  borderSide: BorderSide(
+                    color: isDark ? Colors.white12 : Colors.black12,
+                  ),
                 ),
               ),
               style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
@@ -754,23 +843,33 @@ class _LicenseStatusAndActivationScreenState
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: isLoading ? null : () => _activateCode(_codeController.text),
+                onPressed: isLoading
+                    ? null
+                    : () => _activateCode(_codeController.text),
                 icon: isLoading
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Icon(Icons.check_circle_outline_rounded, size: 18),
                 label: Text(
                   isLoading ? "Validando..." : "Activar Código de Licencia",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13.5,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue[800],
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
             ),
@@ -790,14 +889,23 @@ class _LicenseStatusAndActivationScreenState
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 48),
                     foregroundColor: Colors.blue[700],
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 );
 
                 final btnGallery = OutlinedButton.icon(
                   onPressed: isLoading ? null : _scanQrFromGallery,
-                  icon: const Icon(Icons.photo_library_rounded, size: 17, color: Colors.teal),
+                  icon: const Icon(
+                    Icons.photo_library_rounded,
+                    size: 17,
+                    color: Colors.teal,
+                  ),
                   label: const Text(
                     "QR desde Galería",
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
@@ -806,8 +914,13 @@ class _LicenseStatusAndActivationScreenState
                     minimumSize: const Size(0, 48),
                     foregroundColor: Colors.teal[800],
                     side: BorderSide(color: Colors.teal.withValues(alpha: 0.4)),
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 );
 
@@ -881,7 +994,8 @@ class _LicenseStatusAndActivationScreenState
       {
         "name": "Bolsa Extra IA",
         "price": "S/ 20.00",
-        "desc": "+150 escaneos acumulativos sin vencimiento para cualquier plan",
+        "desc":
+            "+150 escaneos acumulativos sin vencimiento para cualquier plan",
         "badge": "Bolsa IA",
         "aiBadge": "+150 IA",
       },
@@ -905,7 +1019,11 @@ class _LicenseStatusAndActivationScreenState
           children: [
             Row(
               children: [
-                const Icon(Icons.local_offer_rounded, size: 20, color: Colors.blue),
+                const Icon(
+                  Icons.local_offer_rounded,
+                  size: 20,
+                  color: Colors.blue,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -931,7 +1049,11 @@ class _LicenseStatusAndActivationScreenState
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, size: 18, color: Colors.blue),
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: Colors.blue,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -939,7 +1061,9 @@ class _LicenseStatusAndActivationScreenState
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.lightBlue[200] : Colors.blue[900],
+                        color: isDark
+                            ? Colors.lightBlue[200]
+                            : Colors.blue[900],
                       ),
                     ),
                   ),
@@ -954,12 +1078,18 @@ class _LicenseStatusAndActivationScreenState
               decoration: BoxDecoration(
                 color: Colors.indigo.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.indigo.withValues(alpha: 0.25)),
+                border: Border.all(
+                  color: Colors.indigo.withValues(alpha: 0.25),
+                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.storefront_rounded, size: 18, color: Colors.indigo),
+                  const Icon(
+                    Icons.storefront_rounded,
+                    size: 18,
+                    color: Colors.indigo,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -999,9 +1129,13 @@ class _LicenseStatusAndActivationScreenState
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF14141C) : const Color(0xFFF8FAFC),
+                color: isDark
+                    ? const Color(0xFF14141C)
+                    : const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                border: Border.all(
+                  color: isDark ? Colors.white12 : Colors.black12,
+                ),
               ),
               child: Row(
                 children: [
@@ -1011,7 +1145,11 @@ class _LicenseStatusAndActivationScreenState
                       color: const Color(0xFF6B1D90).withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.qr_code_2_rounded, color: Color(0xFF6B1D90), size: 20),
+                    child: const Icon(
+                      Icons.qr_code_2_rounded,
+                      color: Color(0xFF6B1D90),
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -1020,7 +1158,10 @@ class _LicenseStatusAndActivationScreenState
                       children: [
                         const Text(
                           "Yape y Plin (Perú)",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                          ),
                         ),
                         Text(
                           "${OwnerLegalIdentity.supportPhone} • ${OwnerLegalIdentity.yapePlinHolder}",
@@ -1035,21 +1176,35 @@ class _LicenseStatusAndActivationScreenState
                   const SizedBox(width: 8),
                   ElevatedButton(
                     onPressed: () {
-                      Clipboard.setData(ClipboardData(text: OwnerLegalIdentity.supportPhone));
+                      Clipboard.setData(
+                        ClipboardData(text: OwnerLegalIdentity.supportPhone),
+                      );
                       CustomSnackBar.show(
                         context,
-                        message: "Número Yape/Plin copiado: ${OwnerLegalIdentity.supportPhone}",
+                        message:
+                            "Número Yape/Plin copiado: ${OwnerLegalIdentity.supportPhone}",
                         isError: false,
                       );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6B1D90),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    child: const Text("Copiar", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      "Copiar",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1077,7 +1232,9 @@ class _LicenseStatusAndActivationScreenState
                   backgroundColor: Colors.green[700],
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
             ),
@@ -1100,7 +1257,11 @@ class _LicenseStatusAndActivationScreenState
         ),
         child: Row(
           children: [
-            Icon(Icons.account_balance_outlined, size: 16, color: Colors.blue[700]),
+            Icon(
+              Icons.account_balance_outlined,
+              size: 16,
+              color: Colors.blue[700],
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -1154,7 +1315,10 @@ class _LicenseStatusAndActivationScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(bankName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          Text(
+            bankName,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          ),
           const SizedBox(height: 4),
           Row(
             children: [
@@ -1183,7 +1347,10 @@ class _LicenseStatusAndActivationScreenState
                 Expanded(
                   child: Text(
                     "CCI: $cciNumber",
-                    style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                    ),
                   ),
                 ),
                 TextButton(
@@ -1195,7 +1362,10 @@ class _LicenseStatusAndActivationScreenState
                       isError: false,
                     );
                   },
-                  child: const Text("Copiar CCI", style: TextStyle(fontSize: 11)),
+                  child: const Text(
+                    "Copiar CCI",
+                    style: TextStyle(fontSize: 11),
+                  ),
                 ),
               ],
             ),
@@ -1204,7 +1374,11 @@ class _LicenseStatusAndActivationScreenState
     );
   }
 
-  Widget _buildPlanTile(Map<String, String> plan, String fingerprint, bool isDark) {
+  Widget _buildPlanTile(
+    Map<String, String> plan,
+    String fingerprint,
+    bool isDark,
+  ) {
     final isPerpetual = plan['name'] == 'Perpetua';
     final isExtraAi = plan['name'] == 'Bolsa Extra IA';
 
@@ -1248,10 +1422,16 @@ class _LicenseStatusAndActivationScreenState
                   children: [
                     Text(
                       plan['name']!,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13.5,
+                      ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: badgeColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
@@ -1266,11 +1446,16 @@ class _LicenseStatusAndActivationScreenState
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.blue.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: Colors.blue.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Text(
                         plan['aiBadge']!,
@@ -1323,16 +1508,25 @@ class _LicenseStatusAndActivationScreenState
                 },
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+                    border: Border.all(
+                      color: Colors.green.withValues(alpha: 0.4),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.shopping_bag_outlined, size: 13, color: Colors.green[700]),
+                      Icon(
+                        Icons.shopping_bag_outlined,
+                        size: 13,
+                        color: Colors.green[700],
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         "Pedir",
@@ -1370,6 +1564,7 @@ class _LicenseStatusAndActivationScreenState
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => OrderPlanBottomSheet(
         planName: planName,
@@ -1381,7 +1576,8 @@ class _LicenseStatusAndActivationScreenState
         isDark: isDark,
         onSendWhatsApp: (msg) {
           Navigator.of(ctx).pop();
-          final uri = LicenseStatusAndActivationScreen.buildCustomWhatsAppOrderUri(msg);
+          final uri =
+              LicenseStatusAndActivationScreen.buildCustomWhatsAppOrderUri(msg);
           _launchRawWhatsAppUrl(uri.toString());
         },
       ),
@@ -1419,293 +1615,614 @@ class OrderPlanBottomSheet extends StatefulWidget {
 class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
   late final TextEditingController _msgController;
 
+  bool _yapePlinActive = false;
+  bool _bankAccountsActive = false;
+  bool _commercialInvoiceActive = false;
+
+  static const String _yapePlinLine =
+      "\n• Estado: Pago realizado vía Yape/Plin. Adjunto comprobante.";
+  static const String _bankAccountLine =
+      "\n• Consulta: Solicito números de cuenta para transferencia bancaria.";
+  static const String _invoiceLine =
+      "\n• Requerimiento: Solicito emisión de Factura con RUC.";
+
   @override
   void initState() {
     super.initState();
     _msgController = TextEditingController(text: widget.defaultMessage);
+    _msgController.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
+    _msgController.removeListener(_onTextChanged);
     _msgController.dispose();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    final text = _msgController.text;
+    final hasYape = text.contains("Pago realizado vía Yape/Plin");
+    final hasBank = text.contains(
+      "Solicito números de cuenta para transferencia bancaria",
+    );
+    final hasInv = text.contains("Solicito emisión de Factura con RUC");
+    if (hasYape != _yapePlinActive ||
+        hasBank != _bankAccountsActive ||
+        hasInv != _commercialInvoiceActive) {
+      setState(() {
+        _yapePlinActive = hasYape;
+        _bankAccountsActive = hasBank;
+        _commercialInvoiceActive = hasInv;
+      });
+    } else {
+      setState(() {});
+    }
+  }
+
+  void _toggleLine(bool isSelected, String line) {
+    String current = _msgController.text;
+    final trimmedLine = line.trim();
+    if (isSelected) {
+      if (!current.contains(trimmedLine)) {
+        if (current.isNotEmpty && !current.endsWith('\n')) {
+          current = '$current$line';
+        } else {
+          current = '$current$trimmedLine';
+        }
+      }
+    } else {
+      current = current.replaceAll(line, '').replaceAll(trimmedLine, '');
+      current = current.replaceAll(RegExp(r'\n{3,}'), '\n\n').trimRight();
+    }
+    _msgController.text = current;
+    _msgController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _msgController.text.length),
+    );
+  }
+
+  void _resetText() {
+    setState(() {
+      _msgController.text = widget.defaultMessage;
+      _yapePlinActive = false;
+      _bankAccountsActive = false;
+      _commercialInvoiceActive = false;
+    });
+    CustomSnackBar.show(
+      context,
+      message: "Texto restablecido al formato oficial",
+      isError: false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    final padding = MediaQuery.paddingOf(context);
+    final double bottomSafety =
+        math.max(
+          viewInsets.bottom,
+          math.max(viewPadding.bottom, padding.bottom),
+        ) +
+        12.0;
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      ),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E28) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 14,
-        bottom: bottomInset + 20,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Pill indicador superior
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Zona 1 — Cabecera Ejecutiva Fija
+          _buildFixedHeader(isDark),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: isDark ? Colors.white10 : Colors.black12,
+          ),
 
-            // Encabezado del Modal
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.shopping_bag_outlined, color: Colors.green, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Solicitar ${widget.planName}",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                      Text(
-                        "Personaliza tu solicitud antes de enviarla",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                  onPressed: () => Navigator.of(context).pop(),
-                  tooltip: "Cerrar",
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // Tarjeta de Resumen del Pedido
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF14141C) : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
-              ),
+          // Zona 2 — Cuerpo Desplazable Cómodo (Flexible + SingleChildScrollView)
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            Text(
-                              widget.planName,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                widget.aiScansBadge,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.price,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.desc,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Divider(height: 1),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.phonelink_setup_rounded, size: 16, color: Colors.blue),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          "Hardware ID: ${widget.hardwareId}",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'monospace',
-                            color: isDark ? Colors.grey[300] : Colors.grey[800],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  _buildSummaryCard(isDark),
+                  const SizedBox(height: 14),
+                  _buildQuickChips(isDark),
+                  const SizedBox(height: 14),
+                  _buildEditableMessageField(isDark),
                 ],
               ),
             ),
-            const SizedBox(height: 14),
+          ),
 
-            // Título de la Caja de Texto
+          // Zona 3 — Zona de Acciones Inferior Fija (100% Protegida)
+          _buildFixedActions(isDark, bottomSafety),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFixedHeader(bool isDark) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Center(
+          child: Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(top: 10, bottom: 8),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white24 : Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.shopping_bag_rounded,
+                  color: Colors.green,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Solicitar ${widget.planName}",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Revisa y personaliza tu mensaje antes de enviarlo",
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 20),
+                onPressed: () => Navigator.of(context).pop(),
+                tooltip: "Cerrar",
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF14141C) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      widget.planName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        widget.aiScansBadge,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.price,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green[700],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            widget.desc,
+            style: TextStyle(
+              fontSize: 11.5,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(
+                Icons.phonelink_setup_rounded,
+                size: 16,
+                color: Colors.blue,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  "Hardware ID: ${widget.hardwareId}",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'monospace',
+                    color: isDark ? Colors.grey[300] : Colors.grey[800],
+                  ),
+                ),
+              ),
+              InkWell(
+                key: const ValueKey("copy_hardware_id_btn"),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: widget.hardwareId));
+                  CustomSnackBar.show(
+                    context,
+                    message: "Hardware ID copiado (${widget.hardwareId})",
+                    isError: false,
+                  );
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.blue.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.copy_rounded,
+                        size: 13,
+                        color: Colors.blue,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        "Copiar ID",
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.blue[300] : Colors.blue[800],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickChips(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Complementos rápidos (opcional):",
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.grey[400] : Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildComplementChip(
+              label: "Ya realicé el Yape/Plin",
+              icon: Icons.check_circle_outline_rounded,
+              isSelected: _yapePlinActive,
+              onSelected: (val) {
+                _toggleLine(val, _yapePlinLine);
+              },
+              isDark: isDark,
+            ),
+            _buildComplementChip(
+              label: "Solicito cuenta BCP/BBVA",
+              icon: Icons.account_balance_outlined,
+              isSelected: _bankAccountsActive,
+              onSelected: (val) {
+                _toggleLine(val, _bankAccountLine);
+              },
+              isDark: isDark,
+            ),
+            _buildComplementChip(
+              label: "Requiero Factura Comercial",
+              icon: Icons.receipt_long_outlined,
+              isSelected: _commercialInvoiceActive,
+              onSelected: (val) {
+                _toggleLine(val, _invoiceLine);
+              },
+              isDark: isDark,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildComplementChip({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required ValueChanged<bool> onSelected,
+    required bool isDark,
+  }) {
+    final activeColor = Colors.blue[700]!;
+    return FilterChip(
+      avatar: Icon(
+        icon,
+        size: 15,
+        color: isSelected
+            ? Colors.white
+            : (isDark ? Colors.blue[300] : Colors.blue[700]),
+      ),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected
+              ? Colors.white
+              : (isDark ? Colors.grey[200] : Colors.grey[800]),
+        ),
+      ),
+      selected: isSelected,
+      showCheckmark: false,
+      selectedColor: activeColor,
+      backgroundColor: isDark
+          ? const Color(0xFF262636)
+          : const Color(0xFFF1F5F9),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(
+          color: isSelected
+              ? activeColor
+              : (isDark ? Colors.white12 : Colors.black12),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      onSelected: onSelected,
+    );
+  }
+
+  Widget _buildEditableMessageField(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                "Mensaje para Soporte Oficial (Editable):",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.grey[300] : Colors.grey[800],
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
             Text(
-              "Mensaje para Soporte Oficial (Editable):",
+              "${_msgController.text.length} caracteres",
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[300] : Colors.grey[800],
+                fontSize: 10.5,
+                color: isDark ? Colors.grey[500] : Colors.grey[600],
               ),
             ),
-            const SizedBox(height: 6),
-
-            // Caja de Texto Multilínea Editable
-            TextField(
-              controller: _msgController,
-              minLines: 3,
-              maxLines: 5,
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.35,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: isDark ? const Color(0xFF14141C) : const Color(0xFFF8FAFC),
-                contentPadding: const EdgeInsets.all(12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Colors.blue, width: 1.5),
-                ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _msgController,
+          minLines: 4,
+          maxLines: 6,
+          style: TextStyle(
+            fontSize: 12.5,
+            height: 1.4,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: isDark
+                ? const Color(0xFF14141C)
+                : const Color(0xFFF8FAFC),
+            contentPadding: const EdgeInsets.all(12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: isDark ? Colors.white12 : Colors.black12,
               ),
             ),
-            const SizedBox(height: 12),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: isDark ? Colors.white12 : Colors.black12,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
-            // Botones Secundarios: Copiar y Restablecer
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.copy_rounded, size: 16),
-                    label: const Text(
-                      "Copiar Mensaje",
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: _msgController.text));
-                      CustomSnackBar.show(
-                        context,
-                        message: "Mensaje copiado al portapapeles",
-                        isError: false,
-                      );
-                    },
+  Widget _buildFixedActions(bool isDark, double bottomSafety) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 12,
+        bottom: bottomSafety,
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark ? Colors.white12 : Colors.black12,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.copy_rounded, size: 16),
+                  label: const Text(
+                    "Copiar Mensaje",
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text(
-                      "Restablecer Texto",
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 8,
                     ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.orange[800],
-                      side: BorderSide(color: Colors.orange.withValues(alpha: 0.4)),
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    onPressed: () {
-                      setState(() {
-                        _msgController.text = widget.defaultMessage;
-                      });
-                      CustomSnackBar.show(
-                        context,
-                        message: "Texto restablecido al formato oficial",
-                        isError: false,
-                      );
-                    },
+                    foregroundColor: isDark ? Colors.white : Colors.blue[900],
+                    side: BorderSide(
+                      color: isDark
+                          ? Colors.white24
+                          : Colors.blue.withValues(alpha: 0.3),
+                    ),
                   ),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: _msgController.text));
+                    CustomSnackBar.show(
+                      context,
+                      message: "Mensaje copiado al portapapeles",
+                      isError: false,
+                    );
+                  },
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // Botón Primario: Enviar por WhatsApp
-            ElevatedButton.icon(
-              icon: const Icon(Icons.chat_rounded, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text(
+                    "Restablecer",
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orange[800],
+                    side: BorderSide(
+                      color: Colors.orange.withValues(alpha: 0.4),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: _resetText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.chat_rounded, size: 20),
               label: const Text(
                 "Enviar por WhatsApp",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF25D366),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
               ),
               onPressed: () => widget.onSendWhatsApp(_msgController.text),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1774,14 +2291,21 @@ class _QrScannerSheetState extends State<_QrScannerSheet> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.photo_library_rounded, color: Colors.teal),
+                    icon: const Icon(
+                      Icons.photo_library_rounded,
+                      color: Colors.teal,
+                    ),
                     tooltip: "Desde Galería",
                     onPressed: () async {
                       try {
                         final picker = ImagePicker();
-                        final picked = await picker.pickImage(source: ImageSource.gallery);
+                        final picked = await picker.pickImage(
+                          source: ImageSource.gallery,
+                        );
                         if (picked != null) {
-                          final capture = await _controller.analyzeImage(picked.path);
+                          final capture = await _controller.analyzeImage(
+                            picked.path,
+                          );
                           if (capture != null && capture.barcodes.isNotEmpty) {
                             final code = capture.barcodes.first.rawValue;
                             if (code != null && code.trim().isNotEmpty) {
@@ -1792,7 +2316,8 @@ class _QrScannerSheetState extends State<_QrScannerSheet> {
                           if (context.mounted) {
                             CustomSnackBar.show(
                               context,
-                              message: "No se detectó ningún código QR en la imagen.",
+                              message:
+                                  "No se detectó ningún código QR en la imagen.",
                               isError: true,
                             );
                           }
@@ -1861,8 +2386,13 @@ class _QrScannerSheetState extends State<_QrScannerSheet> {
                   decoration: InputDecoration(
                     hintText: "O pega el código QR aquí...",
                     hintStyle: const TextStyle(fontSize: 12),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   style: const TextStyle(fontSize: 12),
                 ),
@@ -1878,7 +2408,10 @@ class _QrScannerSheetState extends State<_QrScannerSheet> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue[700],
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                 ),
                 child: const Text("Aplicar"),
               ),

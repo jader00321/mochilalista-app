@@ -579,7 +579,7 @@ class VaultCryptoService {
     required VaultPayloadFiles files,
     required bool includeMasterKey,
     required Map<String, dynamic> stats,
-    String appVersion = '9.32.0+76',
+    String appVersion = '9.33.0+77',
     int dbSchemaVersion = 36,
   }) async {
     final createdAt = DateTime.now().toUtc().toIso8601String();
@@ -789,7 +789,7 @@ class VaultCryptoService {
       format: parsed['format'] as String? ?? 'MLVAULT',
       version: parsed['version'] as String? ?? '1.1.0',
       createdAt: parsed['created_at'] as String? ?? '',
-      appVersion: parsed['app_version'] as String? ?? '9.32.0+76',
+      appVersion: parsed['app_version'] as String? ?? '9.33.0+77',
       dbSchemaVersion: (parsed['db_schema_version'] as num?)?.toInt() ?? 36,
       includesMasterKey: parsed['includes_master_key'] == true,
     );

@@ -496,7 +496,7 @@ Future<void> _handleApiRoute(
     final List<Map<String, dynamic>> urgentActions = [];
 
     final latestVersion =
-        releases.isNotEmpty ? releases.first['version_name'] : '9.32.0';
+        releases.isNotEmpty ? releases.first['version_name'] : '9.33.0';
 
     for (final c in clients) {
       final payments =
@@ -678,7 +678,7 @@ Future<void> _handleApiRoute(
       final clientId = segments[3];
       final bodyStr = await utf8.decodeStream(request);
       final body = jsonDecode(bodyStr) as Map<String, dynamic>;
-      final versionName = body['version_name'] as String? ?? '9.32.0';
+      final versionName = body['version_name'] as String? ?? '9.33.0';
 
       final updated = await dbService.markClientUpdated(clientId, versionName);
       if (updated == null) {
@@ -1081,8 +1081,8 @@ Future<void> _handleApiRoute(
       File('releases_apks/${dbService.currentMode}/mochilalista-release.apk'),
     ];
 
-    String versionName = '9.32.0';
-    int versionCode = 76;
+    String versionName = '9.33.0';
+    int versionCode = 77;
     final pubspec = File('../app_movil/pubspec.yaml');
     if (await pubspec.exists()) {
       final lines = await pubspec.readAsLines();
@@ -1091,7 +1091,7 @@ Future<void> _handleApiRoute(
           final vPart = line.replaceFirst('version:', '').trim();
           final parts = vPart.split('+');
           if (parts.isNotEmpty) versionName = parts[0];
-          if (parts.length > 1) versionCode = int.tryParse(parts[1]) ?? 76;
+          if (parts.length > 1) versionCode = int.tryParse(parts[1]) ?? 77;
           break;
         }
       }

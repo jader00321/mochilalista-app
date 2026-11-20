@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/core/models/license_model.dart';
 import 'package:app_movil/core/services/device_fingerprint.dart';
@@ -68,11 +69,22 @@ class LicenseRepository {
 
       final expiration = trialStartDate.add(const Duration(days: 30));
 
-      // 🛡️ Limpieza proactiva de claves residuales de Keystore/Knox en instalaciones limpias
-      // Garantiza que tras desinstalar y reinstalar, el EULA sea obligatorio
+      // 🛡️ Limpieza proactiva de claves residuales de Keystore/Knox y Google Drive en instalaciones limpias
+      // Garantiza que tras desinstalar y reinstalar, el EULA sea obligatorio y Google Drive arranque 100% limpio
       try {
         await _secureStorage.delete(key: deviceEulaVersionKey);
         await _secureStorage.delete(key: deviceEulaTimestampKey);
+        await _secureStorage.delete(key: 'mochilalista_drive_user_cache_v1');
+        await _secureStorage.delete(key: 'mochilalista_drive_backup_config_v1');
+        await _secureStorage.delete(key: 'ml_gdrive_user_cache');
+        await _secureStorage.delete(key: 'ml_gdrive_config');
+      } catch (_) {}
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('mochilalista_drive_user_cache_v1');
+        await prefs.remove('mochilalista_drive_backup_config_v1');
+        await prefs.remove('ml_gdrive_user_cache');
+        await prefs.remove('ml_gdrive_config');
       } catch (_) {}
 
       final initialMap = {

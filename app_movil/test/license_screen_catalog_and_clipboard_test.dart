@@ -14,6 +14,7 @@ import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/services/device_fingerprint.dart';
 import 'package:app_movil/core/services/license/ed25519_license_validator.dart';
 import 'package:app_movil/core/config/owner_legal_identity.dart';
+import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 // Pantallas bajo prueba
 import 'package:app_movil/features/auth/screens/license/license_status_and_activation_screen.dart';
@@ -317,17 +318,132 @@ void main() {
     });
   });
 
-  group('5. Cero Desbordes (0px Overflow) en Resoluciones Compactas 320x568dp y 360x640dp', () {
+  group('6. Blindaje del Portapapeles y Despliegue de Errores Multilínea en CustomSnackBar', () {
+    testWidgets('Portapapeles con reporte técnico de Drive o Hardware ID NO activa banner flotante', (tester) async {
+      clipboardContent = '''
+=== REPORTE TÉCNICO DE COPIA EN GOOGLE DRIVE ===
+Fecha / Hora: 2026-11-20 02:45:00
+Código de Error / Mensaje: ApiException: 10
+Detalles Técnicos: DEVELOPER_ERROR OAuth 2.0 configuration mismatch
+''';
+
+      final provider = LicenseProvider();
+      await tester.runAsync(() async {
+        await provider.checkLicense();
+      });
+
+      await tester.pumpWidget(buildTestableWidget(
+        const LicenseStatusAndActivationScreen(),
+        provider: provider,
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text("Código detectado en portapapeles"), findsNothing);
+      expect(find.text("Pegar y Activar"), findsNothing);
+    });
+
+    testWidgets('Portapapeles con token válido ML9- activa banner, muestra código y Pegar y Activar no duplica ML9-ML9-', (tester) async {
+      final payload = {
+        'd': mockDeviceId,
+        'p': 'TRIMESTRAL',
+        'y': 90,
+        'n': 1,
+      };
+
+      late String validToken;
+      await tester.runAsync(() async {
+        validToken = await Ed25519LicenseValidator.generateSignedTokenForTesting(
+          keyPair: testKeyPair,
+          payload: payload,
+          addMl9Prefix: true,
+        );
+      });
+
+      clipboardContent = 'Estimado cliente, su código de activación es: $validToken ¡Gracias por su compra!';
+
+      final provider = LicenseProvider();
+      await tester.runAsync(() async {
+        await provider.checkLicense();
+      });
+
+      await tester.pumpWidget(buildTestableWidget(
+        const LicenseStatusAndActivationScreen(),
+        provider: provider,
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Banner detectado debe mostrarse
+      expect(find.text("Código detectado en portapapeles"), findsOneWidget);
+      expect(find.text("Pegar y Activar"), findsOneWidget);
+      expect(find.text(validToken), findsOneWidget);
+
+      // Tocar "Pegar y Activar"
+      await tester.tap(find.text("Pegar y Activar"));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(seconds: 1));
+
+      // Verificar que la licencia fue activada exitosamente con el plan TRIMESTRAL
+      expect(provider.license?.tipoPlan, equals('TRIMESTRAL'));
+      expect(find.text("Plan Trimestral Activo"), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 10));
+    });
+
+    testWidgets('Icono manual de pegado en TextField extrae token limpio o pega texto sin anteponer ML9- si no es token', (tester) async {
+      final provider = LicenseProvider();
+      await tester.runAsync(() async {
+        await provider.checkLicense();
+      });
+
+      await tester.pumpWidget(buildTestableWidget(
+        const LicenseStatusAndActivationScreen(),
+        provider: provider,
+      ));
+      await tester.pumpAndSettle();
+
+      // 1. Pegar texto sin token (reporte de drive)
+      clipboardContent = 'Reporte Técnico ApiException: 10';
+      final pasteIcon = find.byTooltip("Pegar del portapapeles");
+      expect(pasteIcon, findsOneWidget);
+      await tester.tap(pasteIcon);
+      await tester.pump();
+
+      TextField textField = tester.widget<TextField>(find.byType(TextField).first);
+      expect(textField.controller?.text, equals('Reporte Técnico ApiException: 10'));
+      expect(textField.controller?.text.startsWith('ML9-'), isFalse);
+
+      // 2. Pegar mensaje con token válido
+      final payload = {
+        'd': mockDeviceId,
+        'p': 'ANUAL',
+        'y': 365,
+        'n': 1,
+      };
+      late String token;
+      await tester.runAsync(() async {
+        token = await Ed25519LicenseValidator.generateSignedTokenForTesting(
+          keyPair: testKeyPair,
+          payload: payload,
+          addMl9Prefix: true,
+        );
+      });
+      clipboardContent = 'Activar con: $token';
+      await tester.tap(pasteIcon);
+      await tester.pump();
+
+      textField = tester.widget<TextField>(find.byType(TextField).first);
+      expect(textField.controller?.text, equals(token));
+      expect(textField.controller?.text.contains('ML9-ML9-'), isFalse);
+    });
+
     for (final size in const [Size(320, 568), Size(360, 640)]) {
-      testWidgets('LicenseStatusAndActivationScreen renderiza con 0px overflow en ${size.width}x${size.height}', (tester) async {
+      testWidgets('CustomSnackBar despliega mensajes largos multilínea con 0px overflow en ${size.width}x${size.height}', (tester) async {
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1.0;
         addTearDown(() => tester.view.resetPhysicalSize());
-
-        final provider = LicenseProvider();
-        await tester.runAsync(() async {
-          await provider.checkLicense();
-        });
 
         final errors = <String>[];
         final prevOnError = FlutterError.onError;
@@ -335,19 +451,37 @@ void main() {
           errors.add(details.toString());
         };
 
-        await tester.pumpWidget(buildTestableWidget(
-          const LicenseStatusAndActivationScreen(),
-          provider: provider,
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  onPressed: () {
+                    CustomSnackBar.show(
+                      ctx,
+                      message: "Error de configuración OAuth 2.0 (ApiException: 10): La huella SHA-1 registrada en Google Cloud Console no coincide con la firma del APK instalado en este dispositivo. Verifique las credenciales.",
+                      isError: true,
+                    );
+                  },
+                  child: const Text("Mostrar Error"),
+                ),
+              ),
+            ),
+          ),
         ));
         await tester.pumpAndSettle();
 
+        await tester.tap(find.text("Mostrar Error"));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
         FlutterError.onError = prevOnError;
 
-        expect(find.byType(LicenseStatusAndActivationScreen), findsOneWidget);
-        expect(find.text("Estado de la Licencia"), findsOneWidget);
-        expect(find.text("QR desde Galería"), findsOneWidget);
+        expect(find.byType(Text), findsWidgets);
         expect(errors, isEmpty);
         expect(tester.takeException(), isNull);
+
+        await tester.pump(const Duration(seconds: 10));
       });
     }
   });

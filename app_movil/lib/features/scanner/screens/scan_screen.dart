@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import 'dart:async';
+import 'dart:math' as math;
 
 // Providers
 import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
@@ -356,32 +357,45 @@ class _ScanScreenState extends State<ScanScreen>
         foregroundColor: isDark ? Colors.white : Colors.black87,
         centerTitle: true,
       ),
-      body: Center(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeOutCubic,
-          builder: (context, value, child) {
-            return Opacity(
-              opacity: value,
-              child: Transform.translate(
-                offset: Offset(0, 30 * (1 - value)),
-                child: child,
-              ),
-            );
-          },
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            child: _hasError
-                ? _buildErrorPanel(isDark, mainColor)
-                : _buildMainPanel(
-                    isQuotation,
-                    isDark,
-                    mainColor,
-                    mainIcon,
-                    subtitle,
-                    isGuest,
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: math.max(MediaQuery.viewPaddingOf(context).bottom, 16) + 16,
+          ),
+          child: Center(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, 30 * (1 - value)),
+                    child: child,
                   ),
+                );
+              },
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                child: _hasError
+                    ? _buildErrorPanel(isDark, mainColor)
+                    : _buildMainPanel(
+                        isQuotation,
+                        isDark,
+                        mainColor,
+                        mainIcon,
+                        subtitle,
+                        isGuest,
+                      ),
+              ),
+            ),
           ),
         ),
       ),
@@ -506,7 +520,7 @@ class _ScanScreenState extends State<ScanScreen>
       key: const ValueKey("main_panel"),
       children: [
         Container(
-          padding: const EdgeInsets.all(40),
+          padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             color: isDark
                 ? mainColor.withValues(alpha: 0.15)
@@ -516,45 +530,46 @@ class _ScanScreenState extends State<ScanScreen>
               if (!isDark)
                 BoxShadow(
                   color: mainColor.withValues(alpha: 0.1),
-                  blurRadius: 25,
-                  spreadRadius: 5,
+                  blurRadius: 20,
+                  spreadRadius: 3,
                 ),
             ],
           ),
           child: Icon(
             mainIcon,
-            size: 90,
+            size: 60,
             color: isDark ? mainColor.withValues(alpha: 0.9) : mainColor,
           ),
         ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 24),
 
         Text(
           isQuotation ? "Digitaliza tu Lista" : "Procesa tu Compra",
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 28,
+            fontSize: 26,
             fontWeight: FontWeight.w900,
             color: isDark ? Colors.white : Colors.black87,
             letterSpacing: -0.5,
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
           child: Text(
             subtitle,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: isDark ? Colors.grey[400] : Colors.grey[600],
-              fontSize: 15,
-              height: 1.45,
+              fontSize: 14,
+              height: 1.4,
             ),
           ),
         ),
 
-        // 🏷️ Chips informativos de escenarios multi-rubro soportados (Fase 1)
+        // 🏷️ Chips informativos de escenarios multi-rubro soportados (sin emojis crudos)
         if (isQuotation)
           Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 8, left: 16, right: 16),
+            padding: const EdgeInsets.only(top: 4, bottom: 8),
             child: Wrap(
               alignment: WrapAlignment.center,
               spacing: 8,
@@ -562,19 +577,19 @@ class _ScanScreenState extends State<ScanScreen>
               children: [
                 _buildScenarioPill(
                   icon: Icons.shopping_bag_outlined,
-                  label: "🛒 Compras / Pedido",
+                  label: "Compras / Pedido",
                   color: Colors.blue,
                   isDark: isDark,
                 ),
                 _buildScenarioPill(
                   icon: Icons.storefront_rounded,
-                  label: "📦 Mayorista / Negocio",
+                  label: "Mayorista / Negocio",
                   color: Colors.teal,
                   isDark: isDark,
                 ),
                 _buildScenarioPill(
                   icon: Icons.school_outlined,
-                  label: "🎓 Lista Escolar",
+                  label: "Lista Escolar",
                   color: Colors.orange,
                   isDark: isDark,
                 ),
@@ -584,8 +599,8 @@ class _ScanScreenState extends State<ScanScreen>
 
         if (isGuest)
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
-            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: Colors.orange.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
@@ -600,7 +615,7 @@ class _ScanScreenState extends State<ScanScreen>
                     "Estás en Modo Exploración. Explora la interfaz visual, pero para procesar imágenes necesitas registrar tu negocio.",
                     style: TextStyle(
                       color: isDark ? Colors.orange[200] : Colors.orange[900],
-                      fontSize: 13,
+                      fontSize: 12.5,
                     ),
                   ),
                 ),
@@ -608,27 +623,34 @@ class _ScanScreenState extends State<ScanScreen>
             ),
           ),
 
-        const SizedBox(height: 30),
+        const SizedBox(height: 24),
 
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _bigButton(
-              icon: Icons.camera_alt_rounded,
-              label: "Cámara",
-              color: mainColor,
-              isDark: isDark,
-              onTap: () => _pickImage(ImageSource.camera),
-            ),
-            const SizedBox(width: 25),
-            _bigButton(
-              icon: Icons.photo_library_rounded,
-              label: "Galería",
-              color: Colors.orange,
-              isDark: isDark,
-              onTap: () => _pickImage(ImageSource.gallery),
-            ),
-          ],
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: _bigButton(
+                  icon: Icons.camera_alt_rounded,
+                  label: "Cámara",
+                  color: mainColor,
+                  isDark: isDark,
+                  onTap: () => _pickImage(ImageSource.camera),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _bigButton(
+                  icon: Icons.photo_library_rounded,
+                  label: "Galería",
+                  color: Colors.orange,
+                  isDark: isDark,
+                  onTap: () => _pickImage(ImageSource.gallery),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -645,15 +667,14 @@ class _ScanScreenState extends State<ScanScreen>
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         splashColor: color.withValues(alpha: 0.2),
         highlightColor: color.withValues(alpha: 0.1),
         child: Container(
-          width: 150,
-          height: 150,
+          height: 135,
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF23232F) : Colors.white,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(
               color: isDark
                   ? color.withValues(alpha: 0.3)
@@ -674,16 +695,16 @@ class _ScanScreenState extends State<ScanScreen>
             children: [
               Icon(
                 icon,
-                size: 50,
+                size: 44,
                 color: isDark ? color.withValues(alpha: 0.9) : color,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Text(
                 label,
                 style: TextStyle(
                   color: isDark ? color.withValues(alpha: 0.9) : color,
                   fontWeight: FontWeight.bold,
-                  fontSize: 18,
+                  fontSize: 16.5,
                 ),
               ),
             ],
@@ -714,12 +735,15 @@ class _ScanScreenState extends State<ScanScreen>
         children: [
           Icon(icon, size: 15, color: isDark ? color.shade300 : color.shade700),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: isDark ? color.shade200 : color.shade900,
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isDark ? color.shade200 : color.shade900,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

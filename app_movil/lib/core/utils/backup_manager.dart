@@ -369,6 +369,23 @@ class BackupManager {
            await BackupPathMigrator.migrateAllImagePaths();
         }
 
+        // 🛡️ INMUNIZACIÓN POST-RESTAURACIÓN (Plan Maestro 12 - Fase 1):
+        // Sellar inmediatamente la versión de ejecución en licencia_app al build actual del APK
+        // para que restaurar un backup local (.mlbg) o de Google Drive JAMÁS dispare el modal "¡Actualización Exitosa!"
+        try {
+          final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='licencia_app'");
+          if (tables.isNotEmpty) {
+            await db.execute('''
+              UPDATE licencia_app 
+              SET last_executed_app_version = ?
+              WHERE id = 1
+            ''', [OwnerLegalIdentity.currentAppVersionWithBuild]);
+            AppLogger.info('BackupManager.restoreBackup', 'Versión ejecutada sellada a ${OwnerLegalIdentity.currentAppVersionWithBuild} post-restauración.');
+          }
+        } catch (e) {
+          AppLogger.warning('BackupManager.restoreBackup', 'No se pudo sellar versión en licencia_app: $e');
+        }
+
         // 🛡️ REGLA ANTI-CLONACIÓN INTELIGENTE (Fase 2 - Sección 2.4)
         final currentFingerprint = await DeviceFingerprint.generate();
         final bool isSameDevice = backupDeviceFingerprint.isEmpty || backupDeviceFingerprint == currentFingerprint;

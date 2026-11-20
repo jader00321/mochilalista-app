@@ -248,6 +248,9 @@ abstract class IGoogleDriveBackupService {
   /// Cierra la sesión activa en Google Drive
   Future<void> signOut();
 
+  /// Limpia completamente la sesión local y desconecta silenciosamente la cuenta de Google
+  Future<void> clearSession();
+
   /// Retorna el usuario actualmente conectado (o null)
   Future<GoogleDriveUser?> getCurrentUser();
 

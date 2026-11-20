@@ -39,6 +39,7 @@ void main() {
   });
 
   setUp(() async {
+    StartupFlowCoordinator.resetSessionStateForTesting();
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     DeviceFingerprint.setMockFingerprint(mockDeviceId);

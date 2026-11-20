@@ -4,8 +4,8 @@ class OwnerLegalIdentity {
   // Identidad oficial del Titular y Autor
   static const String authorFullName = "Julio Angello Vasquez Navarro";
   static const String appCommercialName = "MochilaLista";
-  static const String currentAppVersion = "9.32.0";
-  static const String currentAppVersionWithBuild = "9.32.0+76";
+  static const String currentAppVersion = "9.33.0";
+  static const String currentAppVersionWithBuild = "9.33.0+77";
   static const String legalJurisdiction = "Lima, República del Perú";
   static const String legalFrameworkNotice =
       "Protegido por el D.L. 822 (Ley de Derecho de Autor) e INDECOPI";

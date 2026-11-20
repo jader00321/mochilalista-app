@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/providers/backup_provider.dart';
@@ -579,27 +580,36 @@ class BackupScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            children: [
-              // =======================================================
-              // BLOQUE A: COPIA DE SEGURIDAD EN LA NUBE (GOOGLE DRIVE)
-              // =======================================================
-              _buildSectionHeader(
-                icon: Icons.cloud_done_rounded,
-                title: "Copia de Seguridad en la Nube",
-                subtitle: "Base de datos completa: todos tus perfiles y negocios con cifrado AES-256-GCM en Google Drive.",
-                color: Colors.blue,
-                isDark: isDark,
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: Stack(
+          children: [
+            ListView(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 10,
+                bottom: math.max(MediaQuery.viewPaddingOf(context).bottom, 16.0) + 16.0,
               ),
-              const SizedBox(height: 14),
-              GoogleDriveBackupSheet(
-                backupService: driveBackupService,
-                isDark: isDark,
-              ),
-              const SizedBox(height: 36),
+              children: [
+                // =======================================================
+                // BLOQUE A: COPIA DE SEGURIDAD EN LA NUBE (GOOGLE DRIVE)
+                // =======================================================
+                _buildSectionHeader(
+                  icon: Icons.cloud_done_rounded,
+                  title: "Copia de Seguridad en la Nube",
+                  subtitle: "Base de datos completa: todos tus perfiles y negocios con cifrado AES-256-GCM en Google Drive.",
+                  color: Colors.blue,
+                  isDark: isDark,
+                ),
+                const SizedBox(height: 14),
+                GoogleDriveBackupSheet(
+                  backupService: driveBackupService,
+                  isDark: isDark,
+                  showHeader: false,
+                ),
+                const SizedBox(height: 36),
 
               // =======================================================
               // BLOQUE B: COPIA LOCAL EN EL TELÉFONO (.MLBG / .MLB)
@@ -843,8 +853,9 @@ class BackupScreen extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _ActionButton extends StatelessWidget {

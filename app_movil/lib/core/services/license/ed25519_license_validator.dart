@@ -80,7 +80,7 @@ class Ed25519LicenseValidator {
 
     // 1. Prioridad 1: Búsqueda explícita con prefijo oficial ML9-
     final explicitPattern = RegExp(
-      r'ML9-([A-Za-z0-9_\-+=]+\.[A-Za-z0-9_\-+=]{40,120})',
+      r'ML9-([A-Za-z0-9_\-+=]{10,}\.[A-Za-z0-9_\-+=]{20,})',
       caseSensitive: false,
     );
     final explicitMatch = explicitPattern.firstMatch(rawInput);
@@ -89,18 +89,34 @@ class Ed25519LicenseValidator {
     }
 
     // 2. Prioridad 2: Búsqueda del cuerpo criptográfico (Payload.Firma Ed25519 con base64/base64url y padding)
-    final bodyPattern = RegExp(r'([A-Za-z0-9_\-+=]{10,}\.[A-Za-z0-9_\-+=]{40,120})');
+    final bodyPattern = RegExp(
+      r'([A-Za-z0-9_\-+=]{10,}\.[A-Za-z0-9_\-+=]{20,})',
+    );
     final bodyMatch = bodyPattern.firstMatch(rawInput);
     if (bodyMatch != null) {
       return bodyMatch.group(1)!;
     }
 
-    // 3. Fallback tradicional de sanitización de texto
-    String clean = rawInput.trim().replaceAll(RegExp(r'\s+'), '');
-    if (clean.toUpperCase().startsWith('ML9-')) {
-      clean = clean.substring(4);
+    // Sin fallback permisivo: si no contiene estructura criptográfica válida, retorna vacío.
+    return '';
+  }
+
+  /// Extrae el token de activación exclusivo para el detector de portapapeles.
+  /// Exige explícitamente el prefijo 'ML9-' seguido de la estructura 'Payload.Firma'
+  /// para evitar falsos positivos con reportes de Google Drive, hashes SHA, Hardware IDs, etc.
+  /// Retorna `ML9-payload.firma` canónico si coincide, o '' si no coincide.
+  static String extractClipboardLicenseToken(String rawText) {
+    if (rawText.trim().isEmpty) return '';
+
+    final clipboardPattern = RegExp(
+      r'ML9-([A-Za-z0-9_\-+=]{10,}\.[A-Za-z0-9_\-+=]{20,})',
+      caseSensitive: false,
+    );
+    final match = clipboardPattern.firstMatch(rawText);
+    if (match != null) {
+      return 'ML9-${match.group(1)!}';
     }
-    return clean;
+    return '';
   }
 
   /// Limpia y normaliza el código ingresado delegando al extractor inteligente

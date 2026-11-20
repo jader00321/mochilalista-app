@@ -75,8 +75,8 @@ void main() {
     );
   }
 
-  group('Pilar 4.1: Bottom Sheet Editable al Pulsar Pedir', () {
-    testWidgets('Tocar Pedir abre Bottom Sheet editable con resumen, TextField, Copiar y Restablecer', (tester) async {
+  group('Pilar 3: Bottom Sheet Profesional OrderPlanBottomSheet', () {
+    testWidgets('Tocar Pedir abre Bottom Sheet editable en 3 zonas con resumen, TextField, Copiar y Restablecer', (tester) async {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -107,7 +107,7 @@ void main() {
       );
       expect(pedirTrimestralFinder, findsWidgets);
 
-      // Localizar el chip Pedir
+      // Localizar los botones Pedir
       final pedirButtons = find.widgetWithText(InkWell, "Pedir");
       expect(pedirButtons, findsWidgets);
 
@@ -115,7 +115,7 @@ void main() {
       await tester.tap(pedirButtons.at(1));
       await tester.pumpAndSettle();
 
-      // 1. Debe abrirse el Bottom Sheet interactivo
+      // 1. Debe abrirse el Bottom Sheet interactivo en 3 zonas
       expect(find.text("Solicitar Trimestral"), findsOneWidget);
       expect(find.text("S/ 90.00"), findsWidgets);
       expect(find.text("+180 IA"), findsWidgets);
@@ -156,8 +156,8 @@ void main() {
       expect(uri.path, equals('/51922836879'));
       expect(uri.queryParameters['text'], equals(customUserMsg));
 
-      // 6. Probar botón "Restablecer Texto"
-      final resetMsgBtn = find.widgetWithText(OutlinedButton, "Restablecer Texto");
+      // 6. Probar botón "Restablecer"
+      final resetMsgBtn = find.widgetWithText(OutlinedButton, "Restablecer");
       expect(resetMsgBtn, findsOneWidget);
       await tester.tap(resetMsgBtn);
       await tester.pumpAndSettle();
@@ -171,6 +171,141 @@ void main() {
       expect(find.text("Solicitar Trimestral"), findsNothing);
 
       // Limpiar timers pendientes de CustomSnackBar
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('Protección Real sobre Barra de Navegación Android: Enviar por WhatsApp queda sobre la barra con 0px Overflow', (tester) async {
+      const double screenHeight = 800.0;
+      const double screenWidth = 360.0;
+      tester.view.physicalSize = const Size(screenWidth, screenHeight);
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.padding = const FakeViewPadding(bottom: 48.0);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+        tester.view.resetPadding();
+      });
+
+      final provider = LicenseProvider();
+      await tester.runAsync(() async {
+        await provider.checkLicense();
+      });
+
+      await tester.pumpWidget(buildTestableWidget(
+        const LicenseStatusAndActivationScreen(),
+        provider: provider,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text("Planes Comerciales Oficiales"),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      final pedirButtons = find.widgetWithText(InkWell, "Pedir");
+      await tester.tap(pedirButtons.first);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+
+      final whatsAppBtn = find.widgetWithText(ElevatedButton, "Enviar por WhatsApp");
+      expect(whatsAppBtn, findsOneWidget);
+
+      final btnRect = tester.getRect(whatsAppBtn);
+      expect(btnRect.bottom, lessThanOrEqualTo(screenHeight - 48.0),
+          reason: "El botón de WhatsApp no debe quedar cubierto por la barra de 48dp de Android");
+
+      await tester.tap(find.byTooltip("Cerrar"));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('Interacción completa de chips de 1 toque (toggle sin duplicados), reset y micro-botón de Hardware ID', (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final provider = LicenseProvider();
+      await tester.runAsync(() async {
+        await provider.checkLicense();
+      });
+
+      await tester.pumpWidget(buildTestableWidget(
+        const LicenseStatusAndActivationScreen(),
+        provider: provider,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text("Planes Comerciales Oficiales"),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      final pedirButtons = find.widgetWithText(InkWell, "Pedir");
+      await tester.tap(pedirButtons.first);
+      await tester.pumpAndSettle();
+
+      // 1. Probar micro-botón de copiado de Hardware ID
+      final copyIdBtn = find.widgetWithText(InkWell, "Copiar ID");
+      expect(copyIdBtn, findsOneWidget);
+      await tester.tap(copyIdBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(clipboardContent, equals(mockDeviceId), reason: "El micro-botón debe copiar exactamente el Hardware ID");
+
+      // 2. Probar Chip 1: "Ya realicé el Yape/Plin"
+      final chipYape = find.text("Ya realicé el Yape/Plin");
+      expect(chipYape, findsOneWidget);
+      await tester.tap(chipYape);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining("Pago realizado vía Yape/Plin. Adjunto comprobante."), findsOneWidget);
+
+      // 3. Probar Chip 2: "Solicito cuenta BCP/BBVA"
+      final chipBank = find.text("Solicito cuenta BCP/BBVA");
+      expect(chipBank, findsOneWidget);
+      await tester.tap(chipBank);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining("Solicito números de cuenta para transferencia bancaria."), findsOneWidget);
+
+      // 4. Probar Chip 3: "Requiero Factura Comercial"
+      final chipInvoice = find.text("Requiero Factura Comercial");
+      expect(chipInvoice, findsOneWidget);
+      await tester.tap(chipInvoice);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining("Solicito emisión de Factura con RUC."), findsOneWidget);
+
+      // 5. Destocar Chip 1 (Toggle OFF)
+      await tester.tap(chipYape);
+      await tester.pumpAndSettle();
+      expect(find.textContaining("Pago realizado vía Yape/Plin. Adjunto comprobante."), findsNothing);
+      expect(find.textContaining("Solicito números de cuenta para transferencia bancaria."), findsOneWidget);
+      expect(find.textContaining("Solicito emisión de Factura con RUC."), findsOneWidget);
+
+      // 6. Restablecer desmarca todos los chips y devuelve texto original
+      final resetBtn = find.widgetWithText(OutlinedButton, "Restablecer");
+      expect(resetBtn, findsOneWidget);
+      await tester.tap(resetBtn);
+      await tester.pumpAndSettle();
+
+      final defaultExpectedMsg = OwnerLegalIdentity.buildPlanOrderMessage(
+        planName: "Mensual",
+        price: "S/ 35.00",
+        hardwareId: mockDeviceId,
+      );
+      expect(find.text(defaultExpectedMsg), findsOneWidget);
+      expect(find.textContaining("Pago realizado vía Yape/Plin"), findsNothing);
+      expect(find.textContaining("Solicito números de cuenta"), findsNothing);
+      expect(find.textContaining("Solicito emisión de Factura"), findsNothing);
+
+      await tester.tap(find.byTooltip("Cerrar"));
+      await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 4));
     });
   });
@@ -221,7 +356,6 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // Scroll para asegurar que el catálogo esté cargado
       await tester.scrollUntilVisible(
         find.text("Planes Comerciales Oficiales"),
         200,

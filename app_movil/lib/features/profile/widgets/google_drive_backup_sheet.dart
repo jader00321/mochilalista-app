@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -15,11 +16,13 @@ import 'package:app_movil/core/widgets/custom_snackbar.dart';
 class GoogleDriveBackupSheet extends StatefulWidget {
   final IGoogleDriveBackupService? backupService;
   final bool isDark;
+  final bool showHeader;
 
   const GoogleDriveBackupSheet({
     super.key,
     this.backupService,
     this.isDark = false,
+    this.showHeader = true,
   });
 
   /// Abre la hoja modal de respaldo en Google Drive
@@ -195,6 +198,11 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
           if (licenseHardwareId != null && licenseHardwareId.isNotEmpty) {
             unawaited(_service.registerTrialMarker(licenseHardwareId));
           }
+
+          // Si se encontraron copias previas en la nube, desplegar modal guiado estilo WhatsApp
+          if (backups.isNotEmpty) {
+            await _showGuidedWhatsAppRestoreModal(backups, user.email);
+          }
         }
       } else {
         if (mounted) setState(() => _isLoading = false);
@@ -207,6 +215,350 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
     }
   }
 
+  Future<void> _showGuidedWhatsAppRestoreModal(
+    List<GoogleDriveBackupMetadata> allBackups,
+    String userEmail,
+  ) async {
+    final isDark = widget.isDark;
+    final recentBackups = allBackups.take(5).toList();
+    if (recentBackups.isEmpty) return;
+
+    int selectedIndex = 0;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) {
+            final bottomSafety = math.max(
+              MediaQuery.viewInsetsOf(modalCtx).bottom,
+              math.max(
+                MediaQuery.viewPaddingOf(modalCtx).bottom,
+                MediaQuery.paddingOf(modalCtx).bottom,
+              ),
+            ) + 12.0;
+
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(modalCtx).size.height * 0.85,
+              ),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 10, bottom: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.black12,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.cloud_download_rounded,
+                            color: Color(0xFF25D366),
+                            size: 26,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Copias de seguridad encontradas",
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Cuenta: $userEmail",
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[700],
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "Se encontraron respaldos de tu negocio en Google Drive. Selecciona la copia que deseas recuperar en este dispositivo.",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  height: 1.35,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 16),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      itemCount: recentBackups.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (ctx, index) {
+                        final backup = recentBackups[index];
+                        final isSelected = (index == selectedIndex);
+                        final isNewest = (index == 0);
+
+                        return InkWell(
+                          onTap: () {
+                            setModalState(() {
+                              selectedIndex = index;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(14),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? (isDark ? const Color(0xFF232E27) : const Color(0xFFE8F8EE))
+                                  : (isDark ? const Color(0xFF14141C) : const Color(0xFFF8FAFC)),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF25D366)
+                                    : (isDark ? Colors.white12 : Colors.black12),
+                                width: isSelected ? 1.8 : 1.0,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isSelected
+                                      ? Icons.radio_button_checked_rounded
+                                      : Icons.radio_button_off_rounded,
+                                  color: isSelected
+                                      ? const Color(0xFF25D366)
+                                      : (isDark ? Colors.grey[500] : Colors.grey[400]),
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              backup.formattedDate,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13.5,
+                                                color: isDark ? Colors.white : Colors.black87,
+                                              ),
+                                            ),
+                                          ),
+                                          if (isNewest)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 7,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: const Color(0xFF25D366).withValues(alpha: 0.5),
+                                                ),
+                                              ),
+                                              child: const Text(
+                                                "Más reciente",
+                                                style: TextStyle(
+                                                  color: Color(0xFF25D366),
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.verified_user_rounded,
+                                            size: 13,
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              "Respaldo integral multi-perfil",
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 11.5,
+                                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            backup.formattedSize,
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w600,
+                                              fontFamily: 'monospace',
+                                              color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.fromLTRB(16, 12, 16, bottomSafety),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+                      border: Border(
+                        top: BorderSide(
+                          color: isDark ? Colors.white12 : Colors.black12,
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.restore_rounded, size: 20),
+                            label: const Text(
+                              "Restaurar copia seleccionada",
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF25D366),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 2,
+                            ),
+                            onPressed: () {
+                              final chosen = recentBackups[selectedIndex];
+                              Navigator.pop(sheetCtx);
+                              _executeDirectRestore(chosen);
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () => Navigator.pop(sheetCtx),
+                          child: Text(
+                            "Ahora no",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _executeDirectRestore(GoogleDriveBackupMetadata backup) async {
+    setState(() => _isRestoring = true);
+    try {
+      final res = await _service.downloadAndRestoreBackup(backup.fileId);
+      if (!mounted) return;
+      setState(() => _isRestoring = false);
+
+      if (res.isSuccess) {
+        if (!mounted) return;
+        try {
+          final authProv = Provider.of<AuthProvider?>(context, listen: false);
+          await authProv?.checkInitialState();
+        } catch (_) {}
+        if (!mounted) return;
+        try {
+          final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
+          await licenseProv?.checkLicense();
+        } catch (_) {}
+        if (!mounted) return;
+        CustomSnackBar.show(
+          context,
+          message: "¡Copia de seguridad restaurada con éxito! Todos tus perfiles y negocios están listos.",
+          isError: false,
+        );
+      } else {
+        if (mounted) {
+          CustomSnackBar.show(
+            context,
+            message: res.message,
+            isError: true,
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isRestoring = false);
+        CustomSnackBar.show(
+          context,
+          message: "Error restaurando copia: $e",
+          isError: true,
+        );
+      }
+    }
+  }
+
   Future<void> _showOAuthErrorDialog(dynamic error, {String? passedHardwareId}) async {
     final isDark = widget.isDark;
     final hardwareId = passedHardwareId ?? await DeviceFingerprint.generate();
@@ -214,16 +566,6 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
     final appVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
     const packageName = 'com.mochilalista.app';
     final errorStr = error.toString().replaceFirst('Exception: ', '');
-
-    final isOAuthOrDevError = errorStr.contains('10') ||
-        errorStr.toLowerCase().contains('developer_error') ||
-        errorStr.toLowerCase().contains('oauth') ||
-        errorStr.toLowerCase().contains('sha-1') ||
-        errorStr.toLowerCase().contains('huella');
-
-    final String userExplanation = isOAuthOrDevError
-        ? "Google requiere que la huella digital (SHA-1) de esta compilación del APK esté registrada en Google Cloud Console para autorizar el acceso seguro a Google Drive."
-        : "No fue posible conectar con tu cuenta de Google Drive en este momento. Revisa tu conexión a internet o intenta nuevamente.";
 
     final technicalReport = """
 === REPORTE TÉCNICO GOOGLE DRIVE / OAUTH ===
@@ -239,110 +581,156 @@ Fecha: ${DateTime.now().toIso8601String()}
 
     if (!mounted) return;
 
+    bool isTechnicalExpanded = false;
+
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E28) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.amber.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.cloud_off_rounded, color: Colors.amber, size: 24),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                "Configuración de Acceso a Google Drive",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E28) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
             children: [
-              Text(
-                userExplanation,
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.4,
-                  color: isDark ? Colors.grey[300] : Colors.grey[800],
-                ),
-              ),
-              const SizedBox(height: 14),
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF12121A) : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? Colors.white12 : Colors.black12,
-                  ),
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Datos Técnicos para Soporte:",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Colors.blue),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      "• Paquete: $packageName\n"
-                      "• Versión: $appVersion\n"
-                      "• Hardware ID: $hardwareId\n"
-                      "• Huella SHA-1: ${sha1 ?? 'No disponible'}\n"
-                      "• Error: $errorStr",
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.35,
-                        fontFamily: 'monospace',
-                        color: isDark ? Colors.grey[400] : Colors.grey[700],
-                      ),
-                    ),
-                  ],
+                child: const Icon(Icons.cloud_off_rounded, color: Colors.amber, size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  "No se pudo conectar con Google Drive",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
             ],
           ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "En este momento no fue posible vincular tu cuenta de Google. Verifica que tengas conexión a internet estable e intenta nuevamente.\n\nMientras tanto, puedes seguir respaldando tu información de forma segura usando la Copia Local en la memoria de tu teléfono.",
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: isDark ? Colors.grey[300] : Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                InkWell(
+                  onTap: () {
+                    setDialogState(() {
+                      isTechnicalExpanded = !isTechnicalExpanded;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: 16,
+                          color: isDark ? Colors.blue[300] : Colors.blue[700],
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Ver información técnica para soporte",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.blue[300] : Colors.blue[700],
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          isTechnicalExpanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          size: 20,
+                          color: isDark ? Colors.blue[300] : Colors.blue[700],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (isTechnicalExpanded) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF12121A) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark ? Colors.white12 : Colors.black12,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Datos Técnicos para Soporte:",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: Colors.blue),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "• Paquete: $packageName\n"
+                          "• Versión: $appVersion\n"
+                          "• Hardware ID: $hardwareId\n"
+                          "• Huella SHA-1: ${sha1 ?? 'No disponible'}\n"
+                          "• Error: $errorStr",
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.35,
+                            fontFamily: 'monospace',
+                            color: isDark ? Colors.grey[400] : Colors.grey[700],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.copy_rounded, size: 16),
+                          label: const Text("Copiar Datos de Soporte", style: TextStyle(fontSize: 11.5)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: technicalReport));
+                            Navigator.pop(ctx);
+                            CustomSnackBar.show(
+                              context,
+                              message: "Datos técnicos copiados al portapapeles para soporte.",
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.check_rounded, size: 16),
+              label: const Text("Entendido", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
         ),
-        actions: [
-          OutlinedButton.icon(
-            icon: const Icon(Icons.copy_rounded, size: 16),
-            label: const Text("Copiar Datos de Soporte", style: TextStyle(fontSize: 12)),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: technicalReport));
-              Navigator.pop(ctx);
-              CustomSnackBar.show(
-                context,
-                message: "Datos técnicos copiados al portapapeles para soporte.",
-              );
-            },
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.check_rounded, size: 16),
-            label: const Text("Entendido", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () => Navigator.pop(ctx),
-          ),
-        ],
       ),
     );
   }
@@ -559,64 +947,66 @@ Fecha: ${DateTime.now().toIso8601String()}
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Encabezado de la Sección
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
+          // Encabezado de la Sección (Opcional si se incrusta en pantalla con su propia cabecera)
+          if (widget.showHeader) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.cloud_queue_rounded, color: Colors.blue, size: 26),
                 ),
-                child: const Icon(Icons.cloud_queue_rounded, color: Colors.blue, size: 26),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        Text(
-                          "Copia de Seguridad en Google Drive",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: isDark ? Colors.white : Colors.black87,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          Text(
+                            "Copia de Seguridad en Google Drive",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              "Nube",
+                              style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold),
+                            ),
                           ),
-                          child: const Text(
-                            "Nube",
-                            style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Respaldo automático con cifrado AES-256-GCM atado a tu cuenta de Google.",
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.35,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        "Respaldo automático con cifrado AES-256-GCM atado a tu cuenta de Google.",
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
+              ],
+            ),
+            const SizedBox(height: 18),
+          ],
 
           // Estado: No Vinculado
           if (_user == null) ...[

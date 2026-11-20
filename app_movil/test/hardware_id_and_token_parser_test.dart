@@ -190,6 +190,56 @@ Estimado cliente, active con: eyJkIjoiTUwtQUJDMSIsInAiOiJNRU5TVUFMIiwidyI6MzAsIm
       expect(extracted, startsWith('eyJkIjoiTUwtQUJDMSIsInAiOiJNRU5TVUFMIiwidyI6MzAsIm4iOjJ9.'));
     });
 
+    test('extractClipboardLicenseToken exige prefijo ML9- y estructura Payload.Firma', () {
+      const validMsg = '''
+Su código de activación es:
+ML9-eyJkIjoiTUwtQUJDMSIsInAiOiJNRU5TVUFMIiwidyI6MzAsIm4iOjF9.uV9xQwertYuiopAsdfghjklZxcvbnm1234567890QWERTYUIOPASDFGHJKLZXCVBNM==
+''';
+      final extracted = Ed25519LicenseValidator.extractClipboardLicenseToken(validMsg);
+      expect(extracted, startsWith('ML9-eyJkIjoiTUwtQUJDMSIsInAiOiJNRU5TVUFMIiwidyI6MzAsIm4iOjF9.'));
+    });
+
+    test('extractClipboardLicenseToken y extractLicenseToken descartan estrictamente textos no criptográficos', () {
+      const driveReport = '''
+=== REPORTE TÉCNICO DE COPIA EN GOOGLE DRIVE ===
+Fecha / Hora: 2026-11-20 02:45:00
+Código de Error / Mensaje: ApiException: 10
+Detalles Técnicos: DEVELOPER_ERROR OAuth 2.0 configuration mismatch
+''';
+
+      // 1. Reporte técnico de Google Drive
+      expect(Ed25519LicenseValidator.extractClipboardLicenseToken(driveReport), isEmpty);
+      expect(Ed25519LicenseValidator.extractLicenseToken(driveReport), isEmpty);
+
+      // 2. Hardware ID
+      expect(Ed25519LicenseValidator.extractClipboardLicenseToken('ML-B0F8'), isEmpty);
+      expect(Ed25519LicenseValidator.extractClipboardLicenseToken('Hardware ID: ML-270D'), isEmpty);
+      expect(Ed25519LicenseValidator.extractLicenseToken('ML-B0F8'), isEmpty);
+
+      // 3. Hashes SHA-1 y SHA-256
+      const sha1 = '48:E0:D4:57:4E:91:DE:3B:58:62:38:64:18:78:E2:EE:FB:F6:4F:A1';
+      const sha256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+      expect(Ed25519LicenseValidator.extractClipboardLicenseToken(sha1), isEmpty);
+      expect(Ed25519LicenseValidator.extractClipboardLicenseToken(sha256), isEmpty);
+      expect(Ed25519LicenseValidator.extractLicenseToken(sha1), isEmpty);
+      expect(Ed25519LicenseValidator.extractLicenseToken(sha256), isEmpty);
+
+      // 4. URL de AI Studio
+      const aiStudioUrl = 'https://aistudio.google.com/apikey';
+      expect(Ed25519LicenseValidator.extractClipboardLicenseToken(aiStudioUrl), isEmpty);
+      expect(Ed25519LicenseValidator.extractLicenseToken(aiStudioUrl), isEmpty);
+
+      // 5. Cuentas bancarias o teléfonos
+      expect(Ed25519LicenseValidator.extractClipboardLicenseToken('191-12345678-0-12'), isEmpty);
+      expect(Ed25519LicenseValidator.extractClipboardLicenseToken('51922836879'), isEmpty);
+      expect(Ed25519LicenseValidator.extractLicenseToken('191-12345678-0-12'), isEmpty);
+
+      // 6. Códigos sin punto o incompletos
+      expect(Ed25519LicenseValidator.extractClipboardLicenseToken('ML9-INVALID'), isEmpty);
+      expect(Ed25519LicenseValidator.extractClipboardLicenseToken('ML9-12345'), isEmpty);
+      expect(Ed25519LicenseValidator.extractLicenseToken('ML9-INVALID'), isEmpty);
+    });
+
     test('Canje completo de licencia pegada desde mensaje de WhatsApp', () async {
       const testDeviceId = 'ML-TEST';
       DeviceFingerprint.setMockFingerprint(testDeviceId);

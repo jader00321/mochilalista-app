@@ -14,6 +14,7 @@ import 'package:app_movil/features/auth/screens/onboarding/onboarding_screen.dar
 import 'package:app_movil/core/screens/home_screen.dart';
 import 'package:app_movil/features/auth/screens/onboarding/lock_screen.dart';
 import 'package:app_movil/features/auth/widgets/eula_acceptance_modal.dart';
+import 'package:app_movil/core/services/startup_flow_coordinator.dart';
 import 'package:app_movil/core/utils/backup_manager.dart';
 import 'package:app_movil/features/profile/services/business_backup_service.dart';
 import 'package:app_movil/features/profile/widgets/delete_business_modal.dart';
@@ -75,10 +76,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
-      if (licenseProv?.license?.eulaAcceptedVersion == null) {
-        await EulaAcceptanceModal.show(context);
-      }
+      await StartupFlowCoordinator.coordinateStartup(context);
     });
   }
 

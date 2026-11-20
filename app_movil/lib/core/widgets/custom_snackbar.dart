@@ -27,8 +27,8 @@ class CustomSnackBar {
     final iconData = icon ?? (isError ? Icons.error_outline : Icons.check_circle_outline);
 
     // 2. Calculamos el tiempo dinámicamente según la longitud del mensaje
-    // Aprox. 60 milisegundos por letra, con un mínimo de 2 segundos y máximo de 5.
-    final int durationMs = (message.length * 60).clamp(2000, 5000);
+    // Aprox. 60 milisegundos por letra, con un mínimo de 2 segundos y máximo de 6.
+    final int durationMs = (message.length * 60).clamp(2000, 6000);
 
     // 3. Creamos la nueva entrada en la capa superior (Overlay)
     _overlayEntry = OverlayEntry(
@@ -154,7 +154,8 @@ class _ToastWidgetState extends State<_ToastWidget> with SingleTickerProviderSta
                       child: Text(
                         widget.message,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white, height: 1.3),
-                        maxLines: 3,
+                        maxLines: 4,
+                        softWrap: true,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),

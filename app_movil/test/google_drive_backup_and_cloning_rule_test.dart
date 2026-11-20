@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:app_movil/core/database/local_db.dart';
 
 import 'package:app_movil/core/database/database_connection_factory.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
@@ -59,6 +60,13 @@ class MockGoogleDriveBackupService implements IGoogleDriveBackupService {
 
   @override
   Future<void> signOut() async {
+    mockUser = null;
+    mockBackups.clear();
+    mockFiles.clear();
+  }
+
+  @override
+  Future<void> clearSession() async {
     mockUser = null;
     mockBackups.clear();
     mockFiles.clear();
@@ -217,22 +225,30 @@ Widget buildTestWidget(Widget child, {LicenseProvider? licenseProv, IGoogleDrive
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  late Database testDb;
+
   setUpAll(() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfiNoIsolate;
     DatabaseConnectionFactory.isTestMode = true;
   });
 
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     DeviceFingerprint.setMockFingerprint('ML-PHONE-ORIGIN-A1');
     BackupCryptoHelper.drivePbkdf2Iterations = 50; // Iteraciones rápidas para test
+
+    testDb = await databaseFactoryFfiNoIsolate.openDatabase(inMemoryDatabasePath);
+    await LocalDatabase.createDBForTesting(testDb);
+    LocalDatabase.setCustomDatabase(testDb);
   });
 
-  tearDown(() {
+  tearDown(() async {
     DeviceFingerprint.setMockFingerprint(null);
     BackupCryptoHelper.drivePbkdf2Iterations = 100000;
+    LocalDatabase.setCustomDatabase(null);
+    await testDb.close();
   });
 
   group('1. Cifrado Recuperable Cross-Device con googleUser.id (PBKDF2 + AES-256-GCM)', () {
@@ -545,6 +561,131 @@ void main() {
       expect(find.text("Copia de Seguridad en Google Drive"), findsOneWidget);
       expect(find.text("Nube"), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('Pilar 5: Restauración Guiada Estilo WhatsApp y Purga Limpia tras Desinstalación', () {
+    test('1. Purga en instalación limpia: SharedPreferences y SecureStorage eliminan rastros previos de Google Drive', () async {
+      const storage = FlutterSecureStorage();
+      await storage.write(key: 'mochilalista_drive_user_cache_v1', value: '{"id":"old_user"}');
+      await storage.write(key: 'mochilalista_drive_backup_config_v1', value: '{"isEnabled":true}');
+      await storage.write(key: 'ml_gdrive_user_cache', value: '{"id":"old_user"}');
+      await storage.write(key: 'ml_gdrive_config', value: '{"isEnabled":true}');
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('mochilalista_drive_user_cache_v1', 'cached_user');
+      await prefs.setString('ml_gdrive_user_cache', 'cached_user');
+
+      // Base de datos limpia (rows.isEmpty en licencia_app)
+      final repo = LicenseRepository(localDb: LocalDatabase.instance);
+      final lic = await repo.getOrCreateLicense();
+      expect(lic.tipoPlan, equals('TRIAL'));
+
+      // Verificar que los rastros residuales fueron purgados completamente
+      expect(await storage.read(key: 'mochilalista_drive_user_cache_v1'), isNull);
+      expect(await storage.read(key: 'mochilalista_drive_backup_config_v1'), isNull);
+      expect(await storage.read(key: 'ml_gdrive_user_cache'), isNull);
+      expect(await storage.read(key: 'ml_gdrive_config'), isNull);
+      expect(prefs.getString('mochilalista_drive_user_cache_v1'), isNull);
+      expect(prefs.getString('ml_gdrive_user_cache'), isNull);
+    });
+
+    testWidgets('2. Restauración guiada estilo WhatsApp al vincular cuenta: lista hasta 5 copias y restaura la seleccionada', (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final service = MockGoogleDriveBackupService();
+      // Simular que el usuario ya tiene 5 copias guardadas en Google Drive
+      service.mockUser = const GoogleDriveUser(
+        id: 'google_usr_998877',
+        email: 'negocio.mochilalista@gmail.com',
+        displayName: 'Julio Angello Vasquez',
+      );
+      for (int i = 0; i < 5; i++) {
+        await service.uploadEncryptedBackup();
+      }
+      expect(service.mockBackups.length, equals(5));
+
+      // Resetear mockUser a null para simular que la app arranca desvinculada
+      service.mockUser = null;
+
+      await tester.pumpWidget(buildTestWidget(
+        GoogleDriveBackupSheet(backupService: service),
+      ));
+      await tester.pumpAndSettle();
+
+      // Estado inicial: No vinculado
+      expect(find.text("Vincular Cuenta de Google"), findsOneWidget);
+
+      // Pulsar Vincular Cuenta de Google con ensureVisible para scroll
+      final vincularBtn = find.text("Vincular Cuenta de Google");
+      await tester.ensureVisible(vincularBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(vincularBtn);
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      // Debe desplegarse de inmediato el modal / Bottom Sheet estilo WhatsApp
+      expect(find.text("Copias de seguridad encontradas"), findsOneWidget);
+      expect(find.text("Cuenta: negocio.mochilalista@gmail.com"), findsOneWidget);
+      expect(find.text("Más reciente"), findsWidgets);
+      expect(find.text("Restaurar copia seleccionada"), findsOneWidget);
+      expect(find.text("Ahora no"), findsOneWidget);
+
+      // Verificar que se listan copias fechadas con badge multi-perfil
+      expect(find.text("Respaldo integral multi-perfil"), findsWidgets);
+
+      // Pulsar "Restaurar copia seleccionada" (1 toque)
+      await tester.tap(find.text("Restaurar copia seleccionada"));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      // El modal debe haberse cerrado y la cuenta queda vinculada
+      expect(find.text("Copias de seguridad encontradas"), findsNothing);
+      expect(find.text("Desvincular"), findsOneWidget);
+
+      // Limpiar temporizadores de SnackBar
+      await tester.pump(const Duration(seconds: 10));
+    });
+
+    testWidgets('3. Botón "Ahora no" en modal estilo WhatsApp cierra el asistente sin restaurar', (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final service = MockGoogleDriveBackupService();
+      service.mockUser = const GoogleDriveUser(
+        id: 'google_usr_998877',
+        email: 'negocio.mochilalista@gmail.com',
+        displayName: 'Julio Angello Vasquez',
+      );
+      await service.uploadEncryptedBackup();
+      service.mockUser = null;
+
+      await tester.pumpWidget(buildTestWidget(
+        GoogleDriveBackupSheet(backupService: service),
+      ));
+      await tester.pumpAndSettle();
+
+      final vincularBtn = find.text("Vincular Cuenta de Google");
+      await tester.ensureVisible(vincularBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(vincularBtn);
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.text("Copias de seguridad encontradas"), findsOneWidget);
+
+      // Pulsar "Ahora no"
+      await tester.tap(find.text("Ahora no"));
+      await tester.pumpAndSettle();
+
+      expect(find.text("Copias de seguridad encontradas"), findsNothing);
+      expect(find.text("Desvincular"), findsOneWidget);
+
+      // Limpiar temporizadores de SnackBar
+      await tester.pump(const Duration(seconds: 10));
     });
   });
 }

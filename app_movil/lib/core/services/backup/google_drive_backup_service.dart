@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
@@ -69,7 +70,12 @@ class GoogleDriveBackupService implements IGoogleDriveBackupService {
     if (_injectedDriveApi != null) return _injectedDriveApi;
 
     var account = _googleSignIn.currentUser;
-    account ??= await _googleSignIn.signInSilently();
+    if (account == null) {
+      final cached = await getCurrentUser();
+      if (cached != null) {
+        account = await _googleSignIn.signInSilently();
+      }
+    }
 
     if (account == null) {
       throw Exception("Usuario de Google no autenticado.");
@@ -133,6 +139,14 @@ class GoogleDriveBackupService implements IGoogleDriveBackupService {
 
   @override
   Future<GoogleDriveUser?> signInSilently() async {
+    // Si no existe usuario en la caché local (arranque en frío, instalación limpia o sesión cerrada),
+    // no se consulta a Google Play Services para garantizar que jamás se reconecte una cuenta vieja
+    // sin que el comerciante pulse explícitamente "Vincular Cuenta de Google".
+    final cached = await getCurrentUser();
+    if (cached == null) {
+      return null;
+    }
+
     try {
       final account = await _googleSignIn.signInSilently();
       if (account != null) {
@@ -150,10 +164,10 @@ class GoogleDriveBackupService implements IGoogleDriveBackupService {
       }
 
       // Fallback a caché local si la sesión silenciosa no respondió
-      return await getCurrentUser();
+      return cached;
     } catch (e) {
       debugPrint('ℹ️ [GoogleDriveBackupService] signInSilently falló o no disponible: $e');
-      return await getCurrentUser();
+      return cached;
     }
   }
 
@@ -166,6 +180,32 @@ class GoogleDriveBackupService implements IGoogleDriveBackupService {
       AppLogger.info('GoogleDriveBackupService', 'Sesión de Google Drive desvinculada.');
     } catch (e, stack) {
       AppLogger.error('GoogleDriveBackupService.signOut', e, stack);
+    }
+  }
+
+  @override
+  Future<void> clearSession() async {
+    _currentUser = null;
+    try {
+      await _secureStorage.delete(key: userCacheStorageKey);
+      await _secureStorage.delete(key: configStorageKey);
+      await _secureStorage.delete(key: 'ml_gdrive_user_cache');
+      await _secureStorage.delete(key: 'ml_gdrive_config');
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(userCacheStorageKey);
+      await prefs.remove(configStorageKey);
+      await prefs.remove('ml_gdrive_user_cache');
+      await prefs.remove('ml_gdrive_config');
+    } catch (_) {}
+
+    try {
+      await _googleSignIn.signOut();
+      AppLogger.info('GoogleDriveBackupService', 'Sesión de Google Drive purgada completamente.');
+    } catch (e) {
+      AppLogger.w('GoogleDriveBackupService', 'signOut silencioso no bloqueante en clearSession: $e');
     }
   }
 

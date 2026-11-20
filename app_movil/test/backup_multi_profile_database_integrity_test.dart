@@ -53,6 +53,12 @@ class MockTestDriveBackupService implements IGoogleDriveBackupService {
   }
 
   @override
+  Future<void> clearSession() async {
+    mockUser = null;
+    mockBackups.clear();
+  }
+
+  @override
   Future<GoogleDriveUser?> getCurrentUser() async => mockUser;
 
   @override
@@ -148,7 +154,7 @@ void main() {
     } catch (_) {}
   });
 
-  group('Pilar 3.1: Integridad Multi-Perfil de .mlbg y Versión Dinámica v9.32.0+76', () {
+  group('Pilar 3.1: Integridad Multi-Perfil de .mlbg y Versión Dinámica v9.33.0+77', () {
     test('Empaquetado global .mlbg contiene toda la base SQLite con múltiples negocios y versión dinámica', () async {
       // 1. Insertar Negocio 1 y Usuario 1
       final neg1Id = await testDb.insert('negocios', {
@@ -250,7 +256,7 @@ void main() {
       expect(
         manifestJson['app_version'],
         equals(OwnerLegalIdentity.currentAppVersionWithBuild),
-        reason: 'El manifiesto debe reflejar dinámicamente la versión actual v9.32.0+76',
+        reason: 'El manifiesto debe reflejar dinámicamente la versión actual v9.33.0+77',
       );
       expect(manifestJson['device_fingerprint'], equals(testDeviceId));
 
@@ -298,15 +304,22 @@ void main() {
       await tester.tap(vincularBtn);
       await tester.pumpAndSettle();
 
-      // Debe aparecer el diálogo modal limpio (NO un SnackBar rojo invasivo)
-      expect(find.text("Configuración de Acceso a Google Drive"), findsOneWidget);
+      // Debe aparecer el diálogo modal limpio y humano (NO un SnackBar rojo invasivo ni jerga técnica visible)
+      expect(find.text("No se pudo conectar con Google Drive"), findsOneWidget);
       expect(find.byIcon(Icons.cloud_off_rounded), findsOneWidget);
-      expect(find.textContaining("Google requiere que la huella digital (SHA-1)"), findsOneWidget);
+      expect(find.textContaining("En este momento no fue posible vincular tu cuenta de Google"), findsOneWidget);
+      expect(find.textContaining("Google Cloud Console"), findsNothing);
+      expect(find.textContaining("SHA-1"), findsNothing);
+
+      // Desplegar información técnica colapsada para soporte
+      expect(find.text("Ver información técnica para soporte"), findsOneWidget);
+      await tester.tap(find.text("Ver información técnica para soporte"));
+      await tester.pumpAndSettle();
+
+      // Ahora sí se muestran los datos técnicos y el botón de copiado
       expect(find.textContaining("com.mochilalista.app"), findsOneWidget);
       expect(find.textContaining(OwnerLegalIdentity.currentAppVersionWithBuild), findsOneWidget);
       expect(find.textContaining("99:88:77:66:55"), findsOneWidget); // Huella SHA-1 simulada
-
-      // Botón Copiar Datos de Soporte
       expect(find.text("Copiar Datos de Soporte"), findsOneWidget);
       expect(find.byIcon(Icons.copy_rounded), findsOneWidget);
 
@@ -314,7 +327,7 @@ void main() {
       await tester.tap(find.text("Entendido"));
       await tester.pumpAndSettle();
 
-      expect(find.text("Configuración de Acceso a Google Drive"), findsNothing);
+      expect(find.text("No se pudo conectar con Google Drive"), findsNothing);
     });
 
     testWidgets('Estado Vinculado muestra Controles Completos e Historial de 5 Copias', (tester) async {
@@ -386,11 +399,15 @@ void main() {
   });
 
   group('Pilar 3.3: Rediseño Jerárquico de BackupScreen en 2 Bloques (Nube vs Local) y 0px Overflow', () {
-    testWidgets('Renderiza en 320x568dp con separación nítida Nube vs Local y 0px overflow',
+    testWidgets('Renderiza en 320x568dp con separación nítida Nube vs Local, cabecera unificada y 0px overflow',
         (tester) async {
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
+      tester.view.padding = const FakeViewPadding(bottom: 48);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetPadding();
+      });
 
       final mockDrive = MockTestDriveBackupService();
       final authProv = AuthProvider();
@@ -414,10 +431,10 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // 1. Comprobar BLOQUE A: Copia de Seguridad en la Nube
+      // 1. Comprobar BLOQUE A: Copia de Seguridad en la Nube (Cabecera unificada sin duplicados)
       expect(find.text("Copia de Seguridad en la Nube"), findsOneWidget);
       expect(find.byIcon(Icons.cloud_done_rounded), findsOneWidget);
-      expect(find.text("Copia de Seguridad en Google Drive"), findsOneWidget);
+      expect(find.text("Copia de Seguridad en Google Drive"), findsNothing);
 
       // 2. Comprobar BLOQUE B: Copia Local en el Teléfono (scroll down para visualizar en viewport compacto)
       final localHeaderFinder = find.text("Copia Local en el Teléfono");
@@ -445,11 +462,15 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'No deben existir desbordes en 320x568dp');
     });
 
-    testWidgets('Renderiza en 360x640dp con separación nítida Nube vs Local y 0px overflow',
+    testWidgets('Renderiza en 360x640dp con separación nítida Nube vs Local, cabecera unificada y 0px overflow',
         (tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
+      tester.view.padding = const FakeViewPadding(bottom: 48);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetPadding();
+      });
 
       final mockDrive = MockTestDriveBackupService();
       final authProv = AuthProvider();
@@ -473,10 +494,10 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // 1. Comprobar BLOQUE A: Copia de Seguridad en la Nube
+      // 1. Comprobar BLOQUE A: Copia de Seguridad en la Nube (Cabecera unificada sin duplicados)
       expect(find.text("Copia de Seguridad en la Nube"), findsOneWidget);
       expect(find.byIcon(Icons.cloud_done_rounded), findsOneWidget);
-      expect(find.text("Copia de Seguridad en Google Drive"), findsOneWidget);
+      expect(find.text("Copia de Seguridad en Google Drive"), findsNothing);
 
       // 2. Comprobar BLOQUE B: Copia Local en el Teléfono (scroll down para visualizar en viewport compacto)
       final localHeaderFinder = find.text("Copia Local en el Teléfono");
