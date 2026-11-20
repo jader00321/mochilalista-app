@@ -130,7 +130,7 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
    * **Teléfono WhatsApp:** (ej. `+51987654321`)
    * **Device ID del Teléfono:** (ej. `ML-9K4B` — 7 caracteres en mayúsculas)
    * **Plan Inicial:** Selecciona `TRIAL GRATUITO (30 días — S/ 0.00)` (opción por defecto) o el plan contratado.
-   * **Versión de App Instalada:** (por defecto: `9.30.0` — Esquema SQLite `v36`)
+   * **Versión de App Instalada:** (por defecto: `9.31.0` — Esquema SQLite `v36`)
    * **Créditos IA Extra Iniciales:** (por defecto: `0`)
 3. Presiona **"Guardar Cliente"**.
 
@@ -204,11 +204,11 @@ En la pestaña **Inspector de Tokens ML9**:
 ---
 
 ### 1.8. Venta de Bolsas Extra de Escaneos IA (+150 escaneos)
-Si un comerciante agota sus 50 escaneos mensuales de la cuota oficial y no desea configurar su clave BYOK:
+Si un comerciante desea recargar su saldo de escaneos IA o agota su bolsa inicial y no desea configurar su clave BYOK:
 1. El cliente te abona **S/ 20.00**.
 2. En el Generador, selecciona al cliente y el plan **`BOLSA EXTRA IA (+150 escaneos) — S/ 20.00`**.
 3. Presiona emitir y envíale el código o credencial.
-4. Al canjearlo, su fecha de caducidad se mantiene intacta y se le suman **+150 escaneos acumulativos sin vencimiento**.
+4. Al canjearlo, su fecha de caducidad se mantiene intacta y se le suman **+150 escaneos acumulativos sin vencimiento** a su bolsa global.
 
 ---
 
@@ -394,7 +394,7 @@ La matriz compara la versión instalada de cada cliente contra el último lanzam
   * Si es un cliente legítimo que cambió de equipo: solicita su nuevo Device ID, ejecuta la **Reasignación de Dispositivo** (S/ 40.00 o garantía) y emítele su nuevo código.
   * Si es piratería: el teléfono receptor queda inoperable y debe comprar su propia licencia.
 
-### 4.3. Incidente: Agotamiento de la Cuota Mensual de Escaneos con IA
+### 4.3. Incidente: Agotamiento de la Bolsa de Escaneos con IA
 - **Alternativa A:** Compra de Bolsa Extra (+150 escaneos por S/ 20.00 sin caducidad).
 - **Alternativa B:** Modo BYOK Ilimitado (el cliente genera su clave gratuita en [Google AI Studio](https://aistudio.google.com/) y la ingresa en `Perfil > Licencia`).
 
@@ -408,13 +408,14 @@ La matriz compara la versión instalada de cada cliente contra el último lanzam
 
 | Producto / Servicio | Modalidad | Precio Oficial | Alcance y Condiciones |
 | :--- | :--- | :--- | :--- |
-| **Plan Mensual** | Suscripción | **S/ 35.00** | +30 días acumulativos, 50 escaneos IA/mes, soporte técnico estándar. |
-| **Plan Trimestral** | Suscripción | **S/ 90.00** | +90 días acumulativos (Ahorro S/ 15), 60 escaneos IA/mes. |
-| **Plan Semestral** | Suscripción | **S/ 160.00** | +180 días acumulativos (Ahorro S/ 50), 75 escaneos IA/mes. |
-| **Plan Anual** | Suscripción | **S/ 280.00** | +365 días acumulativos (Ahorro S/ 140), 100 escaneos IA/mes. |
-| **Licencia Perpetua Liberada** | Pago Único | **S/ 850.00** | Uso vitalicio ilimitado, hotfixes de estabilidad de por vida, 12 meses de updates de funciones incluidos. |
-| **Pase Anual de Updates** | Anual (Perpetuos) | **S/ 150.00** | +12 meses adicionales de nuevas versiones y herramientas para licencias perpetuas. |
-| **Bolsa Extra IA (+150 escaneos)** | Recarga | **S/ 20.00** | +150 créditos de escaneo sin caducidad para usar con la clave oficial integrada. |
+| **Trial Gratuito** | Evaluación | **S/ 0.00** | +30 días de vigencia, **+50 escaneos IA** acumulativos, activación 100% offline. |
+| **Plan Mensual** | Suscripción | **S/ 35.00** | +30 días acumulativos, **+50 escaneos IA** acumulativos sin vencimiento, soporte estándar. |
+| **Plan Trimestral** | Suscripción | **S/ 90.00** | +90 días acumulativos (Ahorro S/ 15), **+180 escaneos IA** acumulativos sin vencimiento. |
+| **Plan Semestral** | Suscripción | **S/ 160.00** | +180 días acumulativos (Ahorro S/ 50), **+450 escaneos IA** acumulativos sin vencimiento. |
+| **Plan Anual** | Suscripción | **S/ 280.00** | +365 días acumulativos (Ahorro S/ 140), **+1,200 escaneos IA** acumulativos sin vencimiento. |
+| **Licencia Perpetua Liberada** | Pago Único | **S/ 850.00** | Uso vitalicio ilimitado, **+200 escaneos IA** acumulativos, 12 meses de updates incluidos. |
+| **Pase Anual de Updates** | Anual (Perpetuos) | **S/ 150.00** | +12 meses de nuevas funciones, **+100 escaneos IA** acumulativos para licencias perpetuas. |
+| **Bolsa Extra IA (+150 escaneos)** | Recarga | **S/ 20.00** | **+150 escaneos IA** acumulativos sin vencimiento para usar con la clave oficial integrada. |
 | **Reasignación por Cambio de Celular** | Servicio Técnico | **S/ 40.00** | Migración segura de hardware, transferencia de días y créditos acumulados a nuevo DeviceID. |
 | **Extensión de Cortesía (Gracia)** | Cortesía | **S/ 0.00** | +7 días de gracia para clientes con cobranza en trámite o emergencias operativas. |
 
@@ -431,7 +432,7 @@ Uno de los principios de diseño fundamentales de **MochilaLista Admin** es la *
   - Respaldos Históricos: `mochilalista_admin/backups/`.
 * **Bóveda Espejo Cifrada en Sistema Operativo (`%APPDATA%`):**
   - Ruta en Windows: `%APPDATA%\MochilaListaAdminVault\` (`C:\Users\<Usuario>\AppData\Roaming\MochilaListaAdminVault\`).
-  - Archivo Principal: `vault_mirror.mlvault`.
+  - Archivo Principal: `auto_mirror_latest.mlvault`.
   - **Mecanismo de Protección:** Cifrado con **Windows Data Protection API (DPAPI)** nativo mediante Crypt32.dll y CryptProtectData (`currentUser`). Los datos quedan vinculados a las credenciales de tu cuenta de usuario de Windows y al chip TPM de tu laptop. Si alguien copia físicamente la carpeta o accede al disco duro desde otra máquina, los datos son ilegibles.
 * **Espejo en Nube Personal Opcional:**
   - Puedes definir una carpeta local sincronizada por tu proveedor de nube favorito (Google Drive para Escritorio, OneDrive, Dropbox).
@@ -448,11 +449,11 @@ Al iniciar la plataforma por primera vez en tu laptop o al ingresar a la pestañ
 
 1. **Paso 1: Sincronizar Espejo Local y Nube:**
    - Haz clic en **`[🔄 Sincronizar Bóveda Espejo Ahora]`**.
-   - El sistema empaquetará todas las bases de datos de producción y la clave privada Ed25519 en `vault_mirror.mlvault`, cifrándolo con DPAPI.
+   - El sistema empaquetará todas las bases de datos de producción y la clave privada Ed25519 en `auto_mirror_latest.mlvault`, cifrándolo con DPAPI.
    - Si usas Google Drive o OneDrive, pega la ruta absoluta de tu carpeta de respaldo y pulsa Guardar.
 2. **Paso 2: Descargar y Resguardar tu Archivo Llave (`.mlkey`):**
    - Presiona **`[⬇️ Descargar Llave Criptográfica (.mlkey)]`**.
-   - El sistema descargará un archivo `mochilalista_master_recovery.mlkey` que contiene el token criptográfico de 256 bits (`MLKEY:...`).
+   - El sistema descargará un archivo `llave_maestra_mochilalista.mlkey` que contiene el token criptográfico de 256 bits (`MLKEY:...`).
    - **Regla de Oro:** Copia este archivo en una **memoria USB física** y guárdala junto a tus documentos personales, o almacénalo en una bóveda de contraseñas (1Password, Bitwarden, KeePass).
 3. **Paso 3: Imprimir o Guardar en PDF el Kit de Emergencia:**
    - Presiona **`[🖨️ Imprimir Kit de Emergencia]`**.
